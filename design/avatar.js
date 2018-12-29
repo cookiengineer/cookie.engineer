@@ -197,6 +197,10 @@
 
 			if (time.feeling === 'ouch') {
 
+				if (dist > 128) {
+					dist = 128;
+				}
+
 				ctx.beginPath();
 				ctx.ellipse(
 					eye.ball.x,
@@ -212,6 +216,10 @@
 				ctx.closePath();
 
 			} else if (dist < 128) {
+
+				if (dist > 128) {
+					dist = 128;
+				}
 
 				ctx.beginPath();
 				ctx.ellipse(
@@ -253,6 +261,11 @@
 				let delta_y = pos.y - eye.ball.y;
 				let radian  = Math.atan2(delta_y, delta_x);
 				let radius  = Math.min(eye.ball.r - eye.pupil.r - 2, Math.sqrt(Math.pow(delta_x, 2) + Math.pow(delta_y, 2)));
+
+				if (time.feeling === 'ouch') {
+					radius *= 0.75;
+				}
+
 				let pupil_x = eye.ball.x + Math.cos(radian) * radius;
 				let pupil_y = eye.ball.y + Math.sin(radian) * radius;
 

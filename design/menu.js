@@ -118,33 +118,41 @@
 
 		if (menu !== null) {
 
-			let scroll_y = global.scrollY || 0;
-			if (scroll_y < 160) {
-				_del_state(menu, 'visible');
-			}
+			if (typeof global.scrollY === 'number') {
 
-			global.addEventListener('scroll', event => {
+				let offset  = global.scrollY;
+				let current = 0;
 
-				let height = global.innerHeight || 0;
-				let offset = global.scrollY     || 0;
-				if (offset > 160) {
+				global.addEventListener('scroll', event => {
+					current = global.scrollY;
+				}, true);
 
-					_add_state(menu, 'visible');
+				setInterval(_ => {
 
-					let hash = _scroll_to_item(height);
+					let delta = current - offset;
+					if (delta > 32) {
+
+						_del_state(menu, 'open');
+						_del_state(menu, 'visible');
+						items.forEach(item => item.className = '');
+
+					} else if (delta < -32) {
+
+						_add_state(menu, 'visible');
+
+					}
+
+					let height = global.innerHeight || 0;
+					let hash   = _scroll_to_item(height);
 					if (hash !== null) {
 						global.location.hash = hash;
 					}
 
-				} else if (offset < 160) {
+					offset = current;
 
-					_del_state(menu, 'open');
-					_del_state(menu, 'visible');
-					items.forEach(other => other.className = '');
+				}, 250);
 
-				}
-
-			}, true);
+			}
 
 		}
 

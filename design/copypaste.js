@@ -12,18 +12,6 @@
 		 * HELPERS
 		 */
 
-		const _patch_href = (href) => {
-
-			if (href.startsWith('/')) {
-				href = 'https://cookie.engineer/' + href;
-			} else if (!href.startsWith('https://') && !href.startsWith('http://')) {
-				href = 'https://cookie.engineer/' + href;
-			}
-
-			return href;
-
-		};
-
 		const _create_dummy = (text) => {
 
 			text = text.split('\n').join('<br>');
@@ -34,6 +22,22 @@
 			element.innerHTML = text;
 
 			return element;
+
+		};
+
+		const _insert = (node, text) => {
+
+			text = typeof text === 'string' ? text : '';
+
+
+			if (text !== '') {
+
+				let parent = node.parentNode || null;
+				if (parent !== null) {
+					parent.insertBefore(_create_dummy(text), node);
+				}
+
+			}
 
 		};
 
@@ -52,19 +56,15 @@
 
 		};
 
-		const _insert = (node, text) => {
+		const _patch_href = (href) => {
 
-			text = typeof text === 'string' ? text : '';
-
-
-			if (text !== '') {
-
-				let parent = node.parentNode || null;
-				if (parent !== null) {
-					parent.insertBefore(_create_dummy(text), node);
-				}
-
+			if (href.startsWith('/')) {
+				href = 'https://cookie.engineer/' + href;
+			} else if (!href.startsWith('https://') && !href.startsWith('http://')) {
+				href = 'https://cookie.engineer/' + href;
 			}
+
+			return href;
 
 		};
 

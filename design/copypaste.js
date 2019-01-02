@@ -76,7 +76,7 @@
 
 		cache.h1       = Array.from(doc.querySelectorAll('section h1'));
 		cache.h3       = Array.from(doc.querySelectorAll('section h3, dialog h3'));
-		cache.a        = Array.from(doc.querySelectorAll('article a'));
+		cache.a        = Array.from(doc.querySelectorAll('article a, figure div a'));
 		cache.article  = Array.from(doc.querySelectorAll('section article'));
 		cache.del      = Array.from(doc.querySelectorAll('article del, section del'));
 		cache.figure   = Array.from(doc.querySelectorAll('section div ~ figure'));
@@ -173,25 +173,31 @@
 		 * XXX: HACKS AND FIXES
 		 */
 
+		let div = doc.querySelector('#about-me div');
+		if (div !== null) {
+			let fix = doc.createElement('b');
+			fix.className = '_copy_paste_';
+			fix.innerHTML = 'Socialize Me.';
+			_patch(fix, '\n\n# ', '\n\n');
+			div.insertBefore(fix, div.children[0]);
+		}
+
+		// <b class="_copy_paste_">Socialize Me.</b>
+		const _filter_text = (node) => {
+			if (node.nodeName === '#text') {
+				node.parentNode.removeChild(node);
+			}
+		};
+
 		Array.from(doc.querySelectorAll('fieldset#search-form input')).forEach(fix => _insert(fix, '\n'));
 		Array.from(doc.querySelectorAll('fieldset#contact-form')).forEach(fix => _insert(fix, '\n'));
+		Array.from(doc.querySelectorAll('#about-me div a')).forEach(fix => _insert(fix, '\n'));
+		Array.from(doc.querySelectorAll('#about-me article:nth-of-type(2)')).forEach(fix => _insert(fix, '\n'));
 		Array.from(doc.querySelectorAll('#search article p')).forEach(fix => _insert(fix, '\n'));
 
-		Array.from(doc.querySelector('fieldset#search-form').childNodes).forEach(node => {
-
-			if (node.nodeName === '#text') {
-				node.parentNode.removeChild(node);
-			}
-
-		});
-
-		Array.from(doc.querySelector('fieldset#search-form ul').childNodes).forEach(node => {
-
-			if (node.nodeName === '#text') {
-				node.parentNode.removeChild(node);
-			}
-
-		});
+		Array.from(doc.querySelector('#skills article').childNodes).forEach(node => _filter_text(node));
+		Array.from(doc.querySelector('fieldset#search-form').childNodes).forEach(node => _filter_text(node));
+		Array.from(doc.querySelector('fieldset#search-form ul').childNodes).forEach(node => _filter_text(node));
 
 	}, true);
 

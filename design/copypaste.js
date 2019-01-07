@@ -76,7 +76,7 @@
 
 		cache.h1       = Array.from(doc.querySelectorAll('section h1'));
 		cache.h3       = Array.from(doc.querySelectorAll('section h3, dialog h3'));
-		cache.a        = Array.from(doc.querySelectorAll('article a, figure div a'));
+		cache.a        = Array.from(doc.querySelectorAll('article a, section > div a'));
 		cache.article  = Array.from(doc.querySelectorAll('section article'));
 		cache.del      = Array.from(doc.querySelectorAll('article del, section del'));
 		cache.figure   = Array.from(doc.querySelectorAll('section div ~ figure'));
@@ -178,7 +178,7 @@
 			let fix = doc.createElement('b');
 			fix.className = '_copy_paste_';
 			fix.innerHTML = 'Socialize Me.';
-			_patch(fix, '\n\n# ', '\n\n');
+			_patch(fix, '\n# ', '\n');
 			div.insertBefore(fix, div.children[0]);
 		}
 

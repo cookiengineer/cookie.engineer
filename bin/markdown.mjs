@@ -434,6 +434,11 @@ export const render = function(data) {
 	return _render(data);
 };
 
+export const markdown = {
+	parse:  parse,
+	render: render
+};
+
 export default {
 	parse,
 	render

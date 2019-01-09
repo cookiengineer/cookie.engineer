@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 
-import fs                from 'fs';
-import path              from 'path';
-import { parse, render } from './markdown.mjs';
+import fs           from 'fs';
+import path         from 'path';
+import { markdown } from './markdown.mjs';
 
 
 const ROOT     = process.env.PWD + '/weblog';
@@ -102,6 +102,50 @@ const _render_article = function(template, entry) {
 
 };
 
+const _render_feed = function(template) {
+
+	let articles = [];
+
+	DATABASE.sort((a, b) => {
+
+		if (a.meta.date > b.meta.date) return -1;
+		if (b.meta.date > a.meta.date) return  1;
+		return 0;
+
+	}).forEach(entry => {
+
+		let meta   = entry.meta;
+		let file   = entry.file.split('.').slice(0, -1).join('.');
+		let name   = meta.name;
+		let tags   = meta.tags;
+		let date   = new Date(meta.date).toUTCString();
+		let chunk  = '';
+		let indent = TABSPACE.substr(0, 2);
+
+		chunk += indent + '<item>\n';
+		chunk += indent + '\t<title>' + name + '</title>\n';
+		chunk += indent + '\t<description>' + name + '</description>\n';
+		chunk += indent + '\t<link>https://cookie.engineer/weblog/articles/' + file + '.html</link>\n';
+		chunk += indent + '\t<category>' + tags.join('/') + '</category>\n';
+		chunk += indent + '\t<pubDate>' + date + '</pubDate>\n';
+		chunk += indent + '</item>';
+
+		articles.push(chunk);
+
+	});
+
+
+	let date = new Date().toUTCString();
+
+	template = template.replace('${articles}',     articles.join('\n').trim());
+	template = template.replace('${copyright}',    '2018-' + new Date().getFullYear());
+	template = template.replace('${date-build}',   date);
+	template = template.replace('${date-publish}', date);
+
+	return template;
+
+};
+
 const _render_index = function(template) {
 
 	let articles = [];
@@ -110,16 +154,15 @@ const _render_index = function(template) {
 
 		let meta   = entry.meta;
 		let file   = entry.file.split('.').slice(0, -1).join('.');
+		let name   = '<a href="./articles/' + file + '.html" target="_blank">' + meta.name.split(' ').join('&nbsp;') + '</a>';
 		let chunk  = '';
 		let indent = TABSPACE.substr(0, 6);
 
-		let name = '<a href="./articles/' + file + '.html" target="_blank">' + meta.name.split(' ').join('&nbsp;') + '</a>';
-
 		chunk += indent + '<tr class="' + meta.type.join('-') + '" title="Ingredients: ' + meta.type.join(', ') + '">\n';
-		chunk += indent + '\t' + '<td></td>\n';
-		chunk += indent + '\t' + '<td>' + meta.date + '</td>\n';
-		chunk += indent + '\t' + '<td>' + name + '</td>\n';
-		chunk += indent + '\t' + '<td>' + meta.tags.join(', ') + '</td>\n';
+		chunk += indent + '\t<td></td>\n';
+		chunk += indent + '\t<td>' + meta.date + '</td>\n';
+		chunk += indent + '\t<td>' + name + '</td>\n';
+		chunk += indent + '\t<td>' + meta.tags.join(', ') + '</td>\n';
 		chunk += indent + '</tr>';
 
 		articles.push(chunk);
@@ -132,6 +175,10 @@ const _render_index = function(template) {
 
 };
 
+const _render_summary = function(template) {
+
+};
+
 const _parse_body = function(article) {
 
 	let tmp = article.trim();
@@ -140,7 +187,7 @@ const _parse_body = function(article) {
 	}
 
 
-	let data = parse(tmp);
+	let data = markdown.parse(tmp);
 	if (data.length > 0) {
 		_walk_fix_url(data);
 	}
@@ -151,7 +198,7 @@ const _parse_body = function(article) {
 
 const _render_body = function(data) {
 
-	let body = render(data);
+	let body = markdown.render(data);
 	if (body !== null) {
 		return body;
 	}
@@ -228,6 +275,23 @@ setTimeout(_ => {
 
 		} else {
 			console.error('> could not render index.html (no read/write access to template?');
+		}
+
+	});
+
+	fs.readFile(ROOT + '/sources/feed.tpl', 'utf8', (err, template) => {
+
+		if (!err) {
+
+			let feed = _render_feed(template);
+			if (feed !== '') {
+				fs.writeFile(ROOT + '/feed.xml', feed, 'utf8', (err) => {
+					if (!err) console.log('> rendering feed.xml ... OKAY');
+				});
+			}
+
+		} else {
+			console.error('> could not render feed.xml (no read/write access to template?');
 		}
 
 	});

@@ -4,7 +4,7 @@
 	global.addEventListener('DOMContentLoaded', _ => {
 
 		const doc      = global.document;
-		const articles = Array.from(doc.querySelectorAll('#projects article')).concat(Array.from(doc.querySelectorAll('#experience article')));
+		const articles = Array.from(doc.querySelectorAll('#projects article, #blog-articles tbody tr'));
 		const avatar   = doc.querySelector('div#search-form-avatar');
 		const inputs   = Array.from(doc.querySelectorAll('fieldset#search-form input'));
 
@@ -51,9 +51,9 @@
 		 * IMPLEMENTATION
 		 */
 
-		if (avatar !== null && articles.length > 0 && inputs.length > 0) {
+		if (avatar !== null && inputs.length > 0) {
 
-			articles.forEach(function(article) {
+			articles.forEach(article => {
 
 				let headline = article.querySelector('h3');
 				if (headline !== null) {
@@ -78,7 +78,7 @@
 
 			});
 
-			inputs.forEach(function(input) {
+			inputs.forEach(input => {
 
 				let name = input.getAttribute('name');
 

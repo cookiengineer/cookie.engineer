@@ -25,16 +25,30 @@
 
 		};
 
-		const _insert = (node, text) => {
+		const _before = (node, text) => {
 
 			text = typeof text === 'string' ? text : '';
-
 
 			if (text !== '') {
 
 				let parent = node.parentNode || null;
 				if (parent !== null) {
 					parent.insertBefore(_create_dummy(text), node);
+				}
+
+			}
+
+		};
+
+		const _after = (node, text) => {
+
+			text = typeof text === 'string' ? text : '';
+
+			if (text !== '') {
+
+				let parent = node.parentNode || null;
+				if (parent !== null) {
+					parent.insertBefore(_create_dummy(text), node.nextSibling);
 				}
 
 			}
@@ -56,7 +70,7 @@
 
 		};
 
-		const _patch_href = (href) => {
+		const _patch_url = (href) => {
 
 			if (href.startsWith('/')) {
 				href = 'https://cookie.engineer/' + href;
@@ -74,39 +88,58 @@
 		 * IMPLEMENTATION
 		 */
 
-		cache.h1       = Array.from(doc.querySelectorAll('section h1'));
-		cache.h3       = Array.from(doc.querySelectorAll('section h3, dialog h3'));
 		cache.a        = Array.from(doc.querySelectorAll('article a, section > div a'));
 		cache.article  = Array.from(doc.querySelectorAll('section article'));
+		cache.b        = Array.from(doc.querySelectorAll('article b'));
+		cache.button   = Array.from(doc.querySelectorAll('article button'));
+		cache.code     = Array.from(doc.querySelectorAll('article code'));
 		cache.del      = Array.from(doc.querySelectorAll('article del, section del'));
+		cache.em       = Array.from(doc.querySelectorAll('article em'));
 		cache.figure   = Array.from(doc.querySelectorAll('section div ~ figure'));
 		cache.footer   = Array.from(doc.querySelectorAll('footer'));
+		cache.h1       = Array.from(doc.querySelectorAll('section h1'));
+		cache.h3       = Array.from(doc.querySelectorAll('section h3, dialog h3'));
 		cache.input    = Array.from(doc.querySelectorAll('article input, article textarea'));
+		cache.img      = Array.from(doc.querySelectorAll('article img'));
+		cache.ol       = Array.from(doc.querySelectorAll('article ol'));
+		cache.ol_li    = Array.from(doc.querySelectorAll('article ol li'));
+		cache.pre      = Array.from(doc.querySelectorAll('article pre'));
 		cache.progress = Array.from(doc.querySelectorAll('article progress'));
 		cache.select   = Array.from(doc.querySelectorAll('article select'));
+		cache.ul       = Array.from(doc.querySelectorAll('article ul'));
+		cache.ul_li    = Array.from(doc.querySelectorAll('article ul li'));
 
 
-		cache.h1.forEach(h1         => _patch(h1,     '\n\n# ',              '\n\n'));
-		cache.h3.forEach(h3         => _patch(h3,     '\n ### ',             h3.querySelector('progress') ? '\n' : '\n\n'));
-		cache.del.forEach(del       => _patch(del,    '~',                   '~'));
-		cache.footer.forEach(footer => _patch(footer, '\n\n\n# Footer.\n\n', ''));
-		cache.figure.forEach(figure => _patch(figure, '',                    '\n\n'));
-
-		cache.progress.forEach(progress => _insert(progress, ': ' + progress.getAttribute('data-label')));
+		cache.h1.forEach(h1             => _patch(h1,        '\n\n# ', '\n\n'));
+		cache.h3.forEach(h3             => _patch(h3,        '\n ### ', h3.querySelector('progress') ? '\n' : '\n\n'));
+		cache.b.forEach(b               => _patch(b,         '**', '**'));
+		cache.code.forEach(code         => _patch(code,      '`', '`'));
+		cache.del.forEach(del           => _patch(del,       '~', '~'));
+		cache.em.forEach(em             => _patch(em,        '*', '*'));
+		cache.footer.forEach(footer     => _patch(footer,    '\n\n\n# Footer.\n\n', ''));
+		cache.figure.forEach(figure     => _patch(figure,    '', '\n\n'));
+		cache.pre.forEach(pre           => _patch(pre,       '\n ```' + pre.className + '\n', '```'));
+		cache.progress.forEach(progress => _before(progress, ': ' + progress.getAttribute('data-label')));
+		cache.ul.forEach(ul             => _patch(ul,        '\n'));
+		cache.ul_li.forEach(li          => _patch(li,        '- '));
+		cache.ol.forEach(ol             => _patch(ol,        '\n'));
+		cache.ol_li.forEach((li, num)   => _patch(li,        (num + 1) + '. '));
 
 
 		cache.a.forEach(a => {
 
-			let img  = a.querySelector('img') || null;
-			let text = (a.innerText || a.innerHTML).trim();
-			let href = _patch_href(a.getAttribute('href').trim());
+			let img = a.querySelector('img') || null;
+			if (img === null) {
 
-			if (img !== null) {
-				_patch(a, '![' + href.split('/').pop() + '](' + href + ')');
-			} else if (text !== '' && href !== '') {
-				_patch(a, '![', '](' + href + ')');
-			} else if (href !== '') {
-				_patch(a, '![' + href.split('/').pop() + '](' + href + ')');
+				let text = (a.innerText || a.innerHTML).trim();
+				let href = _patch_url(a.getAttribute('href').trim());
+
+				if (text !== '' && href !== '') {
+					_patch(a, '![', '](' + href + ')');
+				} else if (href !== '') {
+					_patch(a, '![' + href.split('/').pop() + '](' + href + ')');
+				}
+
 			}
 
 		});
@@ -130,6 +163,46 @@
 
 		});
 
+		cache.button.forEach(button => {
+
+			_before(button, '?{');
+			_after(button, '}');
+
+		});
+
+		cache.img.forEach(img => {
+
+			let has_link = img.parentNode.tagName.toLowerCase() === 'a';
+			if (has_link === true) {
+
+				let alt = img.getAttribute('alt') || '';
+				let src = img.getAttribute('src') || '';
+
+				if (alt !== '') {
+					_before(img, '![');
+					_after(img, '](' + _patch_url(src) + ')');
+				} else if (src !== '') {
+					_before(img, '![' + _patch_url(src) + '](');
+					_after(img, ')');
+				}
+
+			} else {
+
+				let alt = img.getAttribute('alt') || '';
+				let src = img.getAttribute('src') || '';
+
+				if (alt !== '') {
+					_before(img, '![' + alt + ']');
+					_after(img, ')');
+				} else if (src !== '') {
+					_before(img, '![' + _patch_url(src) + '](');
+					_after(img, ')');
+				}
+
+			}
+
+		});
+
 		cache.input.forEach(input => {
 
 			let type  = input.getAttribute('type') || 'text';
@@ -144,7 +217,7 @@
 				value = input.placeholder;
 			}
 
-			_insert(input, '?{' + type + ' ' + name + '}(' + value + ')');
+			_before(input, '?{' + type + ' ' + name + '}(' + value + ')');
 
 		});
 
@@ -163,7 +236,7 @@
 				value = option.innerText;
 			}
 
-			_insert(select, '?{select ' + name + '}(' + value + ')\n');
+			_before(select, '?{select ' + name + '}(' + value + ')\n');
 
 		});
 
@@ -189,15 +262,23 @@
 			}
 		};
 
-		Array.from(doc.querySelectorAll('fieldset#search-form input')).forEach(fix => _insert(fix, '\n'));
-		Array.from(doc.querySelectorAll('fieldset#contact-form')).forEach(fix => _insert(fix, '\n'));
-		Array.from(doc.querySelectorAll('#about-me div a')).forEach(fix => _insert(fix, '\n'));
-		Array.from(doc.querySelectorAll('#about-me article:nth-of-type(2)')).forEach(fix => _insert(fix, '\n'));
-		Array.from(doc.querySelectorAll('#search article p')).forEach(fix => _insert(fix, '\n'));
+		Array.from(doc.querySelectorAll('fieldset#search-form input')).forEach(fix => _before(fix, '\n'));
+		Array.from(doc.querySelectorAll('fieldset#contact-form')).forEach(fix => _before(fix, '\n'));
+		Array.from(doc.querySelectorAll('#about-me div a')).forEach(fix => _before(fix, '\n'));
+		Array.from(doc.querySelectorAll('#about-me article:nth-of-type(2)')).forEach(fix => _before(fix, '\n'));
+		Array.from(doc.querySelectorAll('#search article p')).forEach(fix => _before(fix, '\n'));
 
-		Array.from(doc.querySelector('#skills article').childNodes).forEach(node => _filter_text(node));
-		Array.from(doc.querySelector('fieldset#search-form').childNodes).forEach(node => _filter_text(node));
-		Array.from(doc.querySelector('fieldset#search-form ul').childNodes).forEach(node => _filter_text(node));
+		let skills = doc.querySelector('#skills article');
+		if (skills !== null) {
+			Array.from(skills.childNodes).forEach(node => _filter_text(node));
+		}
+
+		let search = doc.querySelector('fieldset#search-form');
+		if (search !== null) {
+			Array.from(search.childNodes).forEach(node => _filter_text(node));
+			Array.from(search.querySelector('ul').childNodes).forEach(node => _filter_text(node));
+		}
+
 
 	}, true);
 

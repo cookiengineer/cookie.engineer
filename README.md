@@ -29,6 +29,22 @@ it.
 - SVG Icons, Sounds and Graphics created by myself (@cookiengineer).
 
 
+## Usage
+
+The Website is a completely static website. Therefore
+no dynamic backend language interpreter is necessary.
+
+However, the [Web Log](./weblog) is written in CommonMark,
+so new articles must be rendered into HTML by calling
+the `bin/render-weblog.mjs` via node.js:
+
+```bash
+cd /path/to/cookie.engineer;
+
+# Note that PWD must be the website root
+node --experimental-modules ./bin/render-weblog.mjs;
+```
+
 ## License
 
 (c) 2018-2019 Cookie Engineer (@cookiengineer).

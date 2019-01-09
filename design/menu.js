@@ -6,7 +6,7 @@
 		const doc      = global.document;
 		const menu     = doc.querySelector('aside#menu');
 		const button   = menu.querySelector('button');
-		const items    = Array.from(menu.querySelectorAll('a[href]'));
+		const items    = Array.from(menu.querySelectorAll('a[href]')).filter(a => a.getAttribute('href').startsWith('#'));
 		const links    = Array.from(doc.querySelectorAll('article a')).filter(a => a.getAttribute('href').startsWith('#'));
 		const sections = items.map(a => a.href).map(url => {
 

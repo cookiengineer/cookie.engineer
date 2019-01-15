@@ -8,7 +8,7 @@
 This weekend I finally decided to start to build my own web browser.
 
 Actually I've thought about it for quite a while, because I really
-don't agree where the Web and how its used is going. Due to my work
+don't agree where the Web and how it is used is going. Due to my work
 of being a software engineer, most of the time I do browse the web
 in order to find articles, read articles and papers about topics,
 and discussions of problems on reddit and stackoverflow.
@@ -232,12 +232,16 @@ The simplification of those error pages by telling "Could not connect
 to the website" doesn't magically make it work, dear Web Browser
 designers. A little dinosaur won't make it work either.
 
+![Firefox Network Protocol Error](./firefox-network-protocol-error.png)
+
 In these error cases that happen very often when being online on
 mobile, most of the time it is solved by doing another request
 and then packet loss is temporarily less than before and it will
 work again. But, as Web Browsers are retards, they will redirect
 the *whole fucking tab* to the error page when a sub-request
 anywhere on the website or its requested assets or scripts failed.
+
+![Firefox Network Connection Error](./firefox-network-connection-error.png)
 
 If it can't load the advertisement networks' cookie notification
 for European users, it will literally black out the whole Tab
@@ -286,6 +290,17 @@ JavaScript-based overlays on the new website. The code of all
 assets regarding `old.reddit.com` didn't change for over two years
 now, and yet the Web Browser keeps requesting stuff from
 `redditstatic.com`. How's that even possible?
+
+![Firefox Cache on Mobile Internet](./firefox-cache-on-mobile-internet.png)
+
+In the screenshot you'll see only the filtered website already
+(without any advertisements or API requests that are not necessary
+to display the web page). All of the assets and scripts were
+downloaded before and should've been in the Web Browser Cache.
+
+Literally, all requests except the initial HTML file did not
+change for years. And those 4 minutes waiting time will happen
+on every single link that I will click, even on the same website.
 
 Even when assuming that web developers always know the correct
 implementation of HTTP/HTTPS headers and what you as a Web Browser
@@ -424,6 +439,8 @@ But sadly, HTML5 doesn't give shit about shit. These
 days literally not even stackoverflow can be printed
 out. A website that has the only purpose of transfering
 knowledge. What the fuck?
+
+![StackOverflow's Print Preview](./stackoverflow-print-preview.png)
 
 When I got online, the first website I visited was
 [MIT OpenCourseWare](https://ocw.mit.edu/index.htm).

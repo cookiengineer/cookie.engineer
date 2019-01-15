@@ -91,12 +91,12 @@ const _render_article = function(template, entry) {
 	let meta = entry.meta;
 	let html = entry.html;
 
-	template = template.replace('${menu}',        '<!-- TBD -->');
-	template = template.replace('${title}',       meta.name);
-	template = template.replace('${headline}',    meta.name);
-	template = template.replace('${article}',     html);
-	template = template.replace('${description}', meta.name);
-	template = template.replace('${keywords}',    meta.tags.join(', '));
+	template = template.split('${menu}').join('<!-- TBD -->');
+	template = template.split('${title}').join(meta.name);
+	template = template.split('${headline}').join(meta.name);
+	template = template.split('${article}').join(html);
+	template = template.split('${description}').join(meta.name);
+	template = template.split('${keywords}').join(meta.tags.join(', '));
 
 	return template;
 

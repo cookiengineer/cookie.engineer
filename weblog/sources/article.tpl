@@ -16,6 +16,13 @@
 		<meta name="robots" content="index, follow">
 		<link rel="alternate" type="application/rss+xml" href="../feed.xml">
 
+		<!-- Social Meta -->
+		<meta name="og:image" content="../../design/cookiengineer.png">
+		<meta name="og:title" content="${title} - Cookie Engineer's Web Log">
+		<meta name="og:description" content="${description}">
+		<meta name="og:site_name" content="Cookie Engineer's Web Log">
+		<meta name="og:type" content="article">
+
 		<!-- Website Content -->
 		<link rel="stylesheet" href="../../design/fontello.css">
 		<link rel="stylesheet" href="../../design/layout.css">

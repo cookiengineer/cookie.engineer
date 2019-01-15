@@ -175,10 +175,6 @@ const _render_index = function(template) {
 
 };
 
-const _render_summary = function(template) {
-
-};
-
 const _parse_body = function(article) {
 
 	let tmp = article.trim();

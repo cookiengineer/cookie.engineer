@@ -17,11 +17,15 @@
 		<link rel="alternate" type="application/rss+xml" href="../feed.xml">
 
 		<!-- Social Meta -->
-		<meta name="og:image" content="../../design/cookiengineer.png">
+		<meta name="og:image" itemprop="image" content="https://cookie.engineer/design/cookiengineer.png">
 		<meta name="og:title" content="${title} - Cookie Engineer's Web Log">
 		<meta name="og:description" content="${description}">
 		<meta name="og:site_name" content="Cookie Engineer's Web Log">
 		<meta name="og:type" content="article">
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" property="og:title" itemprop="name" content="${title} - Cookie Engineer's Web Log">
+		<meta name="twitter:description" property="og:description" itemprop="description" content="${description}">
 
 		<!-- Website Content -->
 		<link rel="stylesheet" href="../../design/fontello.css">

@@ -68,9 +68,9 @@ trusted websites that I visit regularly.
 
 This is actually a problem of the naive Web Browser that allows iframes,
 tracking cookies, advertisement networks and WebRTC-abusing network
-traces by default. uBlock Origin allows to flexibly set that with a
-Matrix instead of some weird filter rule syntax nobody that's not a
-developer can understand. Even though, the Matrix isn't understandable
+traces by default. uMatrix allows to flexibly set that with a clickable
+matrix instead of some weird filter rule syntax nobody that's not a
+developer can understand. Even though, the matrix isn't understandable
 at first, so you have to adapt your thinking to that as well.
 
 [Decentraleyes](https://github.com/Synzvato/decentraleyes) to fix
@@ -121,7 +121,7 @@ When an internet connection is throttled, the Domain Name System
 protocol will be compromised as well. That is not only the case
 with throttled internet connections, but with all mobile connections,
 always, even while you feed the dragon hundreds of bucks a month
-to keep your `5 Giga Bytes` per month.
+to keep your `5 Giga Bytes` for the next 30 days.
 
 They do so by setting the TTL (time to live) header field to
 `0 seconds` in order to let the Web Browser forget the IP of the
@@ -130,15 +130,15 @@ domain you've just requested.
 So the network flow will always look like this.
 
 ```chat
-- Browser  - What is the IP of `reddit.com`?
-- Internet - Hey, it's `1.2.3.4`!
-- Browser  - Okay, gonna do a request to `1.2.3.4` now.
+- Browser  - What is the IP of "reddit.com"?
+- Internet - Hey, it's "1.2.3.4"!
+- Browser  - Okay, gonna do a request to "1.2.3.4" now.
 - Browser  - Oh, found a CSS file.
-- Browser  - What is the IP of `reddit.com` again?
-- Internet - Hey, it's `1.2.3.4`!
+- Browser  - What is the IP of "reddit.com" again?
+- Internet - Hey, it's "1.2.3.4"!
 - Browser  - Okay, now loading the second CSS file.
-- Browser  - What is the IP of `reddit.com` again?
-- Internet - Hey, it's `1.2.3.4`!
+- Browser  - What is the IP of "reddit.com" again?
+- Internet - Hey, it's "1.2.3.4"!
 
 (... and so on ...)
 
@@ -146,16 +146,52 @@ So the network flow will always look like this.
 
 ... and it will continue to do so with - every - single - request.
 
-It's so annoying that I actually forked and rewrote a [DNS Proxy](https://github.com/cookiengineer/dns-proxy)
-that tried to fix that and that maintains its own hosts file, but soon
-enough I came to realize that a DNS cache without the *why* it was
-loaded is pretty senseless and stupid and will waste a lot of traffic
-anyways.
+Additionally, every request that is done - ever - will receive
+data after an initial `30 seconds response timeout`. And every
+mobile connection has a maximum of `4 parallel sockets` whereas
+all other sockets are timing out after `2 minutes` when more
+than one socket exceeds the bandwidth limit.
 
-There is no such thing as a working DNS cache without the *why* it was
-loaded. The why decides what to refresh, when to refresh and how to
-refresh. Otherwise it won't work. Literally, never ever. If dev ops
-guys say differently, they ain't knowing what they talk about.
+As there is no easy way to do this in a Web Browser (it's only
+configurable anyhow in Firefox's `about:config` with around
+20 different options for each protocol and situation) the
+underlying problem is that when switching a connection it
+takes at least 10 minutes until you have configured everything
+correctly.
+
+![firefox-network-settings](./firefox-network-settings.png)
+
+The screenshot is somewhat cropped together, because there's
+no easy way to do these mobile internet settings in a single
+search and/or all together. I probably forgot one of the
+dozens of entries I had to override to make it work, and I'm
+sorry about that... but it's literally totally undocumented
+and you will only know about its perks and tweaks when you
+are faced with yet another useless error message.
+
+Also, you cannot use Chromium because Chromium keeps doing
+shitty requests to `clients1.google.com` that you have to
+blacklist in your `/etc/hosts` file. Otherwise you will
+have to wait for your Web Extensions to update, all the
+fucking time. And a couple of Mega Bytes should not be
+underestimated at `4 Kibi Bytes`, on failed requests it
+will continue back from scratch, because google's
+download servers do not have `Content-Range` or `bytes=`
+range requests support.
+
+It's so annoying that I actually forked and rewrote a [DNS Proxy](https://github.com/cookiengineer/dns-proxy)
+that tried to fix at least parts of it and that maintains its
+own hosts file, but soon enough I came to realize that a DNS cache
+without the *why* it was loaded is pretty senseless and stupid
+and will waste a lot of traffic anyways. Let alone the UX problem
+of telling a user to override a specific host with `127.0.0.1`
+in order to be able to use Chromium with it.
+
+There is no such thing as a working DNS filter aand cache without
+the *why* it was loaded. The why decides what to refresh, when to
+refresh and how to refresh. Otherwise it won't work. Literally,
+never ever. If dev ops guys say differently, they ain't knowing
+shit about what they talk.
 
 So in my personal opinion, the DNS cache has to be maintained by the
 Web Browser in an intelligent and peer-to-peer manner.

@@ -334,7 +334,13 @@ const _render_element = function(element, indent) {
 		} else if (type === 'img') {
 			return ' <img src="' + element.src + '" alt="' + element.alt + '" title="' + element.alt + '"> ';
 		} else if (type === 'a') {
-			return ' <a href="' + element.href + '">' + element.raw + '</a> ';
+
+			if (element.state !== '') {
+				return ' <a class="' + element.state + '" href="' + element.href + '">' + element.raw + '</a> ';
+			} else {
+				return ' <a href="' + element.href + '">' + element.raw + '</a> ';
+			}
+
 		} else if (type === 'h1' || type === 'h2' || type === 'h3') {
 
 			block += indent + '<' + type + '>';

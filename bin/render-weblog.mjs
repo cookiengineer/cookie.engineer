@@ -60,9 +60,29 @@ const _walk_fix_url = function(nodes) {
 
 				let href = node.href;
 				if (href.startsWith('../')) {
-					node.href = path.resolve('/weblog/articles', href);
+					href = node.href = path.resolve('/weblog/articles', href);
 				} else if (href.startsWith('./')) {
-					node.href = path.resolve('/weblog/articles', href);
+					href = node.href = path.resolve('/weblog/articles', href);
+				}
+
+				if (href.startsWith('https://github.com')) {
+					node.state = 'icon-github';
+				} else if (href.startsWith('https://gitlab.com')) {
+					node.state = 'icon-gitlab';
+				} else if (href.startsWith('https://instagram.com')) {
+					node.state = 'icon-instagram';
+				} else if (href.startsWith('https://linkedin.com')) {
+					node.state = 'icon-linkedin';
+				} else if (href.startsWith('https://medium.com')) {
+					node.state = 'icon-medium';
+				} else if (href.startsWith('https://reddit.com')) {
+					node.state = 'icon-reddit';
+				} else if (href.startsWith('https://') || href.startsWith('http://')) {
+					node.state = 'icon-website';
+				} else if (href.endsWith('.zip') || href.endsWith('.tar.gz') || href.endsWith('.tar.xz')) {
+					node.state = 'icon-download';
+				} else if (href.startsWith('/')) {
+					node.state = 'icon-section';
 				}
 
 			} else if (node.type === 'img') {

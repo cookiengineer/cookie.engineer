@@ -159,7 +159,7 @@ underlying problem is that when switching a connection it
 takes at least 10 minutes until you have configured everything
 correctly.
 
-![firefox-network-settings](./firefox-network-settings.png)
+![Firefox Network Settings](./firefox-network-settings.png)
 
 The screenshot is somewhat cropped together, because there's
 no easy way to do these mobile internet settings in a single

@@ -332,7 +332,7 @@ const _render_element = function(element, indent) {
 		if (type === 'b' || type === 'code' || type === 'em' || type === 'del') {
 			return ' <' + type + '>' + element.raw + '</' + type + '>';
 		} else if (type === 'img') {
-			return ' <img src="' + element.src + '" alt="' + element.alt + '" title="' + element.alt + '"> ';
+			return ' <img src="' + element.src + '" alt="' + element.alt + '"> ';
 		} else if (type === 'a') {
 
 			if (element.state !== '') {

@@ -98,6 +98,7 @@
 		cache.figure   = Array.from(doc.querySelectorAll('section div ~ figure'));
 		cache.footer   = Array.from(doc.querySelectorAll('footer'));
 		cache.h1       = Array.from(doc.querySelectorAll('section h1'));
+		cache.h2       = Array.from(doc.querySelectorAll('section h2'));
 		cache.h3       = Array.from(doc.querySelectorAll('section h3, dialog h3'));
 		cache.input    = Array.from(doc.querySelectorAll('article input, article textarea'));
 		cache.img      = Array.from(doc.querySelectorAll('article img'));
@@ -111,6 +112,7 @@
 
 
 		cache.h1.forEach(h1             => _patch(h1,        '\n\n# ', '\n\n'));
+		cache.h2.forEach(h1             => _patch(h1,        '\n## ', '\n\n'));
 		cache.h3.forEach(h3             => _patch(h3,        '\n ### ', h3.querySelector('progress') ? '\n' : '\n\n'));
 		cache.b.forEach(b               => _patch(b,         '**', '**'));
 		cache.code.forEach(code         => _patch(code,      '`', '`'));
@@ -135,9 +137,9 @@
 				let href = _patch_url(a.getAttribute('href').trim());
 
 				if (text !== '' && href !== '') {
-					_patch(a, '![', '](' + href + ')');
+					_patch(a, '[', '](' + href + ')');
 				} else if (href !== '') {
-					_patch(a, '![' + href.split('/').pop() + '](' + href + ')');
+					_patch(a, '[' + href.split('/').pop() + '](' + href + ')');
 				}
 
 			}
@@ -192,11 +194,11 @@
 				let src = img.getAttribute('src') || '';
 
 				if (alt !== '') {
-					_before(img, '![' + alt + ']');
-					_after(img, ')');
+					_before(img, '![');
+					_after(img, '](' + _patch_url(src) + ')');
 				} else if (src !== '') {
-					_before(img, '![' + _patch_url(src) + '](');
-					_after(img, ')');
+					_before(img, '![');
+					_after(img, '](' + _patch_url(src) + ')');
 				}
 
 			}
@@ -279,6 +281,23 @@
 			Array.from(search.querySelector('ul').childNodes).forEach(node => _filter_text(node));
 		}
 
+		let weblog = doc.querySelector('#weblog article');
+		if (weblog !== null) {
+
+			Array.from(weblog.querySelectorAll('img')).map(img => {
+
+				let node = img.nextSibling;
+				if (node !== null) {
+					return node.nextSibling;
+				}
+
+				return null;
+
+			}).filter(node => node !== null).forEach(node => {
+				_before(node, '\n\n');
+			});
+
+		}
 
 	}, true);
 

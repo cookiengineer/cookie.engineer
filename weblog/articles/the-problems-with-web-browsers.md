@@ -14,13 +14,15 @@ in order to find articles, read articles and papers about topics,
 and discussions of problems on reddit and stackoverflow.
 
 That's it, quite literally that's what I use the web browser for
-over 90% of the time. I don't use social networks much (only max
-once per week) because I think they are a waste of my precious
-time. But when I do, I always use their mobile variants instead
-of the "real" ones. So I'm using `m.facebook.com` or `mobile.twitter.com`,
+over 90% of the time. I don't regularly use social networks much
+(only max once per week, probably even less) because I think they
+are a waste of my precious time.
+
+But when I do, I always use their mobile variants instead of the
+"real" ones. So I'm using `m.facebook.com` or `mobile.twitter.com`,
 for example - because the normal websites are so much pain to use
-and they annoy me most of the time with all their ads and
-tracking scripts.
+and they annoy me most of the time with all their ads and useless
+scripts that prevent me from efficiently consuming their content.
 
 
 ## Web Extensions
@@ -42,25 +44,28 @@ the last decades, they never learn) I am forced to use Web Extensions.
 The Web Extensions that make the interwebz somewhat usable are:
 
 [HTTPS Everywhere](https://github.com/EFForg/https-everywhere)
-because Browsers are idiots. Period. If the EFF has to be so
-annoyed to make a Web Extension that literally does nothing
-else than replacing `http://` with `https://` in every URL
-in the address bar to change the behaviour of what is requested
-at first, maybe you as a Browser Dev are pretty damn retarded.
-There's no alternative explanation for that, and fuck your opinion
-in particular.
+because Browsers are idiots. Period. This extension does nothing
+else than replacing `http://` with `https://` in every URL that
+the user types in. I think Web Browsers should've done that a
+long time ago.
 
-[uBlock Origin](https://github.com/gorhill/uBlock) because uBlock
-was given away to a trusted maintainer, and the maintainer abused
-it to inject his own ads. Yeah, that's how much of an asshole that
-guy is. uBlock Origin by default has support for host block lists
-and HTML-filter rules to block elements and scripts via a selector.
+[uBlock Origin](https://github.com/gorhill/uBlock) because it
+allows to filter advertisements by using community-maintained
+filter lists.
+
+uBlock Origin by default has support for host block lists and
+adblock-filter rules (that are applied to the DOM after it was
+loaded, not before) to block elements and scripts via a selector.
 These are community-maintained, but they are of very good quality.
-So at least you know that there are many people out there with the
-same problems.
+
+The issue is that a Browser Extension cannot modify the loaded HTML,
+and can only modify the parsed DOM. So that's why there exists an
+Anti-Anti-Anti-Adblocker somewhere already.
 
 [uMatrix](https://github.com/gorhill/uMatrix) to make uBlock Origin
-usable. Most of the time, I block everything except whitelisted websites.
+usable. Most of the time, I block everything except whitelisted,
+trusted websites that I visit regularly.
+
 This is actually a problem of the naive Web Browser that allows iframes,
 tracking cookies, advertisement networks and WebRTC-abusing network
 traces by default. uBlock Origin allows to flexibly set that with a
@@ -70,12 +75,14 @@ at first, so you have to adapt your thinking to that as well.
 
 [Decentraleyes](https://github.com/Synzvato/decentraleyes) to fix
 cache-busting CDNs. Most CDNs on the web actually abuse cache-busting
-in order to track their users. That means they do not use correct
-`ETag` or `Last-Modified-Since` flows and let the Browser always do
-a completely new request for the identical assets that have not changed
-for years. It has a very limited understanding of what is an asset,
-as there's no API for that in any kind of Web Browser...so most of
-the time it's actually still loading stuff from `redditstatic.com`.
+in order to track their users.
+
+That means they do not use correct `ETag` or `Last-Modified-Since`
+flows and let the Browser always do a completely new request for the
+identical assets that have not changed for years. The extension has a
+very limited understanding of what is an asset, as there's no API for
+that in any kind of Web Browser...so most of the time it's actually
+still loading stuff from `redditstatic.com`.
 
 [Cookie Autodelete](https://github.com/Cookie-AutoDelete/Cookie-AutoDelete)
 to delete cookies that I do not want websites to store. It allows
@@ -138,13 +145,20 @@ So the network flow will always look like this.
 ```
 
 ... and it will continue to do so with - every - single - request.
-It's so annoying that I actually wrote a [DNS Proxy](https://github.com/cookiengineer/dns-proxy)
+
+It's so annoying that I actually forked and rewrote a [DNS Proxy](https://github.com/cookiengineer/dns-proxy)
 that tried to fix that and that maintains its own hosts file, but soon
 enough I came to realize that a DNS cache without the *why* it was
 loaded is pretty senseless and stupid and will waste a lot of traffic
-anyways. There is no such thing as a working DNS cache without the *why*
-it was loaded. Literally, never ever. If dev ops guys say differently,
-they ain't know what they talk about.
+anyways.
+
+There is no such thing as a working DNS cache without the *why* it was
+loaded. The why decides what to refresh, when to refresh and how to
+refresh. Otherwise it won't work. Literally, never ever. If dev ops
+guys say differently, they ain't knowing what they talk about.
+
+So in my personal opinion, the DNS cache has to be maintained by the
+Web Browser in an intelligent and peer-to-peer manner.
 
 
 ### TCP Connections
@@ -154,19 +168,24 @@ Additionally, when using a mobile internet connection, TCP
 something like a `Sweden VPN` in order to get your neutral internet
 connection back, Internet Service Providers will fuck that up as well.
 
-Every TCP connection to a border country will be flagged for manual
+Every TCP connection to a bordering country will be flagged for manual
 intervention by the feds (I know that for sure, as I've seen Gotham
 and the systems behind it). Additionally, the Internet Service Provider
 will slow that bandwidth down as much as possible by injecting TCP
-RST (*Rest*) packets. Those packets will be packets without content,
-they are just literally telling the client something like
-"Hold on, I need more time".
+RST (*Rest*) packets.
 
-If you don't believe me, try typing in SSH on a Sweden VPS. It's so
-annoying that you will smash your keyboard after a couple minutes.
-If you ask them about why it's that way, nobody knows anything. They
-will always deny it. But when using a DSL connection of the very same
-Internet Service Provider, it will magically work.
+Those packets will be packets without content, they are just literally
+telling the client something like "Hold on, I need more time".
+These packets are injected to slow down the connection, as it's not
+possible to request anything else on this socket until it times out.
+Well, and they set the timeout to the maximum limit possible.
+
+If you don't believe me, try typing via Remote SSH on a Sweden VPS.
+It's so annoying that you will smash your keyboard after a couple
+minutes. If you ask the Internet Service Providers about why it's that
+way, nobody knows anything. They will always deny it. But when using
+a DSL connection of the very same Internet Service Provider, it will
+magically work.
 
 
 ### UDP Connections
@@ -177,7 +196,7 @@ flagging and slowing down TCP connections as well, their solution to
 the problem is using a UDP socket via mobile internet connection.
 
 As Internet Service Providers are always allowing UDP (because it's
-their means of how to track their users) there's always be an
+their means of how to track their users) there'll always be an
 unlimited UDP socket on `port 53`. Literally, this is how you can
 get unlimited internet bandwidth on mobile, and how to break out
 of your throttled internet. BTW it works in Europe, too.
@@ -232,7 +251,7 @@ The simplification of those error pages by telling "Could not connect
 to the website" doesn't magically make it work, dear Web Browser
 designers. A little dinosaur won't make it work either.
 
-![Firefox Network Protocol Error](./firefox-network-protocol-error.png)
+![Firefox Network Connection Error](./firefox-network-connection-error.png)
 
 In these error cases that happen very often when being online on
 mobile, most of the time it is solved by doing another request
@@ -241,13 +260,13 @@ work again. But, as Web Browsers are retards, they will redirect
 the *whole fucking tab* to the error page when a sub-request
 anywhere on the website or its requested assets or scripts failed.
 
-![Firefox Network Connection Error](./firefox-network-connection-error.png)
-
 If it can't load the advertisement networks' cookie notification
 for European users, it will literally black out the whole Tab
 and show nothing; forcing the user to reload the whole website
 again. And requesting again is bad, because Web Browser caches
 are little retards, too.
+
+![Firefox Network Protocol Error](./firefox-network-protocol-error.png)
 
 
 ## Web Browser Cache
@@ -313,7 +332,7 @@ For example, make a statistic of how often this very specific
 URL was requested because missing headers said so, and just `+1`
 that rank every time it is requested. After a million requests
 without a change in `Content-Length`, it will be blacklisted and
-not requested anymore. I bet even this retard algorithm would be
+not requested anymore. I bet even this stupid algorithm would be
 more efficient than how both Firefox and Chromium work these days.
 
 
@@ -343,10 +362,6 @@ neighbors to listen to your dirty secrets. These days they
 have that for free, because Web Browser devs don't give a shit
 about their users.
 
-Telling others on meetups something like "I had my orders"
-doesn't make it better, yo. It's literally what Nazis said
-why it was magically okay to do what they did. No excuse.
-
 I personally cannot stress enough how important the right
 to privacy and the right to disallow self-incrimination
 is. It is the foundation of what I believe in and what I
@@ -356,22 +371,23 @@ or country they are.
 I also cannot stress enough how wrong it is to allow all
 those Web API features by default and removing the power
 of decision from the user and moving it to the website
-owners and corporations.
+owners and financially motivated corporations.
 
 If somebody was listening to you with a microphone on the
-street, all the time pushing it into your face and trying
-to sell you shit you don't need and taking notes when
-you kiss your girlfriend... would you tolerate it?
+street, all the time pushing the mic right into your face
+and trying to sell you online casino-related shit you don't
+need and taking notes when you kiss your girlfriend... would
+you tolerate it?
 
-Probably not. Why are you tolerating it in the Web then?
-I mean, come on. You gotta have to wonder how Google and
-Palantir get their data at some point. They are "free" as
-in "self-prostitution" for a reason.
+Probably not.
 
-This has to change. And if Browser devs aren't willing to
-listen, I have to change it myself because it's what I
-believe in. I wouldn't be better than them when I would
-blindly accept it and don't care about it.
+Why are you tolerating it in the Web then? I mean, come on.
+You gotta have to wonder how Google and Palantir get their
+data at some point. They are "free" as in "self-prostitution"
+for a reason.
+
+This has to change. And if Web Browser devs aren't willing
+to listen, I have to change it myself.
 
 
 ## The Semantic Web
@@ -429,39 +445,44 @@ quite there yet.
 
 The advantages of embracing the Semantic Web are
 unimaginable. Things like "Wanna print the website
-and store it in your bookshelf? No problem" would
-have been for free.
+and store it in your bookshelf? No problem." or
+"Wanna summarize the page real quick for me?"
+would have been for free.
 
 
 ## The Knowledge Web
 
 But sadly, HTML5 doesn't give shit about shit. These
 days literally not even stackoverflow can be printed
-out. A website that has the only purpose of transfering
-knowledge. What the fuck?
+out and even has no print stylesheets. A website that
+has the only purpose of transfering knowledge.
+
+What the fuck?
 
 ![StackOverflow's Print Preview](./stackoverflow-print-preview.png)
 
 When I got online, the first website I visited was
 [MIT OpenCourseWare](https://ocw.mit.edu/index.htm).
+
 I was 12 at the time, and I downloaded literally
 everything interesting I could find. The next month,
 our internet plan (which had *5 Giga Bytes* volume)
-was overdue by *20 Giga Bytes*. My parents were not
-so happy, and actually tried to block me from accessing
-the internet but realized it was a bad idea when I
-hacked the computer at the city's library in order
-to access to MIT OpenCourseWare.
+was overdue by *20 Giga Bytes*.
+
+My parents were not so happy, and actually tried to
+block me from accessing the internet but realized it
+was a bad idea when I hacked the computer at the city's
+library in order to access to MIT OpenCourseWare.
 
 Yes, the police incriminated me for that and yes, I
 was processed. Thanks, society.
 
 It literally still gives me the chills when I think
-about MIT OpenCourseWare or the Internet Archive.
+about MIT OpenCourseWare or the [Internet Archive](https://archive.org).
 
-These people are the good guys Free knowledge. All
+These people are the good guys. Free knowledge. All
 knowledge. All ideas that humanity had ever. Literally
-at my fingertips, I only have to ask the correct question
+at my fingertips. I only have to ask the correct question
 and learn *How to Ask*.
 
 From building an indoor cleaning robot to building a
@@ -485,12 +506,13 @@ What the fuck?
 
 I think this can be done better. I wish that the Web Browser
 had an automated integration for `404 Not Found` errors
-on the Web. For example, why not query the Internet Archive
-with the URL? If it's there, offer the possibility for
-the user to download the latest archived version of the
-website.
+on the Web.
 
-Well, or just cache it in the first place.
+For example, why not query the Internet Archive with the URL?
+If it's there, offer the possibility for the user to download
+the latest archived version of the website.
+
+Well, or just correctly cache it in the first place.
 
 
 ## Stealth Browser
@@ -499,15 +521,19 @@ All in all I probably forgot about dozens of annoyances
 on why I started to create my own Web Browser.
 
 The Too Long Didn't Read version of this article is probably
-I think Web Browsers do suck and they do it wrong, and I
-want to make the internet awesome again.
+I think Web Browsers do suck and they do it wrong, and
+I want to make the internet semantic and awesome again.
 
 So I started to implement my own Web Browser under the
 code name [Stealth Browser](https://github.com/cookiengineer/stealth-browser)
-and it's not even working yet. The planned architecture
-filters out all stuff that a website doesn't need to make
-it readable, so it will also probably drop support for
-JavaScript entirely and filter that out as well.
+and it's not even working yet.
+
+The planned architecture filters out all stuff that a
+website doesn't need to make it readable, so it will also
+probably drop support for JavaScript entirely and filter
+that out as well.
+
+![Stealth Browser Settings](./stealth-browser-settings.png)
 
 The idea is to have a peer-to-peer knowledge-aware
 Web Browser that can and will share resources among

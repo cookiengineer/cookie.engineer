@@ -84,7 +84,7 @@
 				<p>
 					There is also an RSS feed available. This is the subscription link
 					so you can copy/paste it in your preferred RSS Feed Reader software:
-					<a rel="alternate" type="application/rss+xml" href="./feed.xml">/weblog/feed.xml</a>
+					<a class="icon-download" rel="alternate" type="application/rss+xml" href="./feed.xml" download>/weblog/feed.xml</a>
 				</p>
 				<p>
 					I hope you find this Web Log interesting.
@@ -113,7 +113,7 @@
 		</section>
 		<section id="weblog-articles">
 			<h1>Web Log.</h1>
-			<article>
+			<article cellspacing="2">
 				<table>
 					<thead>
 						<tr>

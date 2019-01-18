@@ -79,7 +79,12 @@ const _walk_fix_url = function(nodes) {
 					node.state = 'icon-reddit';
 				} else if (href.startsWith('https://') || href.startsWith('http://')) {
 					node.state = 'icon-website';
-				} else if (href.endsWith('.zip') || href.endsWith('.tar.gz') || href.endsWith('.tar.xz')) {
+				} else if (
+					href.endsWith('.mjs')
+					|| href.endsWith('.tar.gz')
+					|| href.endsWith('.tar.xz')
+					|| href.endsWith('.zip')
+				) {
 					node.state = 'icon-download';
 				} else if (href.startsWith('/')) {
 					node.state = 'icon-section';

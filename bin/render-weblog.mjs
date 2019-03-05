@@ -17,7 +17,12 @@ const _parse_meta = function(article) {
 	let tmp = article.trim();
 	if (tmp.startsWith('===')) {
 
-		let meta = {};
+		let meta = {
+			date: null,
+			name: null,
+			tags: null,
+			type: null
+		};
 
 		let raw = tmp.substr(3, tmp.indexOf('===', 3) - 3).trim();
 		if (raw.length > 0) {
@@ -38,6 +43,14 @@ const _parse_meta = function(article) {
 
 			});
 
+		}
+
+		if (typeof meta.tags === 'string') {
+			meta.tags = [ meta.tags ];
+		}
+
+		if (typeof meta.type === 'string') {
+			meta.type = [ meta.type ];
 		}
 
 
@@ -244,13 +257,11 @@ fs.readdir(ROOT + '/articles', (err, files) => {
 
 				if (meta !== null && body !== null && html !== '') {
 
-					let date = meta.date || '';
-					let name = meta.name || '';
-					let tags = meta.tags || [];
-					let type = meta.type || [];
+					console.log('< reading   ' + file + ' ... OKAY');
 
 					if (
-						/^([0-9]{4})-([0-9]{2})-([0-9]{2})$/g.test(meta.date)
+						typeof meta.date === 'string'
+						&& /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/g.test(meta.date)
 						&& meta.name !== null
 						&& meta.tags instanceof Array
 						&& meta.type instanceof Array
@@ -258,17 +269,16 @@ fs.readdir(ROOT + '/articles', (err, files) => {
 
 						DATABASE.push({
 							file: file,
-							meta: {
-								date: date,
-								name: name,
-								tags: tags,
-								type: type
-							},
+							meta: meta,
 							body: body,
 							html: html
 						});
 
 					}
+
+				} else {
+
+					console.log('< reading ' + file + ' ... NOT OKAY');
 
 				}
 

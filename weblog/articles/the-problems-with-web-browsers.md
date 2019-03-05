@@ -159,7 +159,7 @@ underlying problem is that when switching a connection it
 takes at least 10 minutes until you have configured everything
 correctly.
 
-![Firefox Network Settings](./firefox-network-settings.png)
+![Firefox Network Settings](./the-problems-with-web-browsers/firefox-network-settings.png)
 
 The screenshot is somewhat cropped together, because there's
 no easy way to do these mobile internet settings in a single
@@ -287,7 +287,7 @@ The simplification of those error pages by telling "Could not connect
 to the website" doesn't magically make it work, dear Web Browser
 designers. A little dinosaur won't make it work either.
 
-![Firefox Network Connection Error](./firefox-network-connection-error.png)
+![Firefox Network Connection Error](./the-problems-with-web-browsers/firefox-network-connection-error.png)
 
 In these error cases that happen very often when being online on
 mobile, most of the time it is solved by doing another request
@@ -302,7 +302,7 @@ and show nothing; forcing the user to reload the whole website
 again. And requesting again is bad, because Web Browser caches
 are little retards, too.
 
-![Firefox Network Protocol Error](./firefox-network-protocol-error.png)
+![Firefox Network Protocol Error](./the-problems-with-web-browsers/firefox-network-protocol-error.png)
 
 
 ## Web Browser Cache
@@ -346,7 +346,7 @@ assets regarding `old.reddit.com` didn't change for over two years
 now, and yet the Web Browser keeps requesting stuff from
 `redditstatic.com`. How's that even possible?
 
-![Firefox Cache on Mobile Internet](./firefox-cache-on-mobile-internet.png)
+![Firefox Cache on Mobile Internet](./the-problems-with-web-browsers/firefox-cache-on-mobile-internet.png)
 
 In the screenshot you'll see only the filtered website already
 (without any advertisements or API requests that are not necessary
@@ -495,7 +495,7 @@ has the only purpose of transfering knowledge.
 
 What the fuck?
 
-![StackOverflow's Print Preview](./stackoverflow-print-preview.png)
+![StackOverflow's Print Preview](./the-problems-with-web-browsers/stackoverflow-print-preview.png)
 
 When I got online, the first website I visited was
 [MIT OpenCourseWare](https://ocw.mit.edu/index.htm).
@@ -569,7 +569,7 @@ website doesn't need to make it readable, so it will also
 probably drop support for JavaScript entirely and filter
 that out as well.
 
-![Stealth Settings](./stealth-browser-settings.png)
+![Stealth Settings](./the-problems-with-web-browsers/stealth-browser-settings.png)
 
 The idea is to have a peer-to-peer knowledge-aware
 Web Browser that can and will share resources among

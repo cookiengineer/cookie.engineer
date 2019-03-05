@@ -1,7 +1,7 @@
 ===
 - date: 2019-02-15
 - name: Your Definition of Privacy is wrong
-- tags: privacy, security
+- tags: privacy, security, web browsers
 - type: legacy
 ===
 

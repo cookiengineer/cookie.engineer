@@ -145,7 +145,7 @@ my personal name, and I'm replying with "Sorry, that's classified".
 
 Wouldn't you be suspicious in that situation?
 
-Remember, this pieces of information are not made up. This is literally
+Remember, these pieces of information are not made up. This is literally
 what the current Web APIs are broadcasting, and I haven't even started
 yet. There are hundreds more of those kind of APIs that send even more
 data to every other website that you will come along.
@@ -181,12 +181,12 @@ Currently, as already mentioned, your Web Browser trusts everyone,
 except the ones that are known Criminals (aka Ad-Blocked). In my opinion
 this is not a good solution for the underlying problem. In real-life
 I cannot afford to give everybody on the street my passport, and wait
-for him to be prosecuted until I know that he has a stamp on his hand
+for him to be prosecuted until I know that he has a sign on his head
 that says "Don't trust this guy (again)".
 
 So, in order to fix this, we have to understand how current technologies
 work, what they do behind the scenes, and whether or not they actually
-increase privacy or not.
+increase Privacy or not.
 
 
 ### Ad-Blocker Extensions
@@ -314,8 +314,6 @@ I know, it's a trade-off with usability. But believe me, the web
 will get blazing fast again this way. The necessary uMatrix rules
 to get you started are these:
 
-**uMatrix Rules**:
-
 ```umatrix
 https-strict: behind-the-scene false
 matrix-off: about-scheme true
@@ -352,6 +350,18 @@ So, you might ask, where does that leave us, currently?
 - Can we trust Governments? Especially No.
 - Can we still believe in Democracy? Hopefully yes.
 
+The underlying problem with the concept of Trust is that the Web Browser
+is only configurable up to a point where you think it's safe to use for
+the moment; until eventually another feature will land in the Web Browser
+that can be abused.
+
+This happened a couple times with WebSockets in the past, and again a
+couple times with WebRTC, and again a couple times with CSS `:hover` and
+`:visited` and again with CSS shaders... and again ... and again.
+
+My point is that Users should whitelist and actively allow Web Sites
+what they can do feature-wise; and not use the Web by trusting things
+and implementations blindly.
 
 If you want to go even further than the recommended solution in this
 article, you might wanna check up on my current project, the
@@ -361,4 +371,7 @@ Stealth was created because I'm unsatisifed how the Web works, and
 I think this needs to be fixed and implemented fundamentally
 differently to protect the rights and freedoms of people using
 the Internet.
+
+I'm probably blogging about Stealth in the upcoming days with a
+follow-up article to this one. Stay tuned.
 

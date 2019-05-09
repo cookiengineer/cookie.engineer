@@ -31,7 +31,7 @@
 		<link rel="stylesheet" href="../design/layout.css">
 
 		<!-- Website Design -->
-		<link rel="stylesheet" href="../design/weblog.css">
+		<link rel="stylesheet" href="../design/weblog/weblog.css">
 
 		<!-- Website Functionality -->
 		<link rel="stylesheet" href="../design/menu.css">
@@ -44,6 +44,10 @@
 		<script src="../design/copypaste.js"></script>
 		<link rel="stylesheet" href="../design/save.css">
 		<script src="../design/save.js"></script>
+
+		<!-- Magic: Highlight -->
+		<link rel="stylesheet" href="../../design/weblog/highlight.css">
+		<script src="../../design/weblog/highlight.js"></script>
 	</head>
 	<body>
 		<header>

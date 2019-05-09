@@ -1,7 +1,7 @@
 ===
 - date: 2019-01-18
 - name: Implementer's Guide to WebSockets
-- tags: websockets, networking, node.js
+- tags: web socket, network, node.js
 - type: software, legacy
 ===
 

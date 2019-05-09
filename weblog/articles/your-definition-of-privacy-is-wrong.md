@@ -1,7 +1,7 @@
 ===
 - date: 2019-02-15
 - name: Your Definition of Privacy is wrong
-- tags: privacy, security, web browsers
+- tags: privacy, security, web browser
 - type: legacy
 ===
 
@@ -54,7 +54,7 @@ As you are a Web Browser, you learned that you cannot open any Web Site
 these days without telling people who you are first, so you got a big
 sign mounted on your head, which reads:
 
-```sign
+```http
 IP:            1.2.3.4
 User-Agent:    Firefox 64, Arch Linux
 Performance:   4 CPU Cores, 8 CPU Threads, Laptop Screen, 2 GPUs
@@ -117,7 +117,7 @@ These Web Sites will try to get that information anyways, they will try
 to call the APIs, and when there's no data coming back (which is how it
 currently works), they will remember that fact, too.
 
-```sign
+```http
 IP:            1.2.3.4
 User-Agent:    Firefox 64, Arch Linux
 Performance:   4 CPU Cores, 8 CPU Threads, Laptop Screen, 2 GPUs

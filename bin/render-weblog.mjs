@@ -150,7 +150,7 @@ const _render_feed = function(template) {
 		if (b.meta.date > a.meta.date) return  1;
 		return 0;
 
-	}).forEach(entry => {
+	}).forEach((entry) => {
 
 		let meta   = entry.meta;
 		let file   = entry.file.split('.').slice(0, -1).join('.');
@@ -188,7 +188,13 @@ const _render_index = function(template) {
 
 	let articles = [];
 
-	DATABASE.forEach(entry => {
+	DATABASE.sort((a, b) => {
+
+		if (a.meta.date > b.meta.date) return -1;
+		if (b.meta.date < a.meta.data) return  1;
+		return 0;
+
+	}).forEach((entry) => {
 
 		let meta   = entry.meta;
 		let file   = entry.file.split('.').slice(0, -1).join('.');

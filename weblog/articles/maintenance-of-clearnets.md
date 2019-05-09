@@ -6,6 +6,8 @@
 ===
 
 
+![Maximum Security Prison](./maintenance-of-clearnets/maximum-security-prison.jpg)
+
 In order to understand how we can break out of Prison, we must first
 understand how the Prison operates, how the Guards spot means of
 Breakouts (Tools, Weapons), how they rotate their watch shifts; and
@@ -36,24 +38,55 @@ if you're the bad guy or a nice guy. They don't care.
 
 ### General Hints for Dealing with Customs
 
-Always use an up-to-date Linux Distribution (like Arch Linux), always
-encrypt all your partitions, always use a small nano-USB-thumbdrive as
-a crypto unlock key file in combination with a password. They also come
-in the form of a wedding ring or necklace. If you travel with a dog or
-cat, that's even better.
+There are a couple of rules on how to behave with Customs. Since a while
+ago they're looking for suspicious things, so while you're still under
+oath you can still plausibly deny what they're suggesting.
 
-Always power down your Laptop; and remove the thumbdrive before walking
-through Customs at the Country Border.
+- Always use an up-to-date FULL Linux installation like [Arch Linux](https://archlinux.org).
+- Always encrypt all your partitions with [LUKS](https://wiki.archlinux.org/index.php/LUKS).
+- Always use a small Nano USB thumbdrive as a crypto unlock keyfile in combination with a password.
+- Always physically power down your Laptop and remove the battery and thumbdrive before going through Customs.
 
-In my case, I also only use Libreboot-compatible Hardware; which means
-it is a bit out of date by performance standards... but with the ongoing
-never-ending shitstorm about Bugs, Backdoors and Exploits in more modern
-Intel processors I'm quite happy with that decision.
+Additionally I'm using some special techniques that have been proven to
+work so far. I also generated a custom `initramfs` which removes the
+Password Dialog and prints out nothing, while waiting in the background
+for a password for 30 seconds until it boots up.
+
+This way when I try to bootup the machine with Customs watching me, I can
+deny knowing about the Encryption of the HDD/SDD and can say that it was
+working before and that the Laptop is broken now.
+
+If they don't see hints about a password, they ain't gonna ask you about it.
+
+What's also very nice is when you travel with a Dog or Cat that comes
+with a Necklace. There are lots of Nano USB thumbdrives that perfectly
+fit in the Necklace of a Dog Tag or a Pet's name sign. Alternatively
+lots of people use thumbdrives hidden in a Wedding-Ring as I've seen.
+
+Remember that an X-Ray scan will be done in case things go wrong, so
+a Dog Tag can easily be denied and you can say it's something like a
+Dog Tag with a GPS in it or you can hide the keyfile as a `RETURNME.md`
+that has your address in it.
+
+Note that Customs has an NTFS-Stream detecting Forensics software, so
+the cheap tricks ain't working here and you gotta go the
+[steganographic way](https://steghide.sourceforge.net) with an audio
+or raw camera image file (the bigger the better). The Entropy gets
+better if you hide a keyfile within another file and make that file
+your keyfile.
+
+If you can, you should use [LibreBoot](https://libreboot.org) compatible
+Hardware, which means it is a bit outdated by modern performance standards
+though the benefits of the better UEFI replacement far outweight Customs
+having a Super Password to bootup your Laptop even when UEFI is locked.
+
+In times of Bugs, Backdoors and Exploits in more modern Intel processors
+I'm quite happy with that decision.
 
 You'll be amazed how often Customs will ask you whether your Laptop is
-broken or not when they cannot boot it up ... which should be a hint
-that they unsuccessfully tried to invade your Privacy, and tried to
-install Spyware on your Computer without your permission.
+broken or not when they cannot boot it up ... which should give you a
+hint that they unsuccessfully tried to invade your Privacy, and tried
+to install Spyware on your Computer without your permission.
 
 
 ## The OSI Model
@@ -130,12 +163,13 @@ Deactivate all Wi-Fi autoconnect features in order to prevent being
 traceable by the Wi-Fi networks that your Wi-Fi card tries to ping
 when being disconnected.
 
-In Network Manager Profiles, you can add these settings to your Connection
-that is located in `/etc/NetworkManager/system-connections/*.nmconnection`.
+In [Network Manager](https://wiki.gnome.org/Projects/NetworkManager)
+Profiles, you can add these settings to your connection that is
+located at `/etc/NetworkManager/system-connections/*.nmconnection`.
 
-Edit the file as `root` (not via `sudo`) and keep the `chmod` of the
-file identical. Otherwise NetworkManager will forget the Connection
-Settings and mess things up.
+Edit the file as `root` (meaning `su -` and not via `sudo`) and
+keep the `chmod` of the file identical. Otherwise NetworkManager
+will forget the connection settings and mess things up.
 
 ```ini
 ; Generate mac-address via macchanger -sr wlp3s0
@@ -164,54 +198,75 @@ is called Fragmentation.
 
 The underlying TCP data frame starts with a so-called `FIN` flag, which
 represents whether or not the data frame is `finished` and can be
-processed by the software that receives it. When the `FIN` flag is set
-to `0`, it means that the software will continue to wait until new data
-arrives; and try to put the upcoming chunks together when they arrive;
-into this big, locally maintained history of past uncomplete chunks.
+processed by the software that receives it.
 
-Additionally, TCP has a feature called `RST` which is basically a message
-that says `Hold on ... I haven't forgot about you, I just need a while ...`
-which means that the software will wait for the next data frame, and
-usually it does so longer than it would without by resetting the local
-timeout.
+If the `FIN` flag is set to `0`, it means that the software will continue
+to wait until new data arrives; and try to put the upcoming chunks together
+when they arrive; into this big, locally maintained history of past
+uncomplete chunks.
 
-For example, when a software would time out after 30 seconds of waiting,
-the only thing an ISP would have to do is sending another `RST` packet
-every 30 seconds and manipulate all incoming TCP frames to `FIN=0` to
-slow down the software dramatically.
+Additionally, TCP has a feature called `RST` which is vulnerable to a
+so-called [TCP reset attack](https://en.wikipedia.org/wiki/TCP_reset_attack).
 
-Literally this is what happens on throttled "Flatrate" 3G/4G connections.
+The important part here is not the attack scenario itself and that it kills
+the TCP connection, but the behaviour of the software using a TCP socket.
 
-The bandwidth of HSPA+ or LTE is too fast to send just 4kiB/s (note that
-kiBiBit is not kiloBit is not kiloByte), so ISPs use this technique in
-order to slow it down to the minimum speeds until all software (read
-as: Web Browsers) break. Literally everything else like IMAP-based
-email will break all the time and throw an absurd amount of errors.
+Generally software tries to recover from reset or timed out connections,
+so in the Web Browser scenario (producing the most internet traffic from
+an ISPs perspective) the network implementations will steadily try to
+reconnect and load the next part of the file with mechanisms like
+[Partial Content](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/206)
+or [Range Requests](https://developer.mozilla.org/en-US/docs/Web/HTTP/Range_requests).
+
+All the ISP has to do to slow you down is listen for connections that
+try to connect to a list of known CDNs or video delivery networks and
+modify the `FIN` flags and `RST` flags of that particular connection.
+
+Usually they also time their attacks based on known software, so they
+test against commonly known Browsers (read as "Blink", "WebKit" and "Gecko").
+That means in the real world scenarios they just mess around the socket
+for the first `~30 seconds` until the actual payload arrives at the Client.
+
+This might not seem long, but have you seen a Website and its resources
+lately? Hundreds of resources easily multiply to half an hour per-refresh
+where due to the `FIN` flag (and DNS which I'll explain later) local
+caching is completely disabled.
+
+This is exactly what happens on throttled "Flatrate" 3G/4G connections.
+
+The bandwidth of HSPA+ or LTE is too fast to send just 48kiB/s (kiBi Bit),
+so the ISPs use this technique to slow down to minimum speeds until all
+software (read as Web Browser) breaks. Literally everything else like
+an `IMAP` based email client will break all the time and throw an absurd
+amount of errors.
 
 
 ### VPN Connections (Layer 2/4/7)
 
-What is important here is that plain VPN connections that are TCP-based
-are also affected by the TCP `FIN` and `RST` flaw and therefore cannot
-be relied on.
+VPN connections that are based on TCP are also affected by the `FIN` and
+`RST` flaw and therefore cannot be relied on as a stable transport layer.
 
 VPN connections are auto-tagged and auto-throttled when they do connect
-to certain networks or IP ranges in specific geolocation areas (e.g.
-Sweden or Switzerland are off limits, usually).
+to certain networks or IP ranges in specific geolocation areas.
+
+If Sweden or Switzerland comes up via [GeoIP](https://www.maxmind.com/en/geoip-demo)
+the connection is usually off limits and is throttled to the max.
 
 Additionally popular VPN providers usually are auto-blocked via an
-IP-based blocklist which means that everything above Layer 2 will not
-work and they're basically just a big waste of money.
+IP-based blocklist which means that everything above `Layer 2` will
+not work and they're basically just a big waste of money.
 
 
 ### SOCKS Proxies (Layer 5)
 
+![Telephone Operator Lady](./maintenance-of-clearnets/telephone-operator-lady.jpg)
+
 SOCKS Proxies are a different story and they are hard to explain as a
-Network Protocol, because SOCKS itself is actually not a Network Protocol
-but rather something like a Connection Creation Protocol.
+Network Protocol, because SOCKS itself is actually not a real network
+protocol but rather something like a connection delegation protocol.
 
 What SOCKS does is basically have a `Client > Proxy > Server` connection,
-whereas the Proxy itself can be abused for Blocking Purposes or as a
+whereas the Proxy itself can be abused for blocking purposes or as a
 connection handler that sits in the middle.
 
 A SOCKS Proxy can be imagined as the Telephone Operator Lady that you
@@ -230,45 +285,173 @@ just a matter of time before the new server pool behind projects like
 
 ### SSL/TLS Certificate Injection (Layer 6)
 
-Most people assume that when there's the Secure Icon in the Browser
+Most people assume that when there's the Secure Icon in the Web Browser
 that it means the connection is secure, private, and safe.
 
-Guess what, you're wrong.
+Guess what, usually, you're wrong.
 
-SSL was broken on uncountable accounts (Certificate Nulling, Sony Root
-Cert Leak, Weak Elliptic Curves, Heartbleed, Dragonblood and what not),
-and the new encryption protocol is called Transport Layer Security (TLS).
+SSL was broken on uncountable accounts.
 
-But, TLS is also broken up until and including TLS 1.2. With the
-[letsencrypt](https://letsencrypt.org) initiative the usage of the `SNI`
-field got so popular that now ISPs are meanwhile regularly abusing it
-to infiltrate encrypted connections.
+- [Certificate Nulling Bug](https://www.cvedetails.com/cve/CVE-2014-3470)
+- [CCS Injection](https://www.cvedetails.com/cve/CVE-2014-0224)
+- [DER Attack](https://www.cvedetails.com/cve/CVE-2012-2110)
+- [X509 Policy Check Bug](https://www.cvedetails.com/cve/CVE-2011-4109)
+- [Heartbleed](https://en.wikipedia.org.wiki/Heartbleed)
+- [POODLE](https://en.wikipedia.org.wiki/POODLE)
+- [DROWN](https://en.wikipedia.org.wiki/DROWN)
+- [Cloudbleed](https://en.wikipedia.org.wiki/Cloudbleed)
+
+... and that's just for starters.
+
+The new all-new implementation is TLS ( `Transport Layer Security` ) and
+Web Browsers have realized that it's a good idea to deprecate everything
+as fast as possible, so the current standard that I'm focussing on is
+`TLS 1.2` and only its specific attack vectors and exploitable bugs that
+still work today; just for the sake of argument.
+
+There are lots of other MITM attack scenarios for outdated banking websites,
+but they are honestly too much to count or remember. Just assume that
+banks want to support grandmas using IE6, so they use the weakest
+encryption possible because they're idiots.
+
+That pretty much sums it up, especially in Germany or the European Union.
+
+
+**3SHAKE Attack**
+
+The [3SHAKE attack](https://mitls.org/pages/attacks/3SHAKE) allows a
+malicious MITM to reuse the client's credentials to make intermediary
+requests to another third-party (or the same server) that uses the same
+credentials, which basically means an MITM scenario where Bob can make
+requests on behalf of Alice even when Alice disconnected from the server.
+
+**LOGJAM Attack**
+
+In the [LOGJAM attack](https://weakdh.org) a TLS connection is downgraded
+to a `512-Bit` encrypted connection which is using weak Diffie-Hellman groups.
+
+Note: This will be fixed in `TLS 1.3` once it is released.
+
+**FREAK Attack**
+
+The FREAK attack abuses `Factoring RSA Export Keys` in order to trick
+servers into negotating a connection with a previous version of TLS
+such as `SSL v2` which then will use cryptographically weak `512-Bit`
+encryption keys.
+
+Note: This will be fixed in `TLS 1.3` by disallowing protocol downgrades,
+but at the moment it's pretty much optional. So most real-world websites
+are actually vulnerable.
+
+**ROBOT Attack**
+
+This is in my opinion most likely what spy agencies are using in the wild.
+The attack is called `Return Of Bleichenbacher's Oracle Attack` as the
+attack was initially discovered in `1998`. Yes, freaking `1 9 9 8`.
+
+Basically [ROBOT](https://robotattack.org) allows to forge signatures so
+that the website that says it's Facebook actually isn't Facebook.
+
+Note: This will be fixed in `TLS 1.3` by disallowing insecure key transport
+mechanisms (as `RSA-PKCS v1.5` is considered unsecure, like, forever).
+
+**LUCKY13 Attack**
+
+The [LUCKY13 Attack](https://nvd.nist.gov/vuln/detail/CVE-2013-0169) is
+a timing attack against TLS up to and including `TLS 1.2`. This attack
+already has been proven to work against `AWS` aka Amazon Web Services,
+so it's pretty likely that this is in use in the wild, too. Oh, and it's
+from `2013`, so it's actually been a long time ago by now.
+
+**BEAST Attack**
+
+The BEAST Attack is primarily a client-side attack vulnerability in `TLS 1.0`,
+so depending on your Operating System this attack might still work.
+Yes, I'm looking at you, Apple and Microsoft, specifically.
+
+The attack allows the attacker to obtain authentication credentials,
+session tokens or even authentication cookies, so it's the real deal
+in terms of "Is it actually being used?". You bet it is.
+
+**CRIME and TIME**
+
+The `Compression Ratio Info-leak Made Easy` attack allows to using a
+side-channel attack against `HTTPS`. It analyzes information that is
+leaked by TLS compression in messages sent from the client to the
+server, so it can recover parts (if not all, given the attacker is
+the actual MITM) of the unencrypted messages.
+
+Note: CRIME will be fixed in `TLS 1.3` by disabling TLS-level compression
+completely. In the wild though, many, many, _many_ webservers still have
+compression enabled, so they're vulnerable to this attack method.
+
+**BREACH Attack**
+
+The [BREACH Attack](https://breachattack.com) is similar to `CRIME`,
+but it abuses `HTTP` compression to read out a Client's session secrets.
+In the Proof of Concept they were able to exfiltrate CSRF tokens, and
+it works even with `TLS 1.3` and is effective against any cipher suite.
+
+As `HTTP` is above the TLS layer, TLS cannot ensure the prevention of
+this attack method. Literally all servers that I've encountered have
+compression enabled, so they're vulnerable to this attack.
+
+**TIME to HEIST**
+
+The HEIST Attack abuses `TCP` windows in order to steal encrypted HTTP
+messages, specifically. This side-channel attack leaks the exact length
+of the unencrypted messages of any cross-origin response, so the attack
+does not actually allow to see the plaintext messages, but it allows
+ISPs (aka MITM) to see what specific resource the client downloaded
+from the website through a simple map of `byte length - URL`.
+
+Note that this attack affects all `TLS` versions, and is also affecting
+both `HTTP/1.1` and `HTTP/2` based connections.
+
+In `HTTP/2` this attack is even more dangerous, because it allows to
+inject malicious resources (such as a JavaScript file that can access
+all session cookies, credentials etc.) into the encrypted website.
+
+Yes, you read that correctly.
+
+**SNI Attack**
+
+With the [letsencrypt](https://letsencrypt.org) initiative the usage
+of the `SNI` field got so popular that now ISPs are meanwhile regularly
+abusing it to infiltrate encrypted connections on a large scale.
 
 The `SNI` stands for `Server Name Identification` which basically allows
 a web hosting provider to have a single server that has multiple domains
 pointing to it; and that its software can deliver the correct encryption
 certificate for the currently requested domain.
 
-But, as you might have guessed, `SNI` before TLS 1.3 (which isn't rolled
-out yet) was transferred unencrypted and lead to plain-old unencrypted DNS
-request for that very domain. As the DNS protocol is unencrypted, it
-lead to ISPs being able to manipulate that result; and therefore legitimize
-otherwise invalid certificates.
+But, as you might have guessed, `SNI` before `TLS 1.3` was transferred
+unencrypted and lead to plain-old unencrypted DNS request for that very
+domain.
 
-So, always check for TLS 1.3 and above; and assume that TLS 1.2 and
-below are insecure. As TLS 1.2 and before is not really deprecated it
-will continue to help exploit users for a long time to come and it will
-take an even longer time to upgrade all those legacy websites running
-on legacy software.
+As the DNS protocol is unencrypted, it lead to ISPs being able to manipulate
+that result; and therefore legitimize otherwise invalid certificates.
 
-The only Browser that currently fixes this issue is the
-[Stealth](https://github.com/cookiengineer/stealth) Browser. Yeah yeah,
-I know, shameless plug, but it's just so that you actively keep in mind
-that other Browsers aren't as secure as they claim to be; even when not
-talking about their always-on-not-actually-deactivateable tracking.
+**TL;DR**
+
+Always check for `TLS 1.3` and above; and assume that `TLS 1.2` and
+below are insecure. As `TLS 1.2` and earlier is not really deprecated
+it will continue to help exploit users for a long time to come and it
+will take an even longer time to upgrade all those legacy websites
+running on legacy software.
+
+The only Browser that currently fixes all of the above issues is the
+[Stealth](https://github.com/cookiengineer/stealth) Browser.
+
+Yeah yeah, I know, shameless plug, but it's just so that you actively
+keep in mind that other Browsers aren't as secure as they claim to be;
+even when not talking about their always-active and not-really
+deactivateable tracking mechanisms.
 
 
 ### DNS Time-To-Live Manipulation (Layer 7)
+
+![First Time](./maintenance-of-clearnets/first-time.jpg)
 
 Even when your network connection is encrypted, your network might be
 compromised. Your Computer doesn't understand what `cookie.engineer`

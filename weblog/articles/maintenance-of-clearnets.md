@@ -408,11 +408,14 @@ from the website through a simple map of `byte length - URL`.
 Note that this attack affects all `TLS` versions, and is also affecting
 both `HTTP/1.1` and `HTTP/2` based connections.
 
-In `HTTP/2` this attack is even more dangerous, because it allows to
-inject malicious resources (such as a JavaScript file that can access
-all session cookies, credentials etc.) into the encrypted website.
+The attack is known among BlackHat DC visitors and very sophisticated
+but doesn't have a website, so I've uploaded it to my website.
 
-Yes, you read that correctly.
+![heist-attack.pdf](./maintenance-of-clearnets/heist-attack.pdf)
+
+The original paper is available at
+[blackhat.com](https://www.blackhat.com/docs/us-16/materials/us-16-VanGoethem-HEIST-HTTP-Encrypted-Information-Can-Be-Stolen-Through-TCP-Windows-wp.pdf)
+
 
 **SNI Attack**
 
@@ -471,16 +474,29 @@ In that case you need to know how many of your customers are surfing
 how often on YouTube (or the Google Video CDN domains).
 
 What you, as an ISP, can do is pretty simple. The DNS Protocol has a
-so-called Time-To-Live field inside it, which means that the receiving
+so-called `Time-To-Live` field inside it, which means that the receiving
 Computer should forget about the Domain in `X seconds` (quite literally)
-and Computers will gladly do so.
+and Computers will gladly do so. ISPs abuse that and set the `TTL` field
+in the response to `0 seconds`.
 
-So, if you visit `searx.me`, the Browser does a DNS request, then
-remembers the IP address, and only then connect to the Server via TCP
-(or HTTP/S). But if the `TTL` field in the DNS request had the value
-`0`, it will immediately forget about it... which means that when you
-loaded the page and you click a single link (that also is on `searx.me`)
-the Browser will end up doing a DNS request, again.
+A visit of `searx.me` then typically looks like this:
+
+```http
+Browser:  DNS request with What is the IP of searx.me?
+Internet: DNS response with It's 1.2.3.4! Forget about it in 0 seconds!
+Browser:  Gotcha, already forgotten.
+Browser:  HTTP(S) request to website
+Internet: HTTP(S) response from website
+
+Browser:  User clicks on link to searx.me/somethingsomething
+
+Browser:  Damn, what was that IP again?
+Browser:  DNS request with What is the IP of searx.me?
+Internet: DNS response with It's 1.2.3.4! Forget about it in 0 seconds!
+Browser:  Gotcha, already forgotten.
+
+(...)
+```
 
 And this continues, again and again... again and again. So even if the
 ISPs don't know the exact data that was transferred, they can basically
@@ -504,6 +520,11 @@ is a so-called HTTP Downgrade Attack that works usually in Firefox or
 An HTTP Downgrade Attack is pretty simple. The Web Browser has a serious
 flaw: It requests websites first via `HTTP` and only then (optionally)
 upgrades the connection to `HTTPS`.
+
+```diff
+- Connection: Upgrade
++ Connection: Downgrade
+```
 
 ISPs manipulate the very first request, and basically remove the
 `Connection: Upgrade` instructions inside the Response in order to

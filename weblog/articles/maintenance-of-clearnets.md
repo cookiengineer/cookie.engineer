@@ -409,10 +409,8 @@ Note that this attack affects all `TLS` versions, and is also affecting
 both `HTTP/1.1` and `HTTP/2` based connections.
 
 The attack is known among BlackHat DC visitors and very sophisticated
-but doesn't have a website, so I've uploaded it to my website.
-
-![heist-attack.pdf](./maintenance-of-clearnets/heist-attack.pdf)
-
+but doesn't have a website, so you gotta download the
+[heist-attack.pdf](./maintenance-of-clearnets/heist-attack.pdf) directly.
 The original paper is available at
 [blackhat.com](https://www.blackhat.com/docs/us-16/materials/us-16-VanGoethem-HEIST-HTTP-Encrypted-Information-Can-Be-Stolen-Through-TCP-Windows-wp.pdf)
 

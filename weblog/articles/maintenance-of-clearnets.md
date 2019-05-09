@@ -138,7 +138,7 @@ file identical. Otherwise NetworkManager will forget the Connection
 Settings and mess things up.
 
 ```ini
-; mac-address generated via macchanger -sr wlp3s0
+; Generate mac-address via macchanger -sr wlp3s0
 
 [connection]
 id=Example-WiFi
@@ -148,6 +148,7 @@ autoconnect=false
 
 [wifi]
 mac-address=00:01:02:03:04:05
+
 [ipv4]
 dhcp-send-hostname=false
 

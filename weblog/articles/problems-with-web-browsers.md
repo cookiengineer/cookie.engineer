@@ -551,7 +551,7 @@ the latest archived version of the website.
 Well, or just correctly cache it in the first place.
 
 
-## Stealth
+## Tholian Stealth
 
 All in all I probably forgot about dozens of annoyances
 on why I started to create my own Web Browser.
@@ -560,8 +560,8 @@ The Too Long Didn't Read version of this article is probably
 I think Web Browsers do suck and they do it wrong, and
 I want to make the internet semantic and awesome again.
 
-So I started to implement my own Web Browser under the
-code name [Stealth](https://github.com/cookiengineer/stealth)
+So I started to implement my own peer-to-peer Web Browser
+under the name [Tholian Stealth](https://github.com/tholian-network/stealth)
 and it's not even working yet.
 
 The planned architecture filters out all stuff that a
@@ -569,7 +569,7 @@ website doesn't need to make it readable, so it will also
 probably drop support for JavaScript entirely and filter
 that out as well.
 
-![Stealth Settings](./problems-with-web-browsers/stealth-browser-settings.png)
+![Stealth Browser Settings](./problems-with-web-browsers/stealth-browser-settings.png)
 
 The idea is to have a peer-to-peer knowledge-aware
 Web Browser that can and will share resources among
@@ -606,6 +606,6 @@ about it once it's ready for the public.
 
 If you have feedback, critiques or comments about the
 architecture or design, please let me know in the
-[issues](https://github.com/cookiengineer/stealth/issues)
+[issues](https://github.com/tholian-network/stealth/issues)
 of the project.
 

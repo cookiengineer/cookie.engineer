@@ -5,7 +5,7 @@
 - type: software, legacy
 ===
 
-Today I implemented WebSocket support for [Stealth](https://github.com/cookiengineer/stealth).
+Today I implemented WebSocket support for [Tholian Stealth](https://github.com/tholian-network/stealth).
 
 But, I soon came to realize that when implementing WebSockets from
 scratch that there is no go-to-and-know-everything resource

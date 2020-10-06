@@ -1,14 +1,14 @@
 
 (function(global) {
 
-	global.addEventListener('DOMContentLoaded', _ => {
+	global.addEventListener('DOMContentLoaded', () => {
 
 		const doc      = global.document;
 		const menu     = doc.querySelector('aside#menu');
 		const button   = menu.querySelector('button');
-		const items    = Array.from(menu.querySelectorAll('a[href]')).filter(a => a.getAttribute('href').startsWith('#'));
-		const links    = Array.from(doc.querySelectorAll('article a')).filter(a => a.getAttribute('href').startsWith('#'));
-		const sections = items.map(a => a.href).map(url => {
+		const items    = Array.from(menu.querySelectorAll('a[href]')).filter((a) => a.getAttribute('href').startsWith('#'));
+		const links    = Array.from(doc.querySelectorAll('article a')).filter((a) => a.getAttribute('href').startsWith('#'));
+		const sections = items.map((a) => a.href).map((url) => {
 
 			let id = url.split('#').pop();
 			let element = doc.querySelector('#' + id);
@@ -18,7 +18,7 @@
 
 			return null;
 
-		}).filter(section => section !== null);
+		}).filter((section) => section !== null);
 
 
 
@@ -64,7 +64,7 @@
 			let candidates = sections.slice(0).reverse();
 			if (candidates.length > 0) {
 
-				let found = candidates.find(section => {
+				let found = candidates.find((section) => {
 
 					let rect = section.getBoundingClientRect();
 					if (rect.top > 0 && rect.top < height / 2) {
@@ -76,7 +76,7 @@
 				}) || null;
 
 				if (found === null) {
-					found = candidates.find(section => {
+					found = candidates.find((section) => {
 						return section.getBoundingClientRect().top < 0;
 					}) || null;
 				}
@@ -84,7 +84,7 @@
 
 				if (found !== null) {
 
-					let item = items.find(item => {
+					let item = items.find((item) => {
 
 						let id = item.href.split('#/').pop();
 						if (id === found.id) {
@@ -97,7 +97,7 @@
 
 					if (item !== null && item.className !== 'active') {
 
-						items.forEach(other => {
+						items.forEach((other) => {
 							other.className = other === item ? 'active' : '';
 						});
 
@@ -123,18 +123,18 @@
 				let offset  = global.scrollY;
 				let current = 0;
 
-				global.addEventListener('scroll', event => {
+				global.addEventListener('scroll', () => {
 					current = global.scrollY;
 				}, true);
 
-				setInterval(_ => {
+				setInterval(() => {
 
 					let delta = current - offset;
 					if (delta > 32) {
 
 						_del_state(menu, 'open');
 						_del_state(menu, 'visible');
-						items.forEach(item => item.className = '');
+						items.forEach((item) => item.className = '');
 
 					} else if (delta < -32) {
 
@@ -158,7 +158,7 @@
 
 		if (menu !== null && button !== null) {
 
-			button.addEventListener('click', _ => {
+			button.addEventListener('click', () => {
 
 				let state = _has_state(menu, 'open');
 				if (state === true) {
@@ -173,7 +173,7 @@
 
 		if (items.length > 0) {
 
-			items.forEach(item => {
+			items.forEach((item) => {
 
 				let href = '#/' + item.getAttribute('href').split('#').pop();
 				if (href === global.location.hash) {
@@ -208,7 +208,7 @@
 
 		if (links.length > 0) {
 
-			links.forEach(link => {
+			links.forEach((link) => {
 
 				let href = '#/' + link.getAttribute('href').split('#').pop();
 

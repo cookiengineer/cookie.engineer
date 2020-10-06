@@ -1,7 +1,7 @@
 
 (function(global) {
 
-	global.addEventListener('DOMContentLoaded', _ => {
+	global.addEventListener('DOMContentLoaded', () => {
 
 		const doc   = global.document;
 		const card  = doc.querySelector('article#card');
@@ -139,12 +139,12 @@
 
 			let width = menu.querySelector('input[name="width"]');
 			if (width !== null) {
-				width.oninput = _ => _update_width(width.value);
+				width.oninput = () => _update_width(width.value);
 			}
 
 			let height = menu.querySelector('input[name="height"]');
 			if (height !== null) {
-				height.oninput = _ => _update_height(height.value);
+				height.oninput = () => _update_height(height.value);
 			}
 
 		}

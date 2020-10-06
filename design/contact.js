@@ -1,22 +1,22 @@
 
 (function(global) {
 
-	global.addEventListener('DOMContentLoaded', _ => {
+	global.addEventListener('DOMContentLoaded', () => {
 
 		const _IGNORE_THIZ = (function() {
 			return [
-				 8,  4,  7, 11,  8,  2, 12,  9,
-				13,  6,  8,  7, 13, 11,  6, 11,
-				 4,  3,  7, 15, 13, 12,  1, 10,
-				10,  3, 10,  1,  3,  1,  0,  5,
-				 7, 15,  0,  7,  6, 15, 12,  6
-			].map(v => (v).toString(16)).join('');
+				8,  4,  7,  11, 8,  2,  12, 9,
+				13, 6,  8,  7,  13, 11, 6,  11,
+				4,  3,  7,  15, 13, 12, 1,  10,
+				10, 3,  10, 1,  3,  1,  0,  5,
+				7,  15, 0,  7,  6,  15, 12, 6
+			].map((v) => (v).toString(16)).join('');
 		})();
 
 		const doc      = global.document;
 		const answer   = doc.querySelector('fieldset#contact-form input[name="captcha"]');
 		const avatar   = doc.querySelector('div#contact-captcha-avatar');
-		const form     = Array.from(doc.querySelectorAll('fieldset#contact-form select, fieldset#contact-form input, fieldset#contact-form textarea')).filter(e => e !== answer);
+		const form     = Array.from(doc.querySelectorAll('fieldset#contact-form select, fieldset#contact-form input, fieldset#contact-form textarea')).filter((e) => e !== answer);
 		const message  = doc.querySelector('div#contact-form-message');
 		const question = doc.querySelector('div#contact-captcha-question');
 		const submit   = doc.querySelector('fieldset#contact-form button');
@@ -47,6 +47,8 @@
 					ext = 'opus';
 				} else if (ogg === true) {
 					ext = 'ogg';
+				} else if (mp3 === true) {
+					ext = 'mp3';
 				}
 
 				human = new Audio('design/contact/human.' + ext);
@@ -153,8 +155,9 @@
 
 					try {
 						let p = sound.play();
-						p.catch(err => {});
+						p.catch(() => {});
 					} catch (err) {
+						// Do nothing
 					}
 
 				}
@@ -183,13 +186,13 @@
 
 		const _verify_question = (value) => {
 
-			let entry = _QUESTIONS.find(entry => entry.question === question.innerHTML.trim()) || null;
+			let entry = _QUESTIONS.find((entry) => entry.question === question.innerHTML.trim()) || null;
 			if (entry !== null) {
 
 				if (entry.answer instanceof Array) {
 
 					let cmp1  = value.toLowerCase().trim();
-					let check = entry.answer.find(cmp2 => cmp1 === cmp2.toLowerCase().trim()) || null;
+					let check = entry.answer.find((cmp2) => cmp1 === cmp2.toLowerCase().trim()) || null;
 					if (check !== null) {
 
 						_set_avatar('human');
@@ -241,7 +244,7 @@
 
 			if (_CHARS_SEARCH.test(san)) {
 
-				san = san.replace(_CHARS_SEARCH, character => {
+				san = san.replace(_CHARS_SEARCH, (character) => {
 
 					let meta = _CHARS_META[character];
 					if (meta !== undefined) {
@@ -265,13 +268,14 @@
 				try {
 					issue = global.localStorage.getItem('issue');
 				} catch (err) {
+					issue = null;
 				}
 
 			}
 
 			if (issue !== null) {
 
-				setTimeout(_ => {
+				setTimeout(() => {
 					callback(issue);
 				}, 5000);
 
@@ -305,6 +309,7 @@
 				try {
 					data = JSON.parse(xhr.responseText);
 				} catch (err) {
+					data = null;
 				}
 
 				if (data instanceof Object) {
@@ -345,7 +350,7 @@
 
 		if (question !== null && answer !== null) {
 
-			answer.addEventListener('change', _ => {
+			answer.addEventListener('change', () => {
 
 				let check1 = _verify_question(answer.value);
 				if (check1 === false) {
@@ -355,8 +360,9 @@
 
 						try {
 							let p = sounds.robot.play();
-							p.catch(err => {});
+							p.catch(() => {});
 						} catch (err) {
+							// Do nothing
 						}
 
 					}
@@ -365,7 +371,7 @@
 
 			}, true);
 
-			answer.addEventListener('keyup', _ => {
+			answer.addEventListener('keyup', () => {
 				_verify_question(answer.value);
 			}, true);
 
@@ -377,11 +383,12 @@
 		try {
 			issue = global.localStorage.getItem('issue');
 		} catch (err) {
+			issue = null;
 		}
 
 		if (issue !== null && message !== null && submit !== null) {
 
-			form.forEach(element => element.setAttribute('disabled', 'true'));
+			form.forEach((element) => element.setAttribute('disabled', 'true'));
 
 			message.className = 'visible';
 			message.innerHTML = _MESSAGE(issue, issue.split('/').pop());
@@ -394,7 +401,7 @@
 
 		if (question !== null && answer !== null && submit !== null) {
 
-			submit.addEventListener('click', _ => {
+			submit.addEventListener('click', () => {
 
 				let captcha = _verify_question(answer.value);
 				if (captcha === true && issue === null) {
@@ -405,7 +412,7 @@
 						message: null
 					};
 
-					form.forEach(element => {
+					form.forEach((element) => {
 
 						let key = element.getAttribute('name');
 						let val = '';
@@ -450,11 +457,11 @@
 						submit.setAttribute('disabled', 'true');
 
 
-						_submit_issue(data, url => {
+						_submit_issue(data, (url) => {
 
 							if (url !== null) {
 
-								form.forEach(element => element.setAttribute('disabled', 'true'));
+								form.forEach((element) => element.setAttribute('disabled', 'true'));
 
 								message.className = 'visible';
 								message.innerHTML = _MESSAGE(url, url.split('/').pop());
@@ -466,6 +473,7 @@
 									issue = url;
 									global.localStorage.setItem('issue', url);
 								} catch (err) {
+									// Do nothing
 								}
 
 							} else {
@@ -485,8 +493,9 @@
 
 					try {
 						let p = sounds.robot.play();
-						p.catch(err => {});
+						p.catch(() => {});
 					} catch (err) {
+						// Do nothing
 					}
 
 				}

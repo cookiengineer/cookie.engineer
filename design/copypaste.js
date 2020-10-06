@@ -1,7 +1,7 @@
 
 (function(global) {
 
-	global.addEventListener('DOMContentLoaded', _ => {
+	global.addEventListener('DOMContentLoaded', () => {
 
 		const doc   = global.document;
 		const cache = {};
@@ -111,24 +111,24 @@
 		cache.ul_li    = Array.from(doc.querySelectorAll('article ul li'));
 
 
-		cache.h1.forEach(h1             => _patch(h1,        '\n\n# ', '\n\n'));
-		cache.h2.forEach(h1             => _patch(h1,        '\n## ', '\n\n'));
-		cache.h3.forEach(h3             => _patch(h3,        '\n ### ', h3.querySelector('progress') ? '\n' : '\n\n'));
-		cache.b.forEach(b               => _patch(b,         '**', '**'));
-		cache.code.forEach(code         => _patch(code,      '`', '`'));
-		cache.del.forEach(del           => _patch(del,       '~', '~'));
-		cache.em.forEach(em             => _patch(em,        '*', '*'));
-		cache.footer.forEach(footer     => _patch(footer,    '\n\n\n# Footer.\n\n', ''));
-		cache.figure.forEach(figure     => _patch(figure,    '', '\n\n'));
-		cache.pre.forEach(pre           => _patch(pre,       '\n ```' + pre.className + '\n', '```'));
-		cache.progress.forEach(progress => _before(progress, ': ' + progress.getAttribute('data-label')));
-		cache.ul.forEach(ul             => _patch(ul,        '\n'));
-		cache.ul_li.forEach(li          => _patch(li,        '- '));
-		cache.ol.forEach(ol             => _patch(ol,        '\n'));
-		cache.ol_li.forEach((li, num)   => _patch(li,        (num + 1) + '. '));
+		cache.h1.forEach((h1)             => _patch(h1,        '\n\n# ', '\n\n'));
+		cache.h2.forEach((h1)             => _patch(h1,        '\n## ', '\n\n'));
+		cache.h3.forEach((h3)             => _patch(h3,        '\n ### ', h3.querySelector('progress') ? '\n' : '\n\n'));
+		cache.b.forEach((b)               => _patch(b,         '**', '**'));
+		cache.code.forEach((code)         => _patch(code,      '`', '`'));
+		cache.del.forEach((del)           => _patch(del,       '~', '~'));
+		cache.em.forEach((em)             => _patch(em,        '*', '*'));
+		cache.footer.forEach((footer)     => _patch(footer,    '\n\n\n# Footer.\n\n', ''));
+		cache.figure.forEach((figure)     => _patch(figure,    '', '\n\n'));
+		cache.pre.forEach((pre)           => _patch(pre,       '\n ```' + pre.className + '\n', '```'));
+		cache.progress.forEach((progress) => _before(progress, ': ' + progress.getAttribute('data-label')));
+		cache.ul.forEach((ul)             => _patch(ul,        '\n'));
+		cache.ul_li.forEach((li)          => _patch(li,        '- '));
+		cache.ol.forEach((ol)             => _patch(ol,        '\n'));
+		cache.ol_li.forEach((li, num)     => _patch(li,        (num + 1) + '. '));
 
 
-		cache.a.forEach(a => {
+		cache.a.forEach((a) => {
 
 			let img = a.querySelector('img') || null;
 			if (img === null) {
@@ -146,15 +146,15 @@
 
 		});
 
-		cache.article.forEach(article => {
+		cache.article.forEach((article) => {
 
 			let div = article.querySelector('div');
 			if (div !== null) {
 
-				let names = article.className.split('-').filter(v => v !== '');
+				let names = article.className.split('-').filter((v) => v !== '');
 				if (names.length > 0) {
 
-					let ingredients = names.map(v => v.charAt(0).toUpperCase() + v.substr(1));
+					let ingredients = names.map((v) => v.charAt(0).toUpperCase() + v.substr(1));
 					if (ingredients.length > 0) {
 						_patch(div, 'Ingredients: ' + ingredients.join(', ') + '\n');
 					}
@@ -165,14 +165,14 @@
 
 		});
 
-		cache.button.forEach(button => {
+		cache.button.forEach((button) => {
 
 			_before(button, '?{');
 			_after(button, '}');
 
 		});
 
-		cache.img.forEach(img => {
+		cache.img.forEach((img) => {
 
 			let has_link = img.parentNode.tagName.toLowerCase() === 'a';
 			if (has_link === true) {
@@ -205,7 +205,7 @@
 
 		});
 
-		cache.input.forEach(input => {
+		cache.input.forEach((input) => {
 
 			let type  = input.getAttribute('type') || 'text';
 			let name  = input.getAttribute('name');
@@ -223,11 +223,11 @@
 
 		});
 
-		cache.select.forEach(select => {
+		cache.select.forEach((select) => {
 
 			let name    = select.getAttribute('name');
 			let options = Array.from(select.querySelectorAll('option'));
-			let option  = options.find(o => o.selected === true) || null;
+			let option  = options.find((o) => o.selected === true) || null;
 			let value   = '';
 
 			if (option !== null) {
@@ -264,27 +264,27 @@
 			}
 		};
 
-		Array.from(doc.querySelectorAll('fieldset#search-form input')).forEach(fix => _before(fix, '\n'));
-		Array.from(doc.querySelectorAll('fieldset#contact-form')).forEach(fix => _before(fix, '\n'));
-		Array.from(doc.querySelectorAll('#about-me div a')).forEach(fix => _before(fix, '\n'));
-		Array.from(doc.querySelectorAll('#about-me article:nth-of-type(2)')).forEach(fix => _before(fix, '\n'));
-		Array.from(doc.querySelectorAll('#search article p')).forEach(fix => _before(fix, '\n'));
+		Array.from(doc.querySelectorAll('fieldset#search-form input')).forEach((fix) => _before(fix, '\n'));
+		Array.from(doc.querySelectorAll('fieldset#contact-form')).forEach((fix) => _before(fix, '\n'));
+		Array.from(doc.querySelectorAll('#about-me div a')).forEach((fix) => _before(fix, '\n'));
+		Array.from(doc.querySelectorAll('#about-me article:nth-of-type(2)')).forEach((fix) => _before(fix, '\n'));
+		Array.from(doc.querySelectorAll('#search article p')).forEach((fix) => _before(fix, '\n'));
 
 		let skills = doc.querySelector('#skills article');
 		if (skills !== null) {
-			Array.from(skills.childNodes).forEach(node => _filter_text(node));
+			Array.from(skills.childNodes).forEach((node) => _filter_text(node));
 		}
 
 		let search = doc.querySelector('fieldset#search-form');
 		if (search !== null) {
-			Array.from(search.childNodes).forEach(node => _filter_text(node));
-			Array.from(search.querySelector('ul').childNodes).forEach(node => _filter_text(node));
+			Array.from(search.childNodes).forEach((node) => _filter_text(node));
+			Array.from(search.querySelector('ul').childNodes).forEach((node) => _filter_text(node));
 		}
 
 		let weblog = doc.querySelector('#weblog article');
 		if (weblog !== null) {
 
-			Array.from(weblog.querySelectorAll('img')).map(img => {
+			Array.from(weblog.querySelectorAll('img')).map((img) => {
 
 				let node = img.nextSibling;
 				if (node !== null) {
@@ -293,7 +293,7 @@
 
 				return null;
 
-			}).filter(node => node !== null).forEach(node => {
+			}).filter((node) => node !== null).forEach((node) => {
 				_before(node, '\n\n');
 			});
 

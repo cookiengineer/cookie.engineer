@@ -1,7 +1,7 @@
 
 (function(global) {
 
-	global.addEventListener('DOMContentLoaded', _ => {
+	global.addEventListener('DOMContentLoaded', () => {
 
 		const doc  = global.document;
 		const save = doc.querySelector('dialog#save');
@@ -12,11 +12,11 @@
 		 * HELPERS
 		 */
 
-		const _show_dialog = _ => {
+		const _show_dialog = () => {
 			save.setAttribute('open', 'true');
 		};
 
-		const _hide_dialog = _ => {
+		const _hide_dialog = () => {
 			save.removeAttribute('open');
 		};
 
@@ -28,7 +28,7 @@
 				button.onclick = _hide_dialog;
 			}
 
-			save.addEventListener('click', event => {
+			save.addEventListener('click', (event) => {
 
 				if (event.target === save) {
 
@@ -41,7 +41,7 @@
 
 			}, true);
 
-			doc.addEventListener('keydown', event => {
+			doc.addEventListener('keydown', (event) => {
 
 				let ctrl = event.ctrlKey === true;
 				let key  = event.key || '';

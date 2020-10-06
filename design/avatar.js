@@ -1,7 +1,7 @@
 
 (function(global) {
 
-	global.addEventListener('DOMContentLoaded', _ => {
+	global.addEventListener('DOMContentLoaded', () => {
 
 		const requestFrame = global.requestAnimationFrame || function(cb) { setTimeout(cb, 1000 / 40); };
 
@@ -39,6 +39,8 @@
 					ext = 'opus';
 				} else if (ogg === true) {
 					ext = 'ogg';
+				} else if (mp3 === true) {
+					ext = 'mp3';
 				}
 
 				burp   = new Audio('design/avatar/burp.'   + ext);
@@ -136,8 +138,7 @@
 		 * HELPERS
 		 */
 
-		const _ease_in  = t => Math.pow(t, 3);
-		const _ease_out = t => Math.pow(t - 1, 3) + 1;
+		const _ease_out = (t) => Math.pow(t - 1, 3) + 1;
 
 		const _draw_face = (ctx, width, height, time) => {
 
@@ -324,7 +325,7 @@
 
 				let dt    = Date.now() - time.melody;
 				let peaks = MOUTH.melody.peaks;
-				let next  = peaks.find(v => v > dt) || 0;
+				let next  = peaks.find((v) => v > dt) || 0;
 				let last  = peaks[peaks.indexOf(next) - 1] || 0;
 
 				if (next !== 0) {
@@ -523,7 +524,7 @@
 					particle.blob = particle.size;
 					particle.life = 250 + Math.random() * 250;
 
-				};
+				}
 
 				time.vomited = time.now;
 
@@ -531,7 +532,6 @@
 
 
 			let dt = time.now - time.throwup;
-			let t  = dt / (time.recover - time.throwup);
 
 			if (dt < 100) {
 
@@ -573,7 +573,7 @@
 
 					}
 
-				};
+				}
 
 			} else if (dt > 750 && dt < 1250) {
 
@@ -628,7 +628,7 @@
 			}
 
 
-			requestFrame(_ => {
+			requestFrame(() => {
 				_render(ctx, pos, time);
 			});
 
@@ -712,11 +712,14 @@
 					if (Date.now() > time.shaked + 100) {
 
 						if (sounds.burp !== null && time.nausea > 67) {
+
 							try {
 								let p = sounds.burp.play();
-								p.catch((err) => {});
+								p.catch(() => {});
 							} catch (err) {
+								// Do nothing
 							}
+
 						}
 
 						time.feeling = 'okay';
@@ -742,11 +745,14 @@
 				if (time.throwup === null) {
 
 					if (sounds.vomit !== null) {
+
 						try {
 							let p = sounds.vomit.play();
-							p.catch((err) => {});
+							p.catch(() => {});
 						} catch (err) {
+							// Do nothing
 						}
+
 					}
 
 					time.throwup = Date.now();
@@ -815,7 +821,7 @@
 				avatar.style.width  = w + 'px';
 				avatar.style.height = h + 'px';
 
-				avatar.addEventListener('click', event => {
+				avatar.addEventListener('click', () => {
 
 					if (timeline.feeling !== 'ouch') {
 
@@ -825,13 +831,14 @@
 
 							try {
 								let p = sounds.ouch.play();
-								p.catch((err) => {});
+								p.catch(() => {});
 							} catch (err) {
+								// Do nothing
 							}
 
 						}
 
-						setTimeout(_ => {
+						setTimeout(() => {
 							timeline.feeling = 'okay';
 							timeline.beatup  = null;
 						}, 1000);
@@ -850,10 +857,10 @@
 				let context = avatar.getContext('2d');
 				if (context !== null) {
 
-					requestFrame(_ => _render(context, position, timeline));
-					setInterval(_ => _update(timeline), 1000 / 60);
+					requestFrame(() => _render(context, position, timeline));
+					setInterval(() => _update(timeline), 1000 / 60);
 
-					setInterval(_ => {
+					setInterval(() => {
 
 						if (sounds.melody !== null) {
 
@@ -867,11 +874,12 @@
 
 									try {
 										let p = sounds.melody.play();
-										p.catch((err) => {});
+										p.catch(() => {});
 									} catch (err) {
+										// Do nothing
 									}
 
-									setTimeout(_ => {
+									setTimeout(() => {
 										timeline._event  = Date.now();
 										timeline.feeling = 'okay';
 										timeline.melody  = null;
@@ -926,7 +934,7 @@
 			 * EVENTS
 			 */
 
-			doc.addEventListener('mousemove', event => {
+			doc.addEventListener('mousemove', (event) => {
 
 				let px = event.pageX - offset.x;
 				let py = event.pageY - offset.y;
@@ -941,7 +949,7 @@
 
 			}, true);
 
-			doc.addEventListener('touchmove', event => {
+			doc.addEventListener('touchmove', (event) => {
 
 				let px = event.touches[0].pageX - offset.x;
 				let py = event.touches[0].pageY - offset.y;
@@ -958,7 +966,7 @@
 
 			if ('ondevicemotion' in global) {
 
-				global.addEventListener('devicemotion', event => {
+				global.addEventListener('devicemotion', (event) => {
 
 					let rotation_rate = event.rotationRate || null;
 					if (rotation_rate !== null) {
@@ -979,7 +987,7 @@
 
 			if ('onresize' in global) {
 
-				global.addEventListener('resize', event => {
+				global.addEventListener('resize', () => {
 
 					let rect = image.getBoundingClientRect();
 					if (rect !== null) {

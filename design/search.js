@@ -4,7 +4,7 @@
 	global.addEventListener('DOMContentLoaded', _ => {
 
 		const doc      = global.document;
-		const articles = Array.from(doc.querySelectorAll('#projects article, #weblog-articles tbody tr'));
+		const articles = Array.from(doc.querySelectorAll('#projects article, #talks article, #weblog-articles tbody tr'));
 		const avatar   = doc.querySelector('div#search-form-avatar');
 		const inputs   = Array.from(doc.querySelectorAll('fieldset#search-form input'));
 

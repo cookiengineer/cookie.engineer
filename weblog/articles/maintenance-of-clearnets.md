@@ -442,7 +442,7 @@ will take an even longer time to upgrade all those legacy websites
 running on legacy software.
 
 The only Browser that currently fixes all of the above issues is the
-[Stealth](https://github.com/Artificial-Engineering/stealth) Browser.
+[Tholian Stealth](https://github.com/tholian-network/stealth) Browser.
 
 Yeah yeah, I know, shameless plug, but it's just so that you actively
 keep in mind that other Browsers aren't as secure as they claim to be;

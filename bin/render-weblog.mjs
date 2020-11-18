@@ -206,7 +206,7 @@ const _render_index = function(template) {
 		chunk += indent + '\t<td></td>\n';
 		chunk += indent + '\t<td>' + meta.date + '</td>\n';
 		chunk += indent + '\t<td>' + name + '</td>\n';
-		chunk += indent + '\t<td>' + meta.tags.join(', ') + '</td>\n';
+		chunk += indent + '\t<td>' + meta.tags.map((v) => v.split(' ').join('&nbsp;')).join(', ') + '</td>\n';
 		chunk += indent + '</tr>';
 
 		articles.push(chunk);

@@ -21,56 +21,69 @@ without a segfault.
 
 ## Tiling Window Manager(s)
 
-So, as I've maintained my own GNOME shell extension for a while
-to get a somewhat tiling window manager functionality, I thought
-I give another window manager a try again.
+As I've maintained my own GNOME shell extension for a while to
+get a somewhat tiling window manager functionality, I thought
+I'll give another window manager a try again.
 
 Back in the days before even XFCE or LXDE were cool, I was using
 openbox and fluxbox for a long time, because I never liked KDE's
 approach to being a Windows look and feel and GNOME wasn't ready
-at the time.
+for daily usage at the time.
 
-Eversince GNOME 3 came out around 2008 I switched to it, and got
-stuck with it for the sake of simplicity. First as an apt shadow
-on Debian and Ubuntu - and later as an Arch user.
+Eversince GNOME 3 came out I switched to it, and got stuck with
+it for the sake of simplicity. First as an apt shadow on Debian
+and Ubuntu - and later as an Arch user.
 
-Nonetheless I decided to try out [i3wm](https://i3wm.org), because
-I tried it out for a short period of time when it came out but
-ditched it due to customization troubles and I thought it would
-be fair to give it another try. This time for real.
+Nonetheless I decided to try out [i3wm](https://i3wm.org) again,
+because last time it was in its very early development phase
+and I thought it would be fair to give it another chance.
 
 
-## i3 WM Installation
+## i3 Installation
 
-It's best to install i3 along with `dmenu` and `i3status`. If you
-use a laptop display that has a configurable brightness, I highly
-recommend to install `brightnessctl`, too.
+It's best to install the i3 window manager along with `dmenu` and
+`i3status` as they are very nicely integrated.
 
-Also, if you don't want to deal with shitty configuration files
-for networking and want to stay with `network-manager`, you should
-install the `network-manager-applet`, too.
+On a laptop with a modifiable brightness function (Fn) keys, it
+is highly recommended to install `brightnessctl`. `brightnessctl`
+allows incrementing and decrementing the brightness in percentages,
+so you don't have to build your own wrapper script for that.
+
+For networking, I decided to stay with `network-manager`, as I'm
+using it in combination with `modem-manager` all the time for 4G
+internet access. In order to make this work, `network-manager-applet`
+will help.
+
+On a machine with Bluetooth, `blueman` also includes an applet
+that can be used similar to the Network Manager Applet.
+
+All in all, these were the necessary base packages to get going:
 
 ```bash
-sudo pacman -S i3-wm i3status dmenu brightnessctl network-manager-applet;
+sudo pacman -S i3-wm i3status dmenu brightnessctl blueman network-manager-applet;
 ```
 
 
 ### Xorg Configuration
 
-In order to use i3, you'll need a couple of things. As i3 is not
-a Desktop Environment and only a window manager, you'll have to
-configure X11 (Xorg) first in order to use it with multiple screens.
+In order to use i3wm, you'll need a couple of things.
 
-First, you need to get the details of your connected monitors by
-using the `xrandr` tool. The output will show all connected displays
-and their supported resolutions whereas by default they'll use the
-maximum resolution available.
+As i3 is not a Desktop Environment and only a window manager, you'll have
+to configure X11 (Xorg) first in order to use it with multiple screens.
 
-Xorg is using the `width x height + offset_left + offset_top` syntax.
+The details of the currently connected monitors can be gathered by using
+the `xrandr` tool. The output will show all connected (and disconnected)
+displays and their supported resolutions, whereas by default they'll use
+the maximum resolution available.
 
-If the monitors are setup incorrectly, all monitors appear with a `...+0+0` output.
+Quick important sidenotes:
 
-If the monitors are setup correctly, they appear all with a different offset like in the example.
+- Xorg/X11 is using the `width x height + offset_left + offset_top` syntax.
+- If the monitors are setup incorrectly, all monitors appear with a `...+0+0` output.
+- If the monitors are setup correctly, they appear all with a different offset like in the example.
+
+If the monitors are connected and not configured as multiple screens, they'll
+appear like this if you execute `xrandr`:
 
 ```bash
 $ xrandr
@@ -84,7 +97,7 @@ HDMI3 connected 1920x1080+3840+0 (normal left inverted right x axis y axis) 540m
 
 In my case the monitors are connected next to each other in a horizontal
 line, from left to right. The `/etc/X11/xorg.conf.d/10-monitors.conf`
-file therefore looks like this:
+file therefore has to look like this:
 
 ```bash
 Section "Monitor"
@@ -107,18 +120,43 @@ EndSection
 
 ### i3 Configuration
 
-The default setup of i3 is pretty straight-forward as a base.
+The default setup of i3wm is pretty straight-forward as a baseline.
 
 The first time you start an i3 session, it will ask you to create a config
 file with the defaults and the file will be located at `~/.config/i3/config`.
-Its also important to note that my config uses `DejaVu Sans Mono` as a
-font in order to have emojis in the `i3status` bar available.
 
-Most keyboards are different, but in my case I wanted the same integration
+
+**Keyboard Shortcuts**:
+
+All keyboards are different, but in my case I wanted the same integration
 with the `Windows` key that I had before, so I chose to use the `Mod4` key.
 
 Most Function (Fn) keys are prefixed with `XF86` and you can detect them
 by running `xev` and pressing the keys on the keyboard.
+
+I also didn't like the VIM-style arrow key bindings (h/j/k/l) because well,
+I have an opinion on that.
+
+**Emojis**:
+
+The config file of i3 supports emoji rendering, which is quite nice if you
+want to show icons next to the information.
+
+In order to use that, you'll need `Google Noto(fu) Fonts` installed, along
+with `DejaVu Sans` or any other full-range UTF8/UTF16 compatible font.
+
+```bash
+sudo pacman -S ttf-dejavu noto-fonts noto-fonts-emoji noto-fonts-extra;
+```
+
+i3 uses Pango as a text rendering library. In order to select the correct
+font, you'll need to use the syntax `font pango:Font Identifier <size in pt>`.
+
+In my case I decided to go with `DejaVu Sans Mono` with a `12 pt` font size
+to make emojis available in the `i3status` bar.
+
+
+**i3 Config**:
 
 In my case, the setup looks like this:
 
@@ -140,6 +178,7 @@ hide_edge_borders smart
 
 font pango:DejaVu Sans Mono 12
 
+exec --no-startup-id blueman-applet
 exec --no-startup-id nm-applet
 exec --no-startup-id xset r rate 250 50
 
@@ -234,39 +273,121 @@ bar {
 
 ### i3status Configuration
 
-The `i3status` bar is pretty straight-forward to configure.
+The `i3status` bar is configurable based on the idea that
+either internal modules are provided for quick and easy
+status integrations - or that external programs are run
+on a regular basis (e.g. every 10 seconds) in order to
+provide the status message.
 
-Its configuration is based on the idea of either external
-programs that are regularly executed, or via its core plugins
-that include a subset of features for common integrations.
+In fact, if you run `i3status` in the Terminal you'll see
+the details of what's being rendered in a JSON formatted
+output.
 
-Its modules are made with the underlying idea to reuse
-them as easy as possible, so e.g. the timezones can be
-integrated multiple times as well as the wireless/ethernet
-modules.
+The `order` string (array?) is generated by calling the
+modules from left to right in order to render the status
+bar.
 
-The `order` string is generated by calling the modules
-from left to right in order to render the status bar.
 
-What I haven't figured out so far is how to integrate the
-`pulse:alsa_input.pci-...analog-stereo` interface's
-microphone state.
+**Wi-Fi and Ethernet**:
 
-It seems to be not as easy to integrate mixers and ports,
-and the `volume` module seems to assume to rely on the
-`master` mixer device.
+Internal Modules of `i3status` can be reused multiple
+times with a different identifier. For example, there can
+be `wireless wlan0` and `wireless wlp0s3` in parallel.
 
-As my config file is used among different systems, the
-identifier for the network interfaces are also different.
+In order to make Modules work on different machines, I
+decided to use the `_first_` identifier for both Wi-Fi
+and Ethernet, so that the first interface will be
+automatically selected no matter if it's named `wlan0`
+or `wlp0s0` or otherwise.
 
-For that case it's possible to use the `_first_` placeholder
-as an interface name, and it will automatically select the
-first available interface that matches the interface type.
 
-The `cpu_temperature` module is depending on the `temp1_input`
-file in `/sys/devices/platform/coretemp.X/hwmon/hwmon*/`
-and the paths might vary depending on CPU here (whereas the
-X is the cpu core id).
+**CPU temperature**:
+
+The `cpu_temperature` module depends on the `temp1_input`
+file in `/sys/devices/platform/coretemp.X/hwmon/hwmonY/`
+wherease X and Y may vary depending on the CPU used in
+the system.
+
+Potential pitfall might be that your system doesn't have
+a CPU temperature sensor for the first core, and only
+the second one, so you would need to verify that manually.
+
+```bash
+[$] cat /sys/devices/platform/coretemp.0/hwmon/hwmon4/temp1_input;
+58000
+```
+
+The output of that file should be in millidegree Celcius,
+which means that the example represents 58.00 C.
+
+
+**Audio Volume Levels**:
+
+The volume levels are a different story. As pulseaudio is
+very dynamic in nature, there's no easy way to predict
+an audio setup.
+
+In my case I decided to go with the `master` stream, which
+is the one that's being used for the primary analog output
+(aka Laptop speakers or headphones connected via cable).
+
+But, in case you want to integrate a Bluetooth speaker, this
+might not be as easy. In order to find out the configuration
+you need `pactl` installed (and probably `pavucontrol` while
+you're at it, too).
+
+The format of the configuration file is `pulse:<audio sink id>`
+or `pulse:<audio sink name>`.
+
+In my case, that means that the `pulse:0` stands for the `Sink #0`
+which is the `alsa_output.pci-0000_00_1b.0.analog-stereo` device.
+
+```bash
+[$] pactl list sinks;
+Sink #0
+	State: SUSPENDED
+	Name: alsa_output.pci-0000_00_1b.0.analog-stereo
+	(...)
+```
+
+**Bluetooth Audio**:
+
+If you connect your bluetooth headphones via the `blueman-applet`,
+they'll start to appear as sinks in `pactl` with a unique identifier
+that is per-device as it encodes the BT MAC address.
+
+```bash
+[$] pactl list sinks;
+Sink #17
+	State: IDLE
+	Name: bluez_sink.AB_CD_EF_12_34_56.a2dp_sink
+	(...)
+```
+
+So, in order to integrate their volume with the `i3status` bar,
+you'll have to use the `pulse:<audio sink name>` syntax, which
+I'm not totally happy with right now because it's a bit redundant
+to have multiple volumes in the status bar being displayed.
+
+
+**Microphone Volume Level**:
+
+What I haven't figured out so far is how to integrate my
+microphone volume level into the status bar. As the microphone
+is part of my `Built-In Audio Analog Stereo` device, but a
+different port than master, it seems that i3status cannot
+integrate this.
+
+Even when using the correct `source` identifier, it is always
+at `0%` which seems to be the default value for the pulseaudio
+module.
+
+But I'll have to dig into the codebase to be absolutely sure
+about this. So far most stackoverflow posts have been not
+helpful at all.
+
+
+**i3status Config**:
 
 ```config
 general {
@@ -279,7 +400,9 @@ order += "wireless _first_"
 order += "ethernet _first_"
 order += "battery 0"
 order += "cpu_temperature 0"
-order += "volume master"
+order += "volume microphone"
+order += "volume speakers"
+order += "volume bluetooth"
 order += "memory"
 order += "tztime local"
 order += "tztime berlin"
@@ -310,24 +433,36 @@ cpu_temperature 0 {
 	path = "/sys/devices/platform/coretemp.0/hwmon/hwmon4/temp1_input"
 }
 
-volume master {
-	format = "🔊 %volume"
-	format_muted = "🔇"
-	device = "pulse:0"
+volume bluetooth {
+	format = "🎧🔊 %volume"
+	format_muted = "🎧🔊🔇"
+	device = "pulse:bluez_sink.FC_58_FA_78_33_42.a2dp_sink"
+}
+
+volume microphone {
+	format = "💻🎤 %volume"
+	format_muted = "💻🎤🔇"
+	device = "pulse:alsa_input.pci-0000_00_1b.0.analog-stereo"
+}
+
+volume speakers {
+	format = "💻🔊 %volume"
+	format_muted = "💻🔊🔇"
+	device = "pulse:alsa_output.pci-0000_00_1b.0.analog-stereo"
 }
 
 memory {
-	format = "%used"
+	format = "♻️ %used"
 	threshold_degraded = "10%"
 	format_degraded = "MEMORY: %free"
 }
 
 tztime local {
-	format = "%Y-%m-%d %H:%M:%S"
+	format = "📅 %Y-%m-%d %H:%M:%S"
 }
 
 tztime berlin {
-	format = "%Y-%m-%d %H:%M:%S %Z"
+	format = "📅 %Y-%m-%d %H:%M:%S %Z"
 	timezone = "Europe/Berlin"
 	hide_if_equals_localtime = true
 }
@@ -345,10 +480,10 @@ mkdir -p $HOME/.icons/default;
 ln -s /usr/share/icons/default/index.theme $HOME/.icons/default/index.theme;
 ```
 
-If you want to change the GTK and icon themes for GTK-based applications,
-I would recommend to use the `lxappearance` tool. It allows to select all
-themes, color schemes, fonts, cursors and other Accessibility-related
-settings - and it does not have any dependencies.
+If you want to change the GTK theme and GTK icon theme for GTK-based
+applications, I would recommend to use the `lxappearance` tool. It allows
+to select all themes, color schemes, fonts, cursors and other accessibility
+related settings - and it does not have any third-party dependencies.
 
 ![lxappearance](./i3-migration-guide/lxappearance.png)
 
@@ -371,6 +506,7 @@ gtk-xft-antialias=1
 gtk-xft-hinting=1
 gtk-xft-hintstyle="hintfull"
 ```
+
 
 ### Other Software
 

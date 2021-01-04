@@ -56,8 +56,9 @@ These subprotocols can be used in the Web Browser, too.
 let socket = new WebSocket('ws://localhost:12345', [
 	'me-want-cookies' // Sub-Protocol
 ]);
-let data   = JSON.stringify({ foo: 'bar' });
-let blob   = new Uint8Array(8);
+
+let data = JSON.stringify({ foo: 'bar' });
+let blob = new Uint8Array(8);
 
 socket.send(data); // Text Frame
 socket.send(blob); // Binary Frame
@@ -89,9 +90,11 @@ import { WS } from './WS.mjs';
 
 
 // Chapter: Opening Handshake
-const _parse_opening_handshake = function(buffer) {
+const parse_opening_handshake = (buffer) => {
+
 	let headers = {};
 	return headers;
+
 };
 
 let server = new net.Server({
@@ -99,18 +102,18 @@ let server = new net.Server({
 	pauseOnConnect: true
 });
 
-server.on('connection', socket => {
+server.on('connection', (socket) => {
 
-	socket.on('data', buffer => {
+	socket.on('data', (buffer) => {
 
-		let headers = _parse_opening_handshake(buffer);
+		let headers = parse_opening_handshake(buffer);
 		if (
 			headers['connection'] === 'Upgrade'
 			&& headers['upgrade'] === 'websocket'
 			&& headers['sec-websocket-protocol'] === 'me-want-cookies'
 		) {
 
-			WS.upgrade(socket, headers, result => {
+			WS.upgrade(socket, headers, (result) => {
 
 				if (result === true) {
 
@@ -153,16 +156,16 @@ server.on('connection', socket => {
 
 	});
 
-	socket.on('error', _ => {});
-	socket.on('close', _ => {});
-	socket.on('timeout', _ => socket.close());
+	socket.on('error',   () => {});
+	socket.on('close',   () => {});
+	socket.on('timeout', () => socket.close());
 
 	socket.resume();
 
 });
 
-server.on('error', _ => server.close());
-server.on('close', _ => (server = null));
+server.on('error', () => server.close());
+server.on('close', () => (server = null));
 
 server.listen(12345, null);
 ```
@@ -200,16 +203,16 @@ good to have a failsafe parsing mechanism in place.
 ```javascript
 // server.mjs
 
-const _parse_opening_handshake = function(buffer) {
+const parse_opening_handshake = (buffer) => {
 
 	let headers = {};
 
 	let req = buffer.toString('utf8');
-	let raw = req.split('\n').map(line => line.trim());
+	let raw = req.split('\n').map((line) => line.trim());
 
 	if (raw[0].includes('HTTP/1.1')) {
 
-		raw.slice(1).filter(line => line.trim() !== '').forEach(line => {
+		raw.slice(1).filter((line) => line.trim() !== '').forEach((line) => {
 
 			let key = line.split(':')[0].trim().toLowerCase();
 			let val = line.split(':').slice(1).join(':').trim();
@@ -369,7 +372,7 @@ WS.receive = (socket, buffer, callback) => {
 
 	if (buffer !== null) {
 
-		let data = _decode(socket, buffer);
+		let data = decode(socket, buffer);
 		if (data !== null) {
 
 			if (data.response !== null) {
@@ -430,7 +433,7 @@ to keep track of a couple of things which it will track in the
 
 ```javascript
 // WS.mjs
-const _decode = function(socket, buffer) {
+const decode = (socket, buffer) => {
 
 	let fragment = socket.__fragment || null;
 	if (fragment === null) {
@@ -542,7 +545,7 @@ or a `Binary Frame` and can both be `fragmented` and `unfragmented`,
 which means it needs to work when `fin` is `0` and `fin` is `1`.
 
 ```javascript
-// WS.mjs in _decode()
+// WS.mjs in decode()
 
 if (operator === 0x00) {
 
@@ -586,7 +589,7 @@ socket.send(data); // Text Frame
 
 
 ```javascript
-// WS.mjs in _decode()
+// WS.mjs in decode()
 
 if (operator === 0x01) {
 
@@ -628,7 +631,7 @@ socket.send(blob); // Binary Frame
 ```
 
 ```javascript
-// WS.mjs in _decode()
+// WS.mjs in decode()
 
 if (operator === 0x02) {
 
@@ -691,7 +694,7 @@ has to be set to `true` and the `chunk.response`
 has to be set to the confirming `Close Frame`.
 
 ```javascript
-// WS.mjs in _decode()
+// WS.mjs in decode()
 
 if (operator === 0x08) {
 
@@ -711,7 +714,6 @@ if (operator === 0x08) {
 
 }
 ```
-
 
 ### 0x09: Ping Frame
 
@@ -737,7 +739,7 @@ method to append the already unmasked
 `payload_data`.
 
 ```javascript
-// WS.mjs in _decode()
+// WS.mjs in decode()
 
 if (operator === 0x09) {
 
@@ -776,7 +778,7 @@ to `true` in order to let the `WS.receive()`
 silently ignore and continue.
 
 ```javascript
-// WS.mjs in _decode()
+// WS.mjs in decode()
 
 if (operator === 0x0a) {
 
@@ -799,7 +801,7 @@ send a close frame in case a Browser from
 the future connects to our server.
 
 ```javascript
-// WS.mjs in _decode()
+// WS.mjs in decode()
 
 if (operator === 0x00) {
 	// ...
@@ -873,34 +875,37 @@ of `setInterval()` loop.
 
 ```javascript
 // client.mjs
-import crypto from 'crypto';
-import net    from 'net';
-
-import { WS  } from './WS.mjs';
-const _NONCE = Buffer.alloc(16);
-
-
-// XXX: Copy/Paste _parse_opening_handshake from './server.mjs';
+import { Buffer } from 'buffer';
+import crypto     from 'crypto';
+import net        from 'net';
+import { WS  }    from './WS.mjs';
 
 
-const _send_handshake = function(socket) {
+
+const NONCE = Buffer.alloc(16);
+
+
+// XXX: Copy/Paste parse_opening_handshake from './server.mjs';
+
+
+const send_handshake = function(socket) {
 
 	let blob = [];
 
 	for (let n = 0; n < 16; n++) {
-		_NONCE[n] = Math.round(Math.random() * 0xff);
+		NONCE[n] = Math.round(Math.random() * 0xff);
 	}
 
 	blob.push('GET / HTTP/1.1');
 	blob.push('Connection: Upgrade');
 	blob.push('Upgrade: websocket');
-	blob.push('Sec-WebSocket-Key: ' + _NONCE.toString('base64'));
+	blob.push('Sec-WebSocket-Key: ' + NONCE.toString('base64'));
 	blob.push('Sec-WebSocket-Protocol: me-want-cookies');
 	blob.push('Sec-WebSocket-Version: 13');
 	blob.push('');
 	blob.push('');
 
-	// XXX: Flags are used later
+	// XXX: Flags are used in WS.send() and WS.receive()
 	socket._is_server = false;
 	socket._is_client = true;
 
@@ -912,17 +917,17 @@ const _send_handshake = function(socket) {
 let client = new net.createConnection({
 	host: 'localhost',
 	port: 12345
-}, _ => {
-	_send_handshake(client);
+}, () => {
+	send_handshake(client);
 });
 
-client.on('data', buffer => {
+client.on('data', (buffer) => {
 
-	let nonce   = _NONCE.toString('base64');
-	let hash    = crypto.createHash('sha1').update(nonce + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('hex');
-	let expect  = Buffer.from(hash, 'hex').toString('base64');
+	let nonce  = NONCE.toString('base64');
+	let hash   = crypto.createHash('sha1').update(nonce + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('hex');
+	let expect = Buffer.from(hash, 'hex').toString('base64');
 
-	let headers = _parse_opening_handshake(buffer);
+	let headers = parse_opening_handshake(buffer);
 	if (headers['sec-websocket-accept'] === expect) {
 
 		client.allowHalfOpen = true;
@@ -941,7 +946,7 @@ client.on('data', buffer => {
 
 		});
 
-		setTimeout(_ => {
+		setTimeout(() => {
 			// Chapter: Sending Web-Socket Frames
 			WS.send(client, JSON.stringify('{"foo":"bar"}'));
 		}, 2000);
@@ -950,9 +955,9 @@ client.on('data', buffer => {
 
 });
 
-client.on('error', _ => {});
-client.on('close', _ => {});
-client.on('timeout', _ => client.close());
+client.on('error',   () => {});
+client.on('close',   () => {});
+client.on('timeout', () => client.close());
 ```
 
 
@@ -972,7 +977,7 @@ WS.send = (socket, payload) => {
 	payload = typeof payload === 'string' ? payload : null;
 
 
-	let buffer = _encode(socket, Buffer.from(payload, 'utf8'));
+	let buffer = encode(socket, Buffer.from(payload, 'utf8'));
 	if (buffer !== null) {
 		socket.write(buffer);
 	}
@@ -983,7 +988,7 @@ WS.send = (socket, payload) => {
 ## Encoding Logic
 
 As our implementation used a `Text Frame`
-before, the `_encode()` method will also
+before, the `encode()` method will also
 encode our data as a `Text Frame`.
 
 I'll leave that up to the reader to implement
@@ -993,7 +998,7 @@ easy now.
 ```javascript
 // WS.mjs
 
-const _encode = function(socket, data) {
+const encode = function(socket, data) {
 
 	let buffer         = null;
 	let mask           = false;
@@ -1007,7 +1012,7 @@ const _encode = function(socket, data) {
 
 		mask         = false;
 		mask_data    = Buffer.alloc(4);
-		payload_data = data.map(value => value);
+		payload_data = data.map((value) => value);
 
 	} else {
 
@@ -1109,9 +1114,4 @@ available.
 - [client.mjs](./implementers-guide-to-websockets/client.mjs)
 - [server.mjs](./implementers-guide-to-websockets/server.mjs)
 - [WS.mjs](./implementers-guide-to-websockets/WS.mjs)
-
-I hope you feel now as brain-fucked as I did the first time.
-And I hope you're enjoying your well-deserved beer now.
-
-Cheers!
 

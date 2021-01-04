@@ -5,7 +5,7 @@ import { Buffer } from 'buffer';
 
 
 // Chapter: Decoding Logic
-const _decode = function(socket, buffer) {
+const decode = (socket, buffer) => {
 
 	let fragment = socket.__fragment || null;
 	if (fragment === null) {
@@ -217,7 +217,7 @@ const _decode = function(socket, buffer) {
 
 
 // Chapter: Encoding Logic
-const _encode = function(socket, data) {
+const encode = (socket, data) => {
 
 	let buffer         = null;
 	let mask           = false;
@@ -231,7 +231,7 @@ const _encode = function(socket, data) {
 
 		mask         = false;
 		mask_data    = Buffer.alloc(4);
-		payload_data = data.map(value => value);
+		payload_data = data.map((value) => value);
 
 	} else {
 
@@ -382,7 +382,7 @@ WS.receive = (socket, buffer, callback) => {
 
 	if (buffer !== null) {
 
-		let data = _decode(socket, buffer);
+		let data = decode(socket, buffer);
 		if (data !== null) {
 
 			if (data.response !== null) {
@@ -431,7 +431,7 @@ WS.send = (socket, payload) => {
 	payload = typeof payload === 'string' ? payload : null;
 
 
-	let buffer = _encode(socket, Buffer.from(payload, 'utf8'));
+	let buffer = encode(socket, Buffer.from(payload, 'utf8'));
 	if (buffer !== null) {
 		socket.write(buffer);
 	}

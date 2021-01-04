@@ -5,16 +5,16 @@ import { WS } from './WS.mjs';
 
 
 // Chapter: Opening Handshake
-const _parse_opening_handshake = function(buffer) {
+const parse_opening_handshake = (buffer) => {
 
 	let headers = {};
 
 	let req = buffer.toString('utf8');
-	let raw = req.split('\n').map(line => line.trim());
+	let raw = req.split('\n').map((line) => line.trim());
 
 	if (raw[0].includes('HTTP/1.1')) {
 
-		raw.slice(1).filter(line => line.trim() !== '').forEach(line => {
+		raw.slice(1).filter((line) => line.trim() !== '').forEach((line) => {
 
 			let key = line.split(':')[0].trim().toLowerCase();
 			let val = line.split(':').slice(1).join(':').trim();
@@ -36,18 +36,18 @@ let server = new net.Server({
 	pauseOnConnect: true
 });
 
-server.on('connection', socket => {
+server.on('connection', (socket) => {
 
-	socket.on('data', buffer => {
+	socket.on('data', (buffer) => {
 
-		let headers = _parse_opening_handshake(buffer);
+		let headers = parse_opening_handshake(buffer);
 		if (
 			headers['connection'] === 'Upgrade'
 			&& headers['upgrade'] === 'websocket'
 			&& headers['sec-websocket-protocol'] === 'me-want-cookies'
 		) {
 
-			WS.upgrade(socket, headers, result => {
+			WS.upgrade(socket, headers, (result) => {
 
 				if (result === true) {
 
@@ -61,9 +61,9 @@ server.on('connection', socket => {
 					socket.removeAllListeners('timeout');
 					socket.removeAllListeners('data');
 
-					socket.on('data', buffer => {
+					socket.on('data', (buffer) => {
 
-						WS.receive(socket, buffer, request => {
+						WS.receive(socket, buffer, (request) => {
 							console.log('Received request ', request);
 						});
 
@@ -90,16 +90,16 @@ server.on('connection', socket => {
 
 	});
 
-	socket.on('error', _ => {});
-	socket.on('close', _ => {});
-	socket.on('timeout', _ => socket.close());
+	socket.on('error',   () => {});
+	socket.on('close',   () => {});
+	socket.on('timeout', () => socket.close());
 
 	socket.resume();
 
 });
 
-server.on('error', _ => server.close());
-server.on('close', _ => (server = null));
+server.on('error', () => server.close());
+server.on('close', () => (server = null));
 
 server.listen(12345, null);
 

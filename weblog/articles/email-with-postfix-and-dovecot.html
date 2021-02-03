@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en" prefix="og: http://ogp.me/ns#">
+	<head>
+		<title>E-Mail with Postfix and Dovecot - Cookie Engineer's Web Log</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="apple-mobile-web-app-capable" content="yes">
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="E-Mail with Postfix and Dovecot">
+		<meta name="keywords" content="email, server, devops">
+		<meta name="generator" content="Hands of Cookie Engineer with some beer and VIM night coding sessions">
+		<meta name="robots" content="index, follow">
+		<link rel="alternate" type="application/rss+xml" href="../feed.xml">
+
+		<!-- Social Meta -->
+		<meta name="og:image" itemprop="image" content="https://cookie.engineer/design/cookiengineer.png">
+		<meta name="og:title" content="E-Mail with Postfix and Dovecot - Cookie Engineer's Web Log">
+		<meta name="og:description" content="E-Mail with Postfix and Dovecot">
+		<meta name="og:site_name" content="Cookie Engineer's Web Log">
+		<meta name="og:type" content="article">
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" property="og:title" itemprop="name" content="E-Mail with Postfix and Dovecot - Cookie Engineer's Web Log">
+		<meta name="twitter:description" property="og:description" itemprop="description" content="E-Mail with Postfix and Dovecot">
+
+		<!-- Website Content -->
+		<link rel="stylesheet" href="../../design/fontello.css">
+		<link rel="stylesheet" href="../../design/layout.css">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="../../design/weblog/weblog.css">
+
+		<!-- Website Functionality -->
+		<link rel="stylesheet" href="../../design/menu.css">
+		<script src="../../design/menu.js"></script>
+
+		<!-- Magic: Copy/Paste/Save -->
+		<link rel="stylesheet" href="../../design/copypaste.css">
+		<script src="../../design/copypaste.js"></script>
+		<link rel="stylesheet" href="../../design/save.css">
+		<script src="../../design/save.js"></script>
+
+		<!-- Magic: Highlight -->
+		<link rel="stylesheet" href="../../design/weblog/highlight.css">
+		<script src="../../design/weblog/highlight.js"></script>
+	</head>
+	<body>
+		<header>
+			<aside id="menu" class="visible">
+				<button id="menu-button"><i></i></button>
+				<!-- TBD -->
+				<a class="icon-section" href="../index.html">Web Log</a>
+				<a class="icon-section" href="../../index.html">Portfolio</a>
+			</aside>
+		</header>
+		<section id="weblog">
+			<h1>E-Mail with Postfix and Dovecot</h1>
+			<article>
+				<p>
+	Today I was setting up an E-Mail server for one of my projects, and I figured
+	that most of the relevant knowledge is widespread across the internet and very
+	old mailing lists of postfix that are literally older than the internet.
+</p>
+<p>
+	So here is kind of my own personal documentation on the necessary installation
+	and configuration procedures that are required to create a self-hosted E-Mail
+	server that have both encrypted SMTP and IMAP support by using Let's Encrypt's
+	certbot for TLS based encryption.
+</p>
+<p>
+	Additionally, E-Mail signatures are required to prevent blocking of sent E-Mails
+	to other E-Mail services.
+</p>
+<h2>Introduction</h2>
+<p>
+	First-off, we have to clarify some of the terminology that is required to understand
+	what's going on behind the scenes. E-Mail is a very old concept, and therefore
+	is broken on pretty much every level that tries to monkey-patch security features
+	on top of it.
+</p>
+<p>
+	In the context of E-Mail, there's also 
+	 <code>STARTTLS</code>
+	 which is somewhat a so-called
+	snakeoil certificate based encryption workflow. We are going to ditch that completely,
+	because it basically is useless encryption. Everybody can intercept it and pretty
+	much no E-Mail client has real certificate pinning support, so it's totally for
+	verifying authenticity of the server endpoint.
+</p>
+<p>
+	Both E-Mail network protocols have literally hundreds of ways to authenticate users,
+	most of them require 
+	 <code>SASL</code>
+	 support and have legacy databases behind them.
+</p>
+<p>
+	We are going to reuse 
+	 <code>dovecot</code>
+	 to have the same auth method for both 
+	 <code>IMAP</code>
+	 and
+	 <code>SMTP</code>
+	 and we are reusing the Linux users' 
+	 <code>/etc/passwd</code>
+	 so that we can create
+	users in a simple way and have their emails stored in their 
+	 <code>/home/$USER/Maildir</code>
+	folders.
+</p>
+<h3>The SMTP Protocol</h3>
+<p>
+	SMTP is the Simple Mail Transfer Protocol. By default, it is unencrypted. This
+	protocol is managed and used by 
+	 <code>postfix</code>
+	 in our scenario.
+</p>
+<p>
+	In an imaginary world where everybody gives a damn about security, we would always
+	use 
+	 <code>TLS</code>
+	 encrypted SMTP(s) to even relay messages to other services. In the real
+	world, services like self-claimed privacy-aware email encryption services like
+	 <a class="icon-website" href="https://protonmail.com">ProtonMail</a> 
+	 do not even have smtps support and only
+	accept messages via unencrypted connections.
+</p>
+<p>
+	In the context of postfix we are going to talk about inbound connections (other
+	clients connecting to us via 
+	 <code>imapd</code>
+	) and outbound connections (we connecting to
+	another server via 
+	 <code>imap</code>
+	).
+</p>
+<p>
+	Relaying messages means that some other Mail Transport Agent is connecting to
+	us and wants us to send E-Mails to another domain - and we usually don't want
+	do that because a lot of spammers out there abuse this.
+</p>
+<p>
+	You can manually list the authentication methods by connecting to an SMTP server
+	via port 
+	 <code>25</code>
+	 (by using 
+	 <code>telnet</code>
+	) or via port 
+	 <code>465</code>
+	 (by using 
+	 <code>openssl</code>
+	).
+</p>
+<pre class="bash">
+# Unencrypted connection to postfix server
+# manually typing "EHLO example.com"
+
+$ telnet example.com 25
+
+Trying 1.3.3.7...
+Connected to example.com.
+Escape character is '^]'.
+220 example ESMTP Postfix
+
+EHLO example.com
+
+# Available SMTP commands
+250-example.com
+250-PIPELINING
+250-SIZE 10240000
+250-VRFY
+250-ETRN
+250-STARTTLS
+250-ENHANCEDSTATUSCODES
+250-8BITMIME
+250-DSN
+250-SMTPUTF8
+250 CHUNKING
+</pre>
+<pre class="bash">
+# TLS-encrypted connection to postfix server
+# manually typing EHLO example.com
+
+$ openssl s_client -crlf -connect example.com:465
+
+CONNECTED(00000003)
+depth=2 O = Digital Signature Trust Co., CN = DST Root CA X3
+verify return:1
+depth=1 C = US, O = Let's Encrypt, CN = Let's Encrypt Authority X3
+verify return:1
+depth=0 CN = example.com
+verify return:1
+---
+Certificate chain
+0 s:CN = example.com
+i:C = US, O = Let's Encrypt, CN = Let's Encrypt Authority X3
+1 s:C = US, O = Let's Encrypt, CN = Let's Encrypt Authority X3
+i:O = Digital Signature Trust Co., CN = DST Root CA X3
+---
+Server certificate
+---
+(... bunch of TLS-related stuff ...)
+---
+read R BLOCK
+220 example.com ESMTP Postfix
+
+EHLO example.com
+
+250-example.com
+250-PIPELINING
+250-SIZE 10240000
+250-VRFY
+250-ETRN
+250-AUTH PLAIN LOGIN
+250-ENHANCEDSTATUSCODES
+250-8BITMIME
+250-DSN
+250-SMTPUTF8
+250 CHUNKING
+</pre>
+<h3>The IMAP Protocol</h3>
+<p>
+	IMAP is the Internet Message Access Protocol. By default, it is unencrypted. This
+	protocol is managed and used by 
+	 <code>dovecot</code>
+	 in our scenario.
+</p>
+<p>
+	The IMAP daemon usually has support for multiple storage formats. This storage
+	format has to be identically configured in both 
+	 <code>postfix</code>
+	 (our MTA) and 
+	 <code>dovecot</code>
+	(our IMAP daemon). In both cases we are going to use the 
+	 <code>Maildir</code>
+	 format.
+</p>
+<p>
+	In the context of dovecot we are going to disallow unencrypted usage of the IMAP
+	protocol, which means that port 
+	 <code>143</code>
+	 will not be used, and we are going to encrypt
+	all connections via TLS on port 
+	 <code>993</code>
+	.
+</p>
+<p>We don't want our users to be potentially intercepted while they download E-Mails.</p>
+<p>
+	You can manually authenticate and list the inbox by connecting to an IMAP server
+	via port 
+	 <code>993</code>
+	 (by using 
+	 <code>openssl</code>
+	).
+</p>
+<pre class="bash">
+# TLS-encrypted connection to dovecot server
+
+$ openssl s_client -crlf -connect example.com:993
+
+CONNECTED(00000003)
+depth=2 O = Digital Signature Trust Co., CN = DST Root CA X3
+verify return:1
+depth=1 C = US, O = Let's Encrypt, CN = Let's Encrypt Authority X3
+verify return:1
+depth=0 CN = example.com
+verify return:1
+---
+Certificate chain
+0 s:CN = example.com
+i:C = US, O = Let's Encrypt, CN = Let's Encrypt Authority X3
+1 s:C = US, O = Let's Encrypt, CN = Let's Encrypt Authority X3
+i:O = Digital Signature Trust Co., CN = DST Root CA X3
+---
+Server certificate
+---
+(... bunch of TLS-related stuff ...)
+---
+read R BLOCK
+* OK [CAPABILITY IMAP4rev1 SASL-IR LOGIN-REFERRALS ID ENABLE IDLE LITERAL+ AUTH=PLAIN AUTH=LOGIN] Dovecot ready.
+</pre>
+<h3>DMARC</h3>
+<p>
+	DMARC means Domain-based Message Authentication, Reporting and Conformance and is an
+	authentication protocol that extends DKIM and SPF.
+</p>
+<p>
+	In order to make it work, you must have to add a 
+	 <code>TXT</code>
+	 record to your domain. If
+	your domain doesn't support 
+	 <code>DKIM</code>
+	 and 
+	 <code>DMARC</code>
+	 entries, the sent emails are very
+	likely classified as spam by other providers.
+</p>
+<p>
+	DMARC as a guideline is hosted at 
+	 <a class="icon-website" href="https://dmarc.org">dmarc.org</a> 
+	 and specified as
+	 <a class="icon-website" href="https://tools.ietf.org/html/rfc7489">RFC7489</a> 
+	, and its goals is to define the
+	reporting methods for authentication failures, and wants to prevent phishing via
+	spoofed E-Mails.
+</p>
+<p>
+	The idea is that the 
+	 <code>_dmarc</code>
+	 subdomain entry includes URIs for receiving
+	forensic reports, so that e.g. the administrator can get notified of these
+	incidents.
+</p>
+<p>
+	Additionally, the policy should be reflected to describe what happens when an
+	unauthenticated user is sending E-Mails via our server.
+</p>
+<ul>
+	<li><code>p=none</code> means that there is no action taken regarding the delivery of messages.</li>
+	<li><code>p=quarantine</code> means that unverified messages are quarantined inside the <code>Spam</code> folder.</li>
+	<li><code>p=reject</code> means that no unverified messages can be received by a receiving server, and they should be immediately deleted.</li>
+</ul>
+<p>
+	In a minimalistic scenario where we don't want to deal with unnecessary reports
+	(everybody can see this, so we would get spam there, too), a 
+	 <code>_dmarc.example.com</code>
+	TXT entry looks like this
+	:
+</p>
+<p>$ dig TXT _dmarc.example.com</p>
+<p>
+	;; ANSWER SECTION
+	:
+</p>
+<p>
+	_dmarc.example.com.	3600	IN	TXT	"v=DMARC1; p=quarantine"
+	 <code></code>
+	`
+</p>
+<h3>DKIM</h3>
+<p>
+	DKIM is the DomainKeys Identified Mail authentication method. It is an authentication
+	method that uses a digital signature attached to every E-Mail sent by an MTA. This
+	signature uses a local RSA-based key, and the public key is published as a DNS record,
+	so that the receiving MTAs can see the public key via DNS lookup.
+</p>
+<p>
+	In order to make it work, you must have to add a 
+	 <code>TXT</code>
+	 record to your domain. If
+	your domain doesn't support 
+	 <code>DKIM</code>
+	 and 
+	 <code>DMARC</code>
+	 entries, the sent emails are very
+	likely classified as spam by other providers.
+</p>
+<p>
+	The idea behind the concept is that a client receives an E-Mail. After reading through
+	the E-Mail, the MTA can look for the public key to verify that this E-Mail was sent
+	indeed by the mentioned domain's server.
+</p>
+<p>
+	As 
+	 <code>DKIM</code>
+	 allows multiple public keys, they are identified via a unique name. This
+	identifier is called 
+	 <code>selector</code>
+	 in the context of 
+	 <code>opendkim</code>
+	.
+</p>
+<pre class="bash">
+# mail is the unique identifier of the key where PUBLIC_KEY
+# has the contents of the (later) generated mail.txt file
+
+$ dig TXT mail._domainkey.example.com
+
+;; ANSWER SECTION:
+mail._domainkey.example.com. 3600	IN	TXT	"v=DKIM1; k=rsa; s=email; p=$PUBLIC_KEY"
+</pre>
+<h3>SPF</h3>
+<p>
+	SPF is the Sender Policy Framework which is a mechanism for a receiving MTA to identify
+	which hosts and IP addresses are allowed to send E-Mails via a given domain. Similar
+	to 
+	 <code>DKIM</code>
+	 it is published (and looked up) using 
+	 <code>TXT</code>
+	 records of a specific domain.
+</p>
+<p>
+	SPF is specified in 
+	 <a class="icon-website" href="https://tools.ietf.org/html/rfc7208">RFC 7208</a> 
+	.
+</p>
+<p>
+	The 
+	 <code>TXT</code>
+	 record of a domain contains pattern matching mechanisms that are executed and
+	validated by the receiving MTA.
+</p>
+<p>
+	An example allowing only E-mails sent from an 
+	 <code>MX</code>
+	 record of a specific domain usually
+	only contains 
+	 <code>mx -all</code>
+	, stating that the server will deny all other emails being sent
+	through it (which is probably the case for most email servers these days, but keep in
+	mind that an MTA can relay messages).
+</p>
+<pre class="bash">
+$ dig TXT example.com
+
+;; ANSWER SECTION:
+example.com.		3190	IN	TXT	"v=spf1 mx -all"
+</pre>
+<h3>Mailbox Format</h3>
+<h2>Installation</h2>
+<h2>Configuration</h2>
+			</article>
+		</section>
+		<footer>
+			<p>Made with 💔 in Heidelberg, Germany. All rights (and jokes) reserved under European Law.</p>
+		</footer>
+		<dialog id="save">
+			<article>
+				<h3>Download Website <button id="save-close" title="Close Dialog">X</button></h3>
+				<p>
+					Usually, a Web Browser's <q>Save</q> functionality is severly broken
+					and it auto-formats and auto-craps up all the HTML, CSS and JS.
+					<br><br>
+					This website includes Print Stylesheets, so you can also print it out
+					by using <q>[Ctrl]+[P]</q> or the print feature of your Web Browser.
+					<br><br>
+					This website's source code is Open Source and can be downloaded from
+					either of these repositories:
+					<br><br>
+					<a class="icon-github" href="https://github.com/cookiengineer/cookie.engineer" target="_blank">GitHub</a>
+					or
+					<a class="icon-gitlab" href="https://gitlab.com/cookiengineer/cookie.engineer" target="_blank">GitLab</a>
+				</p>
+			</article>
+		</dialog>
+		<script>
+		if (typeof hljs !== 'undefined') {
+
+			let codes = Array.from(document.querySelectorAll('pre[class]'));
+			if (codes.length > 0) {
+
+				codes.forEach((code) => {
+
+					let lang = code.className || null;
+					if (lang === 'javascript') {
+
+						setTimeout(() => {
+
+							Array.from(code.querySelectorAll('span.hljs-built_in')).forEach((node) => {
+
+									let text = node.innerHTML || '';
+									if (text === 'console') {
+										node.className += ' hljs-console';
+									}
+
+							});
+
+							Array.from(code.querySelectorAll('span.hljs-keyword')).forEach((node) => {
+
+								let text = node.innerHTML || '';
+								if (text === 'let') {
+									node.className += ' hljs-let';
+								} else if (text === 'new') {
+									node.className += ' hljs-new';
+								} else if (text === 'function') {
+									node.className += ' hljs-function';
+								}
+
+							});
+
+							Array.from(code.querySelectorAll('span.hljs-literal')).forEach((node) => {
+
+								let text = node.innerHTML || '';
+								if (text === 'null') {
+									node.className += ' hljs-null';
+								}
+
+							});
+
+						}, 500);
+
+					}
+
+					hljs.highlightBlock(code);
+
+				});
+
+			}
+
+		}
+		</script>
+	</body>
+</html>

@@ -38,7 +38,7 @@ and that there were a couple of legacy versions of Web Browsers around
 for a while that implemented the websocket protocol in a buggy manner.
 
 This is not the case anymore and I will completely ignore your shitty
-Safari from the dark ages here (it's 2019, not 2011).
+Safari from the dark ages here (it's 2019, not 2011 after all).
 
 The Web-Socket Protocol is a web protocol that uses HTTP's `Upgrade`
 mechanism in order to upgrade a connection. That means the first request
@@ -67,10 +67,11 @@ socket.send(blob); // Binary Frame
 
 ## Web-Socket Server
 
-The demo will be implemented using modern node.js. The server creation
-has to be done with the `net.Server()` interface, as the data that
-we need to access is `raw TCP data`, in order to have support for
-everything binary.
+The demo will be implemented in modern node.js.
+
+The server creation has to be done with the `net.Server()` interface,
+as the data that we need to access is `raw TCP data` and our library
+will have to support binary encodings.
 
 It is important that the TCP connection is modified to fit our needs
 in order to never timeout. The WS13 protocol uses a `Ping Frame` and
@@ -84,8 +85,7 @@ as possible by calling `socket.setNoDelay(true)`.
 
 ```javascript
 // server.mjs
-import net from 'net';
-
+import net    from 'net';
 import { WS } from './WS.mjs';
 
 
@@ -170,6 +170,7 @@ server.on('close', () => (server = null));
 server.listen(12345, null);
 ```
 
+
 ## Opening Handshake
 
 The initial request that is done via HTTP is conform to `HTTP/1.1`,
@@ -247,8 +248,8 @@ utf8 value `258EAFA5-E914-47DA-95CA-C5AB0DC85B11`.
 
 ```javascript
 // WS.mjs
-import crypto     from 'crypto';
 import { Buffer } from 'buffer';
+import crypto     from 'crypto';
 
 
 
@@ -356,7 +357,7 @@ the figure. Here's a bullet-point list of what to remember:
 
 ## Receiving Web-Socket Frames
 
-The integration with our server-side implementation is quite easy.
+The integration of a receiving method for our WS library is quite easy.
 
 In order to integrate it properly, the `WS.receive()` method has
 to only call the `callback` when it was actually receiving a data
@@ -869,9 +870,21 @@ WS.ping = (socket) => {
 
 ## Web-Socket Client
 
-In order to integrate it with a client
-implementation, it has to run in some kind
-of `setInterval()` loop.
+The demo will be implemented in modern node.js.
+
+The client has to be implemented with the `net.createConnection()`
+interface, as the data that we need to access is `raw TCP data`
+and our library needs to support binary encodings.
+
+As node.js runs `libuv` in the background, which is of asynchronous
+nature, we also have to make sure that everything gets send as soon
+as possible by calling `socket.setNoDelay(true)`.
+
+In order to integrate the Ping/Pong frames later with a client-side
+implementation, it has to run inside a `setInterval()` loop that
+sends a Ping Frame every X seconds. The amount of delay between
+Ping and Pong Frames is not specified in the RFC, but it's recommended
+to do this around every `60 seconds`.
 
 ```javascript
 // client.mjs

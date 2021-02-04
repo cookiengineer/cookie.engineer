@@ -1,5 +1,9 @@
 
-const _EMOJI = {
+import { console } from './console.mjs';
+
+
+
+const EMOJI = {
 	'book':         String.fromCodePoint(0x1f4d5),
 	'bug':          String.fromCodePoint(0x1f41b),
 	'construction': String.fromCodePoint(0x1f6a7),
@@ -12,18 +16,14 @@ const _EMOJI = {
 	'sparkles':     String.fromCodePoint(0x2728)
 };
 
-const _element = function(type) {
+const toElement = (type) => ({
+	type:  type,
+	raw:   '',
+	state: '',
+	nodes: []
+});
 
-	return {
-		type:  type,
-		raw:   '',
-		state: '',
-		nodes: []
-	};
-
-};
-
-const _parse_line = function(str) {
+const parseChunk = function(str) {
 
 	str = str.trim();
 
@@ -50,7 +50,7 @@ const _parse_line = function(str) {
 			if (i1 !== -1) {
 
 				let tmp = str.substr(0, i1);
-				let emoji = _EMOJI[tmp] || null;
+				let emoji = EMOJI[tmp] || null;
 				if (emoji !== null) {
 					elements.push(emoji);
 				} else {
@@ -74,7 +74,7 @@ const _parse_line = function(str) {
 				let alt = str.substr(2, i1 - 2);
 				let src = str.substr(i1 + 2, i2 - i1 - 2);
 
-				element = _element('img');
+				element = toElement('img');
 				element.src = src;
 				element.alt = alt;
 				elements.push(element);
@@ -91,7 +91,7 @@ const _parse_line = function(str) {
 			let c1 = str.indexOf('**', 2);
 			if (c1 !== -1) {
 
-				element = _element('b');
+				element = toElement('b');
 				element.raw = str.substr(2, c1 - 2);
 				elements.push(element);
 
@@ -107,7 +107,7 @@ const _parse_line = function(str) {
 			let c1 = str.indexOf('`', 1);
 			if (c1 !== -1) {
 
-				element = _element('code');
+				element = toElement('code');
 				element.raw = str.substr(1, c1 - 1);
 				elements.push(element);
 
@@ -123,7 +123,7 @@ const _parse_line = function(str) {
 			let c1 = str.indexOf('*', 1);
 			if (c1 !== -1) {
 
-				element = _element('em');
+				element = toElement('em');
 				element.raw = str.substr(1, c1 - 1);
 				elements.push(element);
 
@@ -139,7 +139,7 @@ const _parse_line = function(str) {
 			let c1 = str.indexOf('~', 1);
 			if (c1 !== -1) {
 
-				element = _element('del');
+				element = toElement('del');
 				element.raw = str.substr(1, c1 - 1);
 				elements.push(element);
 
@@ -160,7 +160,7 @@ const _parse_line = function(str) {
 				let raw  = str.substr(1, c1 - 1);
 				let href = str.substr(c1 + 2, c2 - c1 - 2);
 
-				element = _element('a');
+				element = toElement('a');
 				element.href = href;
 				element.raw  = raw;
 				elements.push(element);
@@ -207,119 +207,7 @@ const _parse_line = function(str) {
 
 };
 
-const _parse = function(article) {
-
-	let element  = null;
-	let elements = [];
-
-	article.split('\n').forEach((line, l) => {
-
-		let chunk = line.trim();
-		if (chunk === '' && element !== null) {
-
-			if (/^(hr|pre|ul|ol|p)$/g.test(element.type) === false) {
-				element = null;
-			}
-
-		}
-
-
-		if (element !== null && element.type === 'pre') {
-
-			if (chunk === '```') {
-				element = null;
-			} else {
-				element.raw += '\n' + line;
-			}
-
-		} else if (element !== null && element.type === 'p') {
-
-			if (chunk === '') {
-				element = null;
-			} else {
-
-				_parse_line(' ' + chunk).forEach(node => {
-					element.nodes.push(node);
-				});
-			}
-
-		} else if (chunk.startsWith('```')) {
-
-			if (element === null || element.type !== 'pre') {
-				element = _element('pre');
-				element.raw = '';
-			}
-
-			if (chunk.length > 3) {
-				element.state = chunk.substr(3).split(' ')[0].trim();
-			} else if (element !== null) {
-				element = null;
-			}
-
-		} else if (chunk.startsWith('#')) {
-
-			let type = null;
-			let tmp  = chunk.split(' ')[0].trim();
-
-			if (tmp === '#') {
-				type = 'h1';
-			} else if (tmp === '##') {
-				type = 'h2';
-			} else if (tmp === '###') {
-				type = 'h3';
-			}
-
-			if (type !== null) {
-				element       = _element(type);
-				element.nodes = _parse_line(chunk.split(' ').slice(1).join(' '));
-			}
-
-		} else if (chunk.startsWith('* ') || chunk.startsWith('- ')) {
-
-			if (element === null || element.type !== 'ul') {
-				element = _element('ul');
-			}
-
-			let item = _element('li');
-			item.nodes = _parse_line(chunk.substr(2).trim());
-			// console.log(item.nodes);
-			element.nodes.push(item);
-
-		} else if (/^([0-9]+)\./g.test(chunk)) {
-
-			if (element === null || element.type !== 'ol') {
-				element = _element('ol');
-			}
-
-			let item = _element('li');
-			item.nodes = _parse_line(chunk.split('.').slice(1).join('.').trim());
-			element.nodes.push(item);
-
-		} else if (chunk !== '') {
-
-			if (element === null || element.type !== 'p') {
-				element = _element('p');
-			}
-
-			_parse_line(' ' + chunk).forEach(node => {
-				element.nodes.push(node);
-			});
-
-		}
-
-
-		if (element !== null && elements.includes(element) === false) {
-			elements.push(element);
-		}
-
-	});
-
-
-	return elements;
-
-};
-
-const _render_element = function(element, indent) {
+const renderElement = function(element, indent) {
 
 	if (typeof element === 'string') {
 		return element;
@@ -348,7 +236,7 @@ const _render_element = function(element, indent) {
 			if (element.nodes.length > 0) {
 				element.nodes.forEach((node, n) => {
 					if (n > 0) block += ' ';
-					block += _render_element(node, indent + '\t').trim();
+					block += renderElement(node, indent + '\t').trim();
 				});
 			}
 
@@ -363,13 +251,13 @@ const _render_element = function(element, indent) {
 		} else if (type === 'p') {
 
 			if (element.nodes.length === 1) {
-				return indent + '<p>' + _render_element(element.nodes[0], indent) + '</p>';
+				return indent + '<p>' + renderElement(element.nodes[0], indent) + '</p>';
 			} else if (element.nodes.length > 0) {
 
 				block += indent + '<p>\n';
 
-				element.nodes.forEach(node => {
-					block += indent + '\t' + _render_element(node, indent + '\t') + '\n';
+				element.nodes.forEach((node) => {
+					block += indent + '\t' + renderElement(node, indent + '\t') + '\n';
 				});
 
 				block += indent + '</p>';
@@ -381,8 +269,8 @@ const _render_element = function(element, indent) {
 			block += indent + '<' + type + '>\n';
 
 			if (element.nodes.length > 0) {
-				element.nodes.forEach(node => {
-					block += indent + _render_element(node, indent + '\t');
+				element.nodes.forEach((node) => {
+					block += indent + renderElement(node, indent + '\t');
 				});
 			}
 
@@ -395,7 +283,7 @@ const _render_element = function(element, indent) {
 			if (element.nodes.length > 0) {
 				element.nodes.forEach((node, n) => {
 					if (n > 0) block += ' ';
-					block += _render_element(node, indent + '\t').trim();
+					block += renderElement(node, indent + '\t').trim();
 				});
 			}
 
@@ -403,7 +291,7 @@ const _render_element = function(element, indent) {
 
 		} else {
 
-			console.log(element);
+			console.warn('MARKDOWN:', element);
 
 		}
 
@@ -414,33 +302,137 @@ const _render_element = function(element, indent) {
 
 };
 
-const _render = function(elements) {
-
-	let html = [];
-
-	elements.forEach(element => {
-		html.push(_render_element(element, ''));
-	});
-
-	return html.join('\n').trim();
-
-};
-
 
 
 /*
  * IMPLEMENTATION
  */
 
-export const parse = function(article) {
-	return _parse(article);
+const parse = function(article) {
+
+	let element  = null;
+	let elements = [];
+
+	article.split('\n').forEach((line) => {
+
+		let chunk = line.trim();
+		if (chunk === '' && element !== null) {
+
+			if (/^(hr|pre|ul|ol|p)$/g.test(element.type) === false) {
+				element = null;
+			}
+
+		}
+
+
+		if (element !== null && element.type === 'pre') {
+
+			if (chunk === '```') {
+				element = null;
+			} else {
+				element.raw += '\n' + line;
+			}
+
+		} else if (element !== null && element.type === 'p') {
+
+			if (chunk === '') {
+				element = null;
+			} else {
+
+				parseChunk(' ' + chunk).forEach((node) => {
+					element.nodes.push(node);
+				});
+
+			}
+
+		} else if (chunk.startsWith('```')) {
+
+			if (element === null || element.type !== 'pre') {
+				element = toElement('pre');
+				element.raw = '';
+			}
+
+			if (chunk.length > 3) {
+				element.state = chunk.substr(3).split(' ')[0].trim();
+			} else if (element !== null) {
+				element = null;
+			}
+
+		} else if (chunk.startsWith('#')) {
+
+			let type = null;
+			let tmp  = chunk.split(' ')[0].trim();
+
+			if (tmp === '#') {
+				type = 'h1';
+			} else if (tmp === '##') {
+				type = 'h2';
+			} else if (tmp === '###') {
+				type = 'h3';
+			}
+
+			if (type !== null) {
+				element       = toElement(type);
+				element.nodes = parseChunk(chunk.split(' ').slice(1).join(' '));
+			}
+
+		} else if (chunk.startsWith('* ') || chunk.startsWith('- ')) {
+
+			if (element === null || element.type !== 'ul') {
+				element = toElement('ul');
+			}
+
+			let item = toElement('li');
+			item.nodes = parseChunk(chunk.substr(2).trim());
+			// console.log(item.nodes);
+			element.nodes.push(item);
+
+		} else if (/^([0-9]+)\./g.test(chunk)) {
+
+			if (element === null || element.type !== 'ol') {
+				element = toElement('ol');
+			}
+
+			let item = toElement('li');
+			item.nodes = parseChunk(chunk.split('.').slice(1).join('.').trim());
+			element.nodes.push(item);
+
+		} else if (chunk !== '') {
+
+			if (element === null || element.type !== 'p') {
+				element = toElement('p');
+			}
+
+			parseChunk(' ' + chunk).forEach((node) => {
+				element.nodes.push(node);
+			});
+
+		}
+
+
+		if (element !== null && elements.includes(element) === false) {
+			elements.push(element);
+		}
+
+	});
+
+	return elements;
+
 };
 
-export const render = function(data) {
-	return _render(data);
+const render = function(elements) {
+
+	let html = [];
+
+	elements.forEach((element) => {
+		html.push(renderElement(element, ''));
+	});
+
+	return html.join('\n').trim();
+
 };
 
-export const markdown = {
+export const MARKDOWN = {
 	parse:  parse,
 	render: render
 };

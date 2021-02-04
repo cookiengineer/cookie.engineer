@@ -3,7 +3,9 @@
 
 import fs           from 'fs';
 import path         from 'path';
-import { markdown } from './markdown.mjs';
+import process      from 'process';
+import { console  } from './console.mjs';
+import { MARKDOWN } from './MARKDOWN.mjs';
 
 
 const ROOT     = process.env.PWD + '/weblog';
@@ -12,7 +14,7 @@ const TABSPACE = '\t' + new Array(255).fill('\t').join('');
 
 
 
-const _parse_meta = function(article) {
+const parseMeta = function(article) {
 
 	let tmp = article.trim();
 	if (tmp.startsWith('===')) {
@@ -27,7 +29,7 @@ const _parse_meta = function(article) {
 		let raw = tmp.substr(3, tmp.indexOf('===', 3) - 3).trim();
 		if (raw.length > 0) {
 
-			raw.split('\n').forEach(line => {
+			raw.split('\n').forEach((line) => {
 
 				if (line.startsWith('-')) line = line.substr(1);
 
@@ -36,7 +38,7 @@ const _parse_meta = function(article) {
 				let val = tmp[1].trim();
 
 				if (val.includes(',')) {
-					meta[key] = val.split(',').map(v => v.trim());
+					meta[key] = val.split(',').map((v) => v.trim());
 				} else {
 					meta[key] = val;
 				}
@@ -65,7 +67,7 @@ const _parse_meta = function(article) {
 
 const _walk_fix_url = function(nodes) {
 
-	nodes.forEach(node => {
+	nodes.forEach((node) => {
 
 		if (typeof node !== 'string') {
 
@@ -124,7 +126,7 @@ const _walk_fix_url = function(nodes) {
 
 };
 
-const _render_article = function(template, entry) {
+const renderArticle = function(template, entry) {
 
 	let meta = entry.meta;
 	let html = entry.html;
@@ -140,7 +142,7 @@ const _render_article = function(template, entry) {
 
 };
 
-const _render_feed = function(template) {
+const renderFeed = function(template) {
 
 	let articles = [];
 
@@ -184,7 +186,7 @@ const _render_feed = function(template) {
 
 };
 
-const _render_index = function(template) {
+const renderIndex = function(template) {
 
 	let articles = [];
 
@@ -219,7 +221,7 @@ const _render_index = function(template) {
 
 };
 
-const _parse_body = function(article) {
+const parseBody = function(article) {
 
 	let tmp = article.trim();
 	if (tmp.startsWith('===')) {
@@ -227,7 +229,7 @@ const _parse_body = function(article) {
 	}
 
 
-	let data = markdown.parse(tmp);
+	let data = MARKDOWN.parse(tmp);
 	if (data.length > 0) {
 		_walk_fix_url(data);
 	}
@@ -236,9 +238,9 @@ const _parse_body = function(article) {
 
 };
 
-const _render_body = function(data) {
+const renderBody = function(data) {
 
-	let body = markdown.render(data);
+	let body = MARKDOWN.render(data);
 	if (body !== null) {
 		return body;
 	}
@@ -251,15 +253,15 @@ const _render_body = function(data) {
 
 fs.readdir(ROOT + '/articles', (err, files) => {
 
-	files.filter(f => f.endsWith('.md')).forEach(file => {
+	files.filter((file) => file.endsWith('.md')).forEach((file) => {
 
 		fs.readFile(ROOT + '/articles/' + file, 'utf8', (err, article) => {
 
 			if (!err) {
 
-				let meta = _parse_meta(article);
-				let body = _parse_body(article);
-				let html = _render_body(body);
+				let meta = parseMeta(article);
+				let body = parseBody(article);
+				let html = renderBody(body);
 
 				if (meta !== null && body !== null && html !== '') {
 
@@ -284,7 +286,7 @@ fs.readdir(ROOT + '/articles', (err, files) => {
 
 				} else {
 
-					console.log('< reading ' + file + ' ... NOT OKAY');
+					console.error('< reading   ' + file + ' ... NOT OKAY');
 
 				}
 
@@ -297,13 +299,13 @@ fs.readdir(ROOT + '/articles', (err, files) => {
 });
 
 
-setTimeout(_ => {
+setTimeout(() => {
 
 	fs.readFile(ROOT + '/sources/index.tpl', 'utf8', (err, template) => {
 
 		if (!err) {
 
-			let index = _render_index(template);
+			let index = renderIndex(template);
 			if (index !== '') {
 				fs.writeFile(ROOT + '/index.html', index, 'utf8', (err) => {
 					if (!err) console.log('> rendering index.html ... OKAY');
@@ -320,7 +322,7 @@ setTimeout(_ => {
 
 		if (!err) {
 
-			let feed = _render_feed(template);
+			let feed = renderFeed(template);
 			if (feed !== '') {
 				fs.writeFile(ROOT + '/feed.xml', feed, 'utf8', (err) => {
 					if (!err) console.log('> rendering feed.xml ... OKAY');
@@ -337,9 +339,9 @@ setTimeout(_ => {
 
 		if (!err) {
 
-			DATABASE.forEach(entry => {
+			DATABASE.forEach((entry) => {
 
-				let article = _render_article(template, entry);
+				let article = renderArticle(template, entry);
 				if (article !== '') {
 
 					let file = entry.file.split('.').slice(0, -1).join('.');

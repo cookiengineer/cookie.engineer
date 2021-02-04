@@ -44,16 +44,16 @@ to the target, and if it succeeds reaches through the connection to the
 client.
 
 ```chat
-- Client - Please let me connect to IP 1.2.3.4.
-- Proxy  - Trying to connect... please hold the line ...
-- Proxy  - Here's the connection handle, any further data will be dispatched through automatically.
+Client: Please let me connect to IP 1.2.3.4.
+Proxy:  Trying to connect... please hold the line ...
+Proxy:  Here's the connection handle, any further data will be dispatched through automatically.
 ```
 
 ```chat
-- Client - Please let me connect to IP 1.2.3.4.
-- Proxy  - Trying to connect... please hold the line ...
-- Proxy  - Sorry, the given target is not reachable. Please try again later.
-- Proxy  - *hangs off the phone* Beep Beep Beep.
+Client: Please let me connect to IP 1.2.3.4.
+Proxy:  Trying to connect... please hold the line ...
+Proxy:  Sorry, the given target is not reachable. Please try again later.
+Proxy:  *hangs off the phone* Beep Beep Beep.
 ```
 
 As both `SOCKS4` and `SOCKS4a` were proprietary protocols, they didn't
@@ -112,7 +112,7 @@ The SOCKS **Version 4** network flow looks like this:
 
 **SOCKS Version 4 Connection Request Frame**:
 
-```
+```bash
 +---------+---------+----+----+----+----+----+----+----+----+....+----+
 | VERSION | COMMAND | DSTPORT |      DSTIP        | USERID       |NULL|
 +---------+---------+----+----+----+----+----+----+----+----+....+----+
@@ -133,7 +133,7 @@ SOCKS Version 4 Commands:
 
 **SOCKS Version 4 Connection Status Frame**:
 
-```
+```bash
 +---------+--------+----+----+----+----+----+----+
 | VERSION | STATUS | DSTPORT |      DSTIP        |
 +---------+--------+----+----+----+----+----+----+
@@ -177,7 +177,7 @@ The SOCKS **Version 5** network flow looks like this:
 
 **SOCKS Version 5 Handshake Request Frame**:
 
-```
+```bash
 +---------+----+----+----+....+
 | VERSION | NMETHODS| METHODS |
 +---------+----+----+----+....+
@@ -186,7 +186,7 @@ The SOCKS **Version 5** network flow looks like this:
 
 **SOCKS Version 5 Handshake Response Frame**:
 
-```
+```bash
 +---------+----+----+
 | VERSION | METHOD  |
 +---------+----+----+
@@ -210,7 +210,7 @@ SOCKS Version 5 Handshake Methods:
 After the Client and Server have negotiated an Authentication Method,
 the Client sends a Connection Request Frame to the Server.
 
-```
+```bash
 +---------+---------+-----+------+----+----+----+----+
 | VERSION | COMMAND | RSV | ATYP | DSTADDR | DSTPORT |
 +---------+---------+-----+------+----+----+----+----+
@@ -235,7 +235,7 @@ SOCKS Version 5 Commands:
 After the Client has sent the Connection Request frame, the Server responds
 with a Connection Status Frame.
 
-```
+```bash
 +---------+-------+-----+------+----+----+----+----+
 | VERSION | REPLY | RSV | ATYP | BNDADDR | BNDPORT |
 +---------+-------+-----+------+----+----+----+----+
@@ -909,8 +909,8 @@ const encode = function(socket, data) {
 
 ## IPv4, Domain and IPv6 Payload
 
-This has been explained already in the previous chapters, so it
-should be quite easy for you to handle the encoding of the payloads
+The decoding logic has been explained already in the previous chapters,
+so it should be quite easy for you to handle the encoding of the payloads
 and possible to write the `encode_payload` method yourself.
 
 

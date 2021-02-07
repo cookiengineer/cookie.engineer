@@ -1,8 +1,9 @@
 ===
 - date: 2020-12-31
 - name: Implementer's Guide to SOCKS
-- tags: socks, network, node.js
+- tags: networking, nodejs, socks
 - type: software, legacy
+- crux: A How-To Guide on building a SOCKS version 4/5 client and server from scratch, explaining related RFCs and potential quirks and problems with other implementations.
 ===
 
 Yesterday I was verifying that the SOCKS test suite of [Tholian Stealth](https://github.com/tholian-network/stealth)
@@ -125,7 +126,7 @@ The SOCKS **Version 4** network flow looks like this:
 - `DSTIP` is an `IPv4` (4 bytes) represents the destination IP, and encodes 4 digits as `0x00` to `0xFF` respectively.
 - `USERID` (variable byte length, followed by a `NULL` terminator byte) represents an authentication mechanism for a user-login; but without a password.
 
-SOCKS Version 4 Commands:
+**SOCKS Version 4 Commands**:
 
 - `0x01` represents `CONNECT` and is a TCP/IP connection request which lets the Server established the connection.
 - `0x02` represents `BIND` and is a TCP/IP port binding to allow the Client to establish the connection themselves.
@@ -145,12 +146,13 @@ SOCKS Version 4 Commands:
 - `DSTPORT` (2 bytes) represents the destination port from `1` to `65535`.
 - `DSTIP` is an `IPv4` (4 bytes) represents the destination IP, and encodes 4 digits as `0x00` to `0xFF` respectively.
 
-SOCKS Version 4 Status Codes:
+**SOCKS Version 4 Status Codes**:
 
 - `0x5A` Request granted.
 - `0x5B` Request rejected or failed.
 
-SOCKS Version 4 Status Codes for Authentication Mechanism:
+**SOCKS Version 4 Status Codes for Authentication Mechanism**:
+
 (I would not recommend to implement them)
 
 - `0x5C` Request failed because Client's `identd` is not reachable from server.
@@ -197,7 +199,7 @@ The SOCKS **Version 5** network flow looks like this:
 - `NMETHODS` (1 byte) represents the byte length of the following encoded `METHOD`s.
 - `METHODS` (variable byte length) represents the encoded SOCKS methods.
 
-SOCKS Version 5 Handshake Methods:
+**SOCKS Version 5 Handshake Methods**:
 
 - `0x00` represents No Authentication required.
 - `0x01` represents `GSSAPI` which is a "secure" context as defined per [RFC1961](https://tools.ietf.org/html/rfc1961).
@@ -224,7 +226,7 @@ the Client sends a Connection Request Frame to the Server.
 - `DSTADDR` (variable) represents the destination address as an IPv4 (in 4 octets), the domain name (with a prefixed byte length), or an IPv6 (in 16 octets).
 - `DSTPORT` (2 bytes) represents the destination port from `0x01` (`1`) to `0xFF` (`65535`).
 
-SOCKS Version 5 Commands:
+**SOCKS Version 5 Commands**:
 
 - `0x01` represents `CONNECT` and is a TCP/IP connection request which lets the Server established the connection and forward further packets.
 - `0x02` represents `BIND` and is a TCP/IP port binding to allow the Client to establish the connection themselves.
@@ -249,7 +251,7 @@ with a Connection Status Frame.
 - `BNDADDR` (variable) represents the server-bound destination address as an IPv4 (in 4 octets), the domain name (with a prefixed byte length), or an IPv6 (in 16 octets).
 - `BNDPORT` (2 bytes) represents the server-bound destination port from `0x01` (`1`) to `0xFF` (`65535`).
 
-SOCKS Version 5 Replies:
+**SOCKS Version 5 Replies**:
 
 - `0x00` Success
 - `0x01` General SOCKS Failure

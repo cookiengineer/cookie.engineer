@@ -1,8 +1,9 @@
 ===
 - date: 2019-04-26
 - name: Maintenance of Clearnets
-- tags: privacy, security, network, web browser
+- tags: networking, privacy, security
 - type: legacy
+- crux: A crash course in OSI layer theory, related bugs and exploits and what it means for the requirements of an Operating System and its software stack in order to improve anonymity in the face of god's eye like ISP overwatch scenarios.
 ===
 
 

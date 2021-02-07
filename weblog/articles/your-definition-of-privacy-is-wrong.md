@@ -1,8 +1,9 @@
 ===
 - date: 2019-02-15
 - name: Your Definition of Privacy is wrong
-- tags: privacy, security, web browser
+- tags: networking, privacy, security
 - type: legacy
+- crux: A reflection about Identity, Privacy and common misconceptions about fingerprinting and what it means to be undetected inside a swarm of watched and infiltrated devices.
 ===
 
 This week I was researching concepts of alternative Web Browsers, in

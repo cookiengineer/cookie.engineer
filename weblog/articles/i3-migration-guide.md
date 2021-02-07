@@ -2,7 +2,8 @@
 - date: 2020-11-11
 - name: i3 Migration Guide
 - tags: linux, desktop
-- type: legacy
+- type: software, legacy
+- crux: How to migrate from GNOME to i3, step by step with explanations for typical keybindings, configuration problems and status bar integrations.
 ===
 
 Today I decided to ditch GNOME.

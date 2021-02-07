@@ -1,8 +1,9 @@
 ===
 - date: 2019-01-15
 - name: Problems with Web Browsers
-- tags: stealth-browser, web browser, semantic web
+- tags: networking, privacy, security
 - type: software, research
+- crux: The evolution of the Web, its problems and a masterplan on how to improve it by building my own Web Browser.
 ===
 
 This weekend I finally decided to start to build my own web browser.
@@ -130,18 +131,17 @@ domain you've just requested.
 So the network flow will always look like this.
 
 ```chat
-- Browser  - What is the IP of "reddit.com"?
-- Internet - Hey, it's "1.2.3.4"!
-- Browser  - Okay, gonna do a request to "1.2.3.4" now.
-- Browser  - Oh, found a CSS file.
-- Browser  - What is the IP of "reddit.com" again?
-- Internet - Hey, it's "1.2.3.4"!
-- Browser  - Okay, now loading the second CSS file.
-- Browser  - What is the IP of "reddit.com" again?
-- Internet - Hey, it's "1.2.3.4"!
+Browser:  What is the IP of "reddit.com"?
+Internet: Hey, it's "1.2.3.4"!
+Browser:  Okay, gonna do a request to "1.2.3.4" now.
+Browser:  Oh, found a CSS file.
+Browser:  What is the IP of "reddit.com" again?
+Internet: Hey, it's "1.2.3.4"!
+Browser:  Okay, now loading the second CSS file.
+Browser:  What is the IP of "reddit.com" again?
+Internet: Hey, it's "1.2.3.4"!
 
 (... and so on ...)
-
 ```
 
 ... and it will continue to do so with - every - single - request.

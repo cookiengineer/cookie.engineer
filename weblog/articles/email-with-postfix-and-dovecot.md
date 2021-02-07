@@ -1,7 +1,7 @@
 ===
 - date: 2020-11-30
 - name: E-Mail with Postfix and Dovecot
-- tags: email, server, devops
+- tags: server, email, devops
 - type: legacy
 ===
 

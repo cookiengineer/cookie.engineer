@@ -1,15 +1,18 @@
 ===
 - date: 2019-01-18
 - name: Implementer's Guide to WebSockets
-- tags: web socket, network, node.js
+- tags: networking, nodejs, websockets
 - type: software, legacy
+- crux: A How-To Guide on building a WebSocket version 13 client and server from scratch, explaining related RFCs and potential quirks and problems with other implementations.
 ===
 
-Today I implemented WebSocket support for [Tholian Stealth](https://github.com/tholian-network/stealth).
+This time I implemented WebSocket support for [Tholian Stealth](https://github.com/tholian-network/stealth).
 
-But, I soon came to realize that when implementing WebSockets from
-scratch that there is no go-to-and-know-everything resource
-available on the internet.
+Soon came to realize that when implementing WebSockets from
+scratch there is no go-to-and-know-everything resource available
+on the internet. Most of the resources just use third-party
+libraries and don't show how to implement the underlying
+network protocol and frame parsing mechanisms.
 
 Also, reading the RFC is kinda tedious, so I'm trying my best to
 have enough code demos available for clarifications. This guide

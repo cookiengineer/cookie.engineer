@@ -115,23 +115,9 @@
 				</p>
 			</article>
 		</section>
-		<section id="weblog-articles">
+		<section id="weblog">
 			<h1>Web Log.</h1>
-			<article cellspacing="2">
-				<table>
-					<thead>
-						<tr>
-							<th></th>
-							<th>Date</th>
-							<th>Title</th>
-							<th>Tags</th>
-						</tr>
-					</thead>
-					<tbody>
-						${articles}
-					</tbody>
-				</table>
-			</article>
+			${articles}
 		</section>
 		<footer>
 			<p>Made with 💔 in Heidelberg, Germany. All rights (and jokes) reserved under European Law.</p>

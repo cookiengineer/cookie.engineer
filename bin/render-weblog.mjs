@@ -20,16 +20,19 @@ const parseMeta = function(article) {
 	if (tmp.startsWith('===')) {
 
 		let meta = {
+			crux: null,
 			date: null,
 			name: null,
 			tags: null,
-			type: null
+			time: null,
+			type: null,
+			word: null
 		};
 
-		let raw = tmp.substr(3, tmp.indexOf('===', 3) - 3).trim();
-		if (raw.length > 0) {
+		let head = tmp.substr(3, tmp.indexOf('===', 3) - 3).trim();
+		if (head.length > 0) {
 
-			raw.split('\n').forEach((line) => {
+			head.split('\n').forEach((line) => {
 
 				if (line.startsWith('-')) line = line.substr(1);
 
@@ -44,6 +47,14 @@ const parseMeta = function(article) {
 				}
 
 			});
+
+		}
+
+		let body = tmp.substr(tmp.indexOf('===', 3) + 3).trim();
+		if (body.length > 0) {
+
+			meta.word = body.split('\n').join(' ').split(' ').filter((v) => /[A-Za-z]+/g.test(v)).length;
+			meta.time = Math.round(meta.word / 200);
 
 		}
 
@@ -200,16 +211,40 @@ const renderIndex = function(template) {
 
 		let meta   = entry.meta;
 		let file   = entry.file.split('.').slice(0, -1).join('.');
-		let name   = '<a href="./articles/' + file + '.html" target="_blank">' + meta.name.split(' ').join('&nbsp;') + '</a>';
 		let chunk  = '';
-		let indent = TABSPACE.substr(0, 6);
+		let indent = TABSPACE.substr(0, 3);
 
-		chunk += indent + '<tr class="' + meta.type.join('-') + '" title="Ingredients: ' + meta.type.join(', ') + '">\n';
-		chunk += indent + '\t<td></td>\n';
-		chunk += indent + '\t<td>' + meta.date + '</td>\n';
-		chunk += indent + '\t<td>' + name + '</td>\n';
-		chunk += indent + '\t<td>' + meta.tags.map((v) => v.split(' ').join('&nbsp;')).join(', ') + '</td>\n';
-		chunk += indent + '</tr>';
+		chunk += indent + '<article id="' + file.split(' ').join('-') + '" class="' + meta.type.join('-') + '">\n';
+		chunk += indent + '\t<samp></samp>\n';
+		chunk += indent + '\t<h3>' + meta.name + '</h3>\n';
+
+		if (typeof meta.image === 'string') {
+			chunk += indent + '\t<figure>\n';
+			chunk += indent + '\t\t<a href="./articles/' + file + '.html" target="_blank"><img alt="Article Header Image" src="./articles/' + file + '.jpg" width="512" height="288"></a>\n';
+			chunk += indent + '\t</figure>\n';
+		}
+
+		if (meta.crux !== null) {
+			chunk += indent + '\t<p>' + meta.crux + '</p>\n';
+		}
+
+		chunk += indent + '\t<ul>\n';
+		chunk += indent + '\t\t<li><i>Article Link:</i><a href="./articles/' + file + '.html">' + meta.name + '</a></li>\n';
+
+		if (meta.tags !== null && meta.tags.length > 0) {
+			chunk += indent + '\t\t<li><i>Categories:</i><span>' + meta.tags.join(', ') + '</span></li>\n';
+		}
+
+		chunk += indent + '\t\t<li><i>Publishing Date:</i><time datetime="' + meta.date + '">' + meta.date + '</time></li>\n';
+
+		if (meta.time !== null && meta.word !== null) {
+			chunk += indent + '\t\t<li><i>Reading Time:</i><span>ca. ' + meta.time + '-minute read (~' + meta.word + ' words)</span></li>\n';
+		}
+
+
+		chunk += indent + '\t</ul>\n';
+		chunk += indent + '</article>';
+
 
 		articles.push(chunk);
 
@@ -257,6 +292,8 @@ fs.readdir(ROOT + '/articles', (err, files) => {
 
 		fs.readFile(ROOT + '/articles/' + file, 'utf8', (err, article) => {
 
+			console.log('-> reading ' + file);
+
 			if (!err) {
 
 				let meta = parseMeta(article);
@@ -265,7 +302,6 @@ fs.readdir(ROOT + '/articles', (err, files) => {
 
 				if (meta !== null && body !== null && html !== '') {
 
-					console.log('< reading   ' + file + ' ... OKAY');
 
 					if (
 						typeof meta.date === 'string'
@@ -284,9 +320,11 @@ fs.readdir(ROOT + '/articles', (err, files) => {
 
 					}
 
+					console.info('   OKAY');
+
 				} else {
 
-					console.error('< reading   ' + file + ' ... NOT OKAY');
+					console.error('   NOT OKAY');
 
 				}
 
@@ -308,12 +346,21 @@ setTimeout(() => {
 			let index = renderIndex(template);
 			if (index !== '') {
 				fs.writeFile(ROOT + '/index.html', index, 'utf8', (err) => {
-					if (!err) console.log('> rendering index.html ... OKAY');
+
+					console.log('-> rendering index.html');
+
+					if (!err) {
+						console.info('   OKAY');
+					} else {
+						console.error('   NOT OKAY');
+					}
+
 				});
 			}
 
 		} else {
-			console.error('> could not render index.html (no read/write access to template?');
+			console.log('-> rendering index.html');
+			console.error('   NOT OKAY');
 		}
 
 	});
@@ -325,40 +372,65 @@ setTimeout(() => {
 			let feed = renderFeed(template);
 			if (feed !== '') {
 				fs.writeFile(ROOT + '/feed.xml', feed, 'utf8', (err) => {
-					if (!err) console.log('> rendering feed.xml ... OKAY');
+
+					console.log('-> rendering feed.xml');
+
+					if (!err) {
+						console.info('   OKAY');
+					} else {
+						console.error('   NOT OKAY');
+					}
+
 				});
 			}
 
 		} else {
-			console.error('> could not render feed.xml (no read/write access to template?');
+			console.log('-> rendering feed.xml');
+			console.error('   NOT OKAY');
 		}
 
 	});
 
-	fs.readFile(ROOT + '/sources/article.tpl', 'utf8', (err, template) => {
+	setTimeout(() => {
 
-		if (!err) {
+		fs.readFile(ROOT + '/sources/article.tpl', 'utf8', (err, template) => {
 
-			DATABASE.forEach((entry) => {
+			console.log('-> reading article.tpl');
 
-				let article = renderArticle(template, entry);
-				if (article !== '') {
+			if (!err) {
 
-					let file = entry.file.split('.').slice(0, -1).join('.');
+				console.info('   OKAY');
 
-					fs.writeFile(ROOT + '/articles/' + file + '.html', article, 'utf8', (err) => {
-						if (!err) console.log('> rendering articles/' + file + '.html ... OKAY');
-					});
+				DATABASE.forEach((entry) => {
 
-				}
+					let article = renderArticle(template, entry);
+					if (article !== '') {
 
-			});
+						let file = entry.file.split('.').slice(0, -1).join('.');
 
-		} else {
-			console.error('> could not render articles (no read/write access to template?');
-		}
+						fs.writeFile(ROOT + '/articles/' + file + '.html', article, 'utf8', (err) => {
 
-	});
+							console.log('-> rendering articles/' + file + '.html');
 
-}, 1000);
+							if (!err) {
+								console.info('   OKAY');
+							} else {
+								console.error('   NOT OKAY');
+							}
+
+						});
+
+					}
+
+				});
+
+			} else {
+				console.error('   NOT OKAY');
+			}
+
+		});
+
+	}, 100);
+
+}, 500);
 

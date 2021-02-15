@@ -8,6 +8,7 @@ import { console  } from './console.mjs';
 import { MARKDOWN } from './MARKDOWN.mjs';
 
 
+
 const ROOT     = process.env.PWD + '/weblog';
 const DATABASE = [];
 const TABSPACE = '\t' + new Array(255).fill('\t').join('');

@@ -63,8 +63,8 @@
 			<h1>Muh Web Log.</h1>
 			<article>
 				<p>
-					Welcome to my Web Log. This Web Log mostly contains thoughts about
-					Software Engineering or Automation in general.
+					Welcome to my Web Log. This Web Log mostly contains my thoughts
+					about Software Engineering or Software Automation.
 				</p>
 				<p>
 					The idea is that I'm abusing this space to reflect on the Project
@@ -73,13 +73,7 @@
 					n' other cool shit that I built with pride and prejudice.
 				</p>
 				<p>
-					Below is an auto-generated index of all articles that are available.
-					The tags of articles are shown on the right side, so you can use
-					the search function of your Web Browser in case a specific topic
-					caught your interest.
-				</p>
-				<p>
-					If you have a request or feedback on articles, you can use the
+					If you have a request for a new article or feedback, you can use the
 					<a class="icon-section" href="../index.html#contact">Contact Form</a>
 					of the Portfolio or create an issue in the repository manually
 					on <a class="icon-github" href="https://github.com/cookiengineer/cookie.engineer/issues" href="_blank">GitHub</a>
@@ -91,7 +85,7 @@
 					<a class="icon-download" rel="alternate" type="application/rss+xml" href="./feed.xml" download>/weblog/feed.xml</a>
 				</p>
 				<p>
-					I hope you find this Web Log interesting.
+					I hope you'll find this Web Log interesting.
 					<br>
 					Enjoy your stay.
 				</p>

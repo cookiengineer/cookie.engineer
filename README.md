@@ -42,8 +42,12 @@ the `bin/render-weblog.mjs` via node.js:
 cd /path/to/cookie.engineer;
 
 # Note that PWD must be the website root
-node --experimental-modules ./bin/render-weblog.mjs;
+node --experimental-modules ./bin/weblog.mjs;
 ```
+
+Additionally, the CVs are stored in an AES-GCM encrypted
+template format in order to reserve my privacy.
+
 
 ## License
 

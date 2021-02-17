@@ -143,8 +143,8 @@ const decode_payload = function(buffer) {
 		// 0x03: Domain Payload
 
 		let length     = buffer[1];
-		let raw_domain = buffer.slice(1, 1 + length);
-		let raw_port   = buffer.slice(1 + length, 1 + length + 2);
+		let raw_domain = buffer.slice(2, 2 + length);
+		let raw_port   = buffer.slice(2 + length, 2 + length + 2);
 
 		if (raw_domain.length > 0 && raw_port.length === 2) {
 
@@ -195,10 +195,6 @@ const encode = function(socket, data) {
 
 	if ((data.headers instanceof Object) === false) {
 		data.headers = {};
-	}
-
-	if (typeof data.payload !== 'string') {
-		data.payload = '0.0.0.0:0';
 	}
 
 
@@ -303,6 +299,19 @@ const encode_payload = function(payload) {
 	payload = payload instanceof Object ? payload : { host: null, domain: null, port: 0 };
 
 
+	if (typeof payload.host !== 'string') {
+		payload.host = null;
+	}
+
+	if (typeof payload.domain !== 'string') {
+		payload.domain = null;
+	}
+
+	if (typeof payload.port !== 'number') {
+		payload.port = 0;
+	}
+
+
 	if (payload !== null) {
 
 		if (payload.host !== null) {
@@ -344,6 +353,7 @@ const encode_payload = function(payload) {
 			let data = [];
 			let tmp  = Buffer.from(payload.domain, 'utf8');
 
+			data.push(0x03);
 			data.push(tmp.length);
 			tmp.forEach((v) => {
 				data.push(v);

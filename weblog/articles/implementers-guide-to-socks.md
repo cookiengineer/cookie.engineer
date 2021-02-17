@@ -333,16 +333,20 @@ client.once('data', (response) => {
 
 			});
 
-			// Chapter: Connection Request
-			SOCKS.send(client, {
-				headers: {
-					'@method': 'connect'
-				},
-				payload: {
-					domain: 'cookie.engineer',
-					port:   443 // HTTPS
-				}
-			});
+			setTimeout(() => {
+
+				// Chapter: Connection Request
+				SOCKS.send(client, {
+					headers: {
+						'@method': 'connect'
+					},
+					payload: {
+						domain: 'cookie.engineer',
+						port:   443 // HTTPS
+					}
+				});
+
+			}, 1000);
 
 		} else {
 			console.error('Server did not authenticate us -_-');
@@ -719,8 +723,8 @@ if (type === 0x03) {
 	// 0x03: Domain Payload
 
 	let length     = buffer[1];
-	let raw_domain = buffer.slice(1, 1 + length);
-	let raw_port   = buffer.slice(1 + length, 1 + length + 2);
+	let raw_domain = buffer.slice(2, 2 + length);
+	let raw_port   = buffer.slice(2 + length, 2 + length + 2);
 
 	if (raw_domain.length > 0 && raw_port.length === 2) {
 
@@ -778,11 +782,6 @@ if (type === 0x04) {
 ```
 
 
-
-
-
-
-
 ## Sending SOCKS Frames
 
 ### Encoding Logic
@@ -804,10 +803,6 @@ const encode = function(socket, data) {
 
 	if ((data.headers instanceof Object) === false) {
 		data.headers = {};
-	}
-
-	if (typeof data.payload !== 'string') {
-		data.payload = '0.0.0.0:0';
 	}
 
 
@@ -853,8 +848,8 @@ const encode = function(socket, data) {
 			let payload = encode_payload(data.payload);
 			if (payload !== null) {
 				payload.forEach((v) => {
-						blob.push(v);
-						});
+					blob.push(v);
+				});
 			}
 
 		}
@@ -914,6 +909,14 @@ const encode = function(socket, data) {
 The decoding logic has been explained already in the previous chapters,
 so it should be quite easy for you to handle the encoding of the payloads
 and possible to write the `encode_payload` method yourself.
+
+The method should handle two different scenarios:
+
+- Encode a `{host,port}` Payload Object.
+- Encode a `{domain,port}` Payload Object.
+
+In any Error Case, a Payload representing the IPv4 `0.0.0.0` and the Port
+`0` should be returned.
 
 
 ## SOCKS Server

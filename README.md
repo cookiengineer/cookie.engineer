@@ -36,7 +36,7 @@ no dynamic backend language interpreter is necessary.
 
 However, the [Web Log](./weblog) is written in CommonMark,
 so new articles must be rendered into HTML by calling
-the `bin/render-weblog.mjs` via node.js:
+the [weblog.mjs](./bin/weblog.mjs) via node.js:
 
 ```bash
 cd /path/to/cookie.engineer;
@@ -45,12 +45,29 @@ cd /path/to/cookie.engineer;
 node --experimental-modules ./bin/weblog.mjs;
 ```
 
+
 Additionally, the CVs are stored in an AES-GCM encrypted
-template format in order to reserve my privacy.
+template format in order to preserve my privacy and to
+protect me from stalkers...because I had issues with some
+malicious actors in the past.
+
+The CVs can be decrypted and encrypted by calling the
+[cv.mjs](./bin/cv.mjs) via node.js, and in the Browser
+they are decrypted via the Web Crypto API:
+
+```bash
+cd /path/to/cookie.engineer;
+
+node ./bin/cv.mjs --decrypt "old-password-of-already-encrypted-CV";
+
+vim ./cv/.temp.cv; # Edit CV nao
+
+node ./bin/cv.mjs --encrypt "new-password";
+```
 
 
 ## License
 
-(c) 2018-2019 Cookie Engineer (@cookiengineer).
+(c) 2018-2021 Cookie Engineer (@cookiengineer).
 All rights reserved.
 

@@ -10,6 +10,8 @@ let client = new net.createConnection({
 	port: 1080
 }, () => {
 
+	console.log('Send Handshake Request');
+
 	// Chapter: Handshake Request
 	SOCKS.send(client, {
 		headers: {
@@ -32,6 +34,8 @@ client.once('data', (response) => {
 	// Chapter: Handshake Response
 	SOCKS.receive(client, response, (data) => {
 
+		console.log('Receive Handshake Response', data);
+
 		if (data.headers['@version'] === 0x05 && data.headers['auth'] === 'none') {
 
 			// Chapter: Connection Status
@@ -39,7 +43,7 @@ client.once('data', (response) => {
 
 				SOCKS.receive(client, status, (data) => {
 
-					console.log(data);
+					console.log('Receive Connection Status', data);
 
 					if (data.headers['@status'] === 'success') {
 						console.log('Client would be ready to do a HTTP request now.');
@@ -54,16 +58,22 @@ client.once('data', (response) => {
 
 			});
 
-			// Chapter: Connection Request
-			SOCKS.send(client, {
-				headers: {
-					'@method': 'connect'
-				},
-				payload: {
-					domain: 'cookie.engineer',
-					port:   443 // HTTPS
-				}
-			});
+			setTimeout(() => {
+
+				console.log('Send Connection Request');
+
+				// Chapter: Connection Request
+				SOCKS.send(client, {
+					headers: {
+						'@method': 'connect'
+					},
+					payload: {
+						domain: 'cookie.engineer',
+						port:   443 // HTTPS
+					}
+				});
+
+			}, 1000);
 
 		} else {
 			console.error('Server did not authenticate us -_-');

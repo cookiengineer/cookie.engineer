@@ -545,6 +545,6 @@ Now that we know how the Prison operates and how the Prison Guards
 rotate their watch shifts and where they stand guard, we can now
 discuss the Tools we need in order to breakout of the Prison.
 
-The follow-up article is [Breakout of Clearnets](./breakout-of-clearnets.html)
+The follow-up article is [Breakout of Clearnets](/weblog/articles/breakout-of-clearnets.html)
 and writes exactly about that.
 

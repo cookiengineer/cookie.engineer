@@ -1,4 +1,5 @@
 
+import path        from 'path';
 import { console } from './console.mjs';
 
 
@@ -207,7 +208,10 @@ const parseChunk = function(str) {
 
 };
 
-const renderElement = function(element, indent) {
+const renderElement = function(element, indent, root) {
+
+	root = typeof root === 'string' ? root : null;
+
 
 	if (typeof element === 'string') {
 		return element;
@@ -220,8 +224,61 @@ const renderElement = function(element, indent) {
 		if (type === 'b' || type === 'code' || type === 'em' || type === 'del') {
 			return ' <' + type + '>' + element.raw + '</' + type + '>';
 		} else if (type === 'img') {
+
+			if (root !== null) {
+
+				if (element.src.startsWith('../')) {
+					element.src = path.resolve(root, element.src);
+				} else if (element.src.startsWith('./')) {
+					element.src = path.resolve(root, element.src);
+				}
+
+			}
+
+
 			return ' <img src="' + element.src + '" alt="' + element.alt + '"> ';
+
 		} else if (type === 'a') {
+
+			if (element.href.startsWith('https://github.com')) {
+				element.state = 'icon-github';
+			} else if (element.href.startsWith('https://gitlab.com')) {
+				element.state = 'icon-gitlab';
+			} else if (element.href.startsWith('https://instagram.com')) {
+				element.state = 'icon-instagram';
+			} else if (element.href.startsWith('https://linkedin.com')) {
+				element.state = 'icon-linkedin';
+			} else if (element.href.startsWith('https://medium.com')) {
+				element.state = 'icon-medium';
+			} else if (element.href.startsWith('https://reddit.com')) {
+				element.state = 'icon-reddit';
+			} else if (element.href.startsWith('https://') || element.href.startsWith('http://')) {
+				element.state = 'icon-website';
+			}
+
+			if (
+				element.href.endsWith('.js')
+				|| element.href.endsWith('.mjs')
+				|| element.href.endsWith('.pdf')
+				|| element.href.endsWith('.tar.gz')
+				|| element.href.endsWith('.tar.xz')
+				|| element.href.endsWith('.zip')
+			) {
+				element.state = 'icon-download';
+			} else if (element.href.startsWith('/')) {
+				element.state = 'icon-section';
+			}
+
+			if (root !== null) {
+
+				if (element.href.startsWith('../')) {
+					element.href = path.resolve(root, element.href);
+				} else if (element.href.startsWith('./')) {
+					element.href = path.resolve(root, element.href);
+				}
+
+			}
+
 
 			if (element.state !== '') {
 				return ' <a class="' + element.state + '" href="' + element.href + '">' + element.raw + '</a> ';
@@ -236,7 +293,7 @@ const renderElement = function(element, indent) {
 			if (element.nodes.length > 0) {
 				element.nodes.forEach((node, n) => {
 					if (n > 0) block += ' ';
-					block += renderElement(node, indent + '\t').trim();
+					block += renderElement(node, indent + '\t', root).trim();
 				});
 			}
 
@@ -251,13 +308,13 @@ const renderElement = function(element, indent) {
 		} else if (type === 'p') {
 
 			if (element.nodes.length === 1) {
-				return indent + '<p>' + renderElement(element.nodes[0], indent) + '</p>';
+				return indent + '<p>' + renderElement(element.nodes[0], indent, root) + '</p>';
 			} else if (element.nodes.length > 0) {
 
 				block += indent + '<p>\n';
 
 				element.nodes.forEach((node) => {
-					block += indent + '\t' + renderElement(node, indent + '\t') + '\n';
+					block += indent + '\t' + renderElement(node, indent + '\t', root) + '\n';
 				});
 
 				block += indent + '</p>';
@@ -270,7 +327,7 @@ const renderElement = function(element, indent) {
 
 			if (element.nodes.length > 0) {
 				element.nodes.forEach((node) => {
-					block += indent + renderElement(node, indent + '\t');
+					block += indent + renderElement(node, indent + '\t', root);
 				});
 			}
 
@@ -283,7 +340,7 @@ const renderElement = function(element, indent) {
 			if (element.nodes.length > 0) {
 				element.nodes.forEach((node, n) => {
 					if (n > 0) block += ' ';
-					block += renderElement(node, indent + '\t').trim();
+					block += renderElement(node, indent + '\t', root).trim();
 				});
 			}
 
@@ -302,18 +359,15 @@ const renderElement = function(element, indent) {
 
 };
 
+const parseBody = function(body) {
 
+	body = typeof body === 'string' ? body : '';
 
-/*
- * IMPLEMENTATION
- */
-
-const parse = function(article) {
 
 	let element  = null;
 	let elements = [];
 
-	article.split('\n').forEach((line) => {
+	body.split('\n').forEach((line) => {
 
 		let chunk = line.trim();
 		if (chunk === '' && element !== null) {
@@ -384,7 +438,6 @@ const parse = function(article) {
 
 			let item = toElement('li');
 			item.nodes = parseChunk(chunk.substr(2).trim());
-			// console.log(item.nodes);
 			element.nodes.push(item);
 
 		} else if (/^([0-9]+)\./g.test(chunk)) {
@@ -420,25 +473,216 @@ const parse = function(article) {
 
 };
 
-const render = function(elements) {
+const parseMeta = function(meta) {
 
-	let html = [];
+	meta = typeof meta === 'string' ? meta : '';
 
-	elements.forEach((element) => {
-		html.push(renderElement(element, ''));
+
+	let data = {
+		crux: null,
+		date: null,
+		name: null,
+		tags: [],
+		time: null,
+		type: [],
+		word: null
+	};
+
+	meta.split('\n').forEach((line) => {
+
+		if (line.startsWith('-') && line.includes(':')) {
+
+			line = line.substr(1);
+
+
+			let tmp = line.trim().split(':');
+			let key = tmp[0].trim();
+			let val = tmp[1].trim();
+
+			if (key === 'tags' || key === 'type') {
+				data[key] = val.split(',').map((v) => v.trim());
+			} else {
+				data[key] = val;
+			}
+
+		}
+
 	});
 
-	return html.join('\n').trim();
+
+	if (
+		typeof data.date === 'string'
+		&& /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/g.test(data.date)
+		&& data.name !== null
+		&& data.tags.length > 0
+		&& data.type.length > 0
+	) {
+		return data;
+	}
+
+
+	return null;
 
 };
+
+
 
 export const MARKDOWN = {
-	parse:  parse,
-	render: render
+
+	parse: (buffer /*, root */) => {
+
+		buffer = typeof buffer === 'string' ? buffer : null;
+		// root   = typeof root === 'string'   ? root   : null;
+
+
+		let data = {
+			meta: {},
+			body: []
+		};
+
+		if (buffer !== null) {
+
+			buffer = buffer.trim();
+
+			if (buffer.startsWith('===')) {
+
+				let meta = parseMeta(buffer.substr(3, buffer.indexOf('===', 3) - 3).trim());
+				if (meta !== null) {
+					data.meta = meta;
+				}
+
+				let body = parseBody(buffer.substr(buffer.indexOf('===', 3) + 3).trim());
+				if (body.length > 0) {
+					data.body = body;
+				}
+
+				let words = buffer.substr(buffer.indexOf('===', 3) + 3).trim().split('\n').join(' ').split(' ').filter((word) => {
+					return /[A-Za-z]+/g.test(word) === true;
+				});
+
+				if (words.length > 1) {
+					data.meta.word = words.length;
+					data.meta.time = Math.round(words.length / 200);
+				}
+
+			} else {
+
+				data.meta = {
+					crux: null,
+					date: null,
+					name: null,
+					tags: [],
+					time: null,
+					type: [],
+					word: null
+				};
+
+				let body = parseBody(buffer);
+				if (body.length > 0) {
+					data.body = body;
+				}
+
+				let words = buffer.trim().split('\n').join(' ').split(' ').filter((word) => {
+					return /[A-Za-z]+/g.test(word) === true;
+				});
+
+				if (words.length > 1) {
+					data.meta.word = words.length;
+					data.meta.time = Math.round(words.length / 200);
+				}
+
+			}
+
+		}
+
+
+		return data;
+
+	},
+
+	render: (data, root) => {
+
+		data = data instanceof Object   ? data : null;
+		root = typeof root === 'string' ? root : null;
+
+
+		let result = {
+			meta: null,
+			body: null
+		};
+
+		if (data !== null) {
+
+			result.meta = MARKDOWN.renderMeta(data.meta || null, root);
+			result.body = MARKDOWN.renderBody(data.body || null, root);
+
+		}
+
+		return result;
+
+	},
+
+	renderBody: (body, root) => {
+
+		body = body instanceof Array    ? body : null;
+		root = typeof root === 'string' ? root : null;
+
+
+		let result = null;
+
+		if (body !== null) {
+
+			let html = [];
+
+			body.forEach((element) => {
+				html.push(renderElement(element, '', root));
+			});
+
+			if (html.length > 0) {
+				result = html.join('\n').trim();
+			}
+
+		}
+
+		return result;
+
+	},
+
+	renderMeta: (/* meta, root */) => {
+
+		// TODO: renderMeta() should return a string with <meta> tags
+		return null;
+
+	},
+
+	renderTemplate: (temp, data) => {
+
+		temp = typeof temp === 'string' ? temp : '';
+		data = data instanceof Object   ? data : null;
+
+
+		let result = temp;
+
+		Object.keys(data).forEach((key) => {
+
+			let val = data[key] || null;
+			if (val !== null) {
+
+				if (val instanceof Array) {
+					result = result.split('${' + key + '}').join(val.join(', '));
+				} else if (typeof val === 'string') {
+					result = result.split('${' + key + '}').join(val);
+				}
+
+			}
+
+		});
+
+		return result;
+
+	}
+
 };
 
-export default {
-	parse,
-	render
-};
+export default { MARKDOWN };
 

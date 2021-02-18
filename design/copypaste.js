@@ -12,7 +12,7 @@
 		 * HELPERS
 		 */
 
-		const _create_dummy = (text) => {
+		const create_dummy = (text) => {
 
 			text = text.split('\n').join('<br>');
 
@@ -25,7 +25,7 @@
 
 		};
 
-		const _before = (node, text) => {
+		const before = (node, text) => {
 
 			text = typeof text === 'string' ? text : '';
 
@@ -33,14 +33,14 @@
 
 				let parent = node.parentNode || null;
 				if (parent !== null) {
-					parent.insertBefore(_create_dummy(text), node);
+					parent.insertBefore(create_dummy(text), node);
 				}
 
 			}
 
 		};
 
-		const _after = (node, text) => {
+		const after = (node, text) => {
 
 			text = typeof text === 'string' ? text : '';
 
@@ -48,29 +48,29 @@
 
 				let parent = node.parentNode || null;
 				if (parent !== null) {
-					parent.insertBefore(_create_dummy(text), node.nextSibling);
+					parent.insertBefore(create_dummy(text), node.nextSibling);
 				}
 
 			}
 
 		};
 
-		const _patch = (node, text1, text2) => {
+		const patch = (node, text1, text2) => {
 
 			text1 = typeof text1 === 'string' ? text1 : '';
 			text2 = typeof text2 === 'string' ? text2 : '';
 
 			if (text1 !== '') {
-				node.prepend(_create_dummy(text1));
+				node.prepend(create_dummy(text1));
 			}
 
 			if (text2 !== '') {
-				node.append(_create_dummy(text2));
+				node.append(create_dummy(text2));
 			}
 
 		};
 
-		const _patch_url = (href) => {
+		const patch_url = (href) => {
 
 			if (href.startsWith('/')) {
 				href = 'https://cookie.engineer/' + href;
@@ -111,21 +111,21 @@
 		cache.ul_li    = Array.from(doc.querySelectorAll('article ul li'));
 
 
-		cache.h1.forEach((h1)             => _patch(h1,        '\n\n# ', '\n\n'));
-		cache.h2.forEach((h1)             => _patch(h1,        '\n## ', '\n\n'));
-		cache.h3.forEach((h3)             => _patch(h3,        '\n ### ', h3.querySelector('progress') ? '\n' : '\n\n'));
-		cache.b.forEach((b)               => _patch(b,         '**', '**'));
-		cache.code.forEach((code)         => _patch(code,      '`', '`'));
-		cache.del.forEach((del)           => _patch(del,       '~', '~'));
-		cache.em.forEach((em)             => _patch(em,        '*', '*'));
-		cache.footer.forEach((footer)     => _patch(footer,    '\n\n\n# Footer.\n\n', ''));
-		cache.figure.forEach((figure)     => _patch(figure,    '', '\n\n'));
-		cache.pre.forEach((pre)           => _patch(pre,       '\n ```' + pre.className + '\n', '```'));
-		cache.progress.forEach((progress) => _before(progress, ': ' + progress.getAttribute('data-label')));
-		cache.ul.forEach((ul)             => _patch(ul,        '\n'));
-		cache.ul_li.forEach((li)          => _patch(li,        '- '));
-		cache.ol.forEach((ol)             => _patch(ol,        '\n'));
-		cache.ol_li.forEach((li, num)     => _patch(li,        (num + 1) + '. '));
+		cache.h1.forEach((h1)             => patch(h1,        '\n\n# ', '\n\n'));
+		cache.h2.forEach((h1)             => patch(h1,        '\n## ', '\n\n'));
+		cache.h3.forEach((h3)             => patch(h3,        '\n ### ', h3.querySelector('progress') ? '\n' : '\n\n'));
+		cache.b.forEach((b)               => patch(b,         '**', '**'));
+		cache.code.forEach((code)         => patch(code,      '`', '`'));
+		cache.del.forEach((del)           => patch(del,       '~', '~'));
+		cache.em.forEach((em)             => patch(em,        '*', '*'));
+		cache.footer.forEach((footer)     => patch(footer,    '\n\n\n# Footer.\n\n', ''));
+		cache.figure.forEach((figure)     => patch(figure,    '', '\n\n'));
+		cache.pre.forEach((pre)           => patch(pre,       '\n ```' + pre.className + '\n', '```'));
+		cache.progress.forEach((progress) => before(progress, ': ' + progress.getAttribute('data-label')));
+		cache.ul.forEach((ul)             => patch(ul,        '\n'));
+		cache.ul_li.forEach((li)          => patch(li,        '- '));
+		cache.ol.forEach((ol)             => patch(ol,        '\n'));
+		cache.ol_li.forEach((li, num)     => patch(li,        (num + 1) + '. '));
 
 
 		cache.a.forEach((a) => {
@@ -134,12 +134,12 @@
 			if (img === null) {
 
 				let text = (a.innerText || a.innerHTML).trim();
-				let href = _patch_url(a.getAttribute('href').trim());
+				let href = patch_url(a.getAttribute('href').trim());
 
 				if (text !== '' && href !== '') {
-					_patch(a, '[', '](' + href + ')');
+					patch(a, '[', '](' + href + ')');
 				} else if (href !== '') {
-					_patch(a, '[' + href.split('/').pop() + '](' + href + ')');
+					patch(a, '[' + href.split('/').pop() + '](' + href + ')');
 				}
 
 			}
@@ -156,7 +156,7 @@
 
 					let ingredients = names.map((v) => v.charAt(0).toUpperCase() + v.substr(1));
 					if (ingredients.length > 0) {
-						_patch(div, 'Ingredients: ' + ingredients.join(', ') + '\n');
+						patch(div, 'Ingredients: ' + ingredients.join(', ') + '\n');
 					}
 
 				}
@@ -167,8 +167,8 @@
 
 		cache.button.forEach((button) => {
 
-			_before(button, '?{');
-			_after(button, '}');
+			before(button, '?{');
+			after(button, '}');
 
 		});
 
@@ -181,11 +181,11 @@
 				let src = img.getAttribute('src') || '';
 
 				if (alt !== '') {
-					_before(img, '![');
-					_after(img, '](' + _patch_url(src) + ')');
+					before(img, '![');
+					after(img, '](' + patch_url(src) + ')');
 				} else if (src !== '') {
-					_before(img, '![' + _patch_url(src) + '](');
-					_after(img, ')');
+					before(img, '![' + patch_url(src) + '](');
+					after(img, ')');
 				}
 
 			} else {
@@ -194,11 +194,11 @@
 				let src = img.getAttribute('src') || '';
 
 				if (alt !== '') {
-					_before(img, '![');
-					_after(img, '](' + _patch_url(src) + ')');
+					before(img, '![');
+					after(img, '](' + patch_url(src) + ')');
 				} else if (src !== '') {
-					_before(img, '![');
-					_after(img, '](' + _patch_url(src) + ')');
+					before(img, '![');
+					after(img, '](' + patch_url(src) + ')');
 				}
 
 			}
@@ -219,7 +219,7 @@
 				value = input.placeholder;
 			}
 
-			_before(input, '?{' + type + ' ' + name + '}(' + value + ')');
+			before(input, '?{' + type + ' ' + name + '}(' + value + ')');
 
 		});
 
@@ -238,7 +238,7 @@
 				value = option.innerText;
 			}
 
-			_before(select, '?{select ' + name + '}(' + value + ')\n');
+			before(select, '?{select ' + name + '}(' + value + ')\n');
 
 		});
 
@@ -253,7 +253,7 @@
 			let fix = doc.createElement('b');
 			fix.className = '_copy_paste_';
 			fix.innerHTML = 'Socialize Me.';
-			_patch(fix, '\n# ', '\n');
+			patch(fix, '\n# ', '\n');
 			div.insertBefore(fix, div.children[0]);
 		}
 
@@ -264,11 +264,11 @@
 			}
 		};
 
-		Array.from(doc.querySelectorAll('fieldset#search-form input')).forEach((fix) => _before(fix, '\n'));
-		Array.from(doc.querySelectorAll('fieldset#contact-form')).forEach((fix) => _before(fix, '\n'));
-		Array.from(doc.querySelectorAll('#about-me div a')).forEach((fix) => _before(fix, '\n'));
-		Array.from(doc.querySelectorAll('#about-me article:nth-of-type(2)')).forEach((fix) => _before(fix, '\n'));
-		Array.from(doc.querySelectorAll('#search article p')).forEach((fix) => _before(fix, '\n'));
+		Array.from(doc.querySelectorAll('fieldset#search-form input')).forEach((fix) => before(fix, '\n'));
+		Array.from(doc.querySelectorAll('fieldset#contact-form')).forEach((fix) => before(fix, '\n'));
+		Array.from(doc.querySelectorAll('#about-me div a')).forEach((fix) => before(fix, '\n'));
+		Array.from(doc.querySelectorAll('#about-me article:nth-of-type(2)')).forEach((fix) => before(fix, '\n'));
+		Array.from(doc.querySelectorAll('#search article p')).forEach((fix) => before(fix, '\n'));
 
 		let skills = doc.querySelector('#skills article');
 		if (skills !== null) {
@@ -294,7 +294,7 @@
 				return null;
 
 			}).filter((node) => node !== null).forEach((node) => {
-				_before(node, '\n\n');
+				before(node, '\n\n');
 			});
 
 		}

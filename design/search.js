@@ -14,7 +14,7 @@
 		 * HELPERS
 		 */
 
-		const _update_avatar = function(search) {
+		const update_avatar = function(search) {
 
 			avatar.className = search.join('-');
 
@@ -29,7 +29,7 @@
 
 		};
 
-		const _update_articles = function(search) {
+		const update_articles = function(search) {
 
 			articles.forEach((article) => {
 
@@ -84,13 +84,13 @@
 
 				input.setAttribute('title', 'Ingredient: ' + name.charAt(0).toUpperCase() + name.substr(1));
 
-				input.onclick = function() {
+				input.onclick = () => {
 
 					let active = inputs.filter((input) => input.checked === true);
 					let search = active.map((input) => input.id.split('-').pop());
 
-					_update_avatar(search);
-					_update_articles(search);
+					update_avatar(search);
+					update_articles(search);
 
 				};
 
@@ -100,8 +100,8 @@
 			let active = inputs.filter((input) => input.checked === true);
 			let search = active.map((input) => input.id.split('-').pop());
 
-			_update_avatar(search);
-			_update_articles(search);
+			update_avatar(search);
+			update_articles(search);
 
 		}
 

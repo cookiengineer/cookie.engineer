@@ -26,7 +26,7 @@
 		 * HELPERS
 		 */
 
-		const _add_state = (element, state) => {
+		const add_state = (element, state) => {
 
 			let states = element.className.trim().split(' ');
 			if (states.includes(state) === false) {
@@ -37,7 +37,7 @@
 
 		};
 
-		const _del_state = (element, state) => {
+		const del_state = (element, state) => {
 
 			let states = element.className.trim().split(' ');
 			if (states.includes(state) === true) {
@@ -48,7 +48,7 @@
 
 		};
 
-		const _has_state = (element, state) => {
+		const has_state = (element, state) => {
 
 			let states = element.className.trim().split(' ');
 			if (states.includes(state) === true) {
@@ -59,7 +59,7 @@
 
 		};
 
-		const _scroll_to_item = (height) => {
+		const scroll_to_item = (height) => {
 
 			let candidates = sections.slice(0).reverse();
 			if (candidates.length > 0) {
@@ -132,18 +132,18 @@
 					let delta = current - offset;
 					if (delta > 32) {
 
-						_del_state(menu, 'open');
-						_del_state(menu, 'visible');
+						del_state(menu, 'open');
+						del_state(menu, 'visible');
 						items.forEach((item) => item.className = '');
 
 					} else if (delta < -32) {
 
-						_add_state(menu, 'visible');
+						add_state(menu, 'visible');
 
 					}
 
 					let height = global.innerHeight || 0;
-					let hash   = _scroll_to_item(height);
+					let hash   = scroll_to_item(height);
 					if (hash !== null) {
 						global.location.hash = hash;
 					}
@@ -160,11 +160,11 @@
 
 			button.addEventListener('click', () => {
 
-				let state = _has_state(menu, 'open');
+				let state = has_state(menu, 'open');
 				if (state === true) {
-					_del_state(menu, 'open');
+					del_state(menu, 'open');
 				} else {
-					_add_state(menu, 'open');
+					add_state(menu, 'open');
 				}
 
 			}, true);
@@ -187,9 +187,9 @@
 					let section = doc.querySelector('#' + id + ' h1');
 					if (section !== null) {
 
-						let state = _has_state(menu, 'open');
+						let state = has_state(menu, 'open');
 						if (state === true) {
-							_del_state(menu, 'open');
+							del_state(menu, 'open');
 						}
 
 						section.scrollIntoView({

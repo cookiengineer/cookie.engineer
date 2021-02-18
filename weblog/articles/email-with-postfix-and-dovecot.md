@@ -3,6 +3,7 @@
 - name: E-Mail with Postfix and Dovecot
 - tags: server, email, devops
 - type: legacy
+- crux: A How-To Guide on how to configure Postfix and Dovecot for a self-hosted server.
 ===
 
 Today I was setting up an E-Mail server for one of my projects, and I figured

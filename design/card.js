@@ -30,7 +30,7 @@
 		 * HELPERS
 		 */
 
-		const _update_fonts = function() {
+		const update_fonts = function() {
 
 			if (text.h1 !== null) {
 				text.h1.style.fontSize = (data.height / 10.000).toFixed(3) + 'cm';
@@ -46,7 +46,7 @@
 
 		};
 
-		const _update_page = function() {
+		const update_page = function() {
 
 			if (style !== null) {
 
@@ -62,7 +62,7 @@
 
 		};
 
-		const _update_width = function(value) {
+		const update_width = function(value) {
 
 			let num = parseFloat(value, 10);
 			if (Number.isNaN(num) === false) {
@@ -87,14 +87,14 @@
 					menu.style.width = num + 'cm';
 				}
 
-				_update_fonts();
-				_update_page();
+				update_fonts();
+				update_page();
 
 			}
 
 		};
 
-		const _update_height = function(value) {
+		const update_height = function(value) {
 
 			let num = parseFloat(value, 10);
 			if (Number.isNaN(num) === false) {
@@ -119,8 +119,8 @@
 					menu.style.transform = 'translate(-50%, calc(-100% - ' + (num / 2).toFixed(3) + 'cm - 4px))';
 				}
 
-				_update_fonts();
-				_update_page();
+				update_fonts();
+				update_page();
 
 			}
 
@@ -139,12 +139,12 @@
 
 			let width = menu.querySelector('input[name="width"]');
 			if (width !== null) {
-				width.oninput = () => _update_width(width.value);
+				width.oninput = () => update_width(width.value);
 			}
 
 			let height = menu.querySelector('input[name="height"]');
 			if (height !== null) {
-				height.oninput = () => _update_height(height.value);
+				height.oninput = () => update_height(height.value);
 			}
 
 		}

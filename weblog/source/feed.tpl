@@ -4,11 +4,11 @@
 		<title>Cookie Engineer's Web Log</title>
 		<description>Web Log about Software Architecture and Automation</description>
 		<category>Computers/Software/Internet/Automation/Robotics/Artificial Intelligence/Machine Learning</category>
-		<copyright>Copyright ${copyright} Cookie Engineer</copyright>
+		<copyright>Copyright 2019-${year} Cookie Engineer</copyright>
 		<language>en-us</language>
-		<lastBuildDate>${date-build}</lastBuildDate>
+		<lastBuildDate>${date}</lastBuildDate>
 		<managingEditor>@cookiengineer</managingEditor>
-		<pubDate>${date-publish}</pubDate>
+		<pubDate>${date}</pubDate>
 		<image>
 			<url>https://cookie.engineer/design/cookiengineer.png</url>
 			<title>Cookie Engineer's Web Log</title>
@@ -17,6 +17,6 @@
 			<width>256</width>
 			<height>256</height>
 		</image>
-		${articles}
+		${items}
 	</channel>
 </rss>

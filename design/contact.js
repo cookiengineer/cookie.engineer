@@ -3,7 +3,7 @@
 
 	global.addEventListener('DOMContentLoaded', () => {
 
-		const _IGNORE_THIZ = (function() {
+		const IGNORE_THIZ = (() => {
 			return [
 				8,  4,  7,  11, 8,  2,  12, 9,
 				13, 6,  8,  7,  13, 11, 6,  11,
@@ -21,7 +21,7 @@
 		const question = doc.querySelector('div#contact-captcha-question');
 		const submit   = doc.querySelector('fieldset#contact-form button');
 
-		const sounds = (function() {
+		const sounds = (() => {
 
 			let opus  = false;
 			let ogg   = false;
@@ -69,12 +69,12 @@
 		 * HELPERS
 		 */
 
-		const _MESSAGE = (url, id) => `
+		const MESSAGE = (url, id) => `
 			Your message was received as issue
 			<a class="icon-github" href="${url}" target="_blank">#${id}</a>.
 		`;
 
-		const _QUESTIONS = [{
+		const QUESTIONS = [{
 			question: 'What was my first Open Source project?',
 			answer:   'StegIt'
 		}, {
@@ -136,7 +136,7 @@
 			answer:   'Bulbasaur'
 		}];
 
-		const _set_avatar = (type) => {
+		const set_avatar = (type) => {
 
 			if (avatar.className !== type) {
 
@@ -171,10 +171,10 @@
 
 		};
 
-		const _generate_question = () => {
+		const generate_question = () => {
 
-			let index = (Math.random() * _QUESTIONS.length) | 0;
-			let entry = _QUESTIONS[index] || null;
+			let index = (Math.random() * QUESTIONS.length) | 0;
+			let entry = QUESTIONS[index] || null;
 
 			if (avatar !== null && question !== null) {
 				avatar.className = '';
@@ -184,9 +184,9 @@
 
 		};
 
-		const _verify_question = (value) => {
+		const verify_question = (value) => {
 
-			let entry = _QUESTIONS.find((entry) => entry.question === question.innerHTML.trim()) || null;
+			let entry = QUESTIONS.find((entry) => entry.question === question.innerHTML.trim()) || null;
 			if (entry !== null) {
 
 				if (entry.answer instanceof Array) {
@@ -195,7 +195,7 @@
 					let check = entry.answer.find((cmp2) => cmp1 === cmp2.toLowerCase().trim()) || null;
 					if (check !== null) {
 
-						_set_avatar('human');
+						set_avatar('human');
 
 						return true;
 
@@ -208,7 +208,7 @@
 
 					if (cmp1 === cmp2) {
 
-						_set_avatar('human');
+						set_avatar('human');
 
 						return true;
 
@@ -219,7 +219,7 @@
 			} else {
 
 				question.innerHTML = 'You are bad, and you should feel bad.';
-				_set_avatar('robot');
+				set_avatar('robot');
 
 			}
 
@@ -228,8 +228,8 @@
 
 		};
 
-		const _CHARS_SEARCH = /[\\"\u0000-\u001f\u007f-\u009f\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g;
-		const _CHARS_META   = {
+		const CHARS_SEARCH = /[\\"\u0000-\u001f\u007f-\u009f\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g;
+		const CHARS_META   = {
 			'\r': '',    // FUCK YOU, Microsoft!
 			'\b': '\\b',
 			'\t': '    ',
@@ -238,15 +238,15 @@
 			'\\': '\\\\'
 		};
 
-		const _sanitize_string = function(str) {
+		const sanitize_string = (str) => {
 
 			let san = str;
 
-			if (_CHARS_SEARCH.test(san)) {
+			if (CHARS_SEARCH.test(san)) {
 
-				san = san.replace(_CHARS_SEARCH, (character) => {
+				san = san.replace(CHARS_SEARCH, (character) => {
 
-					let meta = _CHARS_META[character];
+					let meta = CHARS_META[character];
 					if (meta !== undefined) {
 						return meta;
 					} else {
@@ -261,7 +261,7 @@
 
 		};
 
-		const _submit_issue = (data, callback) => {
+		const submit_issue = (data, callback) => {
 
 			if (issue === null) {
 
@@ -299,10 +299,10 @@
 
 			xhr.open('POST', 'https://api.github.com/repos/cookiengineer/cookie.engineer/issues');
 			xhr.setRequestHeader('Content-Type',  'application/json');
-			xhr.setRequestHeader('Authorization', 'token ' + _IGNORE_THIZ);
+			xhr.setRequestHeader('Authorization', 'token ' + IGNORE_THIZ);
 			xhr.timeout = 60000;
 
-			xhr.onload = function() {
+			xhr.onload = () => {
 
 				let data = null;
 
@@ -329,11 +329,11 @@
 
 			};
 
-			xhr.onerror = function() {
+			xhr.onerror = () => {
 				callback(null);
 			};
 
-			xhr.ontimeout = function() {
+			xhr.ontimeout = () => {
 				callback(null);
 			};
 
@@ -352,10 +352,10 @@
 
 			answer.addEventListener('change', () => {
 
-				let check1 = _verify_question(answer.value);
+				let check1 = verify_question(answer.value);
 				if (check1 === false) {
 
-					let check2 = _set_avatar('robot');
+					let check2 = set_avatar('robot');
 					if (check2 === false) {
 
 						try {
@@ -372,7 +372,7 @@
 			}, true);
 
 			answer.addEventListener('keyup', () => {
-				_verify_question(answer.value);
+				verify_question(answer.value);
 			}, true);
 
 		}
@@ -391,7 +391,7 @@
 			form.forEach((element) => element.setAttribute('disabled', 'true'));
 
 			message.className = 'visible';
-			message.innerHTML = _MESSAGE(issue, issue.split('/').pop());
+			message.innerHTML = MESSAGE(issue, issue.split('/').pop());
 
 			answer.setAttribute('disabled', 'true');
 			submit.setAttribute('disabled', 'true');
@@ -403,7 +403,7 @@
 
 			submit.addEventListener('click', () => {
 
-				let captcha = _verify_question(answer.value);
+				let captcha = verify_question(answer.value);
 				if (captcha === true && issue === null) {
 
 					let data = {
@@ -436,12 +436,12 @@
 
 						} else if (key === 'message' && val.length > 32 && val.length < 1024) {
 
-							data.message = _sanitize_string(val).trim();
+							data.message = sanitize_string(val).trim();
 
 						} else if (key === 'subject' && val.length > 16) {
 
 							if (val.includes('<') === false && val.includes('>') === false) {
-								data.subject = _sanitize_string(val).trim();
+								data.subject = sanitize_string(val).trim();
 							}
 
 						}
@@ -457,14 +457,14 @@
 						submit.setAttribute('disabled', 'true');
 
 
-						_submit_issue(data, (url) => {
+						submit_issue(data, (url) => {
 
 							if (url !== null) {
 
 								form.forEach((element) => element.setAttribute('disabled', 'true'));
 
 								message.className = 'visible';
-								message.innerHTML = _MESSAGE(url, url.split('/').pop());
+								message.innerHTML = MESSAGE(url, url.split('/').pop());
 
 								answer.setAttribute('disabled', 'true');
 								submit.setAttribute('disabled', 'true');
@@ -506,7 +506,7 @@
 
 
 
-		_generate_question();
+		generate_question();
 
 	}, true);
 

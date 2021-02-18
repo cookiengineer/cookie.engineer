@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en" prefix="og: http://ogp.me/ns#">
 	<head>
-		<title>${title} - Cookie Engineer's Web Log</title>
+		<title>${name} - Cookie Engineer's Web Log</title>
 
 		<!-- Meta -->
 		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
@@ -10,22 +10,22 @@
 		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 		<meta http-equiv="X-UA-Compatible" content="IE=edge">
 		<meta name="creator" content="Cookie Engineer">
-		<meta name="description" content="${description}">
-		<meta name="keywords" content="${keywords}">
-		<meta name="generator" content="Hands of Cookie Engineer with some beer and VIM night coding sessions">
+		<meta name="description" content="${name}">
+		<meta name="keywords" content="${tags}">
+		<meta name="generator" content="Beer and VIM night coding sessions">
 		<meta name="robots" content="index, follow">
 		<link rel="alternate" type="application/rss+xml" href="../feed.xml">
 
 		<!-- Social Meta -->
 		<meta name="og:image" itemprop="image" content="https://cookie.engineer/design/cookiengineer.png">
-		<meta name="og:title" content="${title} - Cookie Engineer's Web Log">
-		<meta name="og:description" content="${description}">
+		<meta name="og:title" content="${name} - Cookie Engineer's Web Log">
+		<meta name="og:description" content="${crux}">
 		<meta name="og:site_name" content="Cookie Engineer's Web Log">
 		<meta name="og:type" content="article">
 		<meta name="twitter:card" content="summary">
 		<meta name="twitter:domain" content="cookie.engineer">
-		<meta name="twitter:title" property="og:title" itemprop="name" content="${title} - Cookie Engineer's Web Log">
-		<meta name="twitter:description" property="og:description" itemprop="description" content="${description}">
+		<meta name="twitter:title" property="og:title" itemprop="name" content="${name} - Cookie Engineer's Web Log">
+		<meta name="twitter:description" property="og:description" itemprop="description" content="${crux}">
 
 		<!-- Website Content -->
 		<link rel="stylesheet" href="../../design/fontello.css">
@@ -52,15 +52,14 @@
 		<header>
 			<aside id="menu" class="visible">
 				<button id="menu-button"><i></i></button>
-				${menu}
 				<a class="icon-section" href="../index.html">Web Log</a>
 				<a class="icon-section" href="../../index.html">Portfolio</a>
 			</aside>
 		</header>
 		<section id="article">
-			<h1>${headline}</h1>
+			<h1>${name}</h1>
 			<article>
-				${article}
+				${body}
 			</article>
 		</section>
 		<footer>

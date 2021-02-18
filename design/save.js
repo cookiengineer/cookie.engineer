@@ -12,11 +12,11 @@
 		 * HELPERS
 		 */
 
-		const _show_dialog = () => {
+		const show_dialog = () => {
 			save.setAttribute('open', 'true');
 		};
 
-		const _hide_dialog = () => {
+		const hide_dialog = () => {
 			save.removeAttribute('open');
 		};
 
@@ -25,7 +25,7 @@
 
 			let button = save.querySelector('button');
 			if (button !== null) {
-				button.onclick = _hide_dialog;
+				button.onclick = () => hide_dialog();
 			}
 
 			save.addEventListener('click', (event) => {
@@ -34,7 +34,7 @@
 
 					let is_open = save.getAttribute('open');
 					if (is_open === 'true') {
-						_hide_dialog();
+						hide_dialog();
 					}
 
 				}
@@ -48,7 +48,7 @@
 
 				if (ctrl === true && key === 's') {
 
-					_show_dialog();
+					show_dialog();
 
 					event.stopPropagation();
 					event.preventDefault();
@@ -57,7 +57,7 @@
 
 					let is_open = save.getAttribute('open');
 					if (is_open === 'true') {
-						_hide_dialog();
+						hide_dialog();
 					}
 
 				}

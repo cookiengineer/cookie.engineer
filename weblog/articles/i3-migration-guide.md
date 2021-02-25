@@ -151,7 +151,7 @@ sudo pacman -S ttf-dejavu noto-fonts noto-fonts-emoji noto-fonts-extra;
 ```
 
 i3 uses Pango as a text rendering library. In order to select the correct
-font, you'll need to use the syntax `font pango:Font Identifier <size in pt>`.
+font, you'll need to use the syntax `font pango: Font-Identifier SizeInPt`.
 
 In my case I decided to go with `DejaVu Sans Mono` with a `12 pt` font size
 to make emojis available in the `i3status` bar.
@@ -337,8 +337,8 @@ might not be as easy. In order to find out the configuration
 you need `pactl` installed (and probably `pavucontrol` while
 you're at it, too).
 
-The format of the configuration file is `pulse:<audio sink id>`
-or `pulse:<audio sink name>`.
+The format of the configuration file is `pulse: audio sink id`
+or `pulse: audio sink name`.
 
 In my case, that means that the `pulse:0` stands for the `Sink #0`
 which is the `alsa_output.pci-0000_00_1b.0.analog-stereo` device.
@@ -366,7 +366,7 @@ Sink #17
 ```
 
 So, in order to integrate their volume with the `i3status` bar,
-you'll have to use the `pulse:<audio sink name>` syntax, which
+you'll have to use the `pulse: audio sink name` syntax, which
 I'm not totally happy with right now because it's a bit redundant
 to have multiple volumes in the status bar being displayed.
 
@@ -517,9 +517,9 @@ with common tasks.
 
 - `celluloid` as a Media Player.
 - `file-roller` as an Archive tool.
-- `nemo` as a File Manager, as it is a fork of nautilus that doesn't need gsettings or dconf.
 - `gpicview-gtk3` as an Image Viewer.
-
-Rather than that I am still using `authenticator` and `gnome-keyring`
-for daily integrations with Web Browsers and 2FA one time passwords.
+- `keepassxc` as a Password and OTP Manager.
+- `kitty` as a Terminal Emulator.
+- `ly` as a Login Manager.
+- `nemo` as a File Manager.
 

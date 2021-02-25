@@ -123,7 +123,11 @@ const MIME = [
 const ROOT   = process.env.PWD;
 const SERVER = http.createServer((request, response) => {
 
-	let url    = request.url;
+	let url = request.url;
+	if (url.includes('?') === true) {
+		url = url.split('?')[0];
+	}
+
 	let ext    = url.split('.').pop();
 	let method = request.method;
 	let mime   = MIME.find((m) => m.ext === ext) || MIME_DEFAULT;

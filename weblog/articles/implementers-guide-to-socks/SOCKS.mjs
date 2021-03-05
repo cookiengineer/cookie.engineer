@@ -132,7 +132,10 @@ const decode_payload = function(buffer) {
 			let port = (raw_port[0] << 8) + (raw_port[1] & 0xff);
 
 			if (port > 0 && port < 65535) {
-				payload = ip + ':' + port;
+				payload = {
+					host: ip,
+					port: port
+				};
 			}
 
 		}
@@ -151,7 +154,10 @@ const decode_payload = function(buffer) {
 			let domain = Buffer.from(raw_domain).toString('utf8');
 			let port   = (raw_port[0] << 8) + (raw_port[1] & 0xff);
 			if (domain.length > 0 && port > 0 && port < 65535) {
-				payload = domain + ':' + port;
+				payload = {
+					domain: domain,
+					port:   port
+				};
 			}
 
 		}
@@ -176,7 +182,10 @@ const decode_payload = function(buffer) {
 			let port = (raw_port[0] << 8) + (raw_port[1] & 0xff);
 
 			if (port > 0 && port < 65535) {
-				payload = '[' + ip + ']:' + port;
+				payload = {
+					host: '[' + ip + ']',
+					port: port
+				};
 			}
 
 		}
@@ -236,6 +245,8 @@ const encode = function(socket, data) {
 			} else if (data.headers['@status'] === 'error') {
 				blob[1] = 0x01;
 			}
+
+			blob[2] = 0x00;
 
 			let payload = encode_payload(data.payload);
 			if (payload !== null) {

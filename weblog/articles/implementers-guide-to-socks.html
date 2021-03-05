@@ -439,12 +439,15 @@ let client = new net.createConnection({
 	port: 1080
 }, () => {
 
-	// Chapter: Handshake Request
-	SOCKS.send(client, {
+	let handshake = {
 		headers: {
 			'auth': [ 'none' ]
 		}
-	});
+	};
+
+	// Chapter: Handshake Request
+	console.log('Send Handshake Request', handshake);
+	SOCKS.send(client, handshake);
 
 });
 
@@ -461,6 +464,8 @@ client.once('data', (response) => {
 	// Chapter: Handshake Response
 	SOCKS.receive(client, response, (data) => {
 
+		console.log('Receive Handshake Response', data);
+
 		if (data.headers['@version'] === 0x05 && data.headers['auth'] === 'none') {
 
 			// Chapter: Connection Status
@@ -468,15 +473,15 @@ client.once('data', (response) => {
 
 				SOCKS.receive(client, status, (data) => {
 
-					console.log(data);
+					console.log('Receive Connection Status', data);
 
 					if (data.headers['@status'] === 'success') {
-						console.log('Client would be ready to do a HTTP request now.');
+						console.log('Client would be ready to do a HTTP request to ' + data.payload.host + ':' + data.payload.port + ' now.');
 						// TODO: client.write(HTTP_REQUEST);
-						client.close();
+						client.destroy();
 					} else {
 						console.error('Server responded with an Error: ' + data.headers['@status']);
-						client.close();
+						client.destroy();
 					}
 
 				});
@@ -485,22 +490,24 @@ client.once('data', (response) => {
 
 			setTimeout(() => {
 
-				// Chapter: Connection Request
-				SOCKS.send(client, {
+				let request = {
 					headers: {
 						'@method': 'connect'
 					},
 					payload: {
 						domain: 'cookie.engineer',
-						port:   443 // HTTPS
+						port:   80 // HTTP
 					}
-				});
+				};
+
+				// Chapter: Connection Request
+				console.log('Send Connection Request', request);
+				SOCKS.send(client, request);
 
 			}, 1000);
 
 		} else {
-			console.error('Server did not authenticate us -_-');
-			client.close();
+			client.destroy();
 		}
 
 	});
@@ -511,7 +518,7 @@ client.once('data', (response) => {
 
 client.on('error',   () => {});
 client.on('close',   () => {});
-client.on('timeout', () => client.close());
+client.on('timeout', () => client.destroy());
 </pre>
 <h2>Handshake Request and Response</h2>
 <p>
@@ -604,7 +611,7 @@ const CONNECTION_REQUEST = [
 	0x03,
 	0x07,
 
-	80    // HTTPS-Connection
+	80    // HTTP
 
 ];
 
@@ -1021,6 +1028,8 @@ const encode = function(socket, data) {
 				blob[1] = 0x01;
 			}
 
+			blob[2] = 0x00;
+
 			let payload = encode_payload(data.payload);
 			if (payload !== null) {
 				payload.forEach((v) => {
@@ -1120,21 +1129,312 @@ const encode = function(socket, data) {
 	<li>Unsupported : Handshake Request with the <code>auth</code> Authentication Method is currently unsupported (as it's unsecure as already explained).</li>
 	<li>Unsupported : The Connection Request's <code>bind</code> Method. It seems to be not used in the wild by any Web Browser anyways.</li>
 </ul>
+<pre class="javascript">
+// server.mjs
+
+import dns from 'dns';
+import net from 'net';
+
+import { SOCKS } from './SOCKS.mjs';
+
+
+
+// Chapter: SOCKS Server
+let server = new net.Server({
+	allowHalfOpen:  true,
+	pauseOnConnect: true
+});
+
+server.on('connection', (socket) => {
+
+	socket._is_server = true;
+
+	socket.allowHalfOpen = true;
+	socket.setNoDelay(true);
+	socket.setKeepAlive(true, 0);
+
+
+	socket.once('data', (request) => {
+
+		if (request[0] === 0x05) {
+
+			SOCKS.receive(socket, request, (data) => {
+
+				console.log('Receive Handshake Request', data);
+
+				if (
+					data.headers['@version'] === 5
+					&& data.headers['auth'].includes('none')
+				) {
+
+					socket.removeAllListeners('data');
+
+
+					socket.once('data', (request) => {
+
+						SOCKS.receive(socket, request, (data) => {
+
+							console.log('Receive Connection Request', data);
+
+							// Chapter: Connection Status
+							if (
+								data.headers['@version'] === 5
+								&& data.headers['@method'] === 'connect'
+							) {
+
+								// Chapter: Handling Host Connections
+								// Chapter: Handling Domain Connections
+
+							} else {
+								socket.end();
+							}
+
+						});
+
+					});
+
+
+					setTimeout(() => {
+
+						SOCKS.send(socket, {
+							headers: {
+								'@version': 5,
+								'auth':     'none'
+							},
+							payload: null
+						});
+
+					}, 0);
+
+				} else {
+					socket.end();
+				}
+
+			});
+
+		} else {
+			socket.end();
+		}
+
+	});
+
+	socket.resume();
+
+});
+
+server.on('error', () => server.close());
+server.on('close', () => (server = null));
+
+server.listen(1080, null);
+</pre>
+<h2>Connection Status</h2>
 <p>
-	Additionally the 
-	 <code>Domain</code>
-	 Payload includes resolving the Domain
-	into an IP before sending the Connection Status Frame, as the
-	Connection Status Frame can contain only resolved IPs for a
-	successfully proxied connection.
+	The Connection Status Frame is sent by the SOCKS Server to the Client after the Server
+	connected to (or tried to connect to) the requested Host or Domain.
+</p>
+<h2>Handling Host Connections</h2>
+<p>
+	A Connection Request for a Host is quite easy to create, as it requires only a simple
+	TCP-based Network Tunnel. The Server creates a TCP Socket to the Target Host and
+	dispatches it through to the Client. Further Data sent by the Client will then just
+	be delegated to the Target Host.
+</p>
+<pre class="javascript">
+// server.mjs
+// (somewhere down the network event flow)
+
+// (...)
+console.log('Receive Connection Request', data);
+
+// Chapter: Connection Status
+if (
+	data.headers['@version'] === 5
+	&& data.headers['@method'] === 'connect'
+) {
+
+	let host   = data.payload.host   || null;
+	let domain = data.payload.domain || null;
+	let port   = data.payload.port   || null;
+
+	if (host !== null && port !== null) {
+
+		let tunnel = null;
+
+		try {
+			tunnel = net.connect({
+				host: host,
+				port: port
+			}, () => {
+
+				socket.pipe(tunnel);
+				tunnel.pipe(socket);
+
+				let status = {
+					headers: {
+						'@version': 5,
+						'@status':  'success'
+					},
+					payload: {
+						host: host,
+						port: port
+					}
+				};
+
+				console.log('Send Connection Status', status);
+				SOCKS.send(socket, status);
+
+			});
+		} catch (err) {
+			tunnel = null;
+		}
+
+		if (tunnel === null) {
+			SOCKS.send(socket, {
+				headers: {
+					'@version': 5,
+					'@status':  'error-network'
+				},
+				payload: null
+			});
+		}
+
+	} else if (domain !== null && port !== null) {
+
+		// Chapter: Handling Domain Connections
+
+	} else {
+		// (...)
+	}
+}
+</pre>
+<h2>Handling Domain Connections</h2>
+<p>
+	A Connection Request for a Domain requires a 
+	 <code>dns.resolve4()</code>
+	 or 
+	 <code>dns.resolve6()</code>
+	 call
+	before, and on successfully resolved 
+	 <code>A</code>
+	 or 
+	 <code>AAAA</code>
+	 domain entries a connection to those
+	addresses.
 </p>
 <p>
-	TODO
-	:
-	 
-	 <code>server.mjs</code>
-	 Implementation
+	In theory, failed connections to the specific addresses should gracefully try out all
+	other entries if there are multiple available; but in practice no SOCKS Proxy supports
+	that. I'll leave that up to the reader to implement it, as it requires a timeout loop
+	that gradually checks for network timeouts and failure scenarios of the 
+	 <code>net.connect()</code>
+	API in node.js, which is rather unclean to implement for demo purposes.
 </p>
+<p>
+	Afterwards, the same Network Flow happens as in the Handling Host Connections example,
+	where the Tunnel is piped through to the Client and further Data received is delegated
+	to the Target Host.
+</p>
+<pre class="javascript">
+// server.mjs
+// (somewhere down the network event flow)
+
+// (...)
+console.log('Receive Connection Request', data);
+
+// Chapter: Connection Status
+if (
+	data.headers['@version'] === 5
+	&& data.headers['@method'] === 'connect'
+) {
+
+	let host   = data.payload.host   || null;
+	let domain = data.payload.domain || null;
+	let port   = data.payload.port   || null;
+
+	if (host !== null && port !== null) {
+
+		// Chapter: Handling Host Connections
+
+	} else if (domain !== null && port !== null) {
+
+		// TODO: Integrate IPv6 support
+		dns.resolve4(domain, (err, addresses) => {
+
+			if (err === null) {
+
+				// TODO: Integrate timeout loop for addresses
+				if (addresses.length > 0) {
+
+					let tunnel = null;
+
+					try {
+
+						tunnel = net.connect({
+							host: addresses[0],
+							port: port
+						}, () => {
+
+							socket.pipe(tunnel);
+							tunnel.pipe(socket);
+
+							let status = {
+								headers: {
+									'@version': 5,
+									'@status':  'success'
+								},
+								payload: {
+									host: addresses[0],
+									port: port
+								}
+							};
+
+							console.log('Send Connection Status', status);
+							SOCKS.send(socket, status);
+
+						});
+
+					} catch (err) {
+						tunnel = null;
+					}
+
+					if (tunnel === null) {
+						SOCKS.send(socket, {
+							headers: {
+								'@version': 5,
+								'@status':  'error-network'
+							},
+							payload: null
+						});
+					}
+
+				} else {
+					SOCKS.send(socket, {
+						headers: {
+							'@version': 5,
+							'@status':  'error-network'
+						},
+						payload: null
+					});
+				}
+
+			} else {
+				SOCKS.send(socket, {
+					headers: {
+						'@version': 5,
+						'@status':  'error-network'
+					},
+					payload: null
+				});
+			}
+
+		});
+
+	} else {
+		// (...)
+	}
+
+}
+</pre>
 <h2>Reference Implementation</h2>
 <p>
 	That's it. Our implementation is now fully peer-to-peer

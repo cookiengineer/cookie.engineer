@@ -23,7 +23,7 @@ const CONNECTION_REQUEST = [
 	0x03,
 	0x07,
 
-	80    // HTTPS-Connection
+	80    // HTTP
 
 ];
 

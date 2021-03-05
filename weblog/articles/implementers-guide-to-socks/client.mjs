@@ -10,14 +10,15 @@ let client = new net.createConnection({
 	port: 1080
 }, () => {
 
-	console.log('Send Handshake Request');
-
-	// Chapter: Handshake Request
-	SOCKS.send(client, {
+	let handshake = {
 		headers: {
 			'auth': [ 'none' ]
 		}
-	});
+	};
+
+	// Chapter: Handshake Request
+	console.log('Send Handshake Request', handshake);
+	SOCKS.send(client, handshake);
 
 });
 
@@ -46,12 +47,12 @@ client.once('data', (response) => {
 					console.log('Receive Connection Status', data);
 
 					if (data.headers['@status'] === 'success') {
-						console.log('Client would be ready to do a HTTP request now.');
+						console.log('Client would be ready to do a HTTP request to ' + data.payload.host + ':' + data.payload.port + ' now.');
 						// TODO: client.write(HTTP_REQUEST);
-						client.close();
+						client.destroy();
 					} else {
 						console.error('Server responded with an Error: ' + data.headers['@status']);
-						client.close();
+						client.destroy();
 					}
 
 				});
@@ -60,24 +61,24 @@ client.once('data', (response) => {
 
 			setTimeout(() => {
 
-				console.log('Send Connection Request');
-
-				// Chapter: Connection Request
-				SOCKS.send(client, {
+				let request = {
 					headers: {
 						'@method': 'connect'
 					},
 					payload: {
 						domain: 'cookie.engineer',
-						port:   443 // HTTPS
+						port:   80 // HTTP
 					}
-				});
+				};
+
+				// Chapter: Connection Request
+				console.log('Send Connection Request', request);
+				SOCKS.send(client, request);
 
 			}, 1000);
 
 		} else {
-			console.error('Server did not authenticate us -_-');
-			client.close();
+			client.destroy();
 		}
 
 	});
@@ -88,5 +89,5 @@ client.once('data', (response) => {
 
 client.on('error',   () => {});
 client.on('close',   () => {});
-client.on('timeout', () => client.close());
+client.on('timeout', () => client.destroy());
 

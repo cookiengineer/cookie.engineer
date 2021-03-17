@@ -14,9 +14,9 @@ the SOCKS protocol.
 The problem with SOCKS in a nutshell is that it is not as well
 documented as someone might think.
 
-Most people are even unaware of the role that a SOCKS proxy plays
-in between network connections and therefore don't know what exactly
-a SOCKS proxy can or cannot do in regards to blocking ads and malicious
+Most people are even unaware of the role that a SOCKS proxy plays in
+between network connections and therefore don't know what exactly a
+SOCKS proxy can or cannot do in regards to blocking ads and malicious
 domains.
 
 So I thought that a reference-class article for SOCKS4 and SOCKS5
@@ -97,9 +97,9 @@ state. So I'm trying to document the different network states first,
 so that you know what kind of states on both sides are possible.
 
 We are also going to completely ignore the `SOCKS authentication methods`,
-because they are broken across every single Browser; and implemented in
-specification violating non-secure non-encrypted manners across every
-piece of source code I've come across.
+because they are broken across every single Browser; and implemented
+in specification violating non-secure non-encrypted manners across
+every piece of source code I've come across.
 
 ### SOCKS Version 4
 

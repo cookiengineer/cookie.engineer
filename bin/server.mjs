@@ -10,7 +10,99 @@ import { MARKDOWN } from './MARKDOWN.mjs';
 
 
 
-const TEMPLATE     = fs.readFileSync(process.env.PWD + '/weblog/source/article.tpl', 'utf8');
+const ROOT      = process.env.PWD;
+const TEMPLATES = {
+	'article':   fs.readFileSync(ROOT + '/weblog/source/article.tpl',   'utf8'),
+	'feed':      fs.readFileSync(ROOT + '/weblog/source/feed.tpl',      'utf8'),
+	'feed-item': fs.readFileSync(ROOT + '/weblog/source/feed-item.tpl', 'utf8'),
+	'index':     fs.readFileSync(ROOT + '/weblog/source/index.tpl',     'utf8')
+};
+
+const renderFeed = (entries) => {
+
+	let items = entries.sort((a, b) => {
+		if (a.data.meta.date > b.data.meta.date) return -1;
+		if (b.data.meta.date > a.data.meta.date) return  1;
+		return 0;
+	}).map((entry) => MARKDOWN.renderTemplate(TEMPLATES['feed-item'], {
+		base: entry.base,
+		date: new Date(entry.data.meta.date).toUTCString(),
+		crux: entry.data.meta.crux || entry.data.meta.name,
+		name: entry.data.meta.name,
+		tags: entry.data.meta.tags.join('/')
+	}));
+
+	return Buffer.from(MARKDOWN.renderTemplate(TEMPLATES['feed'].trim(), {
+		date:  new Date().toUTCString(),
+		year:  new Date().getFullYear(),
+		items: items.join('').trim()
+	}), 'utf-8');
+
+};
+
+const renderIndex = (entries) => {
+
+	let articles = entries.sort((a, b) => {
+		if (a.data.meta.date > b.data.meta.date) return -1;
+		if (b.data.meta.date > a.data.meta.date) return  1;
+		return 0;
+	}).map((entry) => {
+
+		let chunk  = '';
+		let indent = '\t\t\t';
+
+		chunk += indent + '<article id="' + entry.base + '" class="' + entry.data.meta.type.join('-') + '">\n';
+		chunk += indent + '\t<samp></samp>\n';
+		chunk += indent + '\t<h3>' + entry.data.meta.name + '</h3>\n';
+
+		if (typeof entry.data.meta.image === 'string') {
+			chunk += indent + '\t<figure>\n';
+			chunk += indent + '\t\t<a href="./articles/' + entry.base + '.html" target="_blank"><img alt="Article Header Image" src="./articles/' + entry.data.meta.image + '" width="512" height="288"></a>\n';
+			chunk += indent + '\t</figure>\n';
+		}
+
+		if (entry.data.meta.crux !== null) {
+			chunk += indent + '\t<p>' + entry.data.meta.crux + '</p>\n';
+		}
+
+		chunk += indent + '\t<ul>\n';
+		chunk += indent + '\t\t<li><i>Article Link:</i><a href="./articles/' + entry.base + '.html">' + entry.data.meta.name + '</a></li>\n';
+
+		if (entry.data.meta.tags !== null && entry.data.meta.tags.length > 0) {
+			chunk += indent + '\t\t<li><i>Categories:</i><span>' + entry.data.meta.tags.join(', ') + '</span></li>\n';
+		}
+
+		chunk += indent + '\t\t<li><i>Publishing Date:</i><time datetime="' + entry.data.meta.date + '">' + entry.data.meta.date + '</time></li>\n';
+
+		if (entry.data.meta.time !== null && entry.data.meta.word !== null) {
+			chunk += indent + '\t\t<li><i>Reading Time:</i><span>ca. ' + entry.data.meta.time + '-minute read (~' + entry.data.meta.word + ' words)</span></li>\n';
+		}
+
+		chunk += indent + '\t</ul>\n';
+		chunk += indent + '</article>';
+
+		return chunk;
+
+	});
+
+	return Buffer.from(MARKDOWN.renderTemplate(TEMPLATES['index'], {
+		articles: articles.join('\n').trim()
+	}), 'utf-8');
+
+};
+
+const renderArticle = (entry) => {
+
+	return Buffer.from(MARKDOWN.renderTemplate(TEMPLATES['article'], {
+		body: MARKDOWN.renderBody(entry.data.body, '/weblog/articles'),
+		crux: entry.data.meta.crux,
+		name: entry.data.meta.name,
+		tags: entry.data.meta.tags.join(', ')
+	}), 'utf-8');
+
+};
+
+
 const MIME_DEFAULT = { ext: 'bin', binary: true, format: 'application/octet-stream' };
 const MIME = [
 
@@ -120,7 +212,6 @@ const MIME = [
 
 
 
-const ROOT   = process.env.PWD;
 const SERVER = http.createServer((request, response) => {
 
 	let url = request.url;
@@ -139,6 +230,86 @@ const SERVER = http.createServer((request, response) => {
 		});
 
 		response.end();
+
+	} else if (method === 'GET' && url === '/weblog/index.html') {
+
+		let database = [];
+
+		fs.readdir(ROOT + '/weblog/articles', (err, files) => {
+
+			files.filter((file) => file.endsWith('.md')).map((file) => {
+
+				let entry = {
+					base: file.split('/').pop().split('.').slice(0, -1).join('.'),
+					data: null
+				};
+
+				try {
+
+					let buffer = fs.readFileSync(ROOT + '/weblog/articles/' + entry.base + '.md', 'utf8');
+					let data   = MARKDOWN.parse(buffer);
+					if (
+						data.date === null
+						|| data.meta.name === null
+						|| data.meta.tags.length === 0
+						|| data.meta.type.length === 0
+						|| data.meta.crux === null
+					) {
+						console.warn('> "' + entry.base + '.md" incomplete!');
+					}
+
+					entry.data = data;
+
+				} catch (err) {
+					entry.data = null;
+				}
+
+				return entry;
+
+			}).forEach((entry) => {
+
+				if (entry.data !== null) {
+					database.push(entry);
+				}
+
+			});
+
+		});
+
+		setTimeout(() => {
+
+			let index_buffer = renderIndex(database);
+			let feed_buffer  = renderFeed(database);
+
+			fs.writeFile(ROOT + '/weblog/index.html', index_buffer, 'utf8', (err) => {
+
+				if (err === null) {
+					console.info('> "index.html" updated.');
+				} else {
+					console.error('> "index.html" failed.');
+				}
+
+			});
+
+			fs.writeFile(ROOT + '/weblog/feed.xml', feed_buffer, 'utf8', (err) => {
+
+				if (err === null) {
+					console.info('> "feed.xml" updated.');
+				} else {
+					console.error('> "feed.xml" failed.');
+				}
+
+			});
+
+			response.writeHead(200, {
+				'Content-Type':   mime.format,
+				'Content-Length': index_buffer.length,
+				'Charset':        'utf-8'
+			});
+
+			response.end(index_buffer, 'utf-8');
+
+		}, 500);
 
 	} else if (method === 'GET' && url === '/weblog/articles/*.md') {
 
@@ -244,12 +415,7 @@ const SERVER = http.createServer((request, response) => {
 
 		if (entry.data !== null) {
 
-			let buffer = Buffer.from(MARKDOWN.renderTemplate(TEMPLATE, {
-				body: MARKDOWN.renderBody(entry.data.body, '/weblog/articles'),
-				crux: entry.data.meta.crux,
-				name: entry.data.meta.name,
-				tags: entry.data.meta.tags.join(', ')
-			}), 'utf-8');
+			let buffer = renderArticle(entry);
 
 			fs.writeFile(ROOT + '/weblog/articles/' + entry.base + '.html', buffer, 'utf8', (err) => {
 

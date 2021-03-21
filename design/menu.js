@@ -210,9 +210,12 @@
 
 			links.forEach((link) => {
 
-				let href = '#/' + link.getAttribute('href').split('#').pop();
+				let to = link.getAttribute('href').split('#').pop();
+				if (to.includes('-') === true) {
+					to = to.split('-').shift();
+				}
 
-				link.href    = href;
+				link.href    = '#/' + to;
 				link.onclick = function() {
 
 					let id      = this.href.split('#/').pop();

@@ -248,7 +248,7 @@
 		 * XXX: HACKS AND FIXES
 		 */
 
-		let div = doc.querySelector('#about-me div');
+		let div = doc.querySelector('#about div');
 		if (div !== null) {
 			let fix = doc.createElement('b');
 			fix.className = '_copy_paste_';
@@ -266,8 +266,8 @@
 
 		Array.from(doc.querySelectorAll('fieldset#search-form input')).forEach((fix) => before(fix, '\n'));
 		Array.from(doc.querySelectorAll('fieldset#contact-form')).forEach((fix) => before(fix, '\n'));
-		Array.from(doc.querySelectorAll('#about-me div a')).forEach((fix) => before(fix, '\n'));
-		Array.from(doc.querySelectorAll('#about-me article:nth-of-type(2)')).forEach((fix) => before(fix, '\n'));
+		Array.from(doc.querySelectorAll('#about div a')).forEach((fix) => before(fix, '\n'));
+		Array.from(doc.querySelectorAll('#about article:nth-of-type(2)')).forEach((fix) => before(fix, '\n'));
 		Array.from(doc.querySelectorAll('#search article p')).forEach((fix) => before(fix, '\n'));
 
 		let skills = doc.querySelector('#skills article');

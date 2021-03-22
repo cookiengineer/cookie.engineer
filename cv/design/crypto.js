@@ -75,16 +75,14 @@
 				if (decrypted.length > 0) {
 
 					if (
-						decrypted.includes('<section id="about-me">')
+						decrypted.includes('<section id="about">')
 						|| decrypted.includes('<section id="employers">')
 						|| decrypted.includes('<section id="education">')
 					) {
 
-						replace('about-me',  decrypted);
+						replace('about',     decrypted);
 						replace('employers', decrypted);
 						replace('education', decrypted);
-						replace('projects',  decrypted);
-						replace('talks',     decrypted);
 
 					}
 
@@ -178,7 +176,6 @@
 
 
 
-
 			element.addEventListener('blur', async () => {
 
 				let password = element.value.trim();
@@ -204,7 +201,7 @@
 						if (decrypted.length > 0) {
 
 							if (
-								decrypted.includes('<section id="about-me">')
+								decrypted.includes('<section id="about">')
 								|| decrypted.includes('<section id="employers">')
 								|| decrypted.includes('<section id="education">')
 							) {
@@ -214,7 +211,7 @@
 
 								notify('Decrypting CV ...');
 
-								replace('about-me',  decrypted);
+								replace('about',     decrypted);
 								replace('employers', decrypted);
 								replace('education', decrypted);
 

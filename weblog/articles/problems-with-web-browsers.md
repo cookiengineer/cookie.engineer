@@ -130,7 +130,7 @@ domain you've just requested.
 
 So the network flow will always look like this.
 
-```chat
+```http
 Browser:  What is the IP of "reddit.com"?
 Internet: Hey, it's "1.2.3.4"!
 Browser:  Okay, gonna do a request to "1.2.3.4" now.

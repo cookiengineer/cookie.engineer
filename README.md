@@ -27,6 +27,7 @@ it.
 
 - Icon Webfont created with Font Awesome Icons and [fontello](https://fontello.com).
 - SVG Icons, Sounds and Graphics created by myself (@cookiengineer).
+- Highlight.js is embedded with `bash`, `css`, `diff`, `json`, `http`, `html`, `ini`, `javascript` languages.
 
 
 ## Usage
@@ -35,14 +36,19 @@ The Website is a completely static website. Therefore
 no dynamic backend language interpreter is necessary.
 
 However, the [Web Log](./weblog) is written in CommonMark,
-so new articles must be rendered into HTML by calling
-the [weblog.mjs](./bin/weblog.mjs) via node.js:
+so new articles must be rendered into HTML somehow.
+
+This is done transparently by the [server.mjs](/bin/server.mjs)
+which allows the [Editor](/weblog/editor.html) functionality.
+
+It automatically re-renders related URLs when they are
+loaded in the Browser (aka Hot Reload).
 
 ```bash
 cd /path/to/cookie.engineer;
 
 # Note that PWD must be the website root
-node --experimental-modules ./bin/weblog.mjs;
+node ./bin/server.mjs;
 ```
 
 

@@ -61,11 +61,11 @@ User-Agent:    Firefox 64, Arch Linux
 Performance:   4 CPU Cores, 8 CPU Threads, Laptop Screen, 2 GPUs
 USB:           2 Authn Sticks
 Network:       Online, Wi-Fi
-Audio Codecs:  FLAC, MP3, OPUS, OGG, WEBP
-Video Codecs:  MPEG4, WMV, OGV, WEBM
+Audio-Codecs:  FLAC, MP3, OPUS, OGG, WEBP
+Video-Codecs:  MPEG4, WMV, OGV, WEBM
 Camera:        (please ask) Resolution 1024x768 @ 53FPS
 Geolocation:   (please ask)
-WebGL Support: Fuck yeah, biggest Nvidia you can imagine, even with 8GB of memory!
+WebGL-Support: Fuck yeah, biggest Nvidia you can imagine, even with 8GB of memory!
 WebRTC:        My LAN IP is 192.168.1.10, my Router IP is 192.168.1.2
 ```
 
@@ -125,11 +125,11 @@ Performance:   4 CPU Cores, 8 CPU Threads, Laptop Screen, 2 GPUs
 Extensions:    uBlock, uMatrix, Cookie Autodelete
 USB:           (classified)
 Network:       Online, Wi-Fi
-Audio Codecs:  FLAC, MP3, OPUS, OGG, WEBP
-Video Codecs:  MPEG4, WMV, OGV, WEBM
+Audio-Codecs:  FLAC, MP3, OPUS, OGG, WEBP
+Video-Codecs:  MPEG4, WMV, OGV, WEBM
 Camera:        (please ask) Resolution 1024x768 @ 53FPS
 Geolocation:   (please ask)
-WebGL Support: (classified)
+WebGL-Support: (classified)
 WebRTC:        (classified)
 ```
 

@@ -60,9 +60,15 @@
 
 		global.addEventListener('DOMContentLoaded', () => {
 
-			let xhr = new XMLHttpRequest();
+			let file = global.location.pathname.split('/').pop();
+			let xhr  = new XMLHttpRequest();
 
-			xhr.open('GET', '/cv/.temp.cv');
+			if (file === 'en.html') {
+				xhr.open('GET', '/cv/source/en.cv');
+			} else if (file === 'de.html') {
+				xhr.open('GET', '/cv/source/de.cv');
+			}
+
 			xhr.responseType = 'text';
 
 			xhr.onerror = () => {
@@ -78,11 +84,13 @@
 						decrypted.includes('<section id="about">')
 						|| decrypted.includes('<section id="employers">')
 						|| decrypted.includes('<section id="education">')
+						|| decrypted.includes('<section id="volunteer">')
 					) {
 
 						replace('about',     decrypted);
 						replace('employers', decrypted);
 						replace('education', decrypted);
+						replace('volunteer', decrypted);
 
 					}
 
@@ -204,6 +212,7 @@
 								decrypted.includes('<section id="about">')
 								|| decrypted.includes('<section id="employers">')
 								|| decrypted.includes('<section id="education">')
+								|| decrypted.includes('<section id="volunteer">')
 							) {
 
 								notify('Encrypted CV found.');
@@ -214,6 +223,7 @@
 								replace('about',     decrypted);
 								replace('employers', decrypted);
 								replace('education', decrypted);
+								replace('volunteer', decrypted);
 
 								notify('Done. H4v3 fun :)');
 

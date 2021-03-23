@@ -57,7 +57,7 @@ const renderIndex = (entries) => {
 
 		if (typeof entry.data.meta.image === 'string') {
 			chunk += indent + '\t<figure>\n';
-			chunk += indent + '\t\t<a href="./articles/' + entry.base + '.html" target="_blank"><img alt="Article Header Image" src="./articles/' + entry.data.meta.image + '" width="512" height="288"></a>\n';
+			chunk += indent + '\t\t<a href="/weblog/articles/' + entry.base + '.html" target="_blank"><img alt="Article Header Image" src="/weblog/articles/' + entry.data.meta.image + '" width="512" height="288"></a>\n';
 			chunk += indent + '\t</figure>\n';
 		}
 
@@ -66,16 +66,16 @@ const renderIndex = (entries) => {
 		}
 
 		chunk += indent + '\t<ul>\n';
-		chunk += indent + '\t\t<li><i>Article Link:</i><a href="./articles/' + entry.base + '.html">' + entry.data.meta.name + '</a></li>\n';
+		chunk += indent + '\t\t<li><b>Article Link:</b><a href="/weblog/articles/' + entry.base + '.html">' + entry.data.meta.name + '</a></li>\n';
 
 		if (entry.data.meta.tags !== null && entry.data.meta.tags.length > 0) {
-			chunk += indent + '\t\t<li><i>Categories:</i><span>' + entry.data.meta.tags.join(', ') + '</span></li>\n';
+			chunk += indent + '\t\t<li><b>Categories:</b><span>' + entry.data.meta.tags.join(', ') + '</span></li>\n';
 		}
 
-		chunk += indent + '\t\t<li><i>Publishing Date:</i><time datetime="' + entry.data.meta.date + '">' + entry.data.meta.date + '</time></li>\n';
+		chunk += indent + '\t\t<li><b>Publishing Date:</b><time datetime="' + entry.data.meta.date + '">' + entry.data.meta.date + '</time></li>\n';
 
 		if (entry.data.meta.time !== null && entry.data.meta.word !== null) {
-			chunk += indent + '\t\t<li><i>Reading Time:</i><span>ca. ' + entry.data.meta.time + '-minute read (~' + entry.data.meta.word + ' words)</span></li>\n';
+			chunk += indent + '\t\t<li><b>Reading Time:</b><span>ca. ' + entry.data.meta.time + '-minute read (~' + entry.data.meta.word + ' words)</span></li>\n';
 		}
 
 		chunk += indent + '\t</ul>\n';
@@ -93,8 +93,31 @@ const renderIndex = (entries) => {
 
 const renderArticle = (entry) => {
 
+	let body = MARKDOWN.renderBody(entry.data.body, '/weblog/articles');
+	if (body !== null) {
+
+		let lines = body.split('\n');
+
+		for (let l = 0, ll = lines.length; l < ll; l++) {
+
+			let line = lines[l];
+			if (line.startsWith('<h2>') || line.startsWith('<h3>')) {
+
+				lines.splice(l, 0, '</section>\n\n<section>');
+
+				ll++;
+				l++;
+
+			}
+
+		}
+
+		body = lines.join('\n');
+
+	}
+
 	return Buffer.from(MARKDOWN.renderTemplate(TEMPLATES['article'], {
-		body: MARKDOWN.renderBody(entry.data.body, '/weblog/articles'),
+		body: body,
 		crux: entry.data.meta.crux,
 		name: entry.data.meta.name,
 		tags: entry.data.meta.tags.join(', ')

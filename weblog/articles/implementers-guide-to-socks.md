@@ -44,13 +44,13 @@ requests to connect to a specific target. The proxy tries to connect
 to the target, and if it succeeds reaches through the connection to the
 client.
 
-```chat
+```http
 Client: Please let me connect to IP 1.2.3.4.
 Proxy:  Trying to connect... please hold the line ...
 Proxy:  Here's the connection handle, any further data will be dispatched through automatically.
 ```
 
-```chat
+```http
 Client: Please let me connect to IP 1.2.3.4.
 Proxy:  Trying to connect... please hold the line ...
 Proxy:  Sorry, the given target is not reachable. Please try again later.
@@ -791,6 +791,23 @@ if (type === 0x04) {
 
 ## Sending SOCKS Frames
 
+The integration of a sending method for our SOCKS library is quite easy.
+
+```javascript
+// SOCKS.mjs
+SOCKS.send = (socket, data) => {
+
+	data = data instanceof Object ? data : { headers: {}, payload: null };
+
+
+	let buffer = encode(socket, data);
+	if (buffer !== null) {
+		socket.write(buffer);
+	}
+
+};
+```
+
 ### Encoding Logic
 
 The Encoding Logic is a bit more complex, as it has to respect the following states:
@@ -913,7 +930,7 @@ const encode = function(socket, data) {
 ```
 
 
-## IPv4, Domain and IPv6 Payload
+### 0x01: IPv4 Payload, 0x03: Domain Payload, 0x04: IPv6 Payload
 
 The decoding logic has been explained already in the previous chapters,
 so it should be quite easy for you to handle the encoding of the payloads

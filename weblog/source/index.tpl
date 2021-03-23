@@ -10,44 +10,36 @@
 		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 		<meta http-equiv="X-UA-Compatible" content="IE=edge">
 		<meta name="creator" content="Cookie Engineer">
-		<meta name="description" content="Web Log of Cookie Engineer about Software Architecture and Ups and Downs of Automation">
-		<meta name="keywords" content="Artificial Intelligence, Machine Learning, Automation Engineer, Software Engineer, Mad Scientist">
+		<meta name="description" content="Web Log of Cookie Engineer about Network Security and Software Architecture">
+		<meta name="keywords" content="Software Architecture, Network Security, Network Analysis, Artificial Intelligence, Machine Learning">
 		<meta name="generator" content="Hands of Cookie Engineer with some beer and VIM night coding sessions">
 		<meta name="robots" content="index, follow">
 		<link rel="alternate" type="application/rss+xml" href="./feed.xml">
 
 		<!-- Social Meta -->
-		<meta name="og:image" itemprop="image" content="https://cookie.engineer/design/cookiengineer.png">
+		<meta name="og:image" itemprop="image" content="https://cookie.engineer/design/about/avatar/cookiengineer.png">
 		<meta name="og:title" content="Cookie Engineer's Web Log">
 		<meta name="og:site_name" content="Cookie Engineer's Web Log">
 		<meta name="og:type" content="blog">
 		<meta name="twitter:card" content="summary">
 		<meta name="twitter:domain" content="cookie.engineer">
 		<meta name="twitter:title" property="og:title" itemprop="name" content="Cookie Engineer's Web Log">
-		<meta name="twitter:description" property="og:description" itemprop="description" content="Web Log of Cookie Engineer about Software Architecture and Ups and Downs of Automation">
-
-		<!-- Website Content -->
-		<link rel="stylesheet" href="../design/fontello.css">
-		<link rel="stylesheet" href="../design/layout.css">
+		<meta name="twitter:description" property="og:description" itemprop="description" content="Web Log of Cookie Engineer about Network Security and Software Architecture">
 
 		<!-- Website Design -->
-		<link rel="stylesheet" href="../design/weblog/weblog.css">
+		<link rel="stylesheet" href="/design/layout/index.css">
+		<link rel="stylesheet" href="/weblog/design/index.css">
 
 		<!-- Website Functionality -->
-		<link rel="stylesheet" href="../design/menu.css">
-		<script src="../design/menu.js"></script>
-		<link rel="stylesheet" href="../design/search.css">
-		<script src="../design/search.js"></script>
+		<link rel="stylesheet" href="/design/menu/index.css">
+		<script src="/design/menu/index.js" defer></script>
+		<link rel="stylesheet" href="/design/search/index.css">
+		<script src="/design/search/index.js" defer></script>
 
-		<!-- Magic: Copy/Paste/Save -->
-		<link rel="stylesheet" href="../design/copypaste.css">
-		<script src="../design/copypaste.js"></script>
-		<link rel="stylesheet" href="../design/save.css">
-		<script src="../design/save.js"></script>
+		<!-- Magic: Copy/Paste -->
+		<link rel="stylesheet" href="/design/magic/index.css">
+		<script src="/design/magic/index.js" defer></script>
 
-		<!-- Magic: Highlight -->
-		<link rel="stylesheet" href="../../design/weblog/highlight.css">
-		<script src="../../design/weblog/highlight.js"></script>
 	</head>
 	<body>
 		<header>
@@ -55,40 +47,36 @@
 				<button id="menu-button"><i></i></button>
 				<a href="#welcome">Welcome</a>
 				<a href="#search">Search</a>
-				<a href="#weblog">Web Log</a>
-				<a class="icon-section" href="../index.html">Portfolio</a>
+				<a href="#weblog">Web&nbsp;Log</a>
+				<a class="icon-section" href="/index.html">Portfolio</a>
 			</aside>
 		</header>
 		<section id="welcome">
-			<h1>Muh Web Log.</h1>
+			<h1>Cookie Engineer's<br>Web Log.</h1>
 			<article>
 				<p>
 					Welcome to my Web Log. This Web Log mostly contains my thoughts
-					about Software Engineering or Software Automation.
+					about Network Security, Network Analysis and Software Architecture.
 				</p>
 				<p>
 					The idea is that I'm abusing this space to reflect on the Project
 					Architectures when I happen to face some challenging problems.
-					Well, that - or when I'm in the mood to brag about some robots
-					n' other cool shit that I built with pride and prejudice.
+					Well, that - or when I'm in the mood to brag about some nice new
+					concepts or other things that I built with pride and prejudice.
 				</p>
 				<p>
 					If you have a request for a new article or feedback, you can use the
-					<a class="icon-section" href="../index.html#contact">Contact Form</a>
-					of the Portfolio or create an issue in the repository manually
+					<a class="icon-section" href="/index.html#contact">Contact Form</a>
+					of the Portfolio or create an Issue in the repository manually
 					on <a class="icon-github" href="https://github.com/cookiengineer/cookie.engineer/issues" href="_blank">GitHub</a>
 					or <a class="icon-gitlab" href="https://gitlab.com/cookiengineer/cookie.engineer/issues" href="_blank">GitLab</a>.
 				</p>
 				<p>
 					There is also an RSS feed available. This is the subscription link
-					so you can copy/paste it in your preferred RSS Feed Reader software:
+					so you can copy/paste it in your RSS Reader of choice:
 					<a class="icon-download" rel="alternate" type="application/rss+xml" href="./feed.xml" download>/weblog/feed.xml</a>
 				</p>
-				<p>
-					I hope you'll find this Web Log interesting.
-					<br>
-					Enjoy your stay.
-				</p>
+				<p>Enjoy your stay.</p>
 			</article>
 		</section>
 		<section id="search">
@@ -109,31 +97,12 @@
 				</p>
 			</article>
 		</section>
-		<section id="weblog">
+		<section id="weblog" class="timeline">
 			<h1>Web Log.</h1>
 			${articles}
 		</section>
 		<footer>
 			<p>Made with 💔 in Heidelberg, Germany. All rights (and jokes) reserved under European Law.</p>
 		</footer>
-		<dialog id="save">
-			<article>
-				<h3>Download Website <button id="save-close" title="Close Dialog">X</button></h3>
-				<p>
-					Usually, a Web Browser's <q>Save</q> functionality is severly broken
-					and it auto-formats and auto-craps up all the HTML, CSS and JS.
-					<br><br>
-					This website includes Print Stylesheets, so you can also print it out
-					by using <q>[Ctrl]+[P]</q> or the print feature of your Web Browser.
-					<br><br>
-					This website's source code is Open Source and can be downloaded from
-					either of these repositories:
-					<br><br>
-					<a class="icon-github" href="https://github.com/cookiengineer/cookie.engineer" target="_blank">GitHub</a>
-					or
-					<a class="icon-gitlab" href="https://gitlab.com/cookiengineer/cookie.engineer" target="_blank">GitLab</a>
-				</p>
-			</article>
-		</dialog>
 	</body>
 </html>

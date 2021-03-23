@@ -100,7 +100,7 @@ In my case the monitors are connected next to each other in a horizontal
 line, from left to right. The `/etc/X11/xorg.conf.d/10-monitors.conf`
 file therefore has to look like this:
 
-```bash
+```xorg
 Section "Monitor"
 	Identifier "HDMI1"
 	Option "Primary" "true"
@@ -171,7 +171,7 @@ In my case, the setup looks like this:
 - Bind `[Win]+[Enter]` to open a Kitty terminal window.
 - Everything else is pretty much defaulted key bindings.
 
-```config
+```i3config
 set $mod Mod4
 
 default_border pixel 2
@@ -390,7 +390,7 @@ helpful at all.
 
 **i3status Config**:
 
-```config
+```i3config
 general {
 	output_format = "i3bar"
 	colors = true
@@ -491,7 +491,7 @@ related settings - and it does not have any third-party dependencies.
 After `lxappearance` has saved the Theme settings, it's creating
 the GTK settings file located at `~/.gtkrc-2.0`.
 
-```config
+```ini
 gtk-theme-name="Arc-Dark"
 gtk-icon-theme-name="Numix"
 gtk-font-name="Cantarell 12"

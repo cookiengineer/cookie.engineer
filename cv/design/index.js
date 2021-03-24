@@ -71,7 +71,36 @@
 			xhr.send(null);
 
 		} else if (file === 'de.html') {
-			// Do Nothing
+
+			let xhr = new XMLHttpRequest();
+
+			xhr.open('GET', '/index.html');
+			xhr.setRequestHeader('Content-Type', 'text/html');
+			xhr.responseType = 'text';
+
+			xhr.onload = () => {
+
+				let html = xhr.response;
+				if (html.length > 0) {
+
+					// XXX: Hacky, but has to be done here to prevent 404s
+					html = html.split('src="projects/').join('src="/projects/');
+					html = html.split('href="projects/').join('href="/projects/');
+					html = html.split('src="skills/').join('src="/skills/');
+					html = html.split('href="skills/').join('href="/skills/');
+					html = html.split('src="talks/').join('src="/talks/');
+					html = html.split('href="talks/').join('href="/talks/');
+
+					replace('open-source', html);
+
+				}
+
+			};
+
+			xhr.send(null);
+
+			// TODO: Do Nothing (needs translations to German)
+
 		}
 
 	}, true);

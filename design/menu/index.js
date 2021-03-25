@@ -59,6 +59,41 @@
 
 		};
 
+		const scroll_to_element = (query) => {
+
+			let element = doc.querySelector(query);
+			if (element !== null) {
+
+				if (element.tagName.toLowerCase() === 'section') {
+
+					let headline = element.querySelector('h1');
+					if (headline !== null) {
+						element = headline;
+					}
+
+				} else if (element.tagName.toLowerCase() === 'article') {
+					// Do Nothing
+				}
+
+			}
+
+			if (element !== null) {
+
+				element.scrollIntoView({
+					behavior: 'smooth',
+					block:    'center',
+					inline:   'nearest'
+				});
+
+				return true;
+
+			}
+
+
+			return false;
+
+		};
+
 		const scroll_to_item = (height) => {
 
 			let candidates = sections.slice(0).reverse();
@@ -183,20 +218,13 @@
 				item.href    = href;
 				item.onclick = function() {
 
-					let id      = this.href.split('#/').pop();
-					let section = doc.querySelector('#' + id + ' h1');
-					if (section !== null) {
+					let result = scroll_to_element('#' + this.href.split('#/').pop());
+					if (result === true) {
 
 						let state = has_state(menu, 'open');
 						if (state === true) {
 							del_state(menu, 'open');
 						}
-
-						section.scrollIntoView({
-							behavior: 'smooth',
-							block:    'center',
-							inline:   'nearest'
-						});
 
 					}
 
@@ -212,23 +240,7 @@
 
 				link.href    = '#/' + link.getAttribute('href').split('#').pop();
 				link.onclick = function() {
-
-					let target  = this.href.split('#/').pop();
-					let element = doc.querySelector('#' + target);
-					if (element.tagName.toLowerCase() === 'section') {
-						element = doc.querySelector('#' + target + ' h1');
-					} else if (element.tagName.toLowerCase() === 'article') {
-						// Do Nothing
-					}
-
-					if (element !== null) {
-						element.scrollIntoView({
-							behavior: 'smooth',
-							block:    'center',
-							inline:   'nearest'
-						});
-					}
-
+					scroll_to_element('#' + this.href.split('#/').pop());
 				};
 
 			});

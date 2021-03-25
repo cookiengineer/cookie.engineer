@@ -125,14 +125,14 @@ if (PASSWORDS.decrypt === null && PASSWORDS.encrypt === null) {
 	console.log('Usage Notes:');
 	console.log('');
 	console.log('    A decrypted CV template is necessary to be able to encrypt it again.');
-	console.log('    The decrypted CV is stored at /cv/.temp.cv and isn\'t commited to git.');
+	console.log('    The decrypted CV is stored at /cv/source/DECRYPTED.cv and isn\'t commited to git.');
 	console.log('');
 	console.log('Examples:');
 	console.log('');
 	console.log('    # Assumes password123 for already encrypted CV template (at /cv/source/<hash>.cv).');
 	console.log('');
 	console.log('    cv --decrypt="password123";');
-	console.log('    # Optionally customize CV at /cv/.temp.cv now');
+	console.log('    # Optionally customize CV at /cv/source/DECRYPTED.cv now');
 	console.log('');
 	console.log('    cv --encrypt="Custom Password for Receiver";');
 	console.log('    # Encrypted CV is now at /cv/source/<hash>.cv');
@@ -169,14 +169,14 @@ if (PASSWORDS.decrypt === null && PASSWORDS.encrypt === null) {
 			let result = false;
 
 			try {
-				fs.writeFileSync(ROOT + '/.temp.cv', decrypted);
+				fs.writeFileSync(ROOT + '/source/DECRYPTED.cv', decrypted);
 				result = true;
 			} catch (err) {
 				result = false;
 			}
 
 			if (result === true) {
-				console.info('> Decrypted CV stored as "' + ROOT + '/.temp.cv".');
+				console.info('> Decrypted CV stored as "' + ROOT + '/source/DECRYPTED.cv".');
 			} else {
 				console.error('> Decrypted CV could not be stored.');
 			}
@@ -190,7 +190,7 @@ if (PASSWORDS.decrypt === null && PASSWORDS.encrypt === null) {
 		let template = null;
 
 		try {
-			template = fs.readFileSync(ROOT + '/.temp.cv');
+			template = fs.readFileSync(ROOT + '/source/DECRYPTED.cv');
 		} catch (err) {
 			template = null;
 		}
@@ -227,7 +227,7 @@ if (PASSWORDS.decrypt === null && PASSWORDS.encrypt === null) {
 			}
 
 		} else {
-			console.error('Could not find Unencrypted CV template at "' + ROOT + '/.temp.cv".');
+			console.error('Could not find Unencrypted CV template at "' + ROOT + '/source/DECRYPTED.cv".');
 		}
 
 	}

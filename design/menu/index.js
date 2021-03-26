@@ -5,8 +5,8 @@
 
 		const doc      = global.document;
 		const menu     = doc.querySelector('header aside#menu');
-		const button   = doc.querySelector('header aside#menu button');
-		const items    = Array.from(menu.querySelectorAll('a[href]')).filter((a) => a.getAttribute('href').startsWith('#'));
+		const button   = doc.querySelector('header aside#menu a#menu-button');
+		const items    = Array.from(menu.querySelectorAll('a[href]')).filter((a) => a !== button && a.getAttribute('href').startsWith('#'));
 		const links    = Array.from(doc.querySelectorAll('article a')).filter((a) => a.getAttribute('href').startsWith('#'));
 		const sections = items.map((a) => a.href).map((url) => {
 
@@ -193,7 +193,7 @@
 
 		if (menu !== null && button !== null) {
 
-			button.addEventListener('click', () => {
+			button.addEventListener('click', (event) => {
 
 				let state = has_state(menu, 'open');
 				if (state === true) {
@@ -201,6 +201,9 @@
 				} else {
 					add_state(menu, 'open');
 				}
+
+				event.preventDefault();
+				event.stopPropagation();
 
 			}, true);
 

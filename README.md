@@ -64,11 +64,11 @@ they are decrypted via the Web Crypto API:
 ```bash
 cd /path/to/cookie.engineer;
 
-node ./bin/cv.mjs --decrypt "old-password-of-already-encrypted-CV";
+node ./bin/cv.mjs decrypt "old-password-of-already-encrypted-CV";
 
-vim ./cv/.temp.cv; # Edit CV nao
+vim ./cv/source/DECRYPTED.cv; # Edit CV nao
 
-node ./bin/cv.mjs --encrypt "new-password";
+node ./bin/cv.mjs encrypt "new-password";
 ```
 
 

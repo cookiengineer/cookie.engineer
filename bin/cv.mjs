@@ -9,35 +9,25 @@ import { console             } from './console.mjs';
 
 
 
-const ENCODER   = new TextEncoder();
-const DECODER   = new TextDecoder();
-const ROOT      = process.env.PWD + '/cv';
-const PASSWORDS = { decrypt: null, encrypt: null };
+const ENCODER = new TextEncoder();
+const DECODER = new TextDecoder();
+const ROOT    = process.env.PWD + '/cv';
+const ACTION  = ((action) => {
 
-
-Array.from(process.argv).slice(2).forEach((argument) => {
-
-	if (argument.startsWith('--decrypt=') === true) {
-
-		let password = argument.substr(10);
-		if (password.startsWith('"') && password.endsWith('"') === true) {
-			password = password.substr(1, password.length - 2);
-		}
-
-		PASSWORDS.decrypt = password;
-
-	} else if (argument.startsWith('--encrypt=') === true) {
-
-		let password = argument.substr(10);
-		if (password.startsWith('"') && password.endsWith('"') === true) {
-			password = password.substr(1, password.length - 2);
-		}
-
-		PASSWORDS.encrypt = password;
-
+	if (
+		action === 'encrypt'
+		|| action === 'decrypt'
+		|| action === 'remove'
+	) {
+		return action;
 	}
 
-});
+	return null;
+
+})(Array.from(process.argv).slice(2)[0]);
+
+const PASSWORD = Array.from(process.argv).slice(2)[1] || null;
+
 
 
 const digest = async (password) => {
@@ -113,14 +103,16 @@ const encrypt = async (buffer, password) => {
 };
 
 
-if (PASSWORDS.decrypt === null && PASSWORDS.encrypt === null) {
+if (ACTION === null || PASSWORD === null) {
 
 	console.info('');
 	console.info('Encrypted CV Generator');
 	console.info('');
 
 	console.log('');
-	console.log('Usage: cv --decrypt="Decryption Password" --encrypt="Encryption Password"');
+	console.log('Usage: cv decrypt "Decryption Password"');
+	console.log('       cv encrypt "Encryption Password"');
+	console.log('       cv remove  "Decryption Password"');
 	console.log('');
 	console.log('Usage Notes:');
 	console.log('');
@@ -131,10 +123,10 @@ if (PASSWORDS.decrypt === null && PASSWORDS.encrypt === null) {
 	console.log('');
 	console.log('    # Assumes password123 for already encrypted CV template (at /cv/source/<hash>.cv).');
 	console.log('');
-	console.log('    cv --decrypt="password123";');
+	console.log('    cv decrypt "password123";');
 	console.log('    # Optionally customize CV at /cv/source/DECRYPTED.cv now');
 	console.log('');
-	console.log('    cv --encrypt="Custom Password for Receiver";');
+	console.log('    cv encrypt "Custom Password for Receiver";');
 	console.log('    # Encrypted CV is now at /cv/source/<hash>.cv');
 	console.log('');
 
@@ -145,14 +137,28 @@ if (PASSWORDS.decrypt === null && PASSWORDS.encrypt === null) {
 
 (async() => {
 
-	if (PASSWORDS.decrypt !== null && PASSWORDS.encrypt !== null) {
+	if (ACTION === 'remove' && PASSWORD !== null) {
 
-		// TODO: Decrypt and Encrypt in one step without a temporary CV file
+		let filename = await digest(PASSWORD);
+		let result   = false;
 
-	} else if (PASSWORDS.decrypt !== null) {
+		try {
+			fs.unlinkSync(ROOT + '/source/' + filename + '.cv');
+			result = true;
+		} catch (err) {
+			result = false;
+		}
+
+		if (result === true) {
+			console.info('> Encrypted CV removed from "cv/source/' + filename + '.cv".');
+		} else {
+			console.warn('> Encrypted CV could not be removed.');
+		}
+
+	} else if (ACTION === 'decrypt' && PASSWORD !== null) {
 
 		let encrypted = null;
-		let filename  = await digest(PASSWORDS.decrypt);
+		let filename  = await digest(PASSWORD);
 
 		try {
 			encrypted = fs.readFileSync(ROOT + '/source/' + filename + '.cv');
@@ -162,9 +168,9 @@ if (PASSWORDS.decrypt === null && PASSWORDS.encrypt === null) {
 
 		if (encrypted !== null) {
 
-			console.info('Decrypt CV with password "' + PASSWORDS.decrypt + '" ...');
+			console.info('Decrypt CV with password "' + PASSWORD + '" ...');
 
-			let decrypted = await decrypt(encrypted, PASSWORDS.decrypt);
+			let decrypted = await decrypt(encrypted, PASSWORD);
 
 			let result = false;
 
@@ -176,16 +182,16 @@ if (PASSWORDS.decrypt === null && PASSWORDS.encrypt === null) {
 			}
 
 			if (result === true) {
-				console.info('> Decrypted CV stored as "' + ROOT + '/source/DECRYPTED.cv".');
+				console.info('> Decrypted CV stored as "cv/source/DECRYPTED.cv".');
 			} else {
 				console.error('> Decrypted CV could not be stored.');
 			}
 
 		} else {
-			console.error('Could not find Encrypted CV at "' + ROOT + '/source/' + filename + '.cv".');
+			console.error('Could not find Encrypted CV at "cv/source/' + filename + '.cv".');
 		}
 
-	} else if (PASSWORDS.encrypt !== null) {
+	} else if (ACTION === 'encrypt' && PASSWORD !== null) {
 
 		let template = null;
 
@@ -197,11 +203,11 @@ if (PASSWORDS.decrypt === null && PASSWORDS.encrypt === null) {
 
 		if (template !== null) {
 
-			console.info('Encrypt CV with password "' + PASSWORDS.encrypt + '" ...');
+			console.info('Encrypt CV with password "' + PASSWORD + '" ...');
 
-			let encrypted = await encrypt(template, PASSWORDS.encrypt);
-			let decrypted = await decrypt(encrypted, PASSWORDS.encrypt);
-			let filename  = await digest(PASSWORDS.encrypt);
+			let encrypted = await encrypt(template, PASSWORD);
+			let decrypted = await decrypt(encrypted, PASSWORD);
+			let filename  = await digest(PASSWORD);
 
 			if (decrypted.toString('utf8') === template.toString('utf8')) {
 
@@ -217,7 +223,7 @@ if (PASSWORDS.decrypt === null && PASSWORDS.encrypt === null) {
 				}
 
 				if (result === true) {
-					console.info('> Encrypted CV stored as "' + ROOT + '/source/' + filename + '.cv".');
+					console.info('> Encrypted CV stored as "cv/source/' + filename + '.cv".');
 				} else {
 					console.error('> Encrypted CV could not be stored.');
 				}
@@ -227,7 +233,7 @@ if (PASSWORDS.decrypt === null && PASSWORDS.encrypt === null) {
 			}
 
 		} else {
-			console.error('Could not find Unencrypted CV template at "' + ROOT + '/source/DECRYPTED.cv".');
+			console.error('Could not find Unencrypted CV template at "cv/source/DECRYPTED.cv".');
 		}
 
 	}

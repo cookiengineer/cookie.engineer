@@ -250,6 +250,19 @@
 
 		}
 
+		setTimeout(() => {
+
+			let tabbable = Array.from(doc.querySelectorAll('a[href], abbr, button, input, select, textarea'));
+			if (tabbable.length > 0) {
+
+				tabbable.forEach((element, index) => {
+					element.setAttribute('tabindex', index + 1);
+				});
+
+			}
+
+		}, 500);
+
 	}, true);
 
 })(typeof window !== 'undefined' ? window : this);

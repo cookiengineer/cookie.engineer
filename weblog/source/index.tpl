@@ -44,7 +44,7 @@
 	<body>
 		<header>
 			<aside id="menu" class="visible">
-				<button id="menu-button"><i></i></button>
+				<a id="menu-button" href="#menu">Menu</a>
 				<a href="#welcome">Welcome</a>
 				<a href="#search">Search</a>
 				<a href="#weblog">Web&nbsp;Log</a>

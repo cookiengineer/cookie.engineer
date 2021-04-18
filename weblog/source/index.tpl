@@ -17,14 +17,15 @@
 		<link rel="alternate" type="application/rss+xml" href="./feed.xml">
 
 		<!-- Social Meta -->
-		<meta name="og:image" itemprop="image" content="https://cookie.engineer/design/about/avatar/cookiengineer.png">
-		<meta name="og:title" content="Cookie Engineer's Web Log">
-		<meta name="og:site_name" content="Cookie Engineer's Web Log">
-		<meta name="og:type" content="blog">
+		<meta property="og:title" content="Cookie Engineer's Web Log">
+		<meta property="og:site_name" content="Cookie Engineer's Web Log">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/avatar/cookiengineer.png">
+		<meta property="og:url" content="https://cookie.engineer/weblog/index.html">
+		<meta property="og:type" content="blog">
 		<meta name="twitter:card" content="summary">
 		<meta name="twitter:domain" content="cookie.engineer">
-		<meta name="twitter:title" property="og:title" itemprop="name" content="Cookie Engineer's Web Log">
-		<meta name="twitter:description" property="og:description" itemprop="description" content="Web Log of Cookie Engineer about Network Security and Software Architecture">
+		<meta name="twitter:title" itemprop="name" content="Cookie Engineer's Web Log">
+		<meta name="twitter:description" itemprop="description" content="Web Log of Cookie Engineer about Network Security and Software Architecture">
 
 		<!-- Website Design -->
 		<link rel="stylesheet" href="/design/layout/index.css">

@@ -45,8 +45,6 @@ Simulation.prototype = {
 
 		}
 
-
-
 	},
 
 	stop: function() {

@@ -19,11 +19,7 @@ let next_button = document.querySelector('aside button');
 if (next_button !== null) {
 
 	next_button.onclick = () => {
-
-		let population = SIMULATION.evolution.cycle();
-
-		console.info('New Population', population);
-
+		SIMULATION.evolution.cycle();
 	};
 
 	next_button.removeAttribute('disabled');

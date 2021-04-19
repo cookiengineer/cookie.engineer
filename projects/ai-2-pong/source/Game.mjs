@@ -274,37 +274,35 @@ Game.prototype = {
 
 
 		let context = CONTEXT;
-		let info    = this._info;
-		let balls   = this.balls;
-		let paddles = this.paddles;
+		if (context !== null) {
+
+			context.fillStyle = '#404552';
+			context.fillRect(0, 0, this.width, this.height);
 
 
-		context.fillStyle = '#404552';
-		context.fillRect(0, 0, this.width, this.height);
+			for (let b = 0, bl = this.balls.length; b < bl; b++) {
 
+				let ball = this.balls[b];
+				if (ball.alive === true) {
+					ball.render(context);
+				}
 
-		for (let b = 0, bl = balls.length; b < bl; b++) {
-
-			let ball = balls[b];
-			if (ball.alive === true) {
-				ball.render(context);
 			}
 
+			for (let p = 0, pl = this.paddles.length; p < pl; p++) {
+				this.paddles[p].render(context);
+			}
+
+
+			context.fillStyle = '#ffffff';
+			context.font      = '20px "DejaVu Sans Mono", sans-serif';
+
+			context.fillText('Score:      ' + this._info.score,      10, 25);
+			context.fillText('High Score: ' + this._info.highscore,  10, 50);
+			context.fillText('Generation: ' + this._info.generation, 10, 75);
+			context.fillText('Agents:     ' + this._info.alive,      10, 100);
+
 		}
-
-		for (let p = 0, pl = paddles.length; p < pl; p++) {
-			paddles[p].render(context);
-		}
-
-
-		context.fillStyle = '#ffffff';
-		context.font      = '20px "DejaVu Sans Mono", sans-serif';
-
-
-		context.fillText('Score:      ' + info.score,      10, 25);
-		context.fillText('High Score: ' + info.highscore,  10, 50);
-		context.fillText('Generation: ' + info.generation, 10, 75);
-		context.fillText('Agents:     ' + info.alive,      10, 100);
 
 
 		if (this._has_ended === false) {
@@ -320,7 +318,6 @@ Game.prototype = {
 		}
 
 
-		let info       = this._info;
 		let balls      = this.balls;
 		let paddles    = this.paddles;
 		let population = this.population;
@@ -384,7 +381,7 @@ Game.prototype = {
 				let hit_something = paddle.update(this);
 				if (hit_something === true) {
 
-					info.score++;
+					this._info.score++;
 
 
 					let outputs = [ closest_ball.y / this.height ];

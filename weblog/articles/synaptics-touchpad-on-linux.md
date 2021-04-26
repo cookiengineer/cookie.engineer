@@ -117,8 +117,6 @@ is calculated a little different than you'd assume on first sight.
 
 ```javascript
 let boundary = 0.10; // percentage
-let offset_x = LeftEdge;
-let offset_y = TopEdge;
 
 let new_LeftEdge   = LeftEdge + ((RightEdge  - LeftEdge) * boundary);
 let new_RightEdge  = LeftEdge + ((RightEdge  - LeftEdge) * (1 - boundary));

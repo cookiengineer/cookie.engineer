@@ -83,7 +83,16 @@ The `Area` related properties, however, are defined as a `zero origin`
 coordinate system, and are applied inside the constraining `Edges` around the
 `Area`.
 
-The complete coordinate system is defined as the following:
+There's actually a good reason for this to be defined that way. The `Edge`
+Options are necessary to define Areas for `Edge Scrolling` that allows to
+scroll the Mouse Wheel on the side or on the top/bottom.
+
+The `Area` Options define the Touch/Tap areas on the Touchpad, so that it's
+possible to just instead use Two-Finger Taps and/or Three-Finger Swipes, Scrolling
+or Middle Clicks.
+
+The coordinate system is defined as the following (using the default configuration
+values as an example):
 
 - `LeftEdge = 1310` means `0%` to left edge
 - `RightEdge = 4826` means `100%` to left edge
@@ -117,15 +126,15 @@ let new_TopEdge    = TopEdge  + ((BottomEdge - TopEdge)  * boundary);
 let new_BottomEdge = TopEdge  + ((BottomEdge - TopEdge)  * (1 - boundary));
 
 console.log('New config values:');
-console.log('Option "LeftEdge" "' + new_LeftEdge + '"'); 
-console.log('Option "RightEdge" "' + new_LeftEdge + '"'); 
-console.log('Option "LeftEdge" "' + new_LeftEdge + '"'); 
-console.log('Option "LeftEdge" "' + new_LeftEdge + '"'); 
+console.log('Option "TopEdge" "' + new_TopEdge + '"');
+console.log('Option "RightEdge" "' + new_RightEdge + '"');
+console.log('Option "BottomEdge" "' + new_BottomEdge + '"');
+console.log('Option "LeftEdge" "' + new_LeftEdge + '"');
 ```
 
-So when putting everything together, the relevant `InputClass` Section in
-the `Xorg` config file looks like the following if a full-area Touchpad is
-desired.
+Putting everything together it means that the relevant `InputClass` Section
+in the `Xorg` config file looks like the following if a full-area Touchpad
+is desired with Edge Scrolling disabled.
 
 Please check beforehand if your Hardware has the correct boundaries
 before you configure and reboot to ensure that the limits are not out-of-boundary
@@ -144,11 +153,16 @@ Section "InputClass"
 	Option "TopEdge" "2220"
 	Option "BottomEdge" "4636"
 
+	# Disable Edge Scrolling
+	Option "VertEdgeScroll" "0"
+	Option "HorizEdgeScroll" "0"
+
 	# Inner Area (for Touches and Taps)
 	Option "AreaLeftEdge" "0"
 	Option "AreaRightEdge" "5112"
 	Option "AreaTopEdge" "0"
 	Option "AreaBottomEdge" "4832"
+
 EndSection
 ```
 
@@ -191,6 +205,7 @@ Section "InputClass"
 	Option "TapButton1" "1" # One-Finger Left Click
 	Option "TapButton2" "3" # Two-Finger Right Click
 	Option "TapButton3" "2" # Three-Finger Swipe/Middle Click
+
 EndSection
 ```
 
@@ -231,14 +246,15 @@ Section "InputClass"
 	MatchDriver "synaptics"
 
 	# Vertical Two-Finger Scrolling
-	Option "VertTwoFingerScroll" "1"
 	Option "VertEdgeScroll" "0"
+	Option "VertTwoFingerScroll" "1"
 	Option "VertScrollDelta" "-111"
 
 	# Horizontal Two-Finger Scrolling
-	Option "HorizTwoFingerScroll" "1"
 	Option "HorizEdgeScroll" "0"
+	Option "HorizTwoFingerScroll" "1"
 	Option "HorizScrollDelta" "-111"
+
 EndSection
 ```
 
@@ -295,6 +311,7 @@ Section "InputClass"
 	Option "RTCornerButton" "2" # Right Top Corner is Right-Click
 	Option "RBCornerButton" "0" # Right Bottom Corner is disabled
 	Option "LBCornerButton" "3" # Left Bottom Corner is Middle-Click
+
 EndSection
 ```
 
@@ -321,6 +338,7 @@ Section "InputClass"
 	# Double the cursor speed with high pressure
 	Option "PressureMotionMinFactor" "1.0"
 	Option "PressureMotionMaxFactor" "2.0"
+
 EndSection
 ```
 
@@ -335,10 +353,13 @@ by default, so they need to be corrected.
 # Inside /etc/X11/xorg.conf.d/70-synaptics.conf
 
 Section "InputClass"
+
 	Identifier "disable clickpad buttons on Apple touchpads"
 	MatchDriver "synaptics"
 	MatchProduct "Apple|bcm5974"
+
 	Option "SoftButtonAreas" "0 0 0 0 0 0 0 0"
+
 EndSection
 ```
 

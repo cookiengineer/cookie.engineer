@@ -75,69 +75,25 @@ Parameter settings:
 ```
 
 
-### Define Boundaries for the Synaptics Touchpad
+### Use Edges for Scrolling with the Synaptics Touchpad
 
-As you've probably guessed already, the Synaptics Touchpad driver doesn't use
-coordinates for the `Edge` related properties, so they don't use a `zero origin`.
-The `Area` related properties, however, are defined as a `zero origin`
-coordinate system, and are applied inside the constraining `Edges` around the
-`Area`.
+The Boundaries are easily defined once you understood that there are two
+independent areas that you can define.
 
-There's actually a good reason for this to be defined that way. The `Edge`
-Options are necessary to define Areas for `Edge Scrolling` that allows to
-scroll the Mouse Wheel on the side or on the top/bottom.
+- The `*Edge` Options are related to Edge-based Scrolling.
+- The `Area*Edge` Options are related to Touches and Two-Finger Scrolling.
 
-The `Area` Options define the Touch/Tap areas on the Touchpad, so that it's
-possible to just instead use Two-Finger Taps and/or Three-Finger Swipes, Scrolling
-or Middle Clicks.
+If the Touch Area exceeds the Edges, it's recognized as a Touch and not an
+Edge Tap. So if Edge-based Scrolling is desired, the Edges of the Touch Area
+are not allowed to exceed the `*Edge` Edges.
 
-The coordinate system is defined as the following (using the default configuration
-values as an example):
+Example for an Edge-based Scrolling Area that has two separate Scrolling
+Areas on the Right (for vertical One-Finger scrolling) and Top (for
+horizontal One-Finger scrolling):
 
-- `LeftEdge = 1310` means `0%` to left edge
-- `RightEdge = 4826` means `100%` to left edge
-- `TopEdge = 2220` means `0%` to top edge
-- `BottomEdge = 4636` means `100%` to top edge
-
-- `AreaLeftEdge = 0` means `0%` to left edge
-- `AreaRightEdge = 5112` means `100%` to left edge
-- `AreaTopEdge = 0` means `0%` to top edge
-- `AreaBottomEdge = 4832` means `100%` to top edge
-
-When expressing the center of the Touchpad in a formula, it looks like this:
-
-```javascript
-let center_x = LeftEdge + ((RightEdge  - LeftEdge) / 2);
-let center_y = TopEdge  + ((BottomEdge - TopEdge)  / 2);
-```
-
-As the coordinates require the offset to the `LeftEdge` and `TopEdge`, this
-also means that configuring a boundary to the corners where nothing happens
-is calculated a little different than you'd assume on first sight.
-
-```javascript
-let boundary = 0.10; // percentage
-
-let new_LeftEdge   = LeftEdge + ((RightEdge  - LeftEdge) * boundary);
-let new_RightEdge  = LeftEdge + ((RightEdge  - LeftEdge) * (1 - boundary));
-let new_TopEdge    = TopEdge  + ((BottomEdge - TopEdge)  * boundary);
-let new_BottomEdge = TopEdge  + ((BottomEdge - TopEdge)  * (1 - boundary));
-
-console.log('New config values:');
-console.log('Option "TopEdge" "' + new_TopEdge + '"');
-console.log('Option "RightEdge" "' + new_RightEdge + '"');
-console.log('Option "BottomEdge" "' + new_BottomEdge + '"');
-console.log('Option "LeftEdge" "' + new_LeftEdge + '"');
-```
-
-Putting everything together it means that the relevant `InputClass` Section
-in the `Xorg` config file looks like the following if a full-area Touchpad
-is desired with Edge Scrolling disabled.
-
-Please check beforehand if your Hardware has the correct boundaries
-before you configure and reboot to ensure that the limits are not out-of-boundary
-for the Synaptics Touchpad driver. Otherwise, it'll fallback to libinput and
-using your Laptop will be impossible without a USB Mouse.
+When running `synclient -l`, the defaulted areas give a hint on how large
+the coordinate system of the installed Synaptics Touchpad is. In the
+example case, it's `5112` in X-direction and `4832` in Y-direction.
 
 ```config
 # Inside /etc/X11/xorg.conf.d/70-synaptics.conf
@@ -146,10 +102,45 @@ Section "InputClass"
 	MatchDriver "synaptics"
 
 	# Outer Area (for Edge Scrolling)
-	Option "LeftEdge" "1310"
+	Option "LeftEdge" "0"
 	Option "RightEdge" "4826"
 	Option "TopEdge" "2220"
-	Option "BottomEdge" "4636"
+	Option "BottomEdge" "4832"
+
+	# Enable Edge Scrolling
+	Option "VertEdgeScroll" "1"
+	Option "HorizEdgeScroll" "1"
+
+EndSection
+```
+
+
+### Use only Touches and Gestures with the Synaptics Touchpad
+
+As mentioned in the previous paragraph, the Synaptics Touchpad differs
+between the `*Edge` Options that define the older Edge One-Finger based
+Scrolling, and the newer `Area*Edge` Options that can optionally be
+combined with the nwere Two-Finger based Scrolling.
+
+The `Area` Options define the Touch/Tap areas on the Touchpad, so that it's
+possible to just instead use Two-Finger Taps and Two-Finger Scrolling and/or
+Three-Finger Swipes and Middle Clicks.
+
+When running `synclient -l`, the defaulted areas give a hint on how large
+the coordinate system of the installed Synaptics Touchpad is. In the
+example case, it's `5112` in X-direction and `4832` in Y-direction.
+
+```config
+# Inside /etc/X11/xorg.conf.d/70-synaptics.conf
+
+Section "InputClass"
+	MatchDriver "synaptics"
+
+	# Outer Area (for Edge Scrolling)
+	Option "LeftEdge" "0"
+	Option "RightEdge" "5112"
+	Option "TopEdge" "0"
+	Option "BottomEdge" "4832"
 
 	# Disable Edge Scrolling
 	Option "VertEdgeScroll" "0"
@@ -234,7 +225,8 @@ of your Touchpad will be used for Scrolling, and that is unpredictable when usin
 Two-Finger gestures in parallel.
 
 The relevant `ScrollDelta` properties are calculated in an inverted manner, so
-they have to be set to a Number that's lower than `0`.
+they have to be set to a Number that's lower than `0` in order to emulate a
+Natural Scrolling behaviour.
 
 
 ```config
@@ -260,9 +252,9 @@ EndSection
 ### Modify Click Times and Tap Times
 
 The Synaptics Touchpad driver also supports the configuration of the time deltas
-after which a Click or a Tap is recognized. Depending on whether you want the middle
-mouse button (emulated Click on a Scroll Wheel of a Mouse) to function, these times
-can sometimes interfere with the Firmware's defaulted settings.
+after which a Tap and then the Click is recognized. Depending on whether you want
+the Middle Mouse Button (emulated Click on a Scroll Wheel of a Mouse) to function,
+these times can sometimes interfere with the Firmware's defaulted settings.
 
 The time-related Options are all defined in `Milliseconds`.
 
@@ -285,8 +277,9 @@ Section "InputClass"
 	# Emulate Middle Mouse Button (Button 3)
 	Option "EmulateMidButtonTime" "75"
 
-	# If dragged for longer than 5 seconds, cancel
+	# Cancel Drag after 5 Seconds
 	Option "LockedDragTimeout" "5000"
+
 EndSection
 ```
 

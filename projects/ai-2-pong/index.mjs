@@ -63,20 +63,24 @@ if (manual_button !== null) {
 
 	manual_button.onclick = () => {
 
+		manual_button.setAttribute('disabled', true);
+		fps_buttons.forEach((button) => button.setAttribute('disabled', true));
+
 		GAME.stop();
 
-		GAME.population = [ null, new Agent() ];
-		GAME.setFPS(60);
+		setTimeout(() => {
 
-		GAME.start();
-		GAME.update();
-		GAME.render();
+			GAME.population = [ null, new Agent() ];
+			GAME.setFPS(60);
 
-		document.addEventListener('keydown', control, true);
+			GAME.start();
+			GAME.update();
+			GAME.render();
 
-		if (fps_buttons.length > 0) {
-			fps_buttons.forEach((button) => button.setAttribute('disabled', true));
-		}
+			document.addEventListener('keydown', control, true);
+			auto_button.removeAttribute('disabled');
+
+		}, 500);
 
 	};
 
@@ -90,20 +94,24 @@ if (auto_button !== null) {
 
 	auto_button.onclick = () => {
 
+		auto_button.setAttribute('disabled', true);
+		fps_buttons.forEach((button) => button.removeAttribute('disabled'));
+
 		GAME.stop();
 
-		GAME.population = [ new Agent(), new Agent() ];
-		GAME.setFPS(60);
+		setTimeout(() => {
 
-		GAME.start();
-		GAME.update();
-		GAME.render();
+			GAME.population = [ new Agent(), new Agent() ];
+			GAME.setFPS(60);
 
-		document.removeEventListener('keydown', control);
+			GAME.start();
+			GAME.update();
+			GAME.render();
 
-		if (fps_buttons.length > 0) {
-			fps_buttons.forEach((button) => button.removeAttribute('disabled'));
-		}
+			document.removeEventListener('keydown', control);
+			manual_button.removeAttribute('disabled');
+
+		}, 500);
 
 	};
 

@@ -39,19 +39,24 @@ if (manual_button !== null) {
 
 	manual_button.onclick = () => {
 
+		manual_button.setAttribute('disabled', true);
+		fps_buttons.forEach((button) => button.setAttribute('disabled', true));
+
 		SIMULATION.stop();
 
-		SIMULATION.game.population = [];
-		SIMULATION.game.setFPS(60);
-		SIMULATION.game.start();
+		setTimeout(() => {
 
-		SIMULATION.update();
-		SIMULATION.render();
+			SIMULATION.game.population = [];
+			SIMULATION.game.setFPS(60);
+			SIMULATION.game.start();
 
-		let canvas = document.querySelector('canvas');
-		if (canvas !== null) {
-			canvas.addEventListener('click', control);
-		}
+			SIMULATION.update();
+			SIMULATION.render();
+
+			document.querySelector('canvas').addEventListener('click', control);
+			auto_button.removeAttribute('disabled');
+
+		}, 500);
 
 	};
 
@@ -65,18 +70,23 @@ if (auto_button !== null) {
 
 	auto_button.onclick = () => {
 
+		auto_button.setAttribute('disabled', true);
+		fps_buttons.forEach((button) => button.removeAttribute('disabled'));
+
 		SIMULATION.stop();
 
-		SIMULATION.setFPS(300);
+		setTimeout(() => {
 
-		SIMULATION.start();
-		SIMULATION.update();
-		SIMULATION.render();
+			SIMULATION.setFPS(60);
 
-		let canvas = document.querySelector('canvas');
-		if (canvas !== null) {
-			canvas.removeEventListener('click', control);
-		}
+			SIMULATION.start();
+			SIMULATION.update();
+			SIMULATION.render();
+
+			document.querySelector('canvas').removeEventListener('click', control);
+			manual_button.removeAttribute('disabled');
+
+		}, 500);
 
 	};
 

@@ -1,164 +1,161 @@
 ===
-- date: 2021-03-03
+- date: 2021-06-15
 - name: Android Privacy Guide
-- tags: privacy, security
+- tags: privacy, security, mobile
 - type: software
-- crux: Best Practices for an Android 10 smartphone that respects your Privacy and does not send anything to anyone that you don't want it to.
+- crux: Best Practices for Android Apps that respect your Privacy.
 ===
 
-I was asked how I select my vendor, phone, and what kind of Mobile
-Operating System I use. The amount of abandoned Android ROMs gets
-probably larger every second, so choosing an Android ROM that will
-be actively maintained next year is an important part of it.
+So you've installed LineageOS on your device, and now you're unsure
+on how to proceed. You think that an AOSP-based build can't track you
+because there's nothing installed on it - but that's where you're wrong.
 
-The idea will also be to get as close to a Blob-Free Android as
-possible, which means that the amount of available Smartphones
-to choose from is very limited.
+This guide focusses on what to do to keep you safe, what to do and what
+to prevent in order to further securing your Privacy on your smartphone.
 
-## Hardware
 
-The amount of available Vendors is pretty limited. Most Android
-devices are literally abandoned Kernel-wise right after they
-were released. Custom Android OEM ROMs are typically end-of-life
-with their software after half a year when the warranty ends.
+## Prerequisites
 
-## Smartphone Selection
+Some steps in this guide require having a Rooted Phone, which means that
+the `sudo` and `su` binaries need to be available in order to execute
+commands with higher privileges (as the `root` user) on the system.
 
-So, we try to choose an Android device that's compatible with
-an alternative AOSP (Android Open Source Project) ROM and that
-doesn't send everything to Google.
+In case you don't come from the Unix world and don't know what `root` is
+it's heavily recommended to not root your phone as you can easily brick
+your device if you don't know what you're doing.
 
-I personally would recommend the Pine64 Pinephone, as it will
-allow you a greater choice of Linux-based system images, but
-the software stack isn't there yet to use it in practice.
 
-Rather than that it's heavily recommended to use a Smartphone
-where there are alternative Open Source OSes available and
-where they list no upstream Linux kernel bugs. Upstream Linux
-compatibility kind of implies that it's possible to run the
-Smartphone without a Custom (outdated) OEM Kernel.
+## Android Wi-Fi Connectivity Check
 
-A good overview of that can be found in the wiki of postmarketOS
-and its [Devices](https://wiki.postmarketos.org/wiki/Devices)
-article. The workflow behind the project aims to integrate
-patches with the upstream mainline Linux kernel, so the recommended
-devices there have a very high chance of using a blob free Kernel.
+Android's integrated and non-deactivateable Wi-Fi Connectivity Check
+sends your current approximate GPS location and your device's MAC address
+every 10 seconds via the Wi-Fi's connection, so that Google can keep
+track of where you are and what you do.
 
-## Operating System Selection
+The data that is received by those domains contains the current NTP-verifiable
+timestamp, the system's installed exact Chromium Webview and Android version, the
+system's IMEIs and hardware MAC addresses, and of course the IP of the Wi-Fi
+connection itself. This is certainly enough data to make any enduser uniquely
+identifiable, which very likely is its purpose.
 
-The most stable ROM with a huge community is probably LineageOS.
-The [download page](https://download.lineageos.org) contains a
-list of supported vendors, you should make sure to choose a
-Smartphone that's up-to-date with `HEAD` and that contains a
-newer Kernel (meaning version 5.10 or laterbuild as well.
+The only way to block them is by editing the system-wide `hosts` file, which
+requires a rooted phone. In order to deactivate the tracking mechanism, you'll
+also need either an `adb shell` or `Termux` installed.
 
-Sometimes it's possible to use an old Kernel with Android 10+
-or newer Android versions, but that will get you in a state
-where you cannot update anymore.
-
-In my case (due to curiousity) I decided to go for the
-Pinephone and a Xiaomi Redmi Note device, as both Kernels
-were available as source code repositories online and would
-theoretically allow me to patch the kernel in case of a new
-RCE that would appear in the future.
-
-Given the history of Vendor-forked Linux kernels, it's safe
-to assume that the likeliness of being remotely exploited
-increases by using a Vendor-provided OEM Kernel. So you should
-always choose a device that's compatible with the upstream
-Linux Kernel and doesn't use an outdated one that's provided
-by the manufacturer.
-
-## Device Unlocking
-
-Some vendors require a custom Unlocking Application that you
-have to install on a `Windows VM` so that you can unlock your
-device for Flashing the ROM on it.
-
-Sometimes, this also comes with up to `60 days` of waiting
-time until you are allowed to flash the device. Quite literally,
-as this is the case for `Xiaomi's` Unlocking Application.
-
-I always recommend to unlock your device as soon as you get
-it, because at a later point in time, those websites always
-disappear and are not available anymore; therefore you cannot
-unlock your device.
-
-It's typical for manufacturers to keep a track record of all
-unlocked devices, so they know it's your `IMEI` that's running
-an unlocked (flashed) Android ROM. They'll always claim it's
-for warranty purposes, but they won't delete the data after
-2 years either.
-
-From a Privacy perspective this is a clear violation of the GDPR,
-and there's not even a way to ensure deletion of that tracking
-data. I tried contacting the legal representatives of some
-companies in the past, but seemingly nobody gives a damn about
-it.
-
-## Android ROM
-
-As an Android ROM, it's best to select a ROM that's close to
-AOSP and doesn't infiltrate your devices with Google's Apps
-(or the microG framework).
-
-Therefore I would recommend to stick with something like
-LineageOS, because over the years most of the other ROMs
-appeared, went away, and came back again with various
-maintainers that have no trust record of what they actually
-did to build the ROM releases.
-
-I also would not recommend to use a ROM that's distributed
-by random people on the XDA developer forum, as it is known
-that there were cases in the past where ROMs included malware
-and it was discovered only years later.
-
-Always use the upstream ROMs directly and do your modifications
-afterwards, to be sure that's really what you did and what the
-ROM includes.
-
-## TWRP Installation
-
-First, download the TWRP image for your device from 
-
-TODO: TWRP Link
-
-After the device was successfully unlocked via `fastboot oem unlock`,
-it's time to flash TWRP on the recovery partition of your device.
-
-Afterwards it's possible to enter TWRP by pressing the combination
-of buttons on your device. Usually it's pressing `Power + Volume Down`
-or `Power + Volume Up` for a couple seconds while booting, but it
-varies from device to device.
+Then you can edit the `/system/etc/hosts` file after remounting the system
+partition with read and write access, as it's mounted with read access by
+default.
 
 ```bash
-fastboot flash recovery ./path/to/TWRP.img;
-fastboot reboot bootloader;
+[$] su -;                   # get root rights
+[$] mount -ro remount,rw /; # remount system partition
+[$] vim /system/etc/hosts;  # edit hosts file
 ```
 
-## Android ROM Installation
+As the Wi-Fi Connectivity Check is implemented pretty cleverly, it rotates
+between a lot of google-owned domains once one of them is blocked. Therefore
+the hosts file has to contain at least the following domains in order to block
+access to them. Note that this will also block web access to those domains if
+the Web Browser is not routed through TOR.
 
-## Software
+```hosts
+127.0.0.1 localhost
+::1       ip6-localhost
 
-### Rooting the Phone with Magisk
+# These are all rotated domains for the Wi-Fi Connectivity Check as of AOSP version 10
+127.0.0.1 play.googleapis.com
+127.0.0.1 www.google.com google.com
+127.0.0.1 www.google.ru google.ru
+127.0.0.1 connectivitycheck.gstatic.com gstatic.com
+127.0.0.1 time1.google.com
+127.0.0.1 time.android.com
+127.0.0.1 clients1.google.com clients2.google.com clients3.google.com
+127.0.0.1 dns.google.com dns.google
+```
 
-### Ad-Blocking with Blokada
 
-### Spyware Scanning with App Warden
+## DNS and Firewall
 
-### Permission Management with Permission Manager X
+Android 10 and later has integrated a so-called `Private DNS` feature in
+the `Network and Internet` Settings. But as some might suspect, it's still
+sending all DNS requests right to Google depending on which AOSP based
+Android ROM you're using and what kind of patches were integrated in it.
 
-### Suspending Apps with SuperFreeZ
+The best recommendation for blocking and encryption of DNS requests is
+[Rethink DNS](https://rethinkdns.com/app) which is a DNS, Firewall and VPN
+App that allows to block network connections. It can also block both on a
+per-IP basis for all other Apps and on a per-domain basis for DNS lookups.
+Additionally, it allows to forward its requests to public DNS over TLS
+resolvers, so that your ISP cannot track your DNS requests.
 
-### Tracker-Free Telegram FOSS
+![Rethink DNS](./android-privacy-guide/rethinkdns.jpg)
 
-### Navigation with OSMAnd+
+The screenshots show an example configuration of the App, and the Network
+Log which allows to inspect what an App does on a per-connection basis.
 
-### Public Navigation with Oeffi
 
-### Silent SMS with SMS Ping
+## Detection of Trackers and Loggers
 
-### Terminal Emulation with Termux
+[App Warden](https://gitlab.com/AuroraOSS/AppWarden) is an open-source
+tool which integrates the list of known trackers and loggers that is
+maintained by the [Exodus Privacy](https://reports.exodus-privacy.eu.org/en/)
+project.
 
-### Wi-Fi Scanning with Wigle WiFi
+Additionally, if the device is rooted, App Warden can modify and disable
+Services and Components of the App. Depending on whether or not the App
+is really dependent on the Trackers, it might be usable in a tracker-free
+manner.
+
+![App Warden](./android-privacy-guide/appwarden.jpg)
+
+The screenshot shows the Scanner's view of `WhatsApp`, a privacy-invasive
+App that uses Google Analytics to track its users - and how App Warden can
+help disable these malicious App Components.
+
+
+## Permission Management
+
+[Permission Manager X](https://github.com/mirfatif/PermissionManagerX) is an
+App that helps to modify App Permissions in a more detailed way. It uses the
+`AppOps` API behind the scenes, which allows to override App Permissions and
+ensure that the App cannot use features of your smartphone, even when the
+App's Manifest includes those.
+
+Additionally, the App can start an ADB session and a Debug Mode which allows
+a developer to inspect all tracking features of an App on the fly.
+
+![Permission Manager X](./android-privacy-guide/permission-manager-x.jpg)
+
+The screenshot shows `WhatsApp`, a privacy-invasive App that uses a lot of
+Android's available tracking features to spy on its users - and how Permission
+Manager X can be used to deny these permissions via `AppOps` settings.
+
+
+## App Suspension
+
+Sometimes, Apps can be a little annoying and they constantly start themselves
+when they're not supposed to. While Permission Manager can help with the
+prevention of Apps that are starting themselves all the time, it's still
+sometimes necessary to suspend an App that doesn't want to quit.
+
+[SuperFreezZ](https://gitlab.com/SuperFreezZ/SuperFreezZ) is an App that allows
+freezing a list of Apps easily, including System Apps.
+
+![SuperFreezZ](./android-privacy-guide/superfreezz.jpg)
+
+The screenshot shows a list of Pending Freezes, which are configurable on a
+per-App basis. Activating the Lightning Button on the bottom right will auto-freeze
+all Apps that have pending freezes.
+
+
+## (Offline) Navigation
+
+
+## Public Navigation
+
+
+## Terminal Emulation
+
+
+## Web Browser
 

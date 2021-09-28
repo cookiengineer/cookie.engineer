@@ -284,7 +284,12 @@ const SERVER = http.createServer((request, response) => {
 					entry.data = data;
 
 				} catch (err) {
+
+					console.error('> Unknown Parser Error!');
+					console.error(err);
+
 					entry.data = null;
+
 				}
 
 				return entry;
@@ -432,7 +437,12 @@ const SERVER = http.createServer((request, response) => {
 			entry.data = data;
 
 		} catch (err) {
+
+			console.error('> Unknown Parser Error!');
+			console.error(err);
+
 			entry.data = null;
+
 		}
 
 

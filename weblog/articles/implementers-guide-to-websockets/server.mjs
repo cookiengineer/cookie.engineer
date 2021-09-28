@@ -63,7 +63,28 @@ server.on('connection', (socket) => {
 					socket.on('data', (buffer) => {
 
 						WS.receive(socket, buffer, (request) => {
-							console.log('Received request ', request);
+
+							if (request !== null) {
+
+								console.log('Received request ', request);
+
+								if (
+									request.headers['@type'] === 'request'
+									&& request.headers['@operator'] === 0x09
+								) {
+
+									WS.send(socket, {
+										headers: {
+											'@type':     'response',
+											'@operator': 0x0a
+										},
+										payload: null
+									});
+
+								}
+
+							}
+
 						});
 
 					});

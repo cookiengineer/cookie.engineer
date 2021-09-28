@@ -53,10 +53,6 @@ const send_handshake = function(socket) {
 	blob.push('');
 	blob.push('');
 
-	// XXX: Flags are used in WS.send() and WS.receive()
-	socket._is_server = false;
-	socket._is_client = true;
-
 	socket.write(blob.join('\r\n'));
 
 };
@@ -96,9 +92,31 @@ client.on('data', (buffer) => {
 		});
 
 
+		// TODO for Reader: This interval is usually between 60000 and 120000 ms
+		setInterval(() => {
+
+			WS.send(client, {
+				headers: {
+					'@type':     'request',
+					'@operator': 0x09
+				},
+				payload: null
+			});
+
+		}, 10000);
+
+
 		setTimeout(() => {
-			// Chapter: Sending Web-Socket Frames
-			WS.send(client, JSON.stringify('{"foo":"bar"}'));
+
+			// Chapter: Send Web-Socket Frames
+			WS.send(client, {
+				headers: {
+					'@type':     'request',
+					'@operator': 0x01
+				},
+				payload: Buffer.from(JSON.stringify('{"hello":"world!"}'))
+			});
+
 		}, 2000);
 
 	}

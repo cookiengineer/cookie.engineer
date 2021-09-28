@@ -378,7 +378,6 @@ const parseBody = function(body) {
 
 		}
 
-
 		if (element !== null && element.type === 'pre') {
 
 			if (chunk === '```') {
@@ -408,8 +407,6 @@ const parseBody = function(body) {
 
 			if (chunk.length > 3) {
 				element.state = chunk.substr(3).split(' ')[0].trim();
-			} else if (element !== null) {
-				element = null;
 			}
 
 		} else if (chunk.startsWith('#')) {

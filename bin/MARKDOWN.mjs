@@ -279,11 +279,28 @@ const renderElement = function(element, indent, root) {
 
 			}
 
+			let internal = (
+				element.href.startsWith('https://cookie.engineer/')
+				|| element.href.startsWith('/')
+				|| element.href.startsWith('./')
+			);
 
 			if (element.state !== '') {
-				return ' <a class="' + element.state + '" href="' + element.href + '">' + element.raw + '</a> ';
+
+				if (internal === true) {
+					return ' <a class="' + element.state + '" href="' + element.href + '">' + element.raw + '</a> ';
+				} else {
+					return ' <a class="' + element.state + '" href="' + element.href + '" target="_blank">' + element.raw + '</a> ';
+				}
+
 			} else {
-				return ' <a href="' + element.href + '">' + element.raw + '</a> ';
+
+				if (internal === true) {
+					return ' <a href="' + element.href + '">' + element.raw + '</a> ';
+				} else {
+					return ' <a href="' + element.href + '" target="_blank">' + element.raw + '</a> ';
+				}
+
 			}
 
 		} else if (type === 'h1' || type === 'h2' || type === 'h3') {

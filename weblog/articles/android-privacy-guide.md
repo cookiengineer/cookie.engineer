@@ -128,7 +128,8 @@ a developer to inspect all tracking features of an App on the fly.
 
 The screenshot shows `WhatsApp`, a privacy-invasive App that uses a lot of
 Android's available tracking features to spy on its users - and how Permission
-Manager X can be used to deny these permissions via `AppOps` settings.
+Manager X can be used to deny these permissions via the mentioned `AppOps`
+and their overridden settings.
 
 
 ## App Suspension
@@ -136,26 +137,83 @@ Manager X can be used to deny these permissions via `AppOps` settings.
 Sometimes, Apps can be a little annoying and they constantly start themselves
 when they're not supposed to. While Permission Manager can help with the
 prevention of Apps that are starting themselves all the time, it's still
-sometimes necessary to suspend an App that doesn't want to quit.
+sometimes necessary to suspend an App that doesn't want to quit by itself.
+
+If an App resists persistently, you can use `SuperFreezZ` as an App to automatically
+or manually freeze all Apps that keep running in the background.
 
 [SuperFreezZ](https://gitlab.com/SuperFreezZ/SuperFreezZ) is an App that allows
 freezing a list of Apps easily, including System Apps.
 
 ![SuperFreezZ](./android-privacy-guide/superfreezz.jpg)
 
-The screenshot shows a list of Pending Freezes, which are configurable on a
-per-App basis. Activating the Lightning Button on the bottom right will auto-freeze
-all Apps that have pending freezes.
+The screenshot shows a list of Pending Freezes, which are configurable on a per-App
+basis. Pressing the Lightning Button on the bottom right will auto-freeze all Apps
+that have pending freezes. The App will then go into each `Settings` App view of
+the selected Apps and press the `Force stop` button there in an automated way.
 
 
-## (Offline) Navigation
+## Offline Navigation
+
+The best navigation App and the by far most integrated one is [OSMAnd](https://github.com/osmandapp/Osmand),
+which uses the publicly available [OpenStreetMaps](https://openstreetmaps.org) datasets
+and map layers.
+
+The App also offers a nice address-based search which allows to quickly lookup an address
+and figure out what's available in the area. The Point of Interests overlay is compatible
+to the same ones that are available on OpenStreetMaps, like restaurants,
+cinemas, or gas stations.
+
+As OSMAnd also offers different modes of transportation where you can set it to either `car`,
+`bicycle`, `on foot` and via `public transportation`, it's also amazing when being on a hiking
+trip that's a little more rural.
+
+The `Offline Maps` feature allows to download all kinds of regions, from continents to countries
+to even on a per-city basis, so it's very flexible when you're abroad in only a specific city
+and don't want to download the whole country's map.
+
+![OSMAnd](./android-privacy-guide/osmand.jpg)
+
+The screenshot shows the a sample route navigation, and the Local Maps feature in the Settings
+View of the App.
 
 
-## Public Navigation
+## Instant Messaging
 
+If you want a privacy respecting messenging service, you should use a reasonably trustworthy
+decentralized end-to-end encrypted messenger. This means that the message has to stay encrypted
+until the other client decrypts it and has to be encrypted by default (not optionally).
 
-## Terminal Emulation
+This kind of rules out `Signal` due to it backing up its decryption keys via Google Play APIs,
+and it rules out `Telegram` (even the [Telegram FOSS Fork](https://github.com/Telegram-FOSS-Team/Telegram-FOSS))
+because the server implementation is not Open Source and neither verifiable in its behaviour
+of what happens to the Drafts. As `WhatsApp` isn't even remotely secure or privacy respecting,
+we're not going to talk about it.
+
+Luckily, there's [Briar](https://briarproject.org) as a rising messaging client that is peer-to-peer
+and is built for total disaster-scenario usage, where Clients can even chat via the same Wi-Fi
+locally, and even share their messages/forums via Bluetooth.
 
 
 ## Web Browser
+
+Web Browser is a harsh topic, as I historically want to like Firefox. But Firefox for Android
+sends so many packets back to the Mozilla domains that an MITM can easily fingerprint your specific
+Firefox version that you've got installed. So I cannot recommend it, and my findings were similar
+to the one of [Spyware Watchdog](https://spyware.neocities.org/articles/firefox.html).
+
+I'm currently building up my own Browser [Stealth](https://github.com/tholian-network/stealth) and
+a WebKit fork called [RetroKit](https://github.com/tholian-network/retrokit) due to those exact
+reasons, so I'm very biased on the topic when it comes to the availability of no other Browser that
+has a minimal attack surface.
+
+As all Browsers these days are either WebKit, Gecko or Chromium Embedded Framework (CEF) based, there's
+not much choice to choose from. Even Privacy labelled Browsers like Brave basically aren't doing anything
+to reduce the Attack Surface, and happily will execute all JavaScript from all untrusted websites by
+default.
+
+I'm probably going to write a dedicated article about Web Browsers on mobile in the future, and how
+everybody can write exploits that use techniques like Heap Spraying attacks or stack corruptions in
+the proprietary and outdated GPU drivers, because WebGL, WebGPU and other APIs weren't designed with
+having security in mind.
 

@@ -14,7 +14,7 @@
 			'<h3>We value your Privacy</h3>',
 			'<p>Haha, just kidding. Do you consent to sharing Cookies?</p>',
 			'<div>',
-			'<button onclick="alert(\'Boom! You\'re tracked. Are you happy nao?\')">Consent</button>',
+			'<button onclick="alert(\'Boom! You are tracked. Are you happy nao?\')">Consent</button>',
 			'<button onclick="startGame()">Do Not Consent</button>',
 			'</div>'
 		].join('');

@@ -93,14 +93,24 @@
 		};
 
 		const focus = function(event) {
-			cursor.x     = event.x;
-			cursor.y     = event.y;
+
+			if (typeof event.x === 'number' && typeof event.y === 'number') {
+				cursor.x = event.x;
+				cursor.y = event.y;
+			}
+
 		};
 
 		const pewpew = function(event) {
 
-			cursor.x     = event.x;
-			cursor.y     = event.y;
+			if (typeof event.touches !== 'undefined') {
+				cursor.x = event.touches[0].pageX;
+				cursor.y = event.touches[0].pageY;
+			} else if (typeof event.x === 'number' && typeof event.y === 'number') {
+				cursor.x = event.x;
+				cursor.y = event.y;
+			}
+
 			cursor.lazer = 10;
 
 			let got_cookie = false;

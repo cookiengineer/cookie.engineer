@@ -92,9 +92,22 @@
 			lazer: 0
 		};
 
+		const donothing = function(event) {
+
+			if (typeof event.preventDefault === 'function') {
+				event.preventDefault();
+			}
+
+			return false;
+
+		};
+
 		const focus = function(event) {
 
-			if (typeof event.x === 'number' && typeof event.y === 'number') {
+			if (typeof event.touches !== 'undefined') {
+				cursor.x = event.touches[0].pageX;
+				cursor.y = event.touches[0].pageY;
+			} else if (typeof event.x === 'number' && typeof event.y === 'number') {
 				cursor.x = event.x;
 				cursor.y = event.y;
 			}
@@ -166,7 +179,7 @@
 			border = 32;
 
 			let cookie = {
-				x:        32 + (Math.random() * canvas.width - 64),
+				x:        48 + (Math.random() * canvas.width - 64 - 32),
 				y:        0,
 				speed:    32 + (Math.random() * 32),
 				lifetime: (Math.random() * 2) + 2
@@ -308,8 +321,17 @@
 
 			health = 0;
 
-			body.className = '';
+			canvas.removeEventListener('mousedown',  pewpew);
+			canvas.removeEventListener('mousemove',  focus);
+			canvas.removeEventListener('touchstart', pewpew);
+			canvas.removeEventListener('touchmove',  focus);
+
+			canvas.removeEventListener('dragstart', donothing);
+			canvas.removeEventListener('drop',      donothing);
+
 			canvas.style.pointerEvents = 'none';
+			body.className = '';
+
 
 			canvascontext.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -337,11 +359,6 @@
 
 		global.startGame = function() {
 
-			health = 100;
-
-			body.className             = 'game';
-			canvas.style.pointerEvents = 'auto';
-
 			global.scrollTo({
 				top:      0,
 				left:     0,
@@ -360,11 +377,19 @@
 			}, 220);
 
 
-			canvas.addEventListener('click',      pewpew,      false);
-			canvas.addEventListener('dragstart',  () => false, false);
-			canvas.addEventListener('drop',       () => false, false);
-			canvas.addEventListener('mousemove',  focus,       false);
-			canvas.addEventListener('touchstart', pewpew,      false);
+			health = 100;
+
+			canvas.addEventListener('mousedown',  pewpew, false);
+			canvas.addEventListener('mousemove',  focus,  false);
+
+			canvas.addEventListener('touchstart', pewpew, false);
+			canvas.addEventListener('touchmove',  pewpew, false);
+
+			canvas.addEventListener('dragstart',  donothing, false);
+			canvas.addEventListener('drop',       donothing, false);
+
+			canvas.style.pointerEvents = 'auto';
+			body.className             = 'game';
 
 
 			requestFrame(render);

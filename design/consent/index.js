@@ -12,7 +12,7 @@
 
 		consent.innerHTML = [
 			'<h3>We value your Privacy</h3>',
-			'<p>By clicking "Consent" you agree that the whole Internet and our Partners have the right to store and/or access information on your device through the use of cookies and similar technologies and process your personal data, to display personalized ads and content, for ad and content measurement, audience insights and product development. Haha, just kidding. Do you consent to sharing Cookies?</p>',
+			'<p>By clicking "Consent" you agree that the whole Internet and our Partners have the right to store and/or access information on your device through the use of cookies and similar technologies and process your personal data. Haha, just kidding. Do you consent to sharing Cookies?</p>',
 			'<div>',
 			'<button onclick="alert(\'You are tracked! Are you happy nao?\')">Consent</button>',
 			'<button onclick="GAME.start()">Do Not Consent</button>',
@@ -23,11 +23,36 @@
 		body.appendChild(consent);
 
 
-
 		const canvas   = doc.querySelector('body > canvas');
 		const GFX      = canvas.getContext('2d');
-		const SFX      = new AudioContext();
-		const ANALYSER = SFX.createAnalyser();
+		const SFX      = (() => {
+
+			if (typeof AudioContext === 'function') {
+				return new AudioContext();
+			} else if (typeof mozAudioContext === 'function') {
+				return new mozAudioContext();
+			} else if (typeof webkitAudioContext === 'function') {
+				return new webkitAudioContext();
+			}
+
+			return null;
+
+		})();
+		const ANALYSER = (() => {
+
+			if (SFX !== null) {
+
+				let analyser = SFX.createAnalyser();
+
+				analyser.fftSize = 2048;
+
+				return analyser;
+
+			}
+
+			return null;
+
+		})();
 
 
 		const renderBorder = (border) => {
@@ -186,9 +211,13 @@
 				global.fetch(url).then((response) => {
 					return response.arrayBuffer();
 				}).then((buffer) => {
-					SFX.decodeAudioData(buffer, (decoded) => {
-						resolve(decoded);
-					});
+
+					if (SFX !== null) {
+						SFX.decodeAudioData(buffer, (decoded) => {
+							resolve(decoded);
+						});
+					}
+
 				});
 			});
 
@@ -196,18 +225,24 @@
 
 		const playAudio = function(buffer, loop) {
 
-			let node = SFX.createBufferSource();
+			if (SFX !== null) {
 
-			node.buffer = buffer;
-			node.connect(SFX.destination);
+				let node = SFX.createBufferSource();
 
-			if (loop === true) {
-				node.loop = true;
+				node.buffer = buffer;
+				node.connect(SFX.destination);
+
+				if (loop === true) {
+					node.loop = true;
+				}
+
+				node.start(0);
+
+				return node;
+
 			}
 
-			node.start(0);
-
-			return node;
+			return null;
 
 		};
 
@@ -341,8 +376,6 @@
 
 
 
-			ANALYSER.fftSize = 2048;
-
 			loadAudio('/design/consent/music.mp3').then((data) => {
 				CACHE['audio']['music'] = data;
 			});
@@ -383,7 +416,9 @@
 
 			const update = function(delta) {
 
-				ANALYSER.getByteTimeDomainData(STATE['equalizer']);
+				if (ANALYSER !== null) {
+					ANALYSER.getByteTimeDomainData(STATE['equalizer']);
+				}
 
 
 				let cookies = STATE['cookies'];
@@ -447,7 +482,10 @@
 
 				STATE['health'] = [ 100, 100 ];
 				STATE['music']  = playAudio(CACHE['audio']['music'], true);
-				STATE['music'].connect(ANALYSER);
+
+				if (STATE['music'] !== null && ANALYSER !== null) {
+					STATE['music'].connect(ANALYSER);
+				}
 
 
 				setTimeout(() => {

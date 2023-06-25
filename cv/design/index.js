@@ -3,6 +3,41 @@
 
 	global.addEventListener('DOMContentLoaded', () => {
 
+		const load = (url, callback) => {
+
+			let xhr = new XMLHttpRequest();
+
+			xhr.open('GET', url);
+			xhr.setRequestHeader('Content-Type', 'text/html');
+			xhr.responseType = 'text';
+
+			xhr.onload = () => {
+
+				let html = xhr.response;
+				if (html.length > 0) {
+
+					// XXX: Hacky, but has to be done here to prevent 404s
+					html = html.split('src="projects/').join('src="/projects/');
+					html = html.split('href="projects/').join('href="/projects/');
+					html = html.split('src="skills/').join('src="/skills/');
+					html = html.split('href="skills/').join('href="/skills/');
+					html = html.split('src="talks/').join('src="/talks/');
+					html = html.split('href="talks/').join('href="/talks/');
+
+					callback(html);
+
+				}
+
+			};
+
+			xhr.onerror = () => {
+				callback(null);
+			};
+
+			xhr.send(null);
+
+		};
+
 		const replace = (section, data) => {
 
 			let str0 = data.indexOf('<section id="' + section + '"');
@@ -37,69 +72,16 @@
 
 		};
 
-
-
 		let file = global.location.pathname.split('/').pop();
-		if (file === 'en.html') {
+		if (file === 'en.html' || file === 'de.html') {
 
-			let xhr = new XMLHttpRequest();
+			load('/index.html', (html) => {
+				replace('skills', html);
+			});
 
-			xhr.open('GET', '/index.html');
-			xhr.setRequestHeader('Content-Type', 'text/html');
-			xhr.responseType = 'text';
-
-			xhr.onload = () => {
-
-				let html = xhr.response;
-				if (html.length > 0) {
-
-					// XXX: Hacky, but has to be done here to prevent 404s
-					html = html.split('src="projects/').join('src="/projects/');
-					html = html.split('href="projects/').join('href="/projects/');
-					html = html.split('src="skills/').join('src="/skills/');
-					html = html.split('href="skills/').join('href="/skills/');
-					html = html.split('src="talks/').join('src="/talks/');
-					html = html.split('href="talks/').join('href="/talks/');
-
-					replace('skills',      html);
-					replace('open-source', html);
-
-				}
-
-			};
-
-			xhr.send(null);
-
-		} else if (file === 'de.html') {
-
-			let xhr = new XMLHttpRequest();
-
-			xhr.open('GET', '/index.html');
-			xhr.setRequestHeader('Content-Type', 'text/html');
-			xhr.responseType = 'text';
-
-			xhr.onload = () => {
-
-				let html = xhr.response;
-				if (html.length > 0) {
-
-					// XXX: Hacky, but has to be done here to prevent 404s
-					html = html.split('src="projects/').join('src="/projects/');
-					html = html.split('href="projects/').join('href="/projects/');
-					html = html.split('src="skills/').join('src="/skills/');
-					html = html.split('href="skills/').join('href="/skills/');
-					html = html.split('src="talks/').join('src="/talks/');
-					html = html.split('href="talks/').join('href="/talks/');
-
-					replace('open-source', html);
-
-				}
-
-			};
-
-			xhr.send(null);
-
-			// TODO: Do Nothing (needs translations to German)
+			load('/projects.html', (html) => {
+				replace('open-source', html);
+			});
 
 		}
 

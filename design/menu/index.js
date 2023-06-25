@@ -140,59 +140,77 @@
 
 		if (menu !== null) {
 
+			if (global.location.hash.startsWith('#/') === true) {
+
+				let result = scroll_to_element('#' + global.location.hash.split('#/').pop());
+				if (result === true) {
+
+					let state = has_state(menu, 'open');
+					if (state === true) {
+						del_state(menu, 'open');
+					}
+
+				}
+
+			}
+
 			if (typeof global.scrollY === 'number') {
 
-				let offset  = global.scrollY;
-				let current = 0;
+				setTimeout(() => {
 
-				global.addEventListener('scroll', () => {
-					current = global.scrollY;
-				}, true);
+					let offset  = global.scrollY;
+					let current = 0;
 
-				setInterval(() => {
+					global.addEventListener('scroll', () => {
+						current = global.scrollY;
+					}, true);
 
-					let delta = current - offset;
-					if (delta > 32) {
+					setInterval(() => {
 
-						del_state(menu, 'open');
-						del_state(menu, 'visible');
+						let delta = current - offset;
+						if (delta > 32) {
 
-						items.forEach((item) => {
+							del_state(menu, 'open');
+							del_state(menu, 'visible');
 
-							let href = item.getAttribute('href');
-							if (href.startsWith('#/')) {
-								del_state(item, 'active');
-							}
+							items.forEach((item) => {
 
-						});
+								let href = item.getAttribute('href');
+								if (href.startsWith('#/')) {
+									del_state(item, 'active');
+								}
 
-					} else if (delta < -32) {
+							});
 
-						add_state(menu, 'visible');
+						} else if (delta < -32) {
 
-						items.forEach((item) => {
+							add_state(menu, 'visible');
 
-							let href = item.getAttribute('href');
-							if (href.startsWith('#/')) {
-								del_state(item, 'active');
-							}
+							items.forEach((item) => {
 
-						});
+								let href = item.getAttribute('href');
+								if (href.startsWith('#/')) {
+									del_state(item, 'active');
+								}
 
-					}
+							});
 
-					let height = global.innerHeight || 0;
-					let hash   = scroll_to_item(height);
+						}
 
-					if (hash !== null) {
-						global.location.hash = hash;
-					} else {
-						global.location.hash = '';
-					}
+						let height = global.innerHeight || 0;
+						let hash   = scroll_to_item(height);
 
-					offset = current;
+						if (hash !== null) {
+							global.location.hash = hash;
+						} else {
+							global.location.hash = '';
+						}
 
-				}, 250);
+						offset = current;
+
+					}, 250);
+
+				}, 500);
 
 			}
 

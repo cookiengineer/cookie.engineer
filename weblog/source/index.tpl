@@ -46,10 +46,13 @@
 		<header>
 			<aside id="menu" class="visible">
 				<a id="menu-button" href="#menu">Menu</a>
+				<a class="icon-section" href="/index.html">About&nbsp;Me</a>
+				<a class="icon-section" href="/projects.html">Projects</a>
+				<a class="icon-section" href="/talks.html">Talks</a>
+				<a class="icon-section" href="/contact.html">Contact</a>
 				<a href="#welcome">Welcome</a>
 				<a href="#search">Search</a>
 				<a href="#weblog">Web&nbsp;Log</a>
-				<a class="icon-section" href="/index.html">Portfolio</a>
 			</aside>
 		</header>
 		<section id="welcome">

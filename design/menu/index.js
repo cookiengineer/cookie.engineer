@@ -6,19 +6,9 @@
 		const doc      = global.document;
 		const menu     = doc.querySelector('header aside#menu');
 		const button   = doc.querySelector('header aside#menu a#menu-button');
-		const items    = Array.from(menu.querySelectorAll('a[href]')).filter((a) => a !== button && a.getAttribute('href').startsWith('#'));
+		const items    = Array.from(menu.querySelectorAll('a[href]')).filter((a) => a !== button);
 		const links    = Array.from(doc.querySelectorAll('article a')).filter((a) => a.getAttribute('href').startsWith('#'));
-		const sections = items.map((a) => a.href).map((url) => {
-
-			let id = url.split('#').pop();
-			let element = doc.querySelector('#' + id);
-			if (element !== null) {
-				return element;
-			}
-
-			return null;
-
-		}).filter((section) => section !== null);
+		const sections = Array.from(doc.querySelectorAll('section[id]'));
 
 
 
@@ -116,7 +106,6 @@
 					}) || null;
 				}
 
-
 				if (found !== null) {
 
 					let item = items.find((item) => {
@@ -130,11 +119,9 @@
 
 					}) || null;
 
-					if (item !== null && item.className !== 'active') {
+					if (item !== null) {
 
-						items.forEach((other) => {
-							other.className = other === item ? 'active' : '';
-						});
+						add_state(item, 'active');
 
 						return '#/' + found.id;
 
@@ -169,18 +156,38 @@
 
 						del_state(menu, 'open');
 						del_state(menu, 'visible');
-						items.forEach((item) => item.className = '');
+
+						items.forEach((item) => {
+
+							let href = item.getAttribute('href');
+							if (href.startsWith('#/')) {
+								del_state(item, 'active');
+							}
+
+						});
 
 					} else if (delta < -32) {
 
 						add_state(menu, 'visible');
 
+						items.forEach((item) => {
+
+							let href = item.getAttribute('href');
+							if (href.startsWith('#/')) {
+								del_state(item, 'active');
+							}
+
+						});
+
 					}
 
 					let height = global.innerHeight || 0;
 					let hash   = scroll_to_item(height);
+
 					if (hash !== null) {
 						global.location.hash = hash;
+					} else {
+						global.location.hash = '';
 					}
 
 					offset = current;
@@ -213,25 +220,40 @@
 
 			items.forEach((item) => {
 
-				let href = '#/' + item.getAttribute('href').split('#').pop();
-				if (href === global.location.hash) {
-					item.className = 'active';
-				}
+				let href = item.getAttribute('href');
+				if (href.includes('#') === true) {
 
-				item.href    = href;
-				item.onclick = function() {
-
-					let result = scroll_to_element('#' + this.href.split('#/').pop());
-					if (result === true) {
-
-						let state = has_state(menu, 'open');
-						if (state === true) {
-							del_state(menu, 'open');
-						}
-
+					let hash = '#/' + item.getAttribute('href').split('#').pop();
+					if (hash === global.location.hash) {
+						item.href = hash;
+						add_state(item, 'active');
+					} else {
+						item.href = hash;
 					}
 
-				};
+					item.onclick = function() {
+
+						let result = scroll_to_element('#' + this.href.split('#/').pop());
+						if (result === true) {
+
+							let state = has_state(menu, 'open');
+							if (state === true) {
+								del_state(menu, 'open');
+							}
+
+						}
+
+					};
+
+				} else {
+
+					let path = item.getAttribute('href');
+					if (path === global.location.pathname) {
+						item.href = path;
+						add_state(item, 'active');
+					}
+
+				}
 
 			});
 

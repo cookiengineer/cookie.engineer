@@ -201,9 +201,17 @@
 						let hash   = scroll_to_item(height);
 
 						if (hash !== null) {
-							global.location.hash = hash;
+
+							if (global.location.hash != hash) {
+								global.location.hash = hash;
+							}
+
 						} else {
-							global.location.hash = '';
+
+							if (global.location.hash != '') {
+								global.location.hash = '';
+							}
+
 						}
 
 						offset = current;

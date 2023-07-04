@@ -665,7 +665,7 @@ const decode_payload = function(buffer) {
 ```
 
 
-### 0x01: IPv4 Payload
+### Decoding 0x01: IPv4 Payload
 
 The `IPv4 Payload` is sent to communicate that the Client wants to
 `connect` or `bind` to a specific IP and a specific Port.
@@ -705,7 +705,7 @@ if (type === 0x01) {
 ```
 
 
-### 0x03: Domain Payload
+### Decoding 0x03: Domain Payload
 
 The `Domain Payload` is sent to communicate that the Client wants to
 `connect` or `bind` to a specific domain (that the Server or Proxy
@@ -747,7 +747,7 @@ if (type === 0x03) {
 ```
 
 
-### 0x04: IPv6 Payload
+### Decoding 0x04: IPv6 Payload
 
 The `IPv6 Payload` is sent to communicate that the Client wants to
 `connect` or `bind` to a specific IP and a specific Port.
@@ -930,7 +930,7 @@ const encode = function(socket, data) {
 ```
 
 
-### 0x01: IPv4 Payload, 0x03: Domain Payload, 0x04: IPv6 Payload
+### Encoding 0x01: IPv4 Payload, 0x03: Domain Payload, 0x04: IPv6 Payload
 
 The decoding logic has been explained already in the previous chapters,
 so it should be quite easy for you to handle the encoding of the payloads

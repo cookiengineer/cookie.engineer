@@ -3,10 +3,20 @@
 
 	global.addEventListener('DOMContentLoaded', () => {
 
-		const doc      = global.document;
-		const menu     = doc.querySelector('header aside#menu');
-		const button   = doc.querySelector('header aside#menu a#menu-button');
-		const items    = Array.from(menu.querySelectorAll('a[href]')).filter((a) => a !== button);
+		const doc    = global.document;
+		const menu   = doc.querySelector('header aside#menu');
+		const button = doc.querySelector('header aside#menu a#menu-button');
+		const items  = Array.from(menu.querySelectorAll('a[href]')).filter((a) => a !== button);
+
+		const toc = doc.querySelector('header aside#toc');
+		if (toc !== null) {
+
+			Array.from(toc.querySelectorAll('a[href]')).forEach((a) => {
+				items.push(a);
+			});
+
+		}
+
 		const links    = Array.from(doc.querySelectorAll('article a')).filter((a) => a.getAttribute('href').startsWith('#'));
 		const sections = Array.from(doc.querySelectorAll('section[id]'));
 
@@ -173,6 +183,10 @@
 							del_state(menu, 'open');
 							del_state(menu, 'visible');
 
+							if (toc !== null) {
+								del_state(toc, 'visible');
+							}
+
 							items.forEach((item) => {
 
 								let href = item.getAttribute('href');
@@ -185,6 +199,10 @@
 						} else if (delta < -32) {
 
 							add_state(menu, 'visible');
+
+							if (toc !== null) {
+								add_state(toc, 'visible');
+							}
 
 							items.forEach((item) => {
 

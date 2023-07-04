@@ -93,7 +93,10 @@ const renderIndex = (entries) => {
 
 const renderArticle = (entry) => {
 
+	let headlines = [];
 	let body = MARKDOWN.renderBody(entry.data.body, '/weblog/articles');
+	let toc  = [];
+
 	if (body !== null) {
 
 		let lines = body.split('\n');
@@ -101,9 +104,26 @@ const renderArticle = (entry) => {
 		for (let l = 0, ll = lines.length; l < ll; l++) {
 
 			let line = lines[l];
-			if (line.startsWith('<h2>') || line.startsWith('<h3>')) {
+			if (
+				(line.startsWith('<h2>') && line.endsWith('</h2>'))
+				|| (line.startsWith('<h3>') && line.endsWith('</h3>'))
+			) {
 
-				lines.splice(l, 0, '</section>\n\n<section>');
+				let title = line.substr(4, line.length - 9);
+				let identifier = toIdentifier(title);
+				let injected = [
+					'</section>',
+					'\n',
+					'\n',
+					'<section id="' + identifier + '">'
+				].join('');
+
+				headlines.push({
+					title: title,
+					href:  '#' + identifier
+				});
+
+				lines.splice(l, 0, injected);
 
 				ll++;
 				l++;
@@ -116,12 +136,42 @@ const renderArticle = (entry) => {
 
 	}
 
+	if (headlines.length > 0) {
+
+		headlines.forEach((headline) => {
+			toc.push('<a href="' + headline.href + '">' + headline.title + '</a>');
+		});
+
+	}
+
 	return Buffer.from(MARKDOWN.renderTemplate(TEMPLATES['article'], {
 		body: body,
 		crux: entry.data.meta.crux,
 		name: entry.data.meta.name,
-		tags: entry.data.meta.tags.join(', ')
+		tags: entry.data.meta.tags.join(', '),
+		toc:  toc.join('\n')
 	}), 'utf-8');
+
+};
+
+const toIdentifier = (title) => {
+
+	let identifier = title.toLowerCase();
+
+	if (title.includes(':')) {
+		identifier = title.split(':')[0].toLowerCase();
+	}
+
+	identifier = identifier.split(' ').join('-');
+	identifier = identifier.split('--').join('-');
+	identifier = identifier.split('--').join('-');
+	identifier = identifier.split('--').join('-');
+
+	if (identifier.endsWith('-')) {
+		identifier = identifier.substr(0, identifier.length - 1);
+	}
+
+	return identifier;
 
 };
 

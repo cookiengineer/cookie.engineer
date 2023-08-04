@@ -15,3 +15,11 @@ Missing Cookie Engineer Projects:
 - [ ] Add `infiltrator`
 - [ ] Add `lecture-tool` or rename it to `lecturer`?
 
+
+## Weblog
+
+- [ ] Fingerprinting with CSS
+- [ ] Implementer's Guide to HTTP
+- [ ] Implementer's Guide to HTTP Streaming
+- [ ] Implementer's Guide to CSS
+

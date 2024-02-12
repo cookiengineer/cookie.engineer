@@ -38,7 +38,7 @@ no dynamic backend language interpreter is necessary.
 However, the [Web Log](./weblog) is written in CommonMark,
 so new articles must be rendered into HTML somehow.
 
-This is done transparently by the [server.mjs](/bin/server.mjs)
+This is done transparently by the [serve.sh](/toolchain/serve.sh)
 which allows the [Editor](/weblog/editor.html) functionality.
 
 It automatically re-renders related URLs when they are
@@ -48,7 +48,7 @@ loaded in the Browser (aka Hot Reload).
 cd /path/to/cookie.engineer;
 
 # Note that PWD must be the website root
-node ./bin/server.mjs;
+bash ./toolchain/serve.sh;
 ```
 
 
@@ -58,7 +58,7 @@ protect me from stalkers...because I had issues with some
 malicious actors in the past.
 
 The CVs can be decrypted and encrypted by calling the
-[cv.mjs](./bin/cv.mjs) via node.js, and in the Browser
+[cv.mjs](./toolchain/cv.mjs) via node.js, and in the Browser
 they are decrypted via the Web Crypto API:
 
 ```bash
@@ -74,6 +74,6 @@ node ./bin/cv.mjs encrypt "new-password";
 
 ## License
 
-(c) 2018-2021 Cookie Engineer (@cookiengineer).
+(c) 2018-2024 Cookie Engineer (@cookiengineer).
 All rights reserved.
 

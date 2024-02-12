@@ -18,6 +18,11 @@ Missing Cookie Engineer Projects:
 
 ## Weblog
 
+- [ ] Golang Pitfalls (e.g. filtered maps of references needing twice the RAM)
+- [ ] PureGo for EDR Evasion
+- [ ] Go Embedding GZip files
+- [ ] The WHOIS protocol and its quirks and pitfalls
+- [ ] LPM Tries are always the wrong choice
 - [ ] Fingerprinting with CSS
 - [ ] Implementer's Guide to HTTP
 - [ ] Implementer's Guide to HTTP Streaming

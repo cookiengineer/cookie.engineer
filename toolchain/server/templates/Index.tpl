@@ -103,7 +103,18 @@
 		</section>
 		<section id="weblog" class="timeline">
 			<h1>Web Log.</h1>
-			${articles}
+{{range .Documents}}
+			<article class="{{RenderStrings .Meta.Type "-"}}">
+				<samp></samp>
+				<h3>{{.Meta.Name}}</h3>
+				<p>{{.Meta.Crux}}</p>
+				<ul>
+					<li><b>Article Link:</b><a href="/weblog/articles/{{.File}}">{{.Meta.Name}}</a></li>
+					<li><b>Categories:</b><span>{{RenderStrings .Meta.Tags ", "}}</span></li>
+					<li><b>Publishing Date:</b><time datetime="{{.Meta.Date}}">{{.Meta.Date}}</time></li>
+					<li><b>Reading Time:</b><span>ca. {{RenderInteger .Statistics.Minutes}}-minute read (~{{RenderInteger .Statistics.Words}} words)</span></li>
+				</ul>
+			</article>{{end}}
 		</section>
 		<footer>
 			<p>Made with 💔 in Heidelberg, Germany. All rights (and jokes) reserved under European Law.</p>

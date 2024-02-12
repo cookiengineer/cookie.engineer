@@ -25,6 +25,29 @@ it's heavily recommended to not root your phone as you can easily brick
 your device if you don't know what you're doing.
 
 
+## Hardware
+
+Don't buy any of these phones, because they can be remotely disabled. It
+happened in the grey market incident in Mexico from 2022 to 2023 with all
+of those vendors.
+
+All of the smartphones from `ZTE`, `Motorola`, `Samsung`, and `Oppo` can
+be remotely bricked if the government or the vendors decide to do so. Their
+firmware includes a rootkit, which is very likely to be based on the known
+rootkit for MediaTek chipsets. That rootkit can remotely disable all
+functionality, and has even a kernel driver providing remote evidence
+gathering features.
+
+If you want to have an as-opensource-as-possible phone, buy either of these:
+
+- Fairphone 3 / 3 Plus, with LineageOS codename [FP3](https://wiki.lineageos.org/devices/FP3) installed.
+- Fairphone 4, with LineageOS codename [FP4](https://wiki.lineageos.org/devices/FP4) installed.
+- PinePhone, with [GloDroid](https://github.com/GloDroidCommunity/pine64-pinephone) installed.
+
+If you want a fallback device that can run PostmarketOS once there's no Android
+available anymore, I recommend to check the wiki for [Supported Devices](https://wiki.postmarketos.org/wiki/Devices).
+
+
 ## Android Wi-Fi Connectivity Check
 
 Android's integrated and non-deactivateable Wi-Fi Connectivity Check

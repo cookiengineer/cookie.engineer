@@ -37,6 +37,12 @@ func ParseInline(value string) []Element {
 
 				remaining = remaining[strings.Index(remaining, ":")+1:]
 
+			} else {
+
+				element := NewElement("#text")
+				element.Text = ":"
+				result = append(result, element)
+
 			}
 
 		} else if is_img {
@@ -81,6 +87,12 @@ func ParseInline(value string) []Element {
 
 				remaining = remaining[strings.Index(remaining, "**")+2:]
 
+			} else {
+
+				element := NewElement("#text")
+				element.Text = "**"
+				result = append(result, element)
+
 			}
 
 		} else if is_code {
@@ -113,6 +125,12 @@ func ParseInline(value string) []Element {
 
 				remaining = remaining[strings.Index(remaining, "*")+1:]
 
+			} else {
+
+				element := NewElement("#text")
+				element.Text = "*"
+				result = append(result, element)
+
 			}
 
 		} else if is_del {
@@ -128,6 +146,12 @@ func ParseInline(value string) []Element {
 				result = append(result, element)
 
 				remaining = remaining[strings.Index(remaining, "~")+1:]
+
+			} else {
+
+				element := NewElement("#text")
+				element.Text = "~"
+				result = append(result, element)
 
 			}
 

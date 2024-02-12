@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" prefix="og: http://ogp.me/ns#">
+<html lang="en" prefix="og:http://ogp.me/ns#">
 	<head>
 		<title>Implementer's Guide to WebSockets - Cookie Engineer's Web Log</title>
 
@@ -57,101 +57,100 @@
 			</aside>
 			<aside id="toc">
 				<a href="#introduction">Introduction</a>
-<a href="#web-socket-server">Web-Socket Server</a>
-<a href="#opening-handshake">Opening Handshake</a>
-<a href="#connection-upgrade">Connection Upgrade</a>
-<a href="#web-socket-framing">Web-Socket Framing</a>
-<a href="#receive-web-socket-frames">Receive Web-Socket Frames</a>
-<a href="#decoding-logic">Decoding Logic</a>
-<a href="#0x00">0x00 : Continuation Frame</a>
-<a href="#0x01">0x01 : Text Frame</a>
-<a href="#0x02">0x02 : Binary Frame</a>
-<a href="#0x08">0x08 : Close Frame</a>
-<a href="#0x09">0x09 : Ping Frame</a>
-<a href="#0x0a">0x0a : Pong Frame</a>
-<a href="#other-web-socket-control-frames">Other Web-Socket Control Frames</a>
-<a href="#web-socket-client">Web-Socket Client</a>
-<a href="#send-web-socket-frames">Send Web-Socket Frames</a>
-<a href="#encoding-logic">Encoding Logic</a>
-<a href="#reference-implementation">Reference Implementation</a>
+				<a href="#web-socket-server">Web-Socket Server</a>
+				<a href="#opening-handshake">Opening Handshake</a>
+				<a href="#connection-upgrade">Connection Upgrade</a>
+				<a href="#web-socket-framing">Web-Socket Framing</a>
+				<a href="#receive-web-socket-frames">Receive Web-Socket Frames</a>
+				<a href="#decoding-logic">Decoding Logic</a>
+				<a href="#0x00-continuation-frame">0x00 : Continuation Frame</a>
+				<a href="#0x01-text-frame">0x01 : Text Frame</a>
+				<a href="#0x02-binary-frame">0x02 : Binary Frame</a>
+				<a href="#0x08-close-frame">0x08 : Close Frame</a>
+				<a href="#0x09-ping-frame">0x09 : Ping Frame</a>
+				<a href="#0x0a-pong-frame">0x0a : Pong Frame</a>
+				<a href="#other-web-socket-control-frames">Other Web-Socket Control Frames</a>
+				<a href="#web-socket-client">Web-Socket Client</a>
+				<a href="#send-web-socket-frames">Send Web-Socket Frames</a>
+				<a href="#encoding-logic">Encoding Logic</a>
+				<a href="#reference-implementation">Reference Implementation</a>
 			</aside>
 		</header>
 		<section id="article" class="article">
 			<h1>Implementer's Guide to WebSockets</h1>
 			<article>
-<section>
-<p> <b>Updated on 2021-09-28</b></p>
-<p>
-	This time I implemented WebSocket support for 
-	 <a class="icon-github" href="https://github.com/tholian-network/stealth" target="_blank">Tholian Stealth</a> 
-	.
-</p>
-<p>
-	Soon came to realize that when implementing WebSockets from
-	scratch there is no go-to-and-know-everything resource available
-	on the internet. Most of the resources just use third-party
-	libraries and don't show how to implement the underlying
-	network protocol and frame parsing mechanisms.
-</p>
-<p>
-	Also, reading the RFC is kinda tedious, so I'm trying my best to
-	have enough code demos available for clarifications. This guide
-	tries to cover everything when it comes to the current WS13
-	network protocol, including reserved frames and how to support
-	them in future.
-</p>
-<p>
-	Most people will most likely use socket.io, but from my personal
-	view I wouldn't recommend it. In my use cases I use WebSockets
-	peer-to-peer (yes, you can, despite everybody else claiming no),
-	and the whole dependency tree of socket.io is rather redundant
-	than performant.
-</p>
-<p>
-	For the implementation we're going to build in this article,
-	we only need plain node.js and its 
-	 <code>net</code>
-	 core stack. The
-	implementation will be peer-to-peer, which means it can be used
-	for both the client-side and server-side whereas both sides
-	are implemented in node.js for the sake of simplicity.
-</p>
-</section>
-
-<section id="introduction">
-<h2>Introduction</h2>
-<p>
-	First off, you have to know that the 
-	 <code>WS13</code>
-	 protocol is specified as
-	 <a class="icon-website" href="https://tools.ietf.org/html/rfc6455" target="_blank">RFC6455</a> 
-	and that there were a couple of legacy versions of Web Browsers around
-	for a while that implemented the websocket protocol in a buggy manner.
-</p>
-<p>
-	This is not the case anymore and I will completely ignore your shitty
-	Safari from the dark ages here (it's 2019, not 2011 after all).
-</p>
-<p>
-	The Web-Socket Protocol is a web protocol that uses HTTP's 
-	 <code>Upgrade</code>
-	mechanism in order to upgrade a connection. That means the first request
-	to the server is actually an HTTP request with the 
-	 <code>Connection: Upgrade</code>
-	and 
-	 <code>Upgrade: websocket</code>
-	 headers.
-</p>
-<p>
-	If the server has a specialized service-oriented architecture that
-	needs more than just websocket data frames in order to work, it is
-	good to implement it as a so-called sub protocol.
-</p>
-<p>These subprotocols can be used in the Web Browser, too.</p>
-<pre class="javascript">
+				<section>
+					<p><b>Updated on 2021-09-28</b></p>
+					<p>
+						This time I implemented WebSocket support for
+						<a class="icon-github" href="https://github.com/tholian-network/stealth" target="_blank">Tholian Stealth</a>
+						.
+					</p>
+					<p>
+						Soon came to realize that when implementing WebSockets from
+						scratch there is no go-to-and-know-everything resource available
+						on the internet. Most of the resources just use third-party
+						libraries and don't show how to implement the underlying
+						network protocol and frame parsing mechanisms.
+					</p>
+					<p>
+						Also, reading the RFC is kinda tedious, so I'm trying my best to
+						have enough code demos available for clarifications. This guide
+						tries to cover everything when it comes to the current WS13
+						network protocol, including reserved frames and how to support
+						them in future.
+					</p>
+					<p>
+						Most people will most likely use socket.io, but from my personal
+						view I wouldn't recommend it. In my use cases I use WebSockets
+						peer-to-peer (yes, you can, despite everybody else claiming no),
+						and the whole dependency tree of socket.io is rather redundant
+						than performant.
+					</p>
+					<p>
+						For the implementation we're going to build in this article,
+						we only need plain node.js and its
+						<code>net</code>
+						core stack. The
+						implementation will be peer-to-peer, which means it can be used
+						for both the client-side and server-side whereas both sides
+						are implemented in node.js for the sake of simplicity.
+					</p>
+				</section>
+				<section>
+					<h2 id="introduction">Introduction</h2>
+					<p>
+						First off, you have to know that the
+						<code>WS13</code>
+						protocol is specified as
+						<a class="icon-website" href="https://tools.ietf.org/html/rfc6455" target="_blank">RFC6455</a>
+						and that there were a couple of legacy versions of Web Browsers around
+						for a while that implemented the websocket protocol in a buggy manner.
+					</p>
+					<p>
+						This is not the case anymore and I will completely ignore your shitty
+						Safari from the dark ages here (it's 2019, not 2011 after all).
+					</p>
+					<p>
+						The Web-Socket Protocol is a web protocol that uses HTTP's
+						<code>Upgrade</code>
+						mechanism in order to upgrade a connection. That means the first request
+						to the server is actually an HTTP request with the
+						<code>Connection: Upgrade</code>
+						and
+						<code>Upgrade: websocket</code>
+						headers.
+					</p>
+					<p>
+						If the server has a specialized service-oriented architecture that
+						needs more than just websocket data frames in order to work, it is
+						good to implement it as a so-called sub protocol.
+					</p>
+					<p>These subprotocols can be used in the Web Browser, too.</p>
+					<pre class="javascript">
 // Browser Example
 let socket = new WebSocket('ws://localhost:12345', [
-	'me-want-cookies' // Sub-Protocol
+'me-want-cookies' // Sub-Protocol
 ]);
 
 let data = JSON.stringify({ foo: 'bar' });
@@ -159,49 +158,48 @@ let blob = new Uint8Array(8);
 
 socket.send(data); // Text Frame
 socket.send(blob); // Binary Frame
-</pre>
-</section>
-
-<section id="web-socket-server">
-<h2>Web-Socket Server</h2>
-<p>The demo will be implemented in modern node.js.</p>
-<p>
-	The server creation has to be done with the 
-	 <code>net.Server()</code>
-	 interface,
-	as the data that we need to access is 
-	 <code>raw TCP data</code>
-	 and our library
-	will have to support binary encodings.
-</p>
-<p>
-	It is important that the TCP connection is modified to fit our needs
-	in order to never timeout. The WS13 protocol uses a 
-	 <code>Ping Frame</code>
-	 and
-	a 
-	 <code>Pong Frame</code>
-	 which we have to manage ourselves, so we need to tell
-	the TCP networking stack that by setting 
-	 <code>socket.allowHalfOpen</code>
-	 to 
-	 <code>true</code>
-	and by calling 
-	 <code>socket.setTimeout(0)</code>
-	 and 
-	 <code>socket.setKeepAlive(true, 0)</code>
-	.
-</p>
-<p>
-	As node.js runs 
-	 <code>libuv</code>
-	 in the background, which is of asynchronous
-	nature, we also have to make sure that everything gets send as soon
-	as possible by calling 
-	 <code>socket.setNoDelay(true)</code>
-	.
-</p>
-<pre class="javascript">
+					</pre>
+				</section>
+				<section>
+					<h2 id="web-socket-server">Web-Socket Server</h2>
+					<p>The demo will be implemented in modern node.js.</p>
+					<p>
+						The server creation has to be done with the
+						<code>net.Server()</code>
+						interface,
+						as the data that we need to access is
+						<code>raw TCP data</code>
+						and our library
+						will have to support binary encodings.
+					</p>
+					<p>
+						It is important that the TCP connection is modified to fit our needs
+						in order to never timeout. The WS13 protocol uses a
+						<code>Ping Frame</code>
+						and
+						a
+						<code>Pong Frame</code>
+						which we have to manage ourselves, so we need to tell
+						the TCP networking stack that by setting
+						<code>socket.allowHalfOpen</code>
+						to
+						<code>true</code>
+						and by calling
+						<code>socket.setTimeout(0)</code>
+						and
+						<code>socket.setKeepAlive(true, 0)</code>
+						.
+					</p>
+					<p>
+						As node.js runs
+						<code>libuv</code>
+						in the background, which is of asynchronous
+						nature, we also have to make sure that everything gets send as soon
+						as possible by calling
+						<code>socket.setNoDelay(true)</code>
+						.
+					</p>
+					<pre class="javascript">
 // server.mjs
 import net    from 'net';
 import { WS } from './WS.mjs';
@@ -210,75 +208,75 @@ import { WS } from './WS.mjs';
 // Chapter: Opening Handshake
 const parse_opening_handshake = (buffer) => {
 
-	let headers = {};
-	return headers;
+let headers = {};
+return headers;
 
 };
 
 let server = new net.Server({
-	allowHalfOpen:  true,
-	pauseOnConnect: true
+allowHalfOpen:  true,
+pauseOnConnect: true
 });
 
 server.on('connection', (socket) => {
 
-	socket.on('data', (buffer) => {
+socket.on('data', (buffer) => {
 
-		let headers = parse_opening_handshake(buffer);
-		if (
-			headers['connection'] === 'Upgrade'
-			&& headers['upgrade'] === 'websocket'
-			&& headers['sec-websocket-protocol'] === 'me-want-cookies'
-		) {
+let headers = parse_opening_handshake(buffer);
+if (
+headers['connection'] === 'Upgrade'
+&& headers['upgrade'] === 'websocket'
+&& headers['sec-websocket-protocol'] === 'me-want-cookies'
+) {
 
-			WS.upgrade(socket, headers, (result) => {
+WS.upgrade(socket, headers, (result) => {
 
-				if (result === true) {
+if (result === true) {
 
-					console.log('WS.upgrade() successful.');
+console.log('WS.upgrade() successful.');
 
-					socket.allowHalfOpen = true;
-					socket.setTimeout(0);
-					socket.setNoDelay(true);
-					socket.setKeepAlive(true, 0);
+socket.allowHalfOpen = true;
+socket.setTimeout(0);
+socket.setNoDelay(true);
+socket.setKeepAlive(true, 0);
 
-					socket.removeAllListeners('timeout');
-					socket.removeAllListeners('data');
+socket.removeAllListeners('timeout');
+socket.removeAllListeners('data');
 
-					socket.on('data', buffer => {
+socket.on('data', buffer => {
 
-						WS.receive(socket, buffer, request => {
-							console.log('Received request ', request);
-						});
+WS.receive(socket, buffer, request => {
+console.log('Received request ', request);
+});
 
-					});
+});
 
-				} else {
+} else {
 
-					console.error('WS.upgrade() unsuccessful.');
-					console.error('Sorry, no HTTP allowed either, yo');
+console.error('WS.upgrade() unsuccessful.');
+console.error('Sorry, no HTTP allowed either, yo');
 
-					socket.end();
+socket.end();
 
-				}
+}
 
-			});
+});
 
-		} else {
+} else {
 
-			console.error('Sorry, no TCP allowed, yo');
+console.error('Sorry, no TCP allowed, yo');
 
-			socket.end();
+socket.end();
 
-		}
+}
 
-	});
+});
 
-	socket.on('error',   () => {});
-	socket.on('close',   () => {});
-	socket.on('timeout', () => socket.close());
+socket.on('error',   () => {});
+socket.on('close',   () => {});
+socket.on('timeout', () => socket.close());
 
-	socket.resume();
+socket.resume();
 
 });
 
@@ -286,30 +284,29 @@ server.on('error', () => server.close());
 server.on('close', () => (server = null));
 
 server.listen(12345, null);
-</pre>
-</section>
-
-<section id="opening-handshake">
-<h2>Opening Handshake</h2>
-<p>
-	The initial request that is done via HTTP is conform to 
-	 <code>HTTP/1.1</code>
-	,
-	so it is very easy to parse and the payload is encoded in 
-	 <code>utf8</code>
-	and not 
-	 <code>binary</code>
-	, which eases up the parsing process.
-</p>
-<p>
-	The headers are - as every network byte ordered data - separated
-	by 
-	 <code>\r\n</code>
-	 after each line, which means it's best to simply parse
-	line-by-line and just trim everything off to have margin for
-	malformed but recoverable handshakes.
-</p>
-<pre class="text">
+					</pre>
+				</section>
+				<section>
+					<h2 id="opening-handshake">Opening Handshake</h2>
+					<p>
+						The initial request that is done via HTTP is conform to
+						<code>HTTP/1.1</code>
+						,
+						so it is very easy to parse and the payload is encoded in
+						<code>utf8</code>
+						and not
+						<code>binary</code>
+						, which eases up the parsing process.
+					</p>
+					<p>
+						The headers are - as every network byte ordered data - separated
+						by
+						<code>\r\n</code>
+						after each line, which means it's best to simply parse
+						line-by-line and just trim everything off to have margin for
+						malformed but recoverable handshakes.
+					</p>
+					<pre class="text">
 GET / HTTP/1.1
 Host: example.cookie.engineer
 Upgrade: websocket
@@ -318,84 +315,83 @@ Origin: http://localhost:12345
 Sec-WebSocket-Key: bm9tbm9tCg==
 Sec-WebSocket-Protocol: me-want-cookies
 Sec-WebSocket-Version: 13
-</pre>
-<p>
-	The header parsing mechanism for 
-	 <code>HTTP/1.1</code>
-	 is quite easy,
-	as it's just utf8 encoded data that has a trailing 
-	 <code>\r\n\r\n</code>
-	following its headers section.
-</p>
-<p>
-	Fragmented frames always have this, but you never know what
-	kind of script kiddie is challenging your server - so it's
-	good to have a failsafe parsing mechanism in place.
-</p>
-<pre class="javascript">
+					</pre>
+					<p>
+						The header parsing mechanism for
+						<code>HTTP/1.1</code>
+						is quite easy,
+						as it's just utf8 encoded data that has a trailing
+						<code>\r\n\r\n</code>
+						following its headers section.
+					</p>
+					<p>
+						Fragmented frames always have this, but you never know what
+						kind of script kiddie is challenging your server - so it's
+						good to have a failsafe parsing mechanism in place.
+					</p>
+					<pre class="javascript">
 // server.mjs
 
 const parse_opening_handshake = (buffer) => {
 
-	let headers = {};
+let headers = {};
 
-	let req = buffer.toString('utf8');
-	let raw = req.split('\n').map((line) => line.trim());
+let req = buffer.toString('utf8');
+let raw = req.split('\n').map((line) => line.trim());
 
-	if (raw[0].includes('HTTP/1.1')) {
+if (raw[0].includes('HTTP/1.1')) {
 
-		raw.slice(1).filter((line) => line.trim() !== '').forEach((line) => {
+raw.slice(1).filter((line) => line.trim() !== '').forEach((line) => {
 
-			let key = line.split(':')[0].trim().toLowerCase();
-			let val = line.split(':').slice(1).join(':').trim();
+let key = line.split(':')[0].trim().toLowerCase();
+let val = line.split(':').slice(1).join(':').trim();
 
-			headers[key] = val;
+headers[key] = val;
 
-		});
+});
 
-	}
+}
 
-	return headers;
+return headers;
 
 };
-</pre>
-</section>
-
-<section id="connection-upgrade">
-<h2>Connection Upgrade</h2>
-<p>
-	After the initial Opening Handshake request, it's expected to send
-	the handshake verification back to the client.
-</p>
-<p>
-	The handshake response contains the 
-	 <code>Sec-WebSocket-Accept</code>
-	 header
-	and the 
-	 <code>Upgrade: WebSocket</code>
-	 and 
-	 <code>Connection: Upgrade</code>
-	 as well.
-</p>
-<p>
-	Additionally, it is good to let the client know which protocol
-	we are expecting (so that mismatches can be handled automatically)
-	by sending the 
-	 <code>Sec-WebSocket-Protocol: me-want-cookies</code>
-	 and
-	the 
-	 <code>Sec-WebSocket-Version: 13</code>
-	 headers.
-</p>
-<p>
-	Note that the 
-	 <code>nonce</code>
-	 salt for the reply is static and is the
-	utf8 value 
-	 <code>258EAFA5-E914-47DA-95CA-C5AB0DC85B11</code>
-	.
-</p>
-<pre class="javascript">
+					</pre>
+				</section>
+				<section>
+					<h2 id="connection-upgrade">Connection Upgrade</h2>
+					<p>
+						After the initial Opening Handshake request, it's expected to send
+						the handshake verification back to the client.
+					</p>
+					<p>
+						The handshake response contains the
+						<code>Sec-WebSocket-Accept</code>
+						header
+						and the
+						<code>Upgrade: WebSocket</code>
+						and
+						<code>Connection: Upgrade</code>
+						as well.
+					</p>
+					<p>
+						Additionally, it is good to let the client know which protocol
+						we are expecting (so that mismatches can be handled automatically)
+						by sending the
+						<code>Sec-WebSocket-Protocol: me-want-cookies</code>
+						and
+						the
+						<code>Sec-WebSocket-Version: 13</code>
+						headers.
+					</p>
+					<p>
+						Note that the
+						<code>nonce</code>
+						salt for the reply is static and is the
+						utf8 value
+						<code>258EAFA5-E914-47DA-95CA-C5AB0DC85B11</code>
+						.
+					</p>
+					<pre class="javascript">
 // WS.mjs
 import { Buffer } from 'buffer';
 import crypto     from 'crypto';
@@ -412,46 +408,46 @@ WS.encode = (socket, packet) => {};
 
 WS.upgrade = (socket, headers, callback) => {
 
-	headers  = headers instanceof Object    ? headers  : null;
-	callback = callback instanceof Function ? callback : null;
+headers  = headers instanceof Object    ? headers  : null;
+callback = callback instanceof Function ? callback : null;
 
-	if (headers !== null) {
+if (headers !== null) {
 
-		let nonce = headers['sec-websocket-key'] || null;
-		if (nonce !== null) {
+let nonce = headers['sec-websocket-key'] || null;
+if (nonce !== null) {
 
-			let hash   = crypto.createHash('sha1').update(nonce + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('hex');
-			let accept = Buffer.from(hash, 'hex').toString('base64');
-			let blob   = [];
+let hash   = crypto.createHash('sha1').update(nonce + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('hex');
+let accept = Buffer.from(hash, 'hex').toString('base64');
+let blob   = [];
 
-			blob.push('HTTP/1.1 101 WebSocket Protocol Handshake');
-			blob.push('Upgrade: WebSocket');
-			blob.push('Connection: Upgrade');
-			blob.push('Sec-WebSocket-Accept: ' + accept);
-			blob.push('Sec-WebSocket-Protocol: me-want-cookies');
-			blob.push('Sec-WebSocket-Version: 13');
-			blob.push('');
-			blob.push('');
+blob.push('HTTP/1.1 101 WebSocket Protocol Handshake');
+blob.push('Upgrade: WebSocket');
+blob.push('Connection: Upgrade');
+blob.push('Sec-WebSocket-Accept: ' + accept);
+blob.push('Sec-WebSocket-Protocol: me-want-cookies');
+blob.push('Sec-WebSocket-Version: 13');
+blob.push('');
+blob.push('');
 
-			socket.write(blob.join('\r\n'));
+socket.write(blob.join('\r\n'));
 
-			if (callback !== null) {
-				callback(true);
-			}
+if (callback !== null) {
+callback(true);
+}
 
-			return true;
+return true;
 
-		}
+}
 
-	} else {
+} else {
 
-		if (callback !== null) {
-			callback(false);
-		}
+if (callback !== null) {
+callback(false);
+}
 
-		return false;
+return false;
 
-	}
+}
 
 };
 
@@ -466,12 +462,11 @@ WS.send = (socket, data, callback) => {};
 
 
 export { WS };
-</pre>
-</section>
-
-<section id="web-socket-framing">
-<h2>Web-Socket Framing</h2>
-<pre class="plaintext">
+					</pre>
+				</section>
+				<section>
+					<h2 id="web-socket-framing">Web-Socket Framing</h2>
+					<pre class="plaintext">
 |0 1 2 3 4 5 6 7|0 1 2 3 4 5 6 7|0 1 2 3 4 5 6 7|0 1 2 3 4 5 6 7|
 +-+-+-+-+-------+-+-------------+-------------------------------+
 |F|R|R|R| opcode|M| Payload len |    Extended payload length    |
@@ -489,677 +484,667 @@ export { WS };
 + - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - +
 |                     Payload Data continued ...                |
 +---------------------------------------------------------------+
-</pre>
-<p>
-	Web-Socket Frames can be a bit complicated when just looking at
-	the figure. Here's a bullet-point list of what to remember
-	:
-</p>
-<ul>
-	<li>Frames can be fragmented (because of TCP), so the first bit is the <code>fin</code> flag.</li>
-	<li>The <code>rsv1</code> , <code>rsv2</code> and <code>rsv3</code> are Web-Socket Extension flags. If set to <code>1</code> , the payload can be processed differently.</li>
-	<li>The <code>opcode</code> decides what kind of Web-Socket frame follows.</li>
-	<li>The <code>client-to-server</code> transferred <code>mask flag</code> decides whether or not the payload needs to be XOR-masked.</li>
-	<li>The <code>masking key</code> is <code>32 bits</code> long (4 bytes). It is only transferred when <code>mask flag</code> is set to <code>1</code> .</li>
-	<li>The <code>server-to-client</code> transferred <code>mask flag</code> is always set to <code>0</code> and the data frame does not contain a masking key.</li>
-	<li>Frames have a variable payload size. Payload length can be <code>7 bit</code> , <code>16 bit</code> or <code>64 bit</code> .</li>
-	<li>Unknown <code>opcode</code> fields have to lead to a close frame response.</li>
-</ul>
-</section>
-
-<section id="receive-web-socket-frames">
-<h2>Receive Web-Socket Frames</h2>
-<p>
-	The integration of a receiving method for our WS library is quite easy.
-	Our own data structure for parsed Web-Socket Packets looks like this
-	:
-</p>
-<pre class="javascript">
+					</pre>
+					<p>
+						Web-Socket Frames can be a bit complicated when just looking at
+						the figure. Here's a bullet-point list of what to remember
+						:
+					</p>
+					<ul>
+						<li>Frames can be fragmented (because of TCP), so the first bit is the <code>fin</code> flag.</li>
+						<li>The <code>rsv1</code> , <code>rsv2</code> and <code>rsv3</code> are Web-Socket Extension flags. If set to <code>1</code> , the payload can be processed differently.</li>
+						<li>The <code>opcode</code> decides what kind of Web-Socket frame follows.</li>
+						<li>The <code>client-to-server</code> transferred <code>mask flag</code> decides whether or not the payload needs to be XOR-masked.</li>
+						<li>The <code>masking key</code> is <code>32 bits</code> long (4 bytes). It is only transferred when <code>mask flag</code> is set to <code>1</code> .</li>
+						<li>The <code>server-to-client</code> transferred <code>mask flag</code> is always set to <code>0</code> and the data frame does not contain a masking key.</li>
+						<li>Frames have a variable payload size. Payload length can be <code>7 bit</code> , <code>16 bit</code> or <code>64 bit</code> .</li>
+						<li>Unknown <code>opcode</code> fields have to lead to a close frame response.</li>
+					</ul>
+				</section>
+				<section>
+					<h2 id="receive-web-socket-frames">Receive Web-Socket Frames</h2>
+					<p>
+						The integration of a receiving method for our WS library is quite easy.
+						Our own data structure for parsed Web-Socket Packets looks like this
+						:
+					</p>
+					<pre class="javascript">
 let packet = {
-	headers: {
-		'@type':     (
-			'request'     // Client to Server (masked frame)
-			|| 'response' // Server to Client (unmasked frame)
-		),
-		'@operator': (
-			0x00    // Continuation Frame (previous Frame was fragmented)
-			|| 0x01 // Text Frame
-			|| 0x02 // Binary Frame
-			|| 0x08 // Connection Close Frame
-			|| 0x09 // Ping (Client to Server)
-			|| 0x0a // Pong (Server to Client)
-		)
-	},
-	payload: Buffer.from('Example Payload', 'utf8')
+headers: {
+'@type':     (
+'request'     // Client to Server (masked frame)
+|| 'response' // Server to Client (unmasked frame)
+),
+'@operator': (
+0x00    // Continuation Frame (previous Frame was fragmented)
+|| 0x01 // Text Frame
+|| 0x02 // Binary Frame
+|| 0x08 // Connection Close Frame
+|| 0x09 // Ping (Client to Server)
+|| 0x0a // Pong (Server to Client)
+)
+},
+payload: Buffer.from('Example Payload', 'utf8')
 }
-</pre>
-<p>
-	The 
-	 <code>WS.receive()</code>
-	 implementation will basically just delegate everything to
-	the 
-	 <code>WS.decode()</code>
-	 Decoding Logic to keep things as easy as possible.
-</p>
-<p>
-	The stacking and concatenation of fragmented Text Frames and Binary Frames
-	that are followed by a Continuation Frame is left up as a task for the Reader.
-</p>
-<pre class="javascript">
+					</pre>
+					<p>
+						The
+						<code>WS.receive()</code>
+						implementation will basically just delegate everything to
+						the
+						<code>WS.decode()</code>
+						Decoding Logic to keep things as easy as possible.
+					</p>
+					<p>
+						The stacking and concatenation of fragmented Text Frames and Binary Frames
+						that are followed by a Continuation Frame is left up as a task for the Reader.
+					</p>
+					<pre class="javascript">
 // WS.mjs
 WS.receive = (socket, buffer, callback) => {
 
-	buffer   = buffer instanceof Buffer     ? buffer   : null;
-	callback = callback instanceof Function ? callback : null;
+buffer   = buffer instanceof Buffer     ? buffer   : null;
+callback = callback instanceof Function ? callback : null;
 
-	if (buffer !== null) {
+if (buffer !== null) {
 
-		let packet = WS.decode(socket, buffer);
-		if (packet !== null) {
+let packet = WS.decode(socket, buffer);
+if (packet !== null) {
 
-			if (callback !== null) {
-				callback(packet);
-			} else {
-				return packet;
-			}
+if (callback !== null) {
+callback(packet);
+} else {
+return packet;
+}
 
-		}
+}
 
-	} else {
+} else {
 
-		if (callback !== null) {
-			callback(null);
-		} else {
-			return null;
-		}
+if (callback !== null) {
+callback(null);
+} else {
+return null;
+}
 
-	}
+}
 
 };
-</pre>
-</section>
-
-<section id="decoding-logic">
-<h3>Decoding Logic</h3>
-<p>
-	In order to have the full featureset, the implementation needs
-	to keep track of a couple of things related to the Web-Socket
-	Wireframing Protocol.
-</p>
-<ul>
-	<li>Every <code>socket</code> has to have its own <code>fragment</code> buffer for later stacking and concatenation of fragmented buffers.</li>
-	<li>The operator code is represented by <code>packet.headers['@operator']</code> .</li>
-	<li>A masked frame is represented by <code>packet.headers['@type'] = 'request'</code> .</li>
-	<li>An unmasked frame is represented by <code>packet.headers['@type'] = 'response'</code> .</li>
-	<li>If <code>packet.payload.length</code> is lower than or equal <code>125</code> , it is a <code>7 bit</code> extended payload field.</li>
-	<li>If <code>packet.payload.length</code> is <code>126</code> , it is a <code>16 bit</code> extended payload field.</li>
-	<li>If <code>packet.payload.length</code> is <code>127</code> , it is a <code>64 bit</code> extended payload field.</li>
-</ul>
-<pre class="javascript">
+					</pre>
+				</section>
+				<section>
+					<h3 id="decoding-logic">Decoding Logic</h3>
+					<p>
+						In order to have the full featureset, the implementation needs
+						to keep track of a couple of things related to the Web-Socket
+						Wireframing Protocol.
+					</p>
+					<ul>
+						<li>Every <code>socket</code> has to have its own <code>fragment</code> buffer for later stacking and concatenation of fragmented buffers.</li>
+						<li>The operator code is represented by <code>packet.headers['@operator']</code> .</li>
+						<li>A masked frame is represented by <code>packet.headers['@type'] = 'request'</code> .</li>
+						<li>An unmasked frame is represented by <code>packet.headers['@type'] = 'response'</code> .</li>
+						<li>If <code>packet.payload.length</code> is lower than or equal <code>125</code> , it is a <code>7 bit</code> extended payload field.</li>
+						<li>If <code>packet.payload.length</code> is <code>126</code> , it is a <code>16 bit</code> extended payload field.</li>
+						<li>If <code>packet.payload.length</code> is <code>127</code> , it is a <code>64 bit</code> extended payload field.</li>
+					</ul>
+					<pre class="javascript">
 // WS.mjs
 WS.decode = (socket, buffer) => {
 
-	if (buffer !== null) {
+if (buffer !== null) {
 
-		if (buffer.length < 2) {
-			return null;
-		}
+if (buffer.length < 2) {
+return null;
+}
 
 
-		let packet = {
-			headers: {
-				'@operator': null,
-				'@status':   null,
-				'@type':     null
-			},
-			overflow: null,
-			payload:  null
-		};
+let packet = {
+headers: {
+'@operator': null,
+'@status':   null,
+'@type':     null
+},
+overflow: null,
+payload:  null
+};
 
 
-		let msg_payload  = null;
-		let msg_overflow = null;
-		let fin          = (buffer[0] & 128) === 128;
-		let operator     = (buffer[0] &  15);
-		let mask         = (buffer[1] & 128) === 128;
+let msg_payload  = null;
+let msg_overflow = null;
+let fin          = (buffer[0] & 128) === 128;
+let operator     = (buffer[0] &  15);
+let mask         = (buffer[1] & 128) === 128;
 
 
-		let payload_length = buffer[1] & 127;
-		if (payload_length <= 125) {
+let payload_length = buffer[1] & 127;
+if (payload_length <= 125) {
 
-			if (mask === true && buffer.length >= payload_length + 6) {
+if (mask === true && buffer.length >= payload_length + 6) {
 
-				let mask_data = buffer.slice(2, 6);
+let mask_data = buffer.slice(2, 6);
 
-				msg_payload  = buffer.slice(6, 6 + payload_length).map((value, index) => value ^ mask_data[index % 4]);
-				msg_overflow = buffer.slice(6 + payload_length);
+msg_payload  = buffer.slice(6, 6 + payload_length).map((value, index) => value ^ mask_data[index % 4]);
+msg_overflow = buffer.slice(6 + payload_length);
 
-			} else if (buffer.length >= payload_length + 2) {
+} else if (buffer.length >= payload_length + 2) {
 
-				msg_payload  = buffer.slice(2, 2 + payload_length);
-				msg_overflow = buffer.slice(2 + payload_length);
+msg_payload  = buffer.slice(2, 2 + payload_length);
+msg_overflow = buffer.slice(2 + payload_length);
 
-			}
+}
 
-		} else if (payload_length === 126) {
+} else if (payload_length === 126) {
 
-			payload_length = (buffer[2] << 8) + buffer[3];
+payload_length = (buffer[2] << 8) + buffer[3];
 
-			if (mask === true && buffer.length >= payload_length + 8) {
+if (mask === true && buffer.length >= payload_length + 8) {
 
-				let mask_data = buffer.slice(4, 8);
+let mask_data = buffer.slice(4, 8);
 
-				msg_payload  = buffer.slice(8, 8 + payload_length).map((value, index) => value ^ mask_data[index % 4]);
-				msg_overflow = buffer.slice(8 + payload_length);
+msg_payload  = buffer.slice(8, 8 + payload_length).map((value, index) => value ^ mask_data[index % 4]);
+msg_overflow = buffer.slice(8 + payload_length);
 
-			} else if (buffer.length >= payload_length + 4) {
+} else if (buffer.length >= payload_length + 4) {
 
-				msg_payload  = buffer.slice(4, 4 + payload_length);
-				msg_overflow = buffer.slice(4 + payload_length);
+msg_payload  = buffer.slice(4, 4 + payload_length);
+msg_overflow = buffer.slice(4 + payload_length);
 
-			}
+}
 
-		} else if (payload_length === 127) {
+} else if (payload_length === 127) {
 
-			let hi = (buffer[2] * 0x1000000) + ((buffer[3] << 16) | (buffer[4] << 8) | buffer[5]);
-			let lo = (buffer[6] * 0x1000000) + ((buffer[7] << 16) | (buffer[8] << 8) | buffer[9]);
+let hi = (buffer[2] * 0x1000000) + ((buffer[3] << 16) | (buffer[4] << 8) | buffer[5]);
+let lo = (buffer[6] * 0x1000000) + ((buffer[7] << 16) | (buffer[8] << 8) | buffer[9]);
 
-			payload_length = (hi * 4294967296) + lo;
+payload_length = (hi * 4294967296) + lo;
 
-			if (mask === true && buffer.length >= payload_length + 14) {
+if (mask === true && buffer.length >= payload_length + 14) {
 
-				let mask_data = buffer.slice(10, 14);
+let mask_data = buffer.slice(10, 14);
 
-				msg_payload  = buffer.slice(14, 14 + payload_length).map((value, index) => value ^ mask_data[index % 4]);
-				msg_overflow = buffer.slice(14 + payload_length);
+msg_payload  = buffer.slice(14, 14 + payload_length).map((value, index) => value ^ mask_data[index % 4]);
+msg_overflow = buffer.slice(14 + payload_length);
 
-			} else if (buffer.length >= payload_length + 10) {
+} else if (buffer.length >= payload_length + 10) {
 
-				msg_payload  = buffer.slice(10, 10 + payload_length);
-				msg_overflow = buffer.slice(10 + payload_length);
+msg_payload  = buffer.slice(10, 10 + payload_length);
+msg_overflow = buffer.slice(10 + payload_length);
 
-			}
+}
 
-		}
+}
 
 
-		if (msg_overflow !== null && msg_overflow.length > 0) {
-			packet.overflow = msg_overflow;
-		}
+if (msg_overflow !== null && msg_overflow.length > 0) {
+packet.overflow = msg_overflow;
+}
 
 
-		if (msg_payload !== null) {
+if (msg_payload !== null) {
 
-			if (operator === 0x00) {
+if (operator === 0x00) {
 
-				// 0x00: Continuation Frame (fragmented)
+// 0x00: Continuation Frame (fragmented)
 
-				if (fin === true) {
+if (fin === true) {
 
-					// TODO for Reader: Concat previously cached fragmented frames
-					packet.headers['@operator'] = 0x00;
-					packet.headers['@status']   = null;
-					packet.headers['@type']     = mask === true ? 'request' : 'response';
-					packet.payload              = msg_payload;
+// TODO for Reader: Concat previously cached fragmented frames
+packet.headers['@operator'] = 0x00;
+packet.headers['@status']   = null;
+packet.headers['@type']     = mask === true ? 'request' : 'response';
+packet.payload              = msg_payload;
 
-				} else {
+} else {
 
-					packet.headers['@operator'] = 0x00;
-					packet.headers['@status']   = null;
-					packet.headers['@type']     = mask === true ? 'request' : 'response';
-					packet.payload              = msg_payload;
+packet.headers['@operator'] = 0x00;
+packet.headers['@status']   = null;
+packet.headers['@type']     = mask === true ? 'request' : 'response';
+packet.payload              = msg_payload;
 
-				}
+}
 
-			} else if (operator === 0x01 || operator === 0x02) {
+} else if (operator === 0x01 || operator === 0x02) {
 
-				// 0x01: Text Frame (possibly fragmented)
-				// 0x02: Binary Frame (possibly fragmented)
+// 0x01: Text Frame (possibly fragmented)
+// 0x02: Binary Frame (possibly fragmented)
 
-				if (fin === true) {
+if (fin === true) {
 
-					packet.headers['@operator'] = operator;
-					packet.headers['@status']   = null;
-					packet.headers['@type']     = mask === true ? 'request' : 'response';
-					packet.payload              = msg_payload;
+packet.headers['@operator'] = operator;
+packet.headers['@status']   = null;
+packet.headers['@type']     = mask === true ? 'request' : 'response';
+packet.payload              = msg_payload;
 
-				} else {
+} else {
 
-					// TODO for Reader: Cache fragmented frames
-					packet.headers['@operator'] = operator;
-					packet.headers['@status']   = null;
-					packet.headers['@type']     = mask === true ? 'request' : 'response';
-					packet.payload              = msg_payload;
+// TODO for Reader: Cache fragmented frames
+packet.headers['@operator'] = operator;
+packet.headers['@status']   = null;
+packet.headers['@type']     = mask === true ? 'request' : 'response';
+packet.payload              = msg_payload;
 
-				}
+}
 
-			} else if (operator === 0x08) {
+} else if (operator === 0x08) {
 
-				// 0x08: Connection Close Frame
+// 0x08: Connection Close Frame
 
-				packet.headers['@operator'] = 0x08;
-				packet.headers['@status']   = (msg_payload[0] << 8) + (msg_payload[1]);
-				packet.headers['@type']     = mask === true ? 'request' : 'response';
-				packet.payload              = null;
+packet.headers['@operator'] = 0x08;
+packet.headers['@status']   = (msg_payload[0] << 8) + (msg_payload[1]);
+packet.headers['@type']     = mask === true ? 'request' : 'response';
+packet.payload              = null;
 
-			} else if (operator === 0x09) {
+} else if (operator === 0x09) {
 
-				// 0x09: Ping Frame
+// 0x09: Ping Frame
 
-				packet.headers['@operator'] = 0x09;
-				packet.headers['@status']   = null;
-				packet.headers['@type']     = 'request';
-				packet.payload              = null;
+packet.headers['@operator'] = 0x09;
+packet.headers['@status']   = null;
+packet.headers['@type']     = 'request';
+packet.payload              = null;
 
-			} else if (operator === 0x0a) {
+} else if (operator === 0x0a) {
 
-				// 0x0a: Pong Frame
+// 0x0a: Pong Frame
 
-				packet.headers['@operator'] = 0x0a;
-				packet.headers['@status']   = null;
-				packet.headers['@type']     = 'response';
-				packet.payload              = null;
+packet.headers['@operator'] = 0x0a;
+packet.headers['@status']   = null;
+packet.headers['@type']     = 'response';
+packet.payload              = null;
 
-			} else {
+} else {
 
-				// Connection Close Frame
+// Connection Close Frame
 
-				packet.headers['@operator'] = 0x08;
-				packet.headers['@status']   = 1002;
-				packet.headers['@type']     = mask === true ? 'request' : 'response';
-				packet.payload              = msg_payload;
+packet.headers['@operator'] = 0x08;
+packet.headers['@status']   = 1002;
+packet.headers['@type']     = mask === true ? 'request' : 'response';
+packet.payload              = msg_payload;
 
-			}
+}
 
 
-			return packet;
+return packet;
 
-		}
+}
 
-	}
+}
 
 
-	return null;
+return null;
 
 };
-</pre>
-</section>
-
-<section id="0x00">
-<h3>0x00 : Continuation Frame</h3>
-<p>
-	The 
-	 <code>Continuation Frame</code>
-	 is always sent after a fragmented 
-	 <code>Text Frame</code>
-	 or a
-	fragmented 
-	 <code>Binary Frame</code>
-	.
-</p>
-<p>
-	If the 
-	 <code>Continuation Frame</code>
-	 itself is fragmented (
-	 <code>fin</code>
-	 is 
-	 <code>0</code>
-	) this means that
-	the previous 
-	 <code>Text Frame</code>
-	 or 
-	 <code>Binary Frame</code>
-	 is still not completely transferred.
-</p>
-<p>
-	If the 
-	 <code>Continuation Frame</code>
-	 itself is unfragmented (
-	 <code>fin</code>
-	 is 
-	 <code>1</code>
-	) this means
-	that the previous 
-	 <code>Text Frame</code>
-	 or 
-	 <code>Binary Frame</code>
-	 is now completely transferred.
-</p>
-<pre class="javascript">
+					</pre>
+				</section>
+				<section>
+					<h3 id="0x00-continuation-frame">0x00 : Continuation Frame</h3>
+					<p>
+						The
+						<code>Continuation Frame</code>
+						is always sent after a fragmented
+						<code>Text Frame</code>
+						or a
+						fragmented
+						<code>Binary Frame</code>
+						.
+					</p>
+					<p>
+						If the
+						<code>Continuation Frame</code>
+						itself is fragmented (
+						<code>fin</code>
+						is
+						<code>0</code>
+						) this means that
+						the previous
+						<code>Text Frame</code>
+						or
+						<code>Binary Frame</code>
+						is still not completely transferred.
+					</p>
+					<p>
+						If the
+						<code>Continuation Frame</code>
+						itself is unfragmented (
+						<code>fin</code>
+						is
+						<code>1</code>
+						) this means
+						that the previous
+						<code>Text Frame</code>
+						or
+						<code>Binary Frame</code>
+						is now completely transferred.
+					</p>
+					<pre class="javascript">
 // node.js Example
 let fragmented_payload = Buffer.alloc(100);
 
 WS.send(socket, {
-	headers: {
-		'@type':     'request',
-		'@operator': 0x02
-	},
-	payload: payload.slice(0, 50)
+headers: {
+'@type':     'request',
+'@operator': 0x02
+},
+payload: payload.slice(0, 50)
 });
 
 WS.send(socket, {
-	headers: {
-		'@type':     'request',
-		'@operator': 0x00
-	},
-	payload: payload.slice(50, 50)
+headers: {
+'@type':     'request',
+'@operator': 0x00
+},
+payload: payload.slice(50, 50)
 });
-</pre>
-<p>
-	On the Server-Side, however, the fragmented Frames are usually concatenated
-	together and then fired as if a single 
-	 <code>Text Frame</code>
-	 or 
-	 <code>Binary Frame</code>
-	 was sent.
-</p>
-<p>As this is outside the context of this Guide, it's left up to the Reader to implement it.</p>
-</section>
-
-<section id="0x01">
-<h3>0x01 : Text Frame</h3>
-<p>
-	The 
-	 <code>Text Frame</code>
-	 is sent when 
-	 <code>utf8</code>
-	 encoded text data is
-	transferred. It can both be 
-	 <code>fragmented</code>
-	 and 
-	 <code>unfragmented</code>
-	.
-</p>
-<pre class="javascript">
+					</pre>
+					<p>
+						On the Server-Side, however, the fragmented Frames are usually concatenated
+						together and then fired as if a single
+						<code>Text Frame</code>
+						or
+						<code>Binary Frame</code>
+						was sent.
+					</p>
+					<p>As this is outside the context of this Guide, it's left up to the Reader to implement it.</p>
+				</section>
+				<section>
+					<h3 id="0x01-text-frame">0x01 : Text Frame</h3>
+					<p>
+						The
+						<code>Text Frame</code>
+						is sent when
+						<code>utf8</code>
+						encoded text data is
+						transferred. It can both be
+						<code>fragmented</code>
+						and
+						<code>unfragmented</code>
+						.
+					</p>
+					<pre class="javascript">
 // Browser Example
 let data   = JSON.stringify({ foo: 'bar' });
 let socket = new WebSocket('ws://localhost:12345', [
-	'me-want-cookies'
+'me-want-cookies'
 ]);
 
 socket.send(data);
-</pre>
-<pre class="javascript">
+					</pre>
+					<pre class="javascript">
 // node.js Example
 let data = JSON.stringify({ foo: 'bar' };
 
 WS.send(socket, {
-	headers: {
-		'@type': 'request',
-		'@operator': 0x01
-	},
-	payload: Buffer.from(data, 'utf8')
+headers: {
+'@type': 'request',
+'@operator': 0x01
+},
+payload: Buffer.from(data, 'utf8')
 });
-</pre>
-</section>
-
-<section id="0x02">
-<h3>0x02 : Binary Frame</h3>
-<p>
-	The 
-	 <code>Binary Frame</code>
-	 is sent when a 
-	 <code>blob</code>
-	 or a binary representing
-	 <code>Uint8Array</code>
-	 is transferred. It can both be 
-	 <code>fragmented</code>
-	 and 
-	 <code>unfragmented</code>
-	.
-</p>
-<pre class="javascript">
+					</pre>
+				</section>
+				<section>
+					<h3 id="0x02-binary-frame">0x02 : Binary Frame</h3>
+					<p>
+						The
+						<code>Binary Frame</code>
+						is sent when a
+						<code>blob</code>
+						or a binary representing
+						<code>Uint8Array</code>
+						is transferred. It can both be
+						<code>fragmented</code>
+						and
+						<code>unfragmented</code>
+						.
+					</p>
+					<pre class="javascript">
 // Browser Example
 let blob   = new Uint8Array(10);
 let socket = new WebSocket('ws://localhost:12345', [
-	'me-want-cookies'
+'me-want-cookies'
 ]);
 
 socket.send(blob);
-</pre>
-<pre class="javascript">
+					</pre>
+					<pre class="javascript">
 // node.js Example
 let data = Buffer.alloc(10);
 
 WS.send(socket, {
-	headers: {
-		'@type': 'request',
-		'@operator': 0x02
-	},
-	payload: data
+headers: {
+'@type': 'request',
+'@operator': 0x02
+},
+payload: data
 });
-</pre>
-</section>
-
-<section id="0x08">
-<h3>0x08 : Close Frame</h3>
-<p>
-	The 
-	 <code>Close Frame</code>
-	 is sent when both the Client or the Server want to
-	let the other side to close the current Web-Socket connection.
-</p>
-<p>
-	If a 
-	 <code>Close Frame</code>
-	 is sent by the Client, the Server will respond with a
-	 <code>Close Frame</code>
-	, and immediately afterwards close the Socket via 
-	 <code>socket.end()</code>
-	.
-</p>
-<p>
-	A 
-	 <code>Close Frame</code>
-	 contains a status code as payload. In practice, only
-	these four status codes are necessary
-	:
-</p>
-<ul>
-	<li><code>1000</code> normal closure</li>
-	<li><code>1001</code> going away</li>
-	<li><code>1002</code> protocol error</li>
-	<li><code>1015</code> (only server) TLS encryption error</li>
-</ul>
-<p>
-	The other status codes are reserved in case a Server implementation wants to
-	get fancy and do their own thing (without Web Browser clients, I guess?),
-	but usually they never appear in the wild.
-</p>
-<ul>
-	<li><code>1003</code> terminate connection due to data error (e.g. only text frame supported, but binary frame received)</li>
-	<li><code>1007</code> data inconsistency (e.g. no <code>utf8</code> encoded text frame)</li>
-	<li><code>1008</code> policy violation</li>
-	<li><code>1009</code> message too big to process</li>
-	<li><code>1010</code> (only client) terminate connection because server did not confirm extensions</li>
-	<li><code>1011</code> (only server) unexpected error</li>
-</ul>
-<pre class="javascript">
+					</pre>
+				</section>
+				<section>
+					<h3 id="0x08-close-frame">0x08 : Close Frame</h3>
+					<p>
+						The
+						<code>Close Frame</code>
+						is sent when both the Client or the Server want to
+						let the other side to close the current Web-Socket connection.
+					</p>
+					<p>
+						If a
+						<code>Close Frame</code>
+						is sent by the Client, the Server will respond with a
+						<code>Close Frame</code>
+						, and immediately afterwards close the Socket via
+						<code>socket.end()</code>
+						.
+					</p>
+					<p>
+						A
+						<code>Close Frame</code>
+						contains a status code as payload. In practice, only
+						these four status codes are necessary
+						:
+					</p>
+					<ul>
+						<li><code>1000</code> normal closure</li>
+						<li><code>1001</code> going away</li>
+						<li><code>1002</code> protocol error</li>
+						<li><code>1015</code> (only server) TLS encryption error</li>
+					</ul>
+					<p>
+						The other status codes are reserved in case a Server implementation wants to
+						get fancy and do their own thing (without Web Browser clients, I guess?),
+						but usually they never appear in the wild.
+					</p>
+					<ul>
+						<li><code>1003</code> terminate connection due to data error (e.g. only text frame supported, but binary frame received)</li>
+						<li><code>1007</code> data inconsistency (e.g. no <code>utf8</code> encoded text frame)</li>
+						<li><code>1008</code> policy violation</li>
+						<li><code>1009</code> message too big to process</li>
+						<li><code>1010</code> (only client) terminate connection because server did not confirm extensions</li>
+						<li><code>1011</code> (only server) unexpected error</li>
+					</ul>
+					<pre class="javascript">
 // node.js Example
 
 WS.send(socket, {
-	headers: {
-		'@type': 'request',
-		'@operator': 0x08,
-		'@status': 1000
-	},
-	payload: null
+headers: {
+'@type': 'request',
+'@operator': 0x08,
+'@status': 1000
+},
+payload: null
 });
-</pre>
-</section>
-
-<section id="0x09">
-<h3>0x09 : Ping Frame</h3>
-<p>
-	The 
-	 <code>Ping Frame</code>
-	 is sent by the Client to the Server, which means it
-	has a 
-	 <code>masking key</code>
-	 and the payload itself is masked.
-</p>
-<p>
-	The specification implies that when a 
-	 <code>Ping Frame</code>
-	 contains a payload,
-	the identical payload must be sent inside the 
-	 <code>Pong Frame</code>
-	 as well.
-</p>
-<p>
-	In practice, not a single Web Browser does this and payloads of a Pong
-	Frame are completely ignored by any implementation I've taken a look at.
-</p>
-<pre class="javascript">
+					</pre>
+				</section>
+				<section>
+					<h3 id="0x09-ping-frame">0x09 : Ping Frame</h3>
+					<p>
+						The
+						<code>Ping Frame</code>
+						is sent by the Client to the Server, which means it
+						has a
+						<code>masking key</code>
+						and the payload itself is masked.
+					</p>
+					<p>
+						The specification implies that when a
+						<code>Ping Frame</code>
+						contains a payload,
+						the identical payload must be sent inside the
+						<code>Pong Frame</code>
+						as well.
+					</p>
+					<p>
+						In practice, not a single Web Browser does this and payloads of a Pong
+						Frame are completely ignored by any implementation I've taken a look at.
+					</p>
+					<pre class="javascript">
 // node.js Example (for Client)
 
 WS.send(socket, {
-	headers: {
-		'@type': 'request',
-		'@operator': 0x09
-	},
-	payload: null
+headers: {
+'@type': 'request',
+'@operator': 0x09
+},
+payload: null
 });
-</pre>
-</section>
-
-<section id="0x0a">
-<h3>0x0a : Pong Frame</h3>
-<p>
-	The 
-	 <code>Pong Frame</code>
-	 is sent by the Server to the Client, which means it has
-	no masking key and the payload itself is unmasked.
-</p>
-<p>
-	The specification implies that a 
-	 <code>Pong Frame</code>
-	 can be sent as a heartbeat
-	of the connection without any side-effects.
-</p>
-<p>
-	In response to a 
-	 <code>Pong Frame</code>
-	, both the Client and Server have to do
-	nothing in return, so they have to be ignored.
-</p>
-<pre class="">
+					</pre>
+				</section>
+				<section>
+					<h3 id="0x0a-pong-frame">0x0a : Pong Frame</h3>
+					<p>
+						The
+						<code>Pong Frame</code>
+						is sent by the Server to the Client, which means it has
+						no masking key and the payload itself is unmasked.
+					</p>
+					<p>
+						The specification implies that a
+						<code>Pong Frame</code>
+						can be sent as a heartbeat
+						of the connection without any side-effects.
+					</p>
+					<p>
+						In response to a
+						<code>Pong Frame</code>
+						, both the Client and Server have to do
+						nothing in return, so they have to be ignored.
+					</p>
+					<pre class="javascript">
 // node.js Example (for Server)
 
 socket.on('data', (data) => {
 
-	let packet = WS.decode(data);
-	if (packet !== null) {
+let packet = WS.decode(data);
+if (packet !== null) {
 
-		// Received Ping Frame, have to respond with Pong Frame
-		if (packet.headers['@operator'] === 0x09) {
-			WS.send(socket, {
-				headers: {
-					'@type': 'response',
-					'@operator': 0x0a
-				}
-			});
+// Received Ping Frame, have to respond with Pong Frame
+if (packet.headers['@operator'] === 0x09) {
+WS.send(socket, {
+headers: {
+'@type': 'response',
+'@operator': 0x0a
+}
+});
 
-		// Received Pong Frame, have to do nothing
-		} else if (packet.headers['@operator'] === 0x0a) {
-			// Do Nothing
-		}
+// Received Pong Frame, have to do nothing
+} else if (packet.headers['@operator'] === 0x0a) {
+// Do Nothing
+}
 
-	}
+}
 
 });
-</pre>
-</section>
-
-<section id="other-web-socket-control-frames">
-<h3>Other Web-Socket Control Frames</h3>
-<p>
-	The specification reserves the 
-	 <code>opcode</code>
-	 range from 
-	 <code>0x0b</code>
-	 to 
-	 <code>0x0f</code>
-	,
-	but they have no specified purpose yet.
-</p>
-<p>
-	This means that our 
-	 <code>WS13</code>
-	 protocol implementation is complete with
-	the support of above control frames, but our implementation should send
-	a close frame in case a Browser from the future connects to our Server
-	from the past.
-</p>
-<pre class="">
+					</pre>
+				</section>
+				<section>
+					<h3 id="other-web-socket-control-frames">Other Web-Socket Control Frames</h3>
+					<p>
+						The specification reserves the
+						<code>opcode</code>
+						range from
+						<code>0x0b</code>
+						to
+						<code>0x0f</code>
+						,
+						but they have no specified purpose yet.
+					</p>
+					<p>
+						This means that our
+						<code>WS13</code>
+						protocol implementation is complete with
+						the support of above control frames, but our implementation should send
+						a close frame in case a Browser from the future connects to our Server
+						from the past.
+					</p>
+					<pre class="javascript">
 // node.js Example (for Server)
 
 socket.on('data', (data) => {
 
-	let packet = WS.decode(data);
-	if (packet !== null) {
+let packet = WS.decode(data);
+if (packet !== null) {
 
-		// Received Ping Frame, have to respond with Pong Frame
-		if (packet.headers['@operator'] === 0x09) {
-			WS.send(socket, {
-				headers: {
-					'@type': 'response',
-					'@operator': 0x0a
-				},
-				payload: null
-			});
+// Received Ping Frame, have to respond with Pong Frame
+if (packet.headers['@operator'] === 0x09) {
+WS.send(socket, {
+headers: {
+'@type': 'response',
+'@operator': 0x0a
+},
+payload: null
+});
 
-		// Received Pong Frame, have to do nothing
-		} else if (packet.headers['@operator'] === 0x0a) {
-			// Do Nothing
-		} else if (packet.headers['@operator'] > 0x0b) {
-			WS.send(socket, {
-				headers: {
-					'@type': 'response'
-					'@operator': 0x08,
-					'@status':   1002
-				},
-				payload: null
-			});
-		}
+// Received Pong Frame, have to do nothing
+} else if (packet.headers['@operator'] === 0x0a) {
+// Do Nothing
+} else if (packet.headers['@operator'] > 0x0b) {
+WS.send(socket, {
+headers: {
+'@type': 'response'
+'@operator': 0x08,
+'@status':   1002
+},
+payload: null
+});
+}
 
-	}
+}
 
 });
-</pre>
-</section>
-
-<section id="web-socket-client">
-<h2>Web-Socket Client</h2>
-<p>The demo will be implemented in modern node.js.</p>
-<p>
-	The client has to be implemented with the 
-	 <code>net.createConnection()</code>
-	interface, as the data that we need to access is 
-	 <code>raw TCP data</code>
-	and our library needs to support binary encodings.
-</p>
-<p>
-	As node.js runs 
-	 <code>libuv</code>
-	 in the background, which is of asynchronous
-	nature, we also have to make sure that everything gets send as soon
-	as possible by calling 
-	 <code>socket.setNoDelay(true)</code>
-	.
-</p>
-<p>
-	In order to integrate the Ping/Pong frames later with a client-side
-	implementation, it has to run inside a 
-	 <code>setInterval()</code>
-	 loop that
-	sends a Ping Frame every X seconds. The amount of delay between
-	Ping and Pong Frames is not specified in the RFC, but it's recommended
-	to do this around every 
-	 <code>60 seconds</code>
-	.
-</p>
-<pre class="javascript">
+					</pre>
+				</section>
+				<section>
+					<h2 id="web-socket-client">Web-Socket Client</h2>
+					<p>The demo will be implemented in modern node.js.</p>
+					<p>
+						The client has to be implemented with the
+						<code>net.createConnection()</code>
+						interface, as the data that we need to access is
+						<code>raw TCP data</code>
+						and our library needs to support binary encodings.
+					</p>
+					<p>
+						As node.js runs
+						<code>libuv</code>
+						in the background, which is of asynchronous
+						nature, we also have to make sure that everything gets send as soon
+						as possible by calling
+						<code>socket.setNoDelay(true)</code>
+						.
+					</p>
+					<p>
+						In order to integrate the Ping/Pong frames later with a client-side
+						implementation, it has to run inside a
+						<code>setInterval()</code>
+						loop that
+						sends a Ping Frame every X seconds. The amount of delay between
+						Ping and Pong Frames is not specified in the RFC, but it's recommended
+						to do this around every
+						<code>60 seconds</code>
+						.
+					</p>
+					<pre class="javascript">
 // client.mjs
 import { Buffer } from 'buffer';
 import crypto     from 'crypto';
@@ -1177,306 +1162,303 @@ const NONCE = Buffer.alloc(16);
 
 const send_handshake = function(socket) {
 
-	let blob = [];
+let blob = [];
 
-	for (let n = 0; n < 16; n++) {
-		NONCE[n] = Math.round(Math.random() * 0xff);
-	}
+for (let n = 0; n < 16; n++) {
+NONCE[n] = Math.round(Math.random() * 0xff);
+}
 
-	blob.push('GET / HTTP/1.1');
-	blob.push('Connection: Upgrade');
-	blob.push('Upgrade: websocket');
-	blob.push('Sec-WebSocket-Key: ' + NONCE.toString('base64'));
-	blob.push('Sec-WebSocket-Protocol: me-want-cookies');
-	blob.push('Sec-WebSocket-Version: 13');
-	blob.push('');
-	blob.push('');
+blob.push('GET / HTTP/1.1');
+blob.push('Connection: Upgrade');
+blob.push('Upgrade: websocket');
+blob.push('Sec-WebSocket-Key: ' + NONCE.toString('base64'));
+blob.push('Sec-WebSocket-Protocol: me-want-cookies');
+blob.push('Sec-WebSocket-Version: 13');
+blob.push('');
+blob.push('');
 
-	socket.write(blob.join('\r\n'));
+socket.write(blob.join('\r\n'));
 
 };
 
 
 let client = new net.createConnection({
-	host: 'localhost',
-	port: 12345
+host: 'localhost',
+port: 12345
 }, () => {
-	send_handshake(client);
+send_handshake(client);
 });
 
 client.on('data', (buffer) => {
 
-	let nonce  = NONCE.toString('base64');
-	let hash   = crypto.createHash('sha1').update(nonce + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('hex');
-	let expect = Buffer.from(hash, 'hex').toString('base64');
+let nonce  = NONCE.toString('base64');
+let hash   = crypto.createHash('sha1').update(nonce + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('hex');
+let expect = Buffer.from(hash, 'hex').toString('base64');
 
-	let headers = parse_opening_handshake(buffer);
-	if (headers['sec-websocket-accept'] === expect) {
+let headers = parse_opening_handshake(buffer);
+if (headers['sec-websocket-accept'] === expect) {
 
-		client.allowHalfOpen = true;
-		client.setTimeout(0);
-		client.setNoDelay(true);
-		client.setKeepAlive(true, 0);
+client.allowHalfOpen = true;
+client.setTimeout(0);
+client.setNoDelay(true);
+client.setKeepAlive(true, 0);
 
-		client.removeAllListeners('timeout');
-		client.removeAllListeners('data');
+client.removeAllListeners('timeout');
+client.removeAllListeners('data');
 
-		client.on('data', buffer => {
+client.on('data', buffer => {
 
-			WS.receive(client, buffer, response => {
-				console.log('Received response ', response);
-			});
+WS.receive(client, buffer, response => {
+console.log('Received response ', response);
+});
 
-		});
+});
 
-		// TODO for Reader: This interval is usually between 60000 and 120000 ms
-		setInterval(() => {
+// TODO for Reader: This interval is usually between 60000 and 120000 ms
+setInterval(() => {
 
-			WS.send(client, {
-				headers: {
-					'@type':     'request',
-					'@operator': 0x09
-				},
-				payload: null
-			});
+WS.send(client, {
+headers: {
+'@type':     'request',
+'@operator': 0x09
+},
+payload: null
+});
 
-		}, 10000);
+}, 10000);
 
-		setTimeout(() => {
+setTimeout(() => {
 
-			// Chapter: Send Web-Socket Frames
-			WS.send(client, {
-				headers: {
-					'@type':     'request',
-					'@operator': 0x01
-				},
-				payload: Buffer.from(JSON.stringify('{"hello":"world!"}'))
-			});
+// Chapter: Send Web-Socket Frames
+WS.send(client, {
+headers: {
+'@type':     'request',
+'@operator': 0x01
+},
+payload: Buffer.from(JSON.stringify('{"hello":"world!"}'))
+});
 
-		}, 2000);
+}, 2000);
 
-	}
+}
 
 });
 
 client.on('error',   () => {});
 client.on('close',   () => {});
 client.on('timeout', () => client.close());
-</pre>
-</section>
-
-<section id="send-web-socket-frames">
-<h2>Send Web-Socket Frames</h2>
-<p>
-	The implementation currently respects all of the receiving functionality.
-	But in order to be used as a Web-Socket library, the 
-	 <code>WS.send()</code>
-	 method
-	is still missing that transmits all our packets over the wire.
-</p>
-<pre class="javascript">
+					</pre>
+				</section>
+				<section>
+					<h2 id="send-web-socket-frames">Send Web-Socket Frames</h2>
+					<p>
+						The implementation currently respects all of the receiving functionality.
+						But in order to be used as a Web-Socket library, the
+						<code>WS.send()</code>
+						method
+						is still missing that transmits all our packets over the wire.
+					</p>
+					<pre class="javascript">
 // WS.mjs
 
 WS.send = (socket, data, callback) => {
 
-	data     = data instanceof Object       ? data     : { headers: {}, payload: null };
-	callback = callback instanceof Function ? callback : null;
+data     = data instanceof Object       ? data     : { headers: {}, payload: null };
+callback = callback instanceof Function ? callback : null;
 
 
-	let buffer = WS.encode(socket, {
-		headers: data.headers || {},
-		payload: data.payload || null
-	});
+let buffer = WS.encode(socket, {
+headers: data.headers || {},
+payload: data.payload || null
+});
 
-	if (buffer !== null) {
+if (buffer !== null) {
 
-		socket.write(buffer);
+socket.write(buffer);
 
-		if (callback !== null) {
-			callback(true);
-		} else {
-			return true;
-		}
+if (callback !== null) {
+callback(true);
+} else {
+return true;
+}
 
-	} else {
+} else {
 
-		if (callback !== null) {
-			callback(false);
-		} else {
-			return false;
-		}
+if (callback !== null) {
+callback(false);
+} else {
+return false;
+}
 
-	}
+}
 
 };
-</pre>
-</section>
-
-<section id="encoding-logic">
-<h2>Encoding Logic</h2>
-<p>
-	The encoding logic does the opposite of the previously implemented
-	 <code>WS.decode()</code>
-	 method, which represents the 
-	 <code>Decoding Logic</code>
-	.
-</p>
-<pre class="javascript">
+					</pre>
+				</section>
+				<section>
+					<h2 id="encoding-logic">Encoding Logic</h2>
+					<p>
+						The encoding logic does the opposite of the previously implemented
+						<code>WS.decode()</code>
+						method, which represents the
+						<code>Decoding Logic</code>
+						.
+					</p>
+					<pre class="javascript">
 // WS.mjs
 
 WS.encode = (socket, packet) => {
 
-	let fin_payload = true; // TODO for Reader: Implement payload streaming support
-	let msg_headers = Buffer.alloc(0);
-	let msg_payload = Buffer.alloc(0);
-	let msk_payload = Buffer.alloc(0);
+let fin_payload = true; // TODO for Reader: Implement payload streaming support
+let msg_headers = Buffer.alloc(0);
+let msg_payload = Buffer.alloc(0);
+let msk_payload = Buffer.alloc(0);
 
-	console.log(packet.headers);
+console.log(packet.headers);
 
-	if (packet.payload instanceof Buffer) {
-		msg_payload = packet.payload;
-	} else if (packet.payload instanceof Object) {
-		msg_payload = Buffer.from(JSON.stringify(packet.payload, null, '\t'), 'utf8');
-	}
+if (packet.payload instanceof Buffer) {
+msg_payload = packet.payload;
+} else if (packet.payload instanceof Object) {
+msg_payload = Buffer.from(JSON.stringify(packet.payload, null, '\t'), 'utf8');
+}
 
-	if (packet.headers['@type'] === 'request') {
+if (packet.headers['@type'] === 'request') {
 
-		msk_payload    = Buffer.alloc(4);
-		msk_payload[0] = (Math.random() * 0xff) | 0;
-		msk_payload[1] = (Math.random() * 0xff) | 0;
-		msk_payload[2] = (Math.random() * 0xff) | 0;
-		msk_payload[3] = (Math.random() * 0xff) | 0;
+msk_payload    = Buffer.alloc(4);
+msk_payload[0] = (Math.random() * 0xff) | 0;
+msk_payload[1] = (Math.random() * 0xff) | 0;
+msk_payload[2] = (Math.random() * 0xff) | 0;
+msk_payload[3] = (Math.random() * 0xff) | 0;
 
-	} else if (packet.headers['@type'] === 'response') {
+} else if (packet.headers['@type'] === 'response') {
 
-		msk_payload = Buffer.alloc(0);
+msk_payload = Buffer.alloc(0);
 
-	}
+}
 
-	if (
-		packet.headers['@operator'] === 0x00
-		|| packet.headers['@operator'] === 0x01
-		|| packet.headers['@operator'] === 0x02
-	) {
+if (
+packet.headers['@operator'] === 0x00
+|| packet.headers['@operator'] === 0x01
+|| packet.headers['@operator'] === 0x02
+) {
 
-		if (msg_payload.length > 0xffff) {
+if (msg_payload.length > 0xffff) {
 
-			let lo = (msg_payload.length |  0);
-			let hi = (msg_payload.length - lo) / 4294967296;
+let lo = (msg_payload.length |  0);
+let hi = (msg_payload.length - lo) / 4294967296;
 
-			msg_headers    = Buffer.alloc(10 + msk_payload.length);
-			msg_headers[0] = (fin_payload === true   ? 128 : 0) + packet.headers['@operator'];
-			msg_headers[1] = (msk_payload.length > 0 ? 128 : 0) + 127;
-			msg_headers[2] = (hi >> 24) & 0xff;
-			msg_headers[3] = (hi >> 16) & 0xff;
-			msg_headers[4] = (hi >>  8) & 0xff;
-			msg_headers[5] = (hi >>  0) & 0xff;
-			msg_headers[6] = (lo >> 24) & 0xff;
-			msg_headers[7] = (lo >> 16) & 0xff;
-			msg_headers[8] = (lo >>  8) & 0xff;
-			msg_headers[9] = (lo >>  0) & 0xff;
+msg_headers    = Buffer.alloc(10 + msk_payload.length);
+msg_headers[0] = (fin_payload === true   ? 128 : 0) + packet.headers['@operator'];
+msg_headers[1] = (msk_payload.length > 0 ? 128 : 0) + 127;
+msg_headers[2] = (hi >> 24) & 0xff;
+msg_headers[3] = (hi >> 16) & 0xff;
+msg_headers[4] = (hi >>  8) & 0xff;
+msg_headers[5] = (hi >>  0) & 0xff;
+msg_headers[6] = (lo >> 24) & 0xff;
+msg_headers[7] = (lo >> 16) & 0xff;
+msg_headers[8] = (lo >>  8) & 0xff;
+msg_headers[9] = (lo >>  0) & 0xff;
 
-			if (msk_payload.length > 0) {
-				msk_payload.copy(msg_headers, 10);
-			}
+if (msk_payload.length > 0) {
+msk_payload.copy(msg_headers, 10);
+}
 
-		} else if (msg_payload.length > 125) {
+} else if (msg_payload.length > 125) {
 
-			msg_headers    = Buffer.alloc(4 + msk_payload.length);
-			msg_headers[0] = (fin_payload === true   ? 128 : 0) + packet.headers['@operator'];
-			msg_headers[1] = (msk_payload.length > 0 ? 128 : 0) + 126;
-			msg_headers[2] = (msg_payload.length >> 8) & 0xff;
-			msg_headers[3] = (msg_payload.length >> 0) & 0xff;
+msg_headers    = Buffer.alloc(4 + msk_payload.length);
+msg_headers[0] = (fin_payload === true   ? 128 : 0) + packet.headers['@operator'];
+msg_headers[1] = (msk_payload.length > 0 ? 128 : 0) + 126;
+msg_headers[2] = (msg_payload.length >> 8) & 0xff;
+msg_headers[3] = (msg_payload.length >> 0) & 0xff;
 
-			if (msk_payload.length > 0) {
-				msk_payload.copy(msg_headers, 4);
-			}
+if (msk_payload.length > 0) {
+msk_payload.copy(msg_headers, 4);
+}
 
-		} else {
+} else {
 
-			msg_headers    = Buffer.alloc(2 + msk_payload.length);
-			msg_headers[0] = (fin_payload === true   ? 128 : 0) + packet.headers['@operator'];
-			msg_headers[1] = (msk_payload.length > 0 ? 128 : 0) + msg_payload.length;
+msg_headers    = Buffer.alloc(2 + msk_payload.length);
+msg_headers[0] = (fin_payload === true   ? 128 : 0) + packet.headers['@operator'];
+msg_headers[1] = (msk_payload.length > 0 ? 128 : 0) + msg_payload.length;
 
-			if (msk_payload.length > 0) {
-				msk_payload.copy(msg_headers, 2);
-			}
+if (msk_payload.length > 0) {
+msk_payload.copy(msg_headers, 2);
+}
 
-		}
+}
 
-	} else if (packet.headers['@operator'] === 0x08) {
+} else if (packet.headers['@operator'] === 0x08) {
 
-		let code = 1000;
+let code = 1000;
 
-		if (typeof packet.headers['@status'] === 'number') {
-			code = packet.headers['@status'];
-		}
+if (typeof packet.headers['@status'] === 'number') {
+code = packet.headers['@status'];
+}
 
-		msg_headers    = Buffer.alloc(4);
-		msg_headers[0] = 128 + packet.headers['@operator'];
-		msg_headers[1] = (msk_payload.length > 0 ? 128 : 0) + 0x02;
+msg_headers    = Buffer.alloc(4);
+msg_headers[0] = 128 + packet.headers['@operator'];
+msg_headers[1] = (msk_payload.length > 0 ? 128 : 0) + 0x02;
 
-		msg_payload = Buffer.from([
-			(code >> 8) & 0xff,
-			(code >> 0) & 0xff
-		]);
+msg_payload = Buffer.from([
+(code >> 8) & 0xff,
+(code >> 0) & 0xff
+]);
 
-	} else if (packet.headers['@operator'] === 0x09) {
+} else if (packet.headers['@operator'] === 0x09) {
 
-		msg_headers    = Buffer.alloc(2);
-		msg_headers[0] = 128 + packet.headers['@operator'];
-		msg_headers[1] = 0   + 0x00;
-		msg_payload    = Buffer.alloc(0);
-		msk_payload    = Buffer.alloc(0);
+msg_headers    = Buffer.alloc(2);
+msg_headers[0] = 128 + packet.headers['@operator'];
+msg_headers[1] = 0   + 0x00;
+msg_payload    = Buffer.alloc(0);
+msk_payload    = Buffer.alloc(0);
 
-	} else if (packet.headers['@operator'] === 0x0a) {
+} else if (packet.headers['@operator'] === 0x0a) {
 
-		msg_headers    = Buffer.alloc(2);
-		msg_headers[0] = 128 + packet.headers['@operator'];
-		msg_headers[1] = 0   + 0x00;
-		msg_payload    = Buffer.alloc(0);
-		msk_payload    = Buffer.alloc(0);
+msg_headers    = Buffer.alloc(2);
+msg_headers[0] = 128 + packet.headers['@operator'];
+msg_headers[1] = 0   + 0x00;
+msg_payload    = Buffer.alloc(0);
+msk_payload    = Buffer.alloc(0);
 
-	} else {
+} else {
 
-		msg_headers    = Buffer.alloc(4);
-		msg_headers[0] = 128 + packet.headers['@operator'];
-		msg_headers[1] = 0   + 0x02;
-		msg_headers[2] = (1002 >> 8) & 0xff;
-		msg_headers[3] = (1002 >> 0) & 0xff;
-		msg_payload    = Buffer.alloc(0);
-		msk_payload    = Buffer.alloc(0);
+msg_headers    = Buffer.alloc(4);
+msg_headers[0] = 128 + packet.headers['@operator'];
+msg_headers[1] = 0   + 0x02;
+msg_headers[2] = (1002 >> 8) & 0xff;
+msg_headers[3] = (1002 >> 0) & 0xff;
+msg_payload    = Buffer.alloc(0);
+msk_payload    = Buffer.alloc(0);
 
-	}
+}
 
 
-	return Buffer.concat([
-		msg_headers,
-		msg_payload
-	]);
+return Buffer.concat([
+msg_headers,
+msg_payload
+]);
 
 };
-</pre>
-</section>
-
-<section id="reference-implementation">
-<h2>Reference Implementation</h2>
-<p>
-	That's it. Our implementation is now peer-to-peer ready and supports
-	the complete 
-	 <code>WS13</code>
-	 protocol.
-</p>
-<p>
-	In case you missed something in between the lines or made a mistake,
-	there's a reference implementation available.
-</p>
-<ul>
-	<li><a class="icon-download" href="/weblog/articles/implementers-guide-to-websockets/client.mjs">client.mjs</a></li>
-	<li><a class="icon-download" href="/weblog/articles/implementers-guide-to-websockets/server.mjs">server.mjs</a></li>
-	<li><a class="icon-download" href="/weblog/articles/implementers-guide-to-websockets/WS.mjs">WS.mjs</a></li>
-</ul>
-</section>
+					</pre>
+				</section>
+				<section>
+					<h2 id="reference-implementation">Reference Implementation</h2>
+					<p>
+						That's it. Our implementation is now peer-to-peer ready and supports
+						the complete
+						<code>WS13</code>
+						protocol.
+					</p>
+					<p>
+						In case you missed something in between the lines or made a mistake,
+						there's a reference implementation available.
+					</p>
+					<ul>
+						<li><a class="icon-download" href="/weblog/articles/implementers-guide-to-websockets/client.mjs">client.mjs</a></li>
+						<li><a class="icon-download" href="/weblog/articles/implementers-guide-to-websockets/server.mjs">server.mjs</a></li>
+						<li><a class="icon-download" href="/weblog/articles/implementers-guide-to-websockets/WS.mjs">WS.mjs</a></li>
+					</ul>
+				</section>
 			</article>
 		</section>
 		<footer>

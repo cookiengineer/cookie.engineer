@@ -804,7 +804,7 @@ of the connection without any side-effects.
 In response to a `Pong Frame`, both the Client and Server have to do
 nothing in return, so they have to be ignored.
 
-```
+```javascript
 // node.js Example (for Server)
 
 socket.on('data', (data) => {
@@ -842,7 +842,7 @@ the support of above control frames, but our implementation should send
 a close frame in case a Browser from the future connects to our Server
 from the past.
 
-```
+```javascript
 // node.js Example (for Server)
 
 socket.on('data', (data) => {

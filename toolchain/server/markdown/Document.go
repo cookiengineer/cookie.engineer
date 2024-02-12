@@ -1,8 +1,33 @@
 package markdown
 
-import "cookie.engineer/console"
 import "regexp"
 import "strings"
+
+func countWords(element *Element) int {
+
+	var result int = 0
+
+	if element.Text != "" {
+
+		words := strings.Split(element.Text, " ")
+
+		for w := 0; w < len(words); w++ {
+			result++
+		}
+
+	}
+
+	if len(element.Children) > 0 {
+
+		for c := 0; c < len(element.Children); c++ {
+			result += countWords(element.Children[c])
+		}
+
+	}
+
+	return result
+
+}
 
 type Document struct {
 	File string `json:"file"`
@@ -13,6 +38,10 @@ type Document struct {
 		Type []string `json:"type"`
 		Crux string   `json:"crux"`
 	} `json:"meta"`
+	Statistics struct {
+		Minutes int `json:"minutes"`
+		Words   int `json:"words"`
+	} `json:"statistics"`
 	Body []*Element `json:"body"`
 }
 
@@ -38,6 +67,19 @@ func (document *Document) AddElement(value Element) {
 
 }
 
+func (document *Document) Count() {
+
+	var words int = 0
+
+	for b := 0; b < len(document.Body); b++ {
+		words += countWords(document.Body[b])
+	}
+
+	document.Statistics.Words = words
+	document.Statistics.Minutes = int(document.Statistics.Words / 200)
+
+}
+
 func (document *Document) GetLastElement() *Element {
 
 	var element *Element = nil
@@ -58,34 +100,25 @@ func (document *Document) IsValid() bool {
 
 		result = true
 
-		console.Group(document.File)
-
 		if document.Meta.Name == "" {
-			console.Error("Invalid Document Name")
 			result = false
 		}
 
 		if document.Meta.Date == "" {
-			console.Error("Invalid Document Date")
 			result = false
 		}
 
 		if len(document.Meta.Tags) == 0 {
-			console.Error("Invalid Document Tags")
 			result = false
 		}
 
 		if len(document.Meta.Type) == 0 {
-			console.Error("Invalid Document Type")
 			result = false
 		}
 
 		if document.Meta.Crux == "" {
-			console.Error("Invalid Document Crux")
 			result = false
 		}
-
-		console.GroupEndResult(result, document.File)
 
 	}
 
@@ -139,9 +172,19 @@ func (document *Document) Parse(value string) {
 
 		line := strings.TrimSpace(lines[l])
 
-		if line == "" {
+		pointer := document.GetLastElement()
 
-			pointer := document.GetLastElement()
+		if pointer != nil && pointer.Type == "pre" {
+
+			if line == "```" {
+				element := NewElement("#text")
+				element.SetText("")
+				document.AddElement(element)
+			} else {
+				pointer.AddText(line)
+			}
+
+		} else if line == "" {
 
 			if pointer == nil {
 				// Do Nothing
@@ -165,19 +208,11 @@ func (document *Document) Parse(value string) {
 
 		} else if len(line) > 3 && strings.HasPrefix(line, "```") {
 
-			pointer := document.GetLastElement()
-
 			if pointer == nil || pointer.Type != "pre" {
 				element := NewElement("pre")
 				element.SetAttribute("class", strings.TrimSpace(line[3:]))
 				document.AddElement(element)
 			}
-
-		} else if line == "```" {
-
-			element := NewElement("#text")
-			element.SetText("")
-			document.AddElement(element)
 
 		} else if strings.HasPrefix(line, "####") {
 
@@ -205,8 +240,6 @@ func (document *Document) Parse(value string) {
 
 		} else if regexp_ul.MatchString(line) {
 
-			pointer := document.GetLastElement()
-
 			if pointer == nil || pointer.Type != "ul" {
 				element := NewElement("ul")
 				document.AddElement(element)
@@ -218,8 +251,6 @@ func (document *Document) Parse(value string) {
 			pointer.AddChild(item)
 
 		} else if regexp_ol.MatchString(line) {
-
-			pointer := document.GetLastElement()
 
 			if pointer == nil || pointer.Type != "ol" {
 				element := NewElement("ol")
@@ -233,18 +264,16 @@ func (document *Document) Parse(value string) {
 
 		} else if line != "" {
 
-			pointer := document.GetLastElement()
-
-			if pointer == nil || (pointer.Type != "pre" && pointer.Type != "p") {
+			if pointer == nil {
 				element := NewElement("p")
+				element.AddChildren(ParseInline(strings.TrimSpace(line)))
 				document.AddElement(element)
-				pointer = document.GetLastElement()
-			}
-
-			if pointer.Type == "pre" {
-				pointer.AddText(strings.TrimSpace(line))
 			} else if pointer.Type == "p" {
 				pointer.AddChildren(ParseInline(strings.TrimSpace(line)))
+			} else {
+				element := NewElement("p")
+				element.AddChildren(ParseInline(strings.TrimSpace(line)))
+				document.AddElement(element)
 			}
 
 		}
@@ -322,3 +351,38 @@ func (document *Document) SetType(values []string) {
 	document.Meta.Type = filtered
 
 }
+
+func (document Document) String(indent string) string {
+
+	var result []string
+
+	result = append(result, indent + "<section>")
+
+	for b := 0; b < len(document.Body); b++ {
+
+		element := document.Body[b]
+
+		if element.Type == "h2" {
+
+			result = append(result, indent + "</section>")
+			result = append(result, indent + "<section>")
+			result = append(result, element.Render(indent + "\t"))
+
+		} else if element.Type == "h3" {
+
+			result = append(result, indent + "</section>")
+			result = append(result, indent + "<section>")
+			result = append(result, element.Render(indent + "\t"))
+
+		} else if element.Type != "#text" {
+			result = append(result, element.Render(indent + "\t"))
+		}
+
+	}
+
+	result = append(result, indent + "</section>")
+
+	return strings.Join(result, "\n")
+
+}
+

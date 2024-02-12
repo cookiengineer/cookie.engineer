@@ -1,7 +1,7 @@
 <!DOCTYPE html>
-<html lang="en" prefix="og: http://ogp.me/ns#">
+<html lang="en" prefix="og:http://ogp.me/ns#">
 	<head>
-		<title>${name} - Cookie Engineer's Web Log</title>
+		<title>{{.Meta.Name}} - Cookie Engineer's Web Log</title>
 
 		<!-- Meta -->
 		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
@@ -10,22 +10,22 @@
 		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 		<meta http-equiv="X-UA-Compatible" content="IE=edge">
 		<meta name="creator" content="Cookie Engineer">
-		<meta name="description" content="${name}">
-		<meta name="keywords" content="${tags}">
+		<meta name="description" content="{{.Meta.Name}}">
+		<meta name="keywords" content="{{RenderStrings .Meta.Tags ", "}}">
 		<meta name="generator" content="Beer and VIM night coding sessions">
 		<meta name="robots" content="index, follow">
 		<link rel="alternate" type="application/rss+xml" href="../feed.xml">
 
 		<!-- Social Meta -->
 		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/avatar/cookiengineer.png">
-		<meta property="og:title" content="${name} - Cookie Engineer's Web Log">
+		<meta property="og:title" content="{{.Meta.Name}} - Cookie Engineer's Web Log">
 		<meta property="og:site_name" content="Cookie Engineer's Web Log">
-		<meta property="og:description" content="${crux}">
+		<meta property="og:description" content="{{.Meta.Crux}}">
 		<meta property="og:type" content="article">
 		<meta name="twitter:card" content="summary">
 		<meta name="twitter:domain" content="cookie.engineer">
-		<meta name="twitter:title" itemprop="name" content="${name} - Cookie Engineer's Web Log">
-		<meta name="twitter:description" itemprop="description" content="${crux}">
+		<meta name="twitter:title" itemprop="name" content="{{.Meta.Name}} - Cookie Engineer's Web Log">
+		<meta name="twitter:description" itemprop="description" content="{{.Meta.Crux}}">
 
 		<!-- Website Design -->
 		<link rel="stylesheet" href="/design/layout/index.css">
@@ -55,16 +55,14 @@
 				<a class="icon-section" href="/contact.html">Contact</a>
 				<a class="icon-section" href="/weblog/index.html">Web Log</a>
 			</aside>
-			<aside id="toc">
-				${toc}
+			<aside id="toc">{{range .Body}}{{if eq .Type "h2" "h3" "h4"}}
+				<a href="#{{.Attributes.id}}">{{RenderElements .Children ""}}</a>{{else}}{{end}}{{end}}
 			</aside>
 		</header>
 		<section id="article" class="article">
-			<h1>${name}</h1>
+			<h1>{{.Meta.Name}}</h1>
 			<article>
-<section>
-${body}
-</section>
+{{ .String "\t\t\t\t" }}
 			</article>
 		</section>
 		<footer>

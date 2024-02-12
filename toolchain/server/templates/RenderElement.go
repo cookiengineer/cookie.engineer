@@ -1,7 +1,7 @@
 package templates
 
-import "cookie.engineer/markdown"
+import "cookie.engineer/structs"
 
-func RenderElement(element markdown.Element, indent string) string {
+func RenderElement(element structs.Element, indent string) string {
 	return element.Render(indent)
 }

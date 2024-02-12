@@ -1,6 +1,6 @@
 package routes
 
-import "cookie.engineer/markdown"
+import "cookie.engineer/structs"
 import "cookie.engineer/templates"
 import "bytes"
 import "os"
@@ -12,7 +12,7 @@ func RenderIndex(root string) bool {
 
 	entries, err1 := os.ReadDir(root + "/weblog/articles")
 
-	index := markdown.NewIndex()
+	index := structs.NewIndex()
 
 	if err1 == nil {
 
@@ -26,7 +26,7 @@ func RenderIndex(root string) bool {
 
 				if err2 == nil {
 
-					document := markdown.NewDocument(name[0:len(name)-3]+".html", string(buffer))
+					document := structs.NewDocument(name[0:len(name)-3]+".html", string(buffer))
 
 					if document.IsValid() {
 						index.AddDocument(document)

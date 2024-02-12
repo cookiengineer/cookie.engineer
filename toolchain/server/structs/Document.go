@@ -1,33 +1,7 @@
-package markdown
+package structs
 
 import "regexp"
 import "strings"
-
-func countWords(element *Element) int {
-
-	var result int = 0
-
-	if element.Text != "" {
-
-		words := strings.Split(element.Text, " ")
-
-		for w := 0; w < len(words); w++ {
-			result++
-		}
-
-	}
-
-	if len(element.Children) > 0 {
-
-		for c := 0; c < len(element.Children); c++ {
-			result += countWords(element.Children[c])
-		}
-
-	}
-
-	return result
-
-}
 
 type Document struct {
 	File string `json:"file"`
@@ -217,25 +191,25 @@ func (document *Document) Parse(value string) {
 		} else if strings.HasPrefix(line, "####") {
 
 			element := NewElement("h4")
-			element.SetChildren(ParseInline(strings.TrimSpace(line[4:])))
+			element.SetChildren(parseInlineElements(strings.TrimSpace(line[4:])))
 			document.AddElement(element)
 
 		} else if strings.HasPrefix(line, "###") {
 
 			element := NewElement("h3")
-			element.SetChildren(ParseInline(strings.TrimSpace(line[3:])))
+			element.SetChildren(parseInlineElements(strings.TrimSpace(line[3:])))
 			document.AddElement(element)
 
 		} else if strings.HasPrefix(line, "##") {
 
 			element := NewElement("h2")
-			element.SetChildren(ParseInline(strings.TrimSpace(line[2:])))
+			element.SetChildren(parseInlineElements(strings.TrimSpace(line[2:])))
 			document.AddElement(element)
 
 		} else if strings.HasPrefix(line, "#") {
 
 			element := NewElement("h1")
-			element.SetChildren(ParseInline(strings.TrimSpace(line[1:])))
+			element.SetChildren(parseInlineElements(strings.TrimSpace(line[1:])))
 			document.AddElement(element)
 
 		} else if regexp_ul.MatchString(line) {
@@ -247,7 +221,7 @@ func (document *Document) Parse(value string) {
 			}
 
 			item := NewElement("li")
-			item.SetChildren(ParseInline(strings.TrimSpace(line[2:])))
+			item.SetChildren(parseInlineElements(strings.TrimSpace(line[2:])))
 			pointer.AddChild(item)
 
 		} else if regexp_ol.MatchString(line) {
@@ -259,20 +233,20 @@ func (document *Document) Parse(value string) {
 			}
 
 			item := NewElement("li")
-			item.SetChildren(ParseInline(strings.TrimSpace(line[2:])))
+			item.SetChildren(parseInlineElements(strings.TrimSpace(line[2:])))
 			pointer.AddChild(item)
 
 		} else if line != "" {
 
 			if pointer == nil {
 				element := NewElement("p")
-				element.AddChildren(ParseInline(strings.TrimSpace(line)))
+				element.AddChildren(parseInlineElements(strings.TrimSpace(line)))
 				document.AddElement(element)
 			} else if pointer.Type == "p" {
-				pointer.AddChildren(ParseInline(strings.TrimSpace(line)))
+				pointer.AddChildren(parseInlineElements(strings.TrimSpace(line)))
 			} else {
 				element := NewElement("p")
-				element.AddChildren(ParseInline(strings.TrimSpace(line)))
+				element.AddChildren(parseInlineElements(strings.TrimSpace(line)))
 				document.AddElement(element)
 			}
 
@@ -356,7 +330,7 @@ func (document Document) String(indent string) string {
 
 	var result []string
 
-	result = append(result, indent + "<section>")
+	result = append(result, indent+"<section>")
 
 	for b := 0; b < len(document.Body); b++ {
 
@@ -364,25 +338,24 @@ func (document Document) String(indent string) string {
 
 		if element.Type == "h2" {
 
-			result = append(result, indent + "</section>")
-			result = append(result, indent + "<section>")
-			result = append(result, element.Render(indent + "\t"))
+			result = append(result, indent+"</section>")
+			result = append(result, indent+"<section>")
+			result = append(result, element.Render(indent+"\t"))
 
 		} else if element.Type == "h3" {
 
-			result = append(result, indent + "</section>")
-			result = append(result, indent + "<section>")
-			result = append(result, element.Render(indent + "\t"))
+			result = append(result, indent+"</section>")
+			result = append(result, indent+"<section>")
+			result = append(result, element.Render(indent+"\t"))
 
 		} else if element.Type != "#text" {
-			result = append(result, element.Render(indent + "\t"))
+			result = append(result, element.Render(indent+"\t"))
 		}
 
 	}
 
-	result = append(result, indent + "</section>")
+	result = append(result, indent+"</section>")
 
 	return strings.Join(result, "\n")
 
 }
-

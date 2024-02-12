@@ -1,4 +1,4 @@
-package markdown
+package structs
 
 import "sort"
 import "time"
@@ -24,7 +24,7 @@ func (feed *Feed) AddDocument(value Document) {
 	var document = &value
 
 	if document.IsValid() {
-		
+
 		if document.Meta.Date != "" {
 
 			date, _ := time.Parse(time.DateOnly, document.Meta.Date)

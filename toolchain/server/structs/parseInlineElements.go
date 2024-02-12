@@ -1,8 +1,8 @@
-package markdown
+package structs
 
 import "strings"
 
-func ParseInline(value string) []Element {
+func parseInlineElements(value string) []Element {
 
 	var result []Element
 

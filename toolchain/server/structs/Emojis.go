@@ -1,4 +1,4 @@
-package markdown
+package structs
 
 var Emojis map[string]string = map[string]string{
 	"balloon":      "🎈",

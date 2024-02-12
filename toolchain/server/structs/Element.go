@@ -1,57 +1,6 @@
-package markdown
+package structs
 
-import "cookie.engineer/utils"
 import "strings"
-
-func generateElementId(element *Element) string {
-
-	var texts []string
-
-	if element.Text != "" {
-
-		texts = append(texts, strings.TrimSpace(utils.ToASCII(element.Text)))
-
-	} else if len(element.Children) > 0 {
-
-		for c := 0; c < len(element.Children); c++ {
-
-			child := element.Children[c]
-
-			if child.Type == "b" || child.Type == "code" || child.Type == "del" || child.Type == "em" || child.Type == "#text" {
-
-				text := strings.TrimSpace(utils.ToASCIIName(child.Text))
-
-				if strings.HasPrefix(text, "-") {
-					text = text[1:]
-				}
-
-				if strings.HasSuffix(text, "-") {
-					text = text[0:len(text)-1]
-				}
-
-				texts = append(texts, text)
-
-			}
-
-		}
-
-	}
-
-	var filtered []string
-
-	for t := 0; t < len(texts); t++ {
-
-		text := strings.ToLower(strings.TrimSpace(texts[t]))
-
-		if text != "" {
-			filtered = append(filtered, text)
-		}
-
-	}
-
-	return strings.Join(filtered, "-")
-
-}
 
 type Element struct {
 	Type       string            `json:"type"`
@@ -78,7 +27,7 @@ func (element *Element) AddChild(value Element) {
 	element.Children = append(element.Children, child)
 
 	if element.Type == "h1" || element.Type == "h2" || element.Type == "h3" || element.Type == "h4" {
-		element.Attributes["id"] = generateElementId(element)
+		element.Attributes["id"] = generateId(element)
 	}
 
 }
@@ -99,7 +48,7 @@ func (element *Element) AddChildren(value []Element) {
 	}
 
 	if element.Type == "h1" || element.Type == "h2" || element.Type == "h3" || element.Type == "h4" {
-		element.Attributes["id"] = generateElementId(element)
+		element.Attributes["id"] = generateId(element)
 	}
 
 }
@@ -113,7 +62,7 @@ func (element *Element) AddText(value string) {
 	}
 
 	if element.Type == "h1" || element.Type == "h2" || element.Type == "h3" || element.Type == "h4" {
-		element.Attributes["id"] = generateElementId(element)
+		element.Attributes["id"] = generateId(element)
 	}
 
 }
@@ -165,7 +114,7 @@ func (element *Element) Render(indent string) string {
 		id, ok1 := element.Attributes["id"]
 
 		if ok1 == false {
-			id = generateElementId(element)
+			id = generateId(element)
 		}
 
 		result += indent + "<" + element.Type + " id=\"" + id + "\">"
@@ -322,7 +271,7 @@ func (element *Element) SetText(value string) {
 	element.Text = strings.TrimSpace(value)
 
 	if element.Type == "h1" || element.Type == "h2" || element.Type == "h3" || element.Type == "h4" {
-		element.Attributes["id"] = generateElementId(element)
+		element.Attributes["id"] = generateId(element)
 	}
 
 }
@@ -341,7 +290,7 @@ func (element *Element) SetChildren(value []Element) {
 	element.Children = filtered
 
 	if element.Type == "h1" || element.Type == "h2" || element.Type == "h3" || element.Type == "h4" {
-		element.Attributes["id"] = generateElementId(element)
+		element.Attributes["id"] = generateId(element)
 	}
 
 }

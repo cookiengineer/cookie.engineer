@@ -1,7 +1,7 @@
 package routes
 
 import "cookie.engineer/console"
-import "cookie.engineer/markdown"
+import "cookie.engineer/structs"
 import "cookie.engineer/templates"
 import "bytes"
 import "os"
@@ -25,7 +25,7 @@ func RenderArticle(root string, file string) bool {
 
 		if err1 == nil {
 
-			document := markdown.NewDocument(name+".md", string(buffer))
+			document := structs.NewDocument(name+".md", string(buffer))
 
 			var buffer bytes.Buffer
 

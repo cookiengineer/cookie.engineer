@@ -1,8 +1,8 @@
 package templates
 
-import "cookie.engineer/markdown"
+import "cookie.engineer/structs"
 
-func RenderElements(elements []*markdown.Element, indent string) string {
+func RenderElements(elements []*structs.Element, indent string) string {
 
 	var result string
 

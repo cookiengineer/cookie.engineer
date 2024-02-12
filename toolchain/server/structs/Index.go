@@ -1,4 +1,4 @@
-package markdown
+package structs
 
 import "sort"
 import "time"

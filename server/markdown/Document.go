@@ -1,0 +1,324 @@
+package markdown
+
+import "cookie.engineer/console"
+import "regexp"
+import "strings"
+
+type Document struct {
+	File string `json:"file"`
+	Meta struct {
+		Name string   `json:"name"`
+		Date string   `json:"date"`
+		Tags []string `json:"tags"`
+		Type []string `json:"type"`
+		Crux string   `json:"crux"`
+	} `json:"meta"`
+	Body []*Element `json:"body"`
+}
+
+func NewDocument(file string, value string) Document {
+
+	var document Document
+
+	document.File = strings.TrimSpace(file)
+	document.Meta.Tags = make([]string, 0)
+	document.Meta.Type = make([]string, 0)
+	document.Body = make([]*Element, 0)
+
+	document.Parse(value)
+
+	return document
+
+}
+
+func (document *Document) AddElement(value Element) {
+
+	var element = &value
+	document.Body = append(document.Body, element)
+
+}
+
+func (document *Document) GetLastElement() *Element {
+
+	var element *Element = nil
+
+	if len(document.Body) > 0 {
+		element = document.Body[len(document.Body)-1]
+	}
+
+	return element
+
+}
+
+func (document *Document) IsValid() bool {
+
+	var result bool = false
+
+	if document.File != "" && len(document.Body) > 0 {
+
+		result = true
+
+		console.Group(document.File)
+
+		if document.Meta.Name == "" {
+			console.Error("Invalid Document Name")
+			result = false
+		}
+
+		if document.Meta.Date == "" {
+			console.Error("Invalid Document Date")
+			result = false
+		}
+
+		if len(document.Meta.Tags) == 0 {
+			console.Error("Invalid Document Tags")
+			result = false
+		}
+
+		if len(document.Meta.Type) == 0 {
+			console.Error("Invalid Document Type")
+			result = false
+		}
+
+		if document.Meta.Crux == "" {
+			console.Error("Invalid Document Crux")
+			result = false
+		}
+
+		console.GroupEndResult(result, document.File)
+
+	}
+
+	return result
+
+}
+
+func (document *Document) Parse(value string) {
+
+	lines := strings.Split(strings.TrimSpace(value), "\n")
+	regexp_ul, _ := regexp.Compile("^([\\*\\-+]+)[[:space:]]")
+	regexp_ol, _ := regexp.Compile("^([0-9]+)\\.[[:space:]]")
+
+	var first_line = 0
+
+	if lines[0] == "===" {
+
+		for l := 1; l < len(lines); l++ {
+
+			line := strings.TrimSpace(lines[l])
+
+			if strings.HasPrefix(line, "- ") && strings.Contains(line, ":") {
+
+				key := strings.TrimSpace(line[2:strings.Index(line, ":")])
+				val := strings.TrimSpace(line[strings.Index(line, ":")+1:])
+
+				if key == "date" {
+					document.SetDate(val)
+				} else if key == "name" {
+					document.SetName(val)
+				} else if key == "tags" {
+					values := strings.Split(val, ",")
+					document.SetTags(values)
+				} else if key == "type" {
+					values := strings.Split(val, ",")
+					document.SetType(values)
+				} else if key == "crux" {
+					document.SetCrux(val)
+				}
+
+			} else if line == "===" {
+				first_line = l + 1
+				break
+			}
+
+		}
+
+	}
+
+	for l := first_line; l < len(lines); l++ {
+
+		line := strings.TrimSpace(lines[l])
+
+		if line == "" {
+
+			pointer := document.GetLastElement()
+
+			if pointer == nil {
+				// Do Nothing
+			} else if pointer.Type == "pre" {
+				// Do Nothing
+			} else if pointer.Type == "p" {
+				element := NewElement("#text")
+				element.SetText("")
+				document.AddElement(element)
+			}
+
+		} else if strings.HasPrefix(line, "![") && strings.Contains(line, "](") && strings.HasSuffix(line, ")") {
+
+			text := line[2:strings.Index(line, "](")]
+			href := line[strings.Index(line, "](")+2 : strings.Index(line, ")")]
+
+			element := NewElement("img")
+			element.SetAttribute("alt", text)
+			element.SetAttribute("src", href)
+			document.AddElement(element)
+
+		} else if len(line) > 3 && strings.HasPrefix(line, "```") {
+
+			pointer := document.GetLastElement()
+
+			if pointer == nil || pointer.Type != "pre" {
+				element := NewElement("pre")
+				element.SetAttribute("class", strings.TrimSpace(line[3:]))
+				document.AddElement(element)
+			}
+
+		} else if line == "```" {
+
+			element := NewElement("#text")
+			element.SetText("")
+			document.AddElement(element)
+
+		} else if strings.HasPrefix(line, "####") {
+
+			element := NewElement("h4")
+			element.SetChildren(ParseInline(strings.TrimSpace(line[4:])))
+			document.AddElement(element)
+
+		} else if strings.HasPrefix(line, "###") {
+
+			element := NewElement("h3")
+			element.SetChildren(ParseInline(strings.TrimSpace(line[3:])))
+			document.AddElement(element)
+
+		} else if strings.HasPrefix(line, "##") {
+
+			element := NewElement("h2")
+			element.SetChildren(ParseInline(strings.TrimSpace(line[2:])))
+			document.AddElement(element)
+
+		} else if strings.HasPrefix(line, "#") {
+
+			element := NewElement("h1")
+			element.SetChildren(ParseInline(strings.TrimSpace(line[1:])))
+			document.AddElement(element)
+
+		} else if regexp_ul.MatchString(line) {
+
+			pointer := document.GetLastElement()
+
+			if pointer == nil || pointer.Type != "ul" {
+				element := NewElement("ul")
+				document.AddElement(element)
+				pointer = document.GetLastElement()
+			}
+
+			item := NewElement("li")
+			item.SetChildren(ParseInline(strings.TrimSpace(line[2:])))
+			pointer.AddChild(item)
+
+		} else if regexp_ol.MatchString(line) {
+
+			pointer := document.GetLastElement()
+
+			if pointer == nil || pointer.Type != "ol" {
+				element := NewElement("ol")
+				document.AddElement(element)
+				pointer = document.GetLastElement()
+			}
+
+			item := NewElement("li")
+			item.SetChildren(ParseInline(strings.TrimSpace(line[2:])))
+			pointer.AddChild(item)
+
+		} else if line != "" {
+
+			pointer := document.GetLastElement()
+
+			if pointer == nil || (pointer.Type != "pre" && pointer.Type != "p") {
+				element := NewElement("p")
+				document.AddElement(element)
+				pointer = document.GetLastElement()
+			}
+
+			if pointer.Type == "pre" {
+				pointer.AddText(strings.TrimSpace(line))
+			} else if pointer.Type == "p" {
+				pointer.AddChildren(ParseInline(strings.TrimSpace(line)))
+			}
+
+		}
+
+	}
+
+}
+
+func (document *Document) Render() string {
+
+	var result []string
+
+	result = append(result, "<section>")
+
+	for b := 0; b < len(document.Body); b++ {
+
+		element := document.Body[b]
+
+		if element.Type == "h2" {
+
+			result = append(result, "</section>")
+			result = append(result, "<section>")
+			result = append(result, element.Render("\t"))
+
+		} else if element.Type == "h3" {
+
+			result = append(result, "</section>")
+			result = append(result, "<section>")
+			result = append(result, element.Render("\t"))
+
+		} else if element.Type != "#text" {
+			result = append(result, element.Render("\t"))
+		}
+
+	}
+
+	result = append(result, "</section>")
+
+	return strings.Join(result, "\n")
+
+}
+
+func (document *Document) SetCrux(value string) {
+	document.Meta.Crux = strings.TrimSpace(value)
+}
+
+func (document *Document) SetDate(value string) {
+	document.Meta.Date = strings.TrimSpace(value)
+}
+
+func (document *Document) SetName(value string) {
+	document.Meta.Name = strings.TrimSpace(value)
+}
+
+func (document *Document) SetTags(values []string) {
+
+	var filtered []string
+
+	for v := 0; v < len(values); v++ {
+		filtered = append(filtered, strings.TrimSpace(strings.ToLower(values[v])))
+	}
+
+	document.Meta.Tags = filtered
+
+}
+
+func (document *Document) SetType(values []string) {
+
+	var filtered []string
+
+	for v := 0; v < len(values); v++ {
+		filtered = append(filtered, strings.TrimSpace(strings.ToLower(values[v])))
+	}
+
+	document.Meta.Type = filtered
+
+}

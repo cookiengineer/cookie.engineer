@@ -1,6 +1,6 @@
 ===
 - date: 2024-01-31
-- name: Arch Linux Installation Guide (UEFI)
+- name: Arch Linux Installation Guide (GRUB)
 - tags: linux, devops, administration
 - type: software, legacy
 - crux: A compact installation guide with recommendations for an Arch Linux installation that uses full disk encryption with LUKS.
@@ -8,10 +8,10 @@
 
 
 This compact installation guide is meant as an overview article to skim through and remind myself
-of what's missing in an installation process. For any step, the [Arch Wiki](https://wiki.archlinux.org)
+of what's missing in an installation process. For any steps, the [Arch Wiki](https://wiki.archlinux.org)
 is much more comprehensible and has a lot of information on how to deal with error cases.
 
-Familiarity with the `cryptsetup` tool and `systemd-boot` is required for this guide.
+Familiarity with the `cryptsetup` tool and `grub` is required for this guide.
 
 
 ## Boot Live ISO
@@ -44,31 +44,23 @@ timedatectl status;
 
 ## Partition the Hard Drive
 
-UEFI uses a `GPT` partition table, where you also have to have at least two partitions.
-Due to bugs and quirks of old BIOS versions, 512MB EFI partition size (which hosts both
-your kernel images and the EFI bootloader) is recommended, the second partition can be
-your `/` root partition.
+GRUB uses an old `MBR` (DOS-compatible) partition table.
 
-I'll spare the whole bullshit about swapping partitions, the dangers of them and what kind
-of RAM your system has to have. You decide whether you wanna have swap space on your hard
-drive on your own. In my case all my systems have far beyond 16GB of RAM, so swapping pretty
-much never occurs and my operating modes never are rare on system memory.
 
 ### 2.1 Partition Table
 
 ```bash
 fdisk /dev/sda;
 
-# press g to create GPT partition table
+# press o to create MBR (DOS) partition table
 # press n to add new partition (use `+512M` as size when asked)
-# press t to change partition type to ESP/EFI and type `uefi` when asked
 
 # press n to add new partition (use suggested size when asked)
 # press t to change partition type to Linux and type `143` when asked
 # press w to write to disk and exit
 ```
 
-### 2.2 Format ESP/EFI Boot Partition
+### 2.2 Format Boot Partition
 
 ```bash
 mkfs.fat -F 32 /dev/sda1;
@@ -170,8 +162,8 @@ passwd myusername;
 
 ## Install Bootloader and Kernel Image
 
-`systemd-boot` requires EFI and therefore can only be used if you chose the GPT/EFI
-Boot Partition option earlier.
+GRUB is pretty failsafe because it has a lot of support for legacy bootloaders,
+such as old Windows kernels.
 
 ### 4.1 Encrypt Hook
 
@@ -182,13 +174,7 @@ hook into the `/etc/mkinitcpio.conf` file:
 HOOKS=(base udev autodetect modconf kms block encrypt filesystems keyboard fsck)
 ```
 
-### 4.2 Configure SystemD Bootloader
-
-```bash
-echo "default arch.conf" > /boot/loader/loader.conf;
-echo "timeout 3" >> /boot/loader/loader.conf;
-echo "editor no" >> /boot/loader/loader.conf;
-```
+### 4.2 Configure GRUB Bootloader
 
 Find out the `UUID` of the `LUKS` partition and replace the `UUID` variable later.
 The UUID of the `sda2` partition is not the same as the one from the mounted `ext4`
@@ -205,31 +191,28 @@ sda
   └─root ext4        1.0         ce9d9c8c-90d4-4aea-bbf3-c345e21c2f8a     12G    90% /
 ```
 
-Configure the Bootloader Entry for `Arch Linux`:
+GRUB uses the `GRUB_CMDLINE_LINUX_DEFAULT` parameter which needs to be changed in
+the `/etc/default/grub` file:
 
-```bash
-# You need to change this (see above):
-export UUID="4e31973f-1e77-4061-aadf-d77a057832b2";
-
-echo "title Arch Linux" > /boot/loader/entries/arch.conf;
-echo "linux /vmlinuz-linux" >> /boot/loader/entries/arch.conf;
-echo "initrd /initramfs-linux" >> /boot/loader/entries/arch.conf;
-echo "options cryptdevice=UUID=$UUID:root root=/dev/mapper/root rw" >> /boot/loader/entries/arch.conf;
+```config
+# replace $UUID with correct one
+GRUB_CMDLINE_LINUX_DEFAULT="resume=UUID=$UUID udev.log_priority=3 cryptdevice=UUID=$UUID:root root=/dev/mapper/root rw"
 ```
 
 ### 4.3 Regenerate Image and Install Bootloader
 
-Regenerate the Linux Images and install the SystemD Bootloader:
+Regenerate the Linux Images and install the GRUB Bootloader:
 
 ```bash
 mkinitcpio -P;
-bootctl --esp-path=/boot --boot-path=/boot install;
+grub-install --target=i386-pc /dev/sda;
+grub-mkconfig -o /boot/grub/grub.cfg;
 ```
 
 
-## Configure for Server Usage
+## Configure Server Usage
 
-### 5.1 Configure Network Interfaces
+### 5.1 Configure Network Interface
 
 Arch Linux comes with SystemD, so it makes sense to reuse `systemd-networkd`.
 When you're running a server, you're probably using a LAN/ethernet cable.

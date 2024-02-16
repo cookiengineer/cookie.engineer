@@ -15,6 +15,10 @@ func main() {
 			cwd = strings.TrimSpace(cwd[0:len(cwd)-7])
 		}
 
+		if strings.HasSuffix(cwd, "/toolchain") {
+			cwd = strings.TrimSpace(cwd[0:len(cwd)-10])
+		}
+
 		console.Log("Listening on http://localhost:8080")
 		routes.Serve(cwd, 8080)
 

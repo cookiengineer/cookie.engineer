@@ -318,7 +318,7 @@ encryption possible because they're idiots.
 That pretty much sums it up, especially in Germany or the European Union.
 
 
-**3SHAKE Attack**
+### 3SHAKE Attack
 
 The [3SHAKE attack](https://mitls.org/pages/attacks/3SHAKE) allows a
 malicious MITM to reuse the client's credentials to make intermediary
@@ -326,14 +326,14 @@ requests to another third-party (or the same server) that uses the same
 credentials, which basically means an MITM scenario where Bob can make
 requests on behalf of Alice even when Alice disconnected from the server.
 
-**LOGJAM Attack**
+### LOGJAM Attack
 
 In the [LOGJAM attack](https://weakdh.org) a TLS connection is downgraded
 to a `512-Bit` encrypted connection which is using weak Diffie-Hellman groups.
 
 Note: This will be fixed in `TLS 1.3` once it is released.
 
-**FREAK Attack**
+### FREAK Attack
 
 The FREAK attack abuses `Factoring RSA Export Keys` in order to trick
 servers into negotating a connection with a previous version of TLS
@@ -344,7 +344,7 @@ Note: This will be fixed in `TLS 1.3` by disallowing protocol downgrades,
 but at the moment it's pretty much optional. So most real-world websites
 are actually vulnerable.
 
-**ROBOT Attack**
+### ROBOT Attack
 
 This is in my opinion most likely what spy agencies are using in the wild.
 The attack is called `Return Of Bleichenbacher's Oracle Attack` as the
@@ -356,7 +356,7 @@ that the website that says it's Facebook actually isn't Facebook.
 Note: This will be fixed in `TLS 1.3` by disallowing insecure key transport
 mechanisms (as `RSA-PKCS v1.5` is considered unsecure, like, forever).
 
-**LUCKY13 Attack**
+### LUCKY13 Attack
 
 The [LUCKY13 Attack](https://nvd.nist.gov/vuln/detail/CVE-2013-0169) is
 a timing attack against TLS up to and including `TLS 1.2`. This attack
@@ -364,7 +364,7 @@ already has been proven to work against `AWS` aka Amazon Web Services,
 so it's pretty likely that this is in use in the wild, too. Oh, and it's
 from `2013`, so it's actually been a long time ago by now.
 
-**BEAST Attack**
+### BEAST Attack
 
 The BEAST Attack is primarily a client-side attack vulnerability in `TLS 1.0`,
 so depending on your Operating System this attack might still work.
@@ -374,7 +374,7 @@ The attack allows the attacker to obtain authentication credentials,
 session tokens or even authentication cookies, so it's the real deal
 in terms of "Is it actually being used?". You bet it is.
 
-**CRIME and TIME**
+### CRIME and TIME
 
 The `Compression Ratio Info-leak Made Easy` attack allows to using a
 side-channel attack against `HTTPS`. It analyzes information that is
@@ -386,7 +386,7 @@ Note: CRIME will be fixed in `TLS 1.3` by disabling TLS-level compression
 completely. In the wild though, many, many, _many_ webservers still have
 compression enabled, so they're vulnerable to this attack method.
 
-**BREACH Attack**
+### BREACH Attack
 
 The [BREACH Attack](https://breachattack.com) is similar to `CRIME`,
 but it abuses `HTTP` compression to read out a Client's session secrets.
@@ -397,7 +397,7 @@ As `HTTP` is above the TLS layer, TLS cannot ensure the prevention of
 this attack method. Literally all servers that I've encountered have
 compression enabled, so they're vulnerable to this attack.
 
-**TIME to HEIST**
+### TIME to HEIST
 
 The HEIST Attack abuses `TCP` windows in order to steal encrypted HTTP
 messages, specifically. This side-channel attack leaks the exact length
@@ -415,8 +415,7 @@ but doesn't have a website, so you gotta download the
 The original paper is available at
 [blackhat.com](https://www.blackhat.com/docs/us-16/materials/us-16-VanGoethem-HEIST-HTTP-Encrypted-Information-Can-Be-Stolen-Through-TCP-Windows-wp.pdf)
 
-
-**SNI Attack**
+### SNI Attack
 
 With the [letsencrypt](https://letsencrypt.org) initiative the usage
 of the `SNI` field got so popular that now ISPs are meanwhile regularly
@@ -434,7 +433,7 @@ domain.
 As the DNS protocol is unencrypted, it lead to ISPs being able to manipulate
 that result; and therefore legitimize otherwise invalid certificates.
 
-**TL;DR**
+### TL;DR
 
 Always check for `TLS 1.3` and above; and assume that `TLS 1.2` and
 below are insecure. As `TLS 1.2` and earlier is not really deprecated

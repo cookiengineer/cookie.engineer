@@ -12,7 +12,7 @@ convenient gameplay with an EZFlash Omega cartridge that allows to store `.gba`
 files on a microSD card, so that I don't have to carry around all the game cassettes
 everywhere to use it.
 
-### Parts List
+## Parts List
 
 - GameBoy screw driver (Gamebit 3.8mm)
 - FunnyPlaying IPS LCD V2 GBA Kit
@@ -24,7 +24,7 @@ everywhere to use it.
 - RetroSix GBA IPS glass screen
 
 
-### Teardown
+## Teardown
 
 ![Teardown](./gameboy-advance/gba-01-teardown.jpg)
 
@@ -40,7 +40,7 @@ won't fit the IPS-ready GBA shell case. The FunnyPlaying IPS LCD display is a li
 than the original display, that's why it's important to get an IPS-ready shell case so that
 you don't have to cut into the plastic.
 
-### Cleanup
+## Cleanup
 
 ![Cleanup](./gameboy-advance/gba-02-cleanup.jpg)
 
@@ -53,7 +53,7 @@ keep working when you place them in the new shell case again. I used some isopro
 alcohol and some Q-tips to clean everything, and it worked quite nicely.
 
 
-### IPS Display Mod
+## IPS Display Mod
 
 The IPS display doesn't need any wiring or soldering, as the cables for controlling its
 brightness are optional. I decided to not connect the wires of the IPS display to the PCB,
@@ -79,7 +79,7 @@ glass came with adhesive under it so it's stickied to the shell case when you pr
 Make sure to cleanup everything under and over it, otherwise you're going to have some nasty
 dirt under it that will annoy you real quick.
 
-### EZFlash Omega
+## EZFlash Omega
 
 ![EZFlash Omega Cartridge](./gameboy-advance/gba-04-ezflash-omega.jpg)
 

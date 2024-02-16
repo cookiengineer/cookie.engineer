@@ -41,10 +41,14 @@ func RenderArticle(root string, file string) bool {
 						result = true
 					}
 
+				} else {
+					console.Warn("File \"" + name + ".md\" cannot be parsed")
 				}
 
 			}
 
+		} else {
+			console.Warn("File \"" + name + ".md\" does not exist")
 		}
 
 	}

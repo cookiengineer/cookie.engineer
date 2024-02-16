@@ -119,7 +119,7 @@ EndSection
 ```
 
 
-### i3 Configuration
+## i3 Configuration
 
 The default setup of i3wm is pretty straight-forward as a baseline.
 
@@ -127,7 +127,7 @@ The first time you start an i3 session, it will ask you to create a config
 file with the defaults and the file will be located at `~/.config/i3/config`.
 
 
-**Keyboard Shortcuts**:
+### Keyboard Shortcuts
 
 All keyboards are different, but in my case I wanted the same integration
 with the `Windows` key that I had before, so I chose to use the `Mod4` key.
@@ -138,7 +138,7 @@ by running `xev` and pressing the keys on the keyboard.
 I also didn't like the VIM-style arrow key bindings (h/j/k/l) because well,
 I have an opinion on that.
 
-**Emojis**:
+### Emojis in Status Bar
 
 The config file of i3 supports emoji rendering, which is quite nice if you
 want to show icons next to the information.
@@ -157,7 +157,7 @@ In my case I decided to go with `DejaVu Sans Mono` with a `12 pt` font size
 to make emojis available in the `i3status` bar.
 
 
-**i3 Config**:
+### i3 Config
 
 In my case, the setup looks like this:
 
@@ -272,7 +272,7 @@ bar {
 ```
 
 
-### i3status Configuration
+## i3status Config
 
 The `i3status` bar is configurable based on the idea that
 either internal modules are provided for quick and easy
@@ -289,7 +289,7 @@ modules from left to right in order to render the status
 bar.
 
 
-**Wi-Fi and Ethernet**:
+### Wi-Fi and Ethernet
 
 Internal Modules of `i3status` can be reused multiple
 times with a different identifier. For example, there can
@@ -302,7 +302,7 @@ automatically selected no matter if it's named `wlan0`
 or `wlp0s0` or otherwise.
 
 
-**CPU temperature**:
+### CPU temperature
 
 The `cpu_temperature` module depends on the `temp1_input`
 file in `/sys/devices/platform/coretemp.X/hwmon/hwmonY/`
@@ -322,7 +322,7 @@ The output of that file should be in millidegree Celcius,
 which means that the example represents 58.00 C.
 
 
-**Audio Volume Levels**:
+### Audio Volume Levels
 
 The volume levels are a different story. As pulseaudio is
 very dynamic in nature, there's no easy way to predict
@@ -351,7 +351,7 @@ Sink #0
 	(...)
 ```
 
-**Bluetooth Audio**:
+### Bluetooth Audio
 
 If you connect your bluetooth headphones via the `blueman-applet`,
 they'll start to appear as sinks in `pactl` with a unique identifier
@@ -371,7 +371,7 @@ I'm not totally happy with right now because it's a bit redundant
 to have multiple volumes in the status bar being displayed.
 
 
-**Microphone Volume Level**:
+### Microphone Volume Level
 
 What I haven't figured out so far is how to integrate my
 microphone volume level into the status bar. As the microphone
@@ -388,7 +388,7 @@ about this. So far most stackoverflow posts have been not
 helpful at all.
 
 
-**i3status Config**:
+### i3status Config
 
 ```i3config
 general {
@@ -509,7 +509,7 @@ gtk-xft-hintstyle="hintfull"
 ```
 
 
-### Other Software
+## Other Software
 
 As above setup isn't really a complete Desktop Environment,
 I would recommend some other software due to better integrations

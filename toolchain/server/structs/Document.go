@@ -155,7 +155,8 @@ func (document *Document) Parse(value string) {
 				element.SetText("")
 				document.AddElement(element)
 			} else {
-				pointer.AddText(line)
+				// Preserve indention
+				pointer.AddText(lines[l])
 			}
 
 		} else if line == "" {
@@ -266,13 +267,13 @@ func (document *Document) Render() string {
 
 		element := document.Body[b]
 
-		if element.Type == "h2" {
+		if element.Type == "h1" {
 
 			result = append(result, "</section>")
 			result = append(result, "<section>")
 			result = append(result, element.Render("\t"))
 
-		} else if element.Type == "h3" {
+		} else if element.Type == "h2" {
 
 			result = append(result, "</section>")
 			result = append(result, "<section>")
@@ -336,13 +337,13 @@ func (document Document) String(indent string) string {
 
 		element := document.Body[b]
 
-		if element.Type == "h2" {
+		if element.Type == "h1" {
 
 			result = append(result, indent+"</section>")
 			result = append(result, indent+"<section>")
 			result = append(result, element.Render(indent+"\t"))
 
-		} else if element.Type == "h3" {
+		} else if element.Type == "h2" {
 
 			result = append(result, indent+"</section>")
 			result = append(result, indent+"<section>")

@@ -27,7 +27,8 @@ it.
 
 - Icon Webfont created with Font Awesome Icons and [fontello](https://fontello.com).
 - SVG Icons, Sounds and Graphics created by myself (@cookiengineer).
-- Highlight.js is embedded with `bash`, `css`, `diff`, `json`, `http`, `html`, `ini`, `javascript` languages.
+- [Highlight.js](https://highlightjs.org) embedded with `bash`, `c`, `cpp`, `css`, `diff`,
+  `dockerfile`, `go`, `http`, `ini`, `javascript`, `json`, `sql`, `xml` languages.
 
 
 ## Usage
@@ -35,7 +36,7 @@ it.
 The Website is a completely static website. Therefore
 no dynamic backend language interpreter is necessary.
 
-However, the [Web Log](./weblog) is written in CommonMark,
+However, the [Web Log](/weblog) is written in CommonMark,
 so new articles must be rendered into HTML somehow.
 
 This is done transparently by the [serve.sh](/toolchain/serve.sh)

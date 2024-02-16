@@ -32,6 +32,7 @@
 		<link rel="stylesheet" href="/weblog/design/index.css">
 
 		<!-- Weblog Design -->
+		<link rel="stylesheet" href="/weblog/design/layout/highlight.css">
 		<link rel="stylesheet" href="/weblog/design/layout/article.css">
 		<script src="/weblog/design/layout/highlight.js"></script>
 		<script src="/weblog/design/layout/article.js" defer></script>

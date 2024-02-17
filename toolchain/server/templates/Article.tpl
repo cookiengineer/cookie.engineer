@@ -56,8 +56,9 @@
 				<a class="icon-section" href="/contact.html">Contact</a>
 				<a class="icon-section" href="/weblog/index.html">Web Log</a>
 			</aside>
-			<aside id="toc">{{range .Body}}{{if eq .Type "h2" "h3" "h4"}}
-				<a href="#{{.Attributes.id}}">{{RenderElements .Children ""}}</a>{{else}}{{end}}{{end}}
+			<aside id="toc">{{range .Body}}{{if eq .Type "h2"}}
+				<a class="section" href="#{{.Attributes.id}}">{{RenderElements .Children ""}}</a>{{else if eq .Type "h3" "h4"}}
+				<a class="headline" href="#{{.Attributes.id}}">{{RenderElements .Children ""}}</a>{{else}}{{end}}{{end}}
 			</aside>
 		</header>
 		<section id="article" class="article">

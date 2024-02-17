@@ -7,6 +7,7 @@
 		const menu   = doc.querySelector('header aside#menu');
 		const button = doc.querySelector('header aside#menu a#menu-button');
 		const items  = Array.from(menu.querySelectorAll('a[href]')).filter((a) => a !== button);
+		const links  = Array.from(doc.querySelectorAll('article a')).filter((a) => a.getAttribute('href').startsWith('#'));
 
 		const toc = doc.querySelector('header aside#toc');
 		if (toc !== null) {
@@ -16,9 +17,6 @@
 			});
 
 		}
-
-		const links    = Array.from(doc.querySelectorAll('article a')).filter((a) => a.getAttribute('href').startsWith('#'));
-		const sections = Array.from(doc.querySelectorAll('section[id]'));
 
 
 
@@ -64,14 +62,17 @@
 			let element = doc.querySelector(query);
 			if (element !== null) {
 
-				if (element.tagName.toLowerCase() === 'section') {
+				let type = element.tagName.toLowerCase();
+				if (type === 'section') {
 
 					let headline = element.querySelector('h1');
 					if (headline !== null) {
 						element = headline;
 					}
 
-				} else if (element.tagName.toLowerCase() === 'article') {
+				} else if (type === 'h2' || type === 'h3' || type === 'h4') {
+					// Do Nothing
+				} else if (type === 'article') {
 					// Do Nothing
 				}
 
@@ -79,9 +80,13 @@
 
 			if (element !== null) {
 
+				if (element.id !== '') {
+					global.location.hash = '#/' + element.id;
+				}
+
 				element.scrollIntoView({
 					behavior: 'smooth',
-					block:    'center',
+					block:    'start',
 					inline:   'nearest'
 				});
 
@@ -96,13 +101,13 @@
 
 		const scroll_to_item = (height) => {
 
-			let candidates = sections.slice(0).reverse();
-			if (candidates.length > 0) {
+			let found      = null;
+			let candidates = Array.from(doc.querySelectorAll('section[id], article[id], h1[id], h2[id], h3[id], h4[id]')).map((candidate) => {
 
-				let found = candidates.find((section) => {
+				let item = items.find((item) => {
 
-					let rect = section.getBoundingClientRect();
-					if (rect.top > 0 && rect.top < height / 2) {
+					let id = item.href.split('#/').pop();
+					if (id === candidate.id) {
 						return true;
 					}
 
@@ -110,30 +115,52 @@
 
 				}) || null;
 
-				if (found === null) {
-					found = candidates.find((section) => {
-						return section.getBoundingClientRect().top < 0;
-					}) || null;
-				}
+				return {
+					element: candidate,
+					item:    item
+				};
 
-				if (found !== null) {
+			}).filter((candidate) => candidate.item !== null);
 
-					let item = items.find((item) => {
+			// Find the candidate inside the current viewport
+			for (let c = 0; c < candidates.length; c++) {
 
-						let id = item.href.split('#/').pop();
-						if (id === found.id) {
-							return true;
+				let rect1 = candidates[c].element.getBoundingClientRect();
+				if (rect1.top > 0 && rect1.top < height / 2) {
+
+					if (found !== null) {
+
+						let rect2 = found.element.getBoundingClientRect();
+						if (rect1.top < rect2.top) {
+							found = candidates[c];
 						}
 
-						return false;
+					} else {
+						found = candidates[c];
+					}
 
-					}) || null;
+				}
 
-					if (item !== null) {
+			}
 
-						add_state(item, 'active');
+			// Find the candidate outside the current viewport
+			if (found === null) {
 
-						return '#/' + found.id;
+				for (let c = 0; c < candidates.length; c++) {
+
+					let rect1 = candidates[c].element.getBoundingClientRect();
+					if (rect1.top < height / 2) {
+
+						if (found !== null) {
+
+							let rect2 = found.element.getBoundingClientRect();
+							if (rect1.top > rect2.top) {
+								found = candidates[c];
+							}
+
+						} else {
+							found = candidates[c];
+						}
 
 					}
 
@@ -141,6 +168,13 @@
 
 			}
 
+			if (found !== null && found.element !== null && found.item !== null) {
+
+				add_state(found.item, 'active');
+
+				return '#/' + found.element.id;
+
+			}
 
 			return null;
 
@@ -178,7 +212,7 @@
 					setInterval(() => {
 
 						let delta = current - offset;
-						if (delta > 32) {
+						if (delta > 128) {
 
 							del_state(menu, 'open');
 							del_state(menu, 'visible');
@@ -196,7 +230,9 @@
 
 							});
 
-						} else if (delta < -32) {
+							offset = current;
+
+						} else if (delta < -128) {
 
 							add_state(menu, 'visible');
 
@@ -213,30 +249,28 @@
 
 							});
 
-						}
-
-						let height = global.innerHeight || 0;
-						let hash   = scroll_to_item(height);
-
-						if (hash !== null) {
-
-							if (global.location.hash != hash) {
-								global.location.hash = hash;
-							}
-
-						} else {
-
-							if (global.location.hash != '') {
-								global.location.hash = '';
-							}
+							offset = current;
 
 						}
 
-						offset = current;
+						if (Math.abs(delta) > 128) {
+
+							setTimeout(() => {
+
+								let height = global.innerHeight || 0;
+								let hash   = scroll_to_item(height);
+
+								if (hash !== null) {
+									global.location.hash = hash;
+								}
+
+							}, 250);
+
+						}
 
 					}, 250);
 
-				}, 500);
+				}, 1000);
 
 			}
 

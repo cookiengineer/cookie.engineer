@@ -31,7 +31,6 @@ Missing Cookie Engineer Projects:
 - [ ] Memory Debugging and Profiling in Go
 - [ ] Unmarshalling and Marshalling in Go
 - [ ] The WHOIS protocol and its quirks and pitfalls
-- [ ] LPM Tries are always the wrong choice
 - [ ] Fingerprinting with CSS
 - [ ] Implementer's Guide to HTTP
 - [ ] Implementer's Guide to HTTP Streaming

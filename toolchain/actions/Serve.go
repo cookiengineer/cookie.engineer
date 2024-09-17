@@ -1,5 +1,7 @@
-package routes
+package actions
 
+import "cookie.engineer/routes"
+import "cookie.engineer/utils"
 import "net/http"
 import "os"
 import "strconv"
@@ -16,11 +18,11 @@ func Serve(root string, port uint) bool {
 
 		if request.Method == http.MethodGet {
 
-			RenderArticles(root)
-			RenderFeed(root)
-			RenderIndex(root)
+			routes.RenderArticles(root)
+			routes.RenderFeed(root)
+			routes.RenderIndex(root)
 
-			ServeFile(root, "weblog/index.html", response, request)
+			routes.ServeFile(root, "weblog/index.html", response, request)
 
 		} else {
 
@@ -33,7 +35,7 @@ func Serve(root string, port uint) bool {
 	})
 
 	http.HandleFunc("/weblog/articles/*.md", func(response http.ResponseWriter, request *http.Request) {
-		ServeArticleIndex(root, response, request)
+		routes.ServeArticleIndex(root, response, request)
 	})
 
 	http.HandleFunc("/weblog/articles/{file}", func(response http.ResponseWriter, request *http.Request) {
@@ -43,11 +45,11 @@ func Serve(root string, port uint) bool {
 			file := request.PathValue("file")
 
 			if strings.HasSuffix(file, ".md") {
-				ServeArticle(root, response, request)
+				routes.ServeArticle(root, response, request)
 			} else if strings.HasSuffix(file, ".html") {
-				ServeArticle(root, response, request)
+				routes.ServeArticle(root, response, request)
 			} else {
-				ServeFile(root, "weblog/articles/"+file, response, request)
+				routes.ServeFile(root, "weblog/articles/"+file, response, request)
 			}
 
 		} else if request.Method == http.MethodPost {
@@ -55,39 +57,23 @@ func Serve(root string, port uint) bool {
 			file := request.PathValue("file")
 
 			if strings.HasSuffix(file, ".md") {
-
-				ModifyFile(root, "weblog/articles/"+file, response, request)
-
+				routes.ModifyFile(root, "weblog/articles/"+file, response, request)
 			} else {
-
-				extension := file[strings.LastIndex(file, ".")+1:]
-				content_type, ok := MIME[extension]
-
-				if ok == false {
-					content_type = "application/octet-stream"
-				}
-
-				response.Header().Set("Content-Type", content_type)
-				response.WriteHeader(http.StatusMethodNotAllowed)
-				response.Write([]byte{})
-
+				utils.RespondWith(response, file, http.StatusMethodNotAllowed)
 			}
 
-		} else {
+		} else if request.Method == http.MethodDelete {
 
 			file := request.PathValue("file")
 
-			extension := file[strings.LastIndex(file, ".")+1:]
-			content_type, ok := MIME[extension]
-
-			if ok == false {
-				content_type = "application/octet-stream"
+			if strings.HasPrefix(file, "draft-") && strings.HasSuffix(file, ".md") {
+				routes.RemoveFile(root, "weblog/articles/"+file, response, request)
+			} else {
+				utils.RespondWith(response, file, http.StatusMethodNotAllowed)
 			}
 
-			response.Header().Set("Content-Type", content_type)
-			response.WriteHeader(http.StatusMethodNotAllowed)
-			response.Write([]byte{})
-
+		} else {
+			utils.RespondWith(response, request.PathValue("file"), http.StatusMethodNotAllowed)
 		}
 
 	})

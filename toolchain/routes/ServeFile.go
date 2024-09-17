@@ -1,5 +1,6 @@
 package routes
 
+import "cookie.engineer/utils"
 import "net/http"
 import "os"
 import "strconv"
@@ -14,7 +15,7 @@ func ServeFile(root string, file string, response http.ResponseWriter, request *
 
 		if err1 == nil {
 
-			content_type, ok := MIME[extension]
+			content_type, ok := utils.MIME[extension]
 
 			if ok == false {
 				content_type = "application/octet-stream"
@@ -26,32 +27,11 @@ func ServeFile(root string, file string, response http.ResponseWriter, request *
 			response.Write(buffer)
 
 		} else {
-
-			content_type, ok := MIME[extension]
-
-			if ok == false {
-				content_type = "application/octet-stream"
-			}
-
-			response.Header().Set("Content-Type", content_type)
-			response.WriteHeader(http.StatusNotFound)
-			response.Write(buffer)
-
+			utils.RespondWith(response, file, http.StatusNotFound)
 		}
 
 	} else {
-
-		extension := file[strings.LastIndex(file, ".")+1:]
-		content_type, ok := MIME[extension]
-
-		if ok == false {
-			content_type = "application/octet-stream"
-		}
-
-		response.Header().Set("Content-Type", content_type)
-		response.WriteHeader(http.StatusMethodNotAllowed)
-		response.Write([]byte{})
-
+		utils.RespondWith(response, file, http.StatusMethodNotAllowed)
 	}
 
 }

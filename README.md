@@ -3,22 +3,25 @@
 
 You can visit my portfolio at [https://cookie.engineer](https://cookie.engineer).
 
-This website is how I think every website should be.
-Printable, shareable, interactive, fun to use and
-semantically correct.
+This website is how I think every website should be. Printable, shareable, interactive,
+fun to use and semantically correct.
 
-To be honest, take it or leave it. This is my website
-and I like it. I think I did a great job at building
-it.
+To be honest, take it or leave it. This is my website and I like it. I think I did a
+great job at building it.
 
 
 ## Features
 
+- [x] Static Website
+- [x] Offline-ready Go Toolchain
 - [x] Semantic HTML, CSS and JS
 - [x] Works with deactivated JS
+- [x] CommonMark Web Log
 - [x] Dynamic Avatar Interaction
 - [x] Awesome Sound Recordings
+- [x] Awesome Cookie Shooter Game
 - [x] Interactive Search
+- [x] Encrypted CVs for enhanced privacy
 - [x] Copy/Paste as CommonMark via CSS
 - [x] Print Stylesheets
 
@@ -33,47 +36,47 @@ it.
 
 ## Usage
 
-The Website is a completely static website. Therefore
-no dynamic backend language interpreter is necessary.
+The Website is a completely static website. Therefore no dynamic backend language
+interpreter is necessary.
 
-However, the [Web Log](/weblog) is written in CommonMark,
-so new articles must be rendered into HTML somehow.
+However, the [Web Log](/weblog) is written in CommonMark, and the articles are rendered
+to HTML via the [toolchain](/toolchain)'s Server. This server also implements a backend
+that allows the [Web Log Editor](/weblog/editor.html) to read, save and remove articles.
 
-This is done transparently by the [serve.sh](/toolchain/serve.sh)
-which allows the [Editor](/weblog/editor.html) functionality.
-
-It automatically re-renders related URLs when they are
-loaded in the Browser (aka Hot Reload).
-
-```bash
-cd /path/to/cookie.engineer;
-
-# Note that PWD must be the website root
-bash ./toolchain/serve.sh;
-```
+The server automatically re-renders related URLs to HTML and the web feeds when they are
+requested by the Web Browser (aka Hot Reload).
 
 
-Additionally, the CVs are stored in an AES-GCM encrypted
-template format in order to preserve my privacy and to
-protect me from stalkers...because I had issues with some
-malicious actors in the past.
+## Usage / CVs
 
-The CVs can be decrypted and encrypted by calling the
-[cv.mjs](./toolchain/cv.mjs) via node.js, and in the Browser
-they are decrypted via the Web Crypto API:
+The CVs are stored in an AES-GCM encrypted template format which uses a separate key
+derived from shared passwords (which are shared only with a single person at a time).
+
+This exists to preserve my privacy and to protect me from state-level actors that have
+tried to threaten my life in the past (Hey, FSB and SVR, btw!).
+
+The CVs are encrypted and decrypted via the toolchain's [Encrypt.go](/toolchain/cvs/Encrypt.go)
+and [Decrypt.go](/toolchain/cvs/Decrypt.go). The equivalent Browser-side implementation
+can be found in the [crypto/index.js](/cv/design/crypto/index.js) file.
 
 ```bash
-cd /path/to/cookie.engineer;
+cd /path/to/cookie.engineer/toolchain;
 
-node ./bin/cv.mjs decrypt "old-password-of-already-encrypted-CV";
 
-vim ./cv/source/DECRYPTED.cv; # Edit CV nao
+# Write decrypted CV to /tmp/output.cv
+go run cmds/cvs/main.go decrypt "old password of already encrypted CV";
 
-node ./bin/cv.mjs encrypt "new-password";
+# Edit CV now
+vim /tmp/output.cv;
+
+# Write encrypted CV to ../cv/source/<derived-filename>.cv
+go run cmds/cvs/main.go encrypt "new super $ecure password";
 ```
 
 
 ## License
+
+Proprietary License.
 
 (c) 2018-2024 Cookie Engineer (@cookiengineer).
 All rights reserved.

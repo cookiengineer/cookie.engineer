@@ -1,7 +1,7 @@
 package main
 
 import "cookie.engineer/console"
-import "cookie.engineer/routes"
+import "cookie.engineer/actions"
 import "os"
 import "strings"
 
@@ -20,7 +20,8 @@ func main() {
 		}
 
 		console.Log("Listening on http://localhost:8080")
-		routes.Serve(cwd, 8080)
+
+		actions.Serve(cwd, 8080)
 
 	}
 

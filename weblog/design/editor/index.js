@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 		name += date.getFullYear();
 		name += '-';
-		name += format('' + date.getUTCMonth(), 2);
+		name += format('' + (date.getUTCMonth() + 1), 2);
 		name += '-';
 		name += format('' + date.getUTCDate(), 2);
 
@@ -128,6 +128,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
 	};
 
+	const remove = (filename, callback) => {
+
+		let xhr = new XMLHttpRequest();
+
+		xhr.open('DELETE', '/weblog/articles/' + filename);
+		xhr.responseType = 'text';
+
+		xhr.onerror = () => {
+			callback(false);
+		};
+
+		xhr.ontimeout = () => {
+			callback(false);
+		};
+
+		xhr.onload = () => {
+
+			if (xhr.status === 200) {
+				callback(true);
+			} else {
+				callback(false);
+			}
+
+		};
+
+		xhr.send(null);
+
+	};
+
 	const save = (filename, buffer, callback) => {
 
 		let xhr = new XMLHttpRequest();
@@ -161,8 +190,6 @@ document.addEventListener('DOMContentLoaded', () => {
 		xhr.send(buffer);
 
 	};
-
-
 
 	filename.onchange = () => {
 
@@ -207,6 +234,71 @@ document.addEventListener('DOMContentLoaded', () => {
 		}
 
 	};
+
+	document.addEventListener('keydown', (event) => {
+
+		if (event.ctrlKey === true && event.key === 's') {
+
+			let buffer = editor.value;
+			if (buffer !== FILE.buffer) {
+
+				save(FILE.name, buffer, (result) => {
+
+					if (result === true) {
+
+						FILE.buffer = buffer;
+
+						setTimeout(() => {
+							update();
+						}, 0);
+
+					}
+
+				});
+
+			}
+
+			event.preventDefault();
+			event.stopPropagation();
+
+		} else if (event.ctrlKey === true && event.key === 'e') {
+
+			let name = window.prompt("Enter new filename", FILE.name)
+			if (name !== null && name.endsWith(".md") && name !== FILE.name) {
+
+				save(name, FILE.buffer, (result1) => {
+
+					if (result1 === true) {
+
+						remove(FILE.name, (result2) => {
+
+							if (result2 === true) {
+
+								FILE.name = name;
+								FILE.buffer = buffer;
+
+								refresh();
+
+								setTimeout(() => {
+									filename.value = FILE.name;
+								}, 50);
+
+							}
+
+						});
+
+					}
+
+				});
+
+			}
+
+			event.preventDefault();
+			event.stopPropagation();
+
+		}
+
+	}, true)
 
 	refresh();
 

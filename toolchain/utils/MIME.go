@@ -1,4 +1,4 @@
-package routes
+package utils
 
 var MIME map[string]string = map[string]string{
 

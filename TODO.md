@@ -18,9 +18,18 @@ Missing Cookie Engineer Projects:
 
 ## Weblog
 
+- [ ] The Ugly Internet - Crime, Propaganda and War
+- [ ] The Bad Internet - Greed, Persuasion and Seduction
+- [ ] The Toxic Internet - Trolls, Useful Idiots and Fragile Egos
+- [ ] The Good Internet - Research, Curiosity and Knowledge
+- [ ] One Year of Cyber Attacks - Who tried to hack me?
+- [ ] One Year of Cyber Attacks - Never use these passwords
+- [ ] One Year of Cyber Attacks - The most malicious networks
 - [ ] Golang Pitfalls (e.g. filtered maps of references needing twice the RAM)
 - [ ] PureGo for EDR Evasion
 - [ ] Go Embedding GZip files
+- [ ] Memory Debugging and Profiling in Go
+- [ ] Unmarshalling and Marshalling in Go
 - [ ] The WHOIS protocol and its quirks and pitfalls
 - [ ] LPM Tries are always the wrong choice
 - [ ] Fingerprinting with CSS

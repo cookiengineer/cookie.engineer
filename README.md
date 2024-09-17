@@ -43,8 +43,8 @@ However, the [Web Log](/weblog) is written in CommonMark, and the articles are r
 to HTML via the [toolchain](/toolchain)'s Server. This server also implements a backend
 that allows the [Web Log Editor](/weblog/editor.html) to read, save and remove articles.
 
-The server automatically re-renders related URLs to HTML and the web feeds when they are
-requested by the Web Browser (aka Hot Reload).
+The server automatically re-renders an article's related URLs when they are requested
+by the Web Browser (aka Hot Reload).
 
 
 ## Usage / CVs
@@ -53,7 +53,7 @@ The CVs are stored in an AES-GCM encrypted template format which uses a separate
 derived from shared passwords (which are shared only with a single person at a time).
 
 This exists to preserve my privacy and to protect me from state-level actors that have
-tried to threaten my life in the past (Hey, FSB and SVR, btw!).
+tried to threaten my life in the past (looking at you, FSB and SVR, btw!).
 
 The CVs are encrypted and decrypted via the toolchain's [Encrypt.go](/toolchain/cvs/Encrypt.go)
 and [Decrypt.go](/toolchain/cvs/Decrypt.go). The equivalent Browser-side implementation

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en" prefix="og:http://ogp.me/ns#">
+	<head>
+		<title>Linux Assembly Part 1 - Cookie Engineer's Web Log</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="apple-mobile-web-app-capable" content="yes">
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Linux Assembly Part 1">
+		<meta name="keywords" content="linux, assembly">
+		<meta name="generator" content="Beer and VIM night coding sessions">
+		<meta name="robots" content="index, follow">
+		<link rel="alternate" type="application/rss+xml" href="../feed.xml">
+
+		<!-- Social Meta -->
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/avatar/cookiengineer.png">
+		<meta property="og:title" content="Linux Assembly Part 1 - Cookie Engineer's Web Log">
+		<meta property="og:site_name" content="Cookie Engineer's Web Log">
+		<meta property="og:description" content="Learn assembly for Linux syscalls">
+		<meta property="og:type" content="article">
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Linux Assembly Part 1 - Cookie Engineer's Web Log">
+		<meta name="twitter:description" itemprop="description" content="Learn assembly for Linux syscalls">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/layout/index.css">
+		<link rel="stylesheet" href="/weblog/design/index.css">
+
+		<!-- Weblog Design -->
+		<link rel="stylesheet" href="/weblog/design/layout/highlight.css">
+		<link rel="stylesheet" href="/weblog/design/layout/article.css">
+		<script src="/weblog/design/layout/highlight.js"></script>
+		<script src="/weblog/design/layout/article.js" defer></script>
+
+		<!-- Website Functionality -->
+		<link rel="stylesheet" href="/design/menu/index.css">
+		<script src="/design/menu/index.js" defer></script>
+
+		<!-- Magic: Copy/Paste -->
+		<link rel="stylesheet" href="/design/magic/index.css">
+		<script src="/design/magic/index.js" defer></script>
+
+	</head>
+	<body>
+		<header>
+			<aside id="menu" class="visible">
+				<a id="menu-button" href="#menu">Menu</a>
+				<a class="icon-section" href="/index.html">About&nbsp;Me</a>
+				<a class="icon-section" href="/projects.html">Projects</a>
+				<a class="icon-section" href="/talks.html">Talks</a>
+				<a class="icon-section" href="/contact.html">Contact</a>
+				<a class="icon-section" href="/weblog/index.html">Web Log</a>
+			</aside>
+			<aside id="toc">
+				<a class="section" href="#requirements-and-tools">Requirements and Tools</a>
+				<a class="section" href="#hello-world-in-c">Hello World in C</a>
+				<a class="section" href="#anatomy-of-nasm-assembly">Anatomy of NASM assembly</a>
+				<a class="section" href="#syscall-values">Syscall Values</a>
+				<a class="section" href="#registers">Registers</a>
+				<a class="section" href="#hello-world-in-nasm">Hello World in NASM</a>
+			</aside>
+		</header>
+		<section id="article" class="article">
+			<h1>Linux Assembly Part 1</h1>
+			<article>
+				<section>
+					<p>
+						This is my attempt at writing down my personal notes in the form of a tutorial
+						on Linux binary exploitation and how syscalls work behind the scenes by learning
+						how to write code in assembler.
+					</p>
+					<p>
+						I chose to use
+						<code>nasm</code>
+						here for the sake of explaining how assembly works behind
+						the scenes, and my goal is to move to
+						<code>go</code>
+						as a high level programming language
+						to write/port that binary exploitation code.
+					</p>
+					<p>
+						This way the reader or an older me can take a look at this article and use it as
+						a somewhat how-to guide to figure things out again in case I or you forget them.
+					</p>
+				</section>
+				<section>
+					<h2 id="requirements-and-tools">Requirements and Tools</h2>
+					<ul>
+						<li>Install <code>nasm</code> assembler</li>
+						<li>Install <code>go</code> toolchain</li>
+					</ul>
+					<pre class="bash">
+sudo pacman -S go nasm;
+					</pre>
+				</section>
+				<section>
+					<h2 id="hello-world-in-c">Hello World in C</h2>
+					<p>
+						In order to understand how a program is structured in
+						<code>asm</code>
+						we first need to
+						understand how a typical program looks like when we write it in
+						<code>C</code>
+						.
+					</p>
+					<p>
+						The best example is a simple program that outputs
+						<code>Hello World</code>
+						and uses
+						<code>printf()</code>
+						behind the scenes.
+					</p>
+					<pre class="c">
+#include <stdio.h>
+
+int main() {
+	printf("Hello, world!");
+	return 0;
+}
+					</pre>
+				</section>
+				<section>
+					<h2 id="anatomy-of-nasm-assembly">Anatomy of NASM assembly</h2>
+					<p>
+						An assembly program usually tries to reflect the
+						<code>binary</code>
+						formats it is targeting.
+						In this case, we target
+						<code>ELF</code>
+						as a format, which is divided in two different sections
+						:
+					</p>
+					<ul>
+						<li><code>.data</code> section that contains <code>variables</code> , <code>constants</code> and <code>strings</code></li>
+						<li><code>.text</code> section that contains defined <code>methods</code> and rest of the actual program</li>
+					</ul>
+					<p>
+						The syntax of a NASM assembly line looks like this, where statements inside a square
+						bracket are optional
+						:
+					</p>
+					<p><code>[label:] instruction [operands] [; comment]</code></p>
+				</section>
+				<section>
+					<h2 id="syscall-values">Syscall Values</h2>
+					<p>
+						The syscall table for the upstream Linux is available in the
+						<a class="icon-github" href="https://github.com/torvalds/linux/blob/master/arch/x86/entry/syscalls/syscall_64.tbl" target="_blank">syscall_64.tbl</a>
+						file for the
+						<code>amd64</code>
+						architecture. The
+						<a class="icon-github" href="https://github.com/torvalds/linux/blob/master/arch/x86/entry/syscalls/syscall_32.tbl" target="_blank">syscall_32.tbl</a>
+						contains the syscall numbers for the
+						<code>i386</code>
+						architecture.
+					</p>
+					<ul>
+						<li>syscall <code>1</code> calls <code>ksys_write(rdi, rsi, rdx)</code></li>
+						<li>syscall <code>60</code> calls <code>exit(rdi)</code></li>
+					</ul>
+				</section>
+				<section>
+					<h2 id="registers">Registers</h2>
+					<p>
+						For now, we stick to the basics and the registers we need to do to call the
+						<code>ksys_write()</code>
+						method
+						with our given parameters. Before we know which registers to use, we need to understand how the
+						functions are defined in the
+						<code>C ABI</code>
+						of the kernel.
+					</p>
+					<p>
+						The anatomy of the
+						<code>ksys_write()</code>
+						function method looks like this and is defined in the
+						<a class="icon-github" href="https://github.com/torvalds/linux/blob/master/fs/read_write.c" target="_blank">fs/read_write.c</a>
+						file
+						:
+					</p>
+					<pre class="c">
+// From linux/fs/read_write.c
+SYSCALL_DEFINE3(write, unsigned int, fd, const char __user *, buf, size_t, count)
+{
+	return ksys_write(fd, buf, count);
+}
+
+// which is equivalent to
+size_t ksys_write(unsigned int fd, const char *buffer, size_t length);
+					</pre>
+					<p>
+						This means that we need the following registers to execute the
+						<code>syscall</code>
+						:
+					</p>
+					<ul>
+						<li><code>rax</code> is the temporary register that has to contain the <code>syscall number</code> .</li>
+						<li><code>rdi</code> is the 1st function argument, representing <code>unsigned int fd</code> .</li>
+						<li><code>rsi</code> is the 2nd function argument, representing the pointer to <code>const char *buffer</code> .</li>
+						<li><code>rdx</code> is the 3rd function argument, representing the message <code>size_t length</code> .</li>
+					</ul>
+					<p>
+						The
+						<code>unsigned int fd</code>
+						parameter can have the following values
+						:
+					</p>
+					<ul>
+						<li><code>0</code> for <code>stdin</code> or standard input</li>
+						<li><code>1</code> for <code>stdout</code> or standard output</li>
+						<li><code>2</code> for <code>stderr</code> or standard error</li>
+					</ul>
+					<p>
+						Remember this from bash? You can redirect those standard input, output, and error messages
+						by using e.g. something like
+						<code>program 2> /dev/null</code>
+						to ignore them.
+						<code>0</code>
+						,
+						<code>1</code>
+						, and
+						<code>2</code>
+						represent the same thing here as in our assembly program.
+					</p>
+				</section>
+				<section>
+					<h2 id="hello-world-in-nasm">Hello World in NASM</h2>
+					<pre class="asm">
+section .data
+	msg db "Hello, World!"
+
+section .text
+	global _start
+
+_start:
+	mov rax, 1;   syscall 1 "ksys_write(rdi, rsi, rdx)"
+	mov rdi, 1;   int 1 for standard output
+	mov rsi, msg; pointer to message
+	mov rdx, 13;  length of message
+	syscall;      execute syscall stored in rax
+
+	mov rax, 60;  syscall 60 for "exit(rdi)"
+	mov rdi, 0;   int 0 for exit code
+	syscall;      execute syscall stored in rax
+					</pre>
+					<p>
+						If we compile and run our program, we can see the
+						<code>Hello, World!</code>
+						message
+						:
+					</p>
+					<pre class="bash">
+nasm -f elf64 -o hello.o hello.asm;
+ld -o hello.bin hello.o;
+
+chmod +x hello.bin;
+./hello.bin;
+					</pre>
+				</section>
+			</article>
+		</section>
+		<footer>
+			<p class="print-not">Made with 💔 in Heidelberg, Germany. All rights (and jokes) reserved under European Law.</p>
+			<p>&copy; Cookie Engineer (https://cookie.engineer). All rights reserved.</p>
+		</footer>
+	</body>
+</html>

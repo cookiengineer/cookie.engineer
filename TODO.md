@@ -18,6 +18,7 @@ Missing Cookie Engineer Projects:
 
 ## Weblog
 
+- [ ] Human Eyes Only - How to combat LLMs with the Enigma Webfont
 - [ ] The Ugly Internet - Crime, Propaganda and War
 - [ ] The Bad Internet - Greed, Persuasion and Seduction
 - [ ] The Toxic Internet - Trolls, Useful Idiots and Fragile Egos

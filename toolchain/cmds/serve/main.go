@@ -19,9 +19,9 @@ func main() {
 			cwd = strings.TrimSpace(cwd[0:len(cwd)-10])
 		}
 
-		console.Log("Listening on http://localhost:8080")
+		console.Log("Listening on http://localhost:3000")
 
-		actions.Serve(cwd, 8080)
+		actions.Serve(cwd, 3000)
 
 	}
 

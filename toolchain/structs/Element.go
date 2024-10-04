@@ -155,13 +155,17 @@ func (element *Element) Render(indent string) string {
 
 		class, ok := element.Attributes["class"]
 
+		text := strings.TrimSpace(element.Text)
+		text = strings.ReplaceAll(text, "<", "&lt;")
+		text = strings.ReplaceAll(text, ">", "&gt;")
+
 		if ok == true {
 			result += indent + "<pre class=\"" + class + "\">\n"
-			result += strings.TrimSpace(element.Text) + "\n"
+			result += text + "\n"
 			result += indent + "</pre>"
 		} else {
 			result += indent + "<pre>\n"
-			result += strings.TrimSpace(element.Text) + "\n"
+			result += text + "\n"
 			result += indent + "</pre>"
 		}
 

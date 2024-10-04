@@ -1,9 +1,9 @@
 ===
 - date: 2024-10-01
-- name: Linux Assembly Part 1
+- name: Linux Assembly Part 1: Syscalls
 - tags: linux, assembly
 - type: software, research
-- crux: Learn assembly for Linux syscalls
+- crux: Learn Linux assembly to execute syscalls.
 ===
 
 
@@ -52,8 +52,9 @@ int main() {
 An assembly program usually tries to reflect the `binary` formats it is targeting.
 In this case, we target `ELF` as a format, which is divided in two different sections:
 
-- `.data` section that contains `variables`, `constants` and `strings`
-- `.text` section that contains defined `methods` and rest of the actual program
+- `.data` section that contains `constants` and `strings`.
+- `.bss` section that contains uninitialized `variables`.
+- `.text` section that contains defined `methods` and rest of the actual program.
 
 The syntax of a NASM assembly line looks like this, where statements inside a square
 bracket are optional:
@@ -110,6 +111,9 @@ represent the same thing here as in our assembly program.
 
 ## Hello World in NASM
 
+Our Hello World program is pretty straight forward and doesn't need many registers to
+work. We apply the previously learned knowledge and write our assembly program like this:
+
 ```asm
 section .data
 	msg db "Hello, World!"
@@ -138,3 +142,35 @@ ld -o hello.bin hello.o;
 chmod +x hello.bin;
 ./hello.bin;
 ```
+
+
+## Hello World in Go with Syscalls
+
+Now that we know how to do syscalls in `C` and in `asm`, we can come full cycle
+by using our high-level `syscall` package in `go`.
+
+```go
+package main
+
+import "syscall"
+
+// this is somewhat similar to the data section before
+var msg []byte = []byte("Hello, World!")
+
+func main() {
+	syscall.Write(1, msg)
+	syscall.Exit(0)
+}
+```
+
+It's important that we only use the `syscall` package for now, so that we can read
+the generated assembler code.
+
+If we compile the binary with the following command, it will show us the generated
+go assembler code. It is different from our x86 / amd64 assembly code, but you should
+be able to understand in principle what it does now :)
+
+```bash
+go build -gcflags=-S hello.go;
+```
+

@@ -7,16 +7,21 @@
 ===
 
 
-This is my attempt at writing down my personal notes in the form of a tutorial
-on Linux binary exploitation and how syscalls work behind the scenes by learning
-how to write code in assembler.
+This is my attempt at writing down my personal notes in the form of a tutorial.
+The tutorial for now wants to go deeper into the topics of binary exploitation
+techniques, and also describe how EDR evasion techniques work behind the scenes.
 
-I chose to use `nasm` here for the sake of explaining how assembly works behind
-the scenes, and my goal is to move to `go` as a high level programming language
-to write/port that binary exploitation code.
+Most of these topics, however, require a fundemental understanding of assembly
+and shellcoding. That is why we are going to learn about assembly first, before
+we can continue to new realms of malware development techniques.
 
-This way the reader or an older me can take a look at this article and use it as
-a somewhat how-to guide to figure things out again in case I or you forget them.
+I chose to use `nasm` as an assembler here for the sake of ease of use, and my
+my goal is to move towards `go` as a high level programming language to write
+and backport binary exploitation code, so that you can learn why most APTs have
+moved towards `go` and `c#` as a programming language.
+
+This way you or an older fool like me can take a look at this article and use it
+as a reference guide on how to relearn things again in case I forget about them.
 
 
 ## Requirements and Tools
@@ -164,7 +169,11 @@ them using something like `program 1> out.txt 2> err.txt`. The file descriptor v
 ## Hello World in NASM
 
 The syntax of a NASM assembly line looks similar to this, where statements inside a square
-bracket are optional: `[label:] instruction [operands] [; comment]`.
+bracket are optional:
+
+```syntax
+[label:] instruction [operands] [; comment]
+```
 
 Our Hello World program is pretty straight forward and doesn't need many registers to work with.
 For now, our targeted binary format `ELF` needs only two different `sections`.
@@ -179,15 +188,15 @@ section .text
 	global _start
 
 _start:
-	mov rax, 1;   syscall 1 "ksys_write(rdi, rsi, rdx)"
-	mov rdi, 1;   int 1 for standard output
-	mov rsi, msg; pointer to message
-	mov rdx, 13;  length of message
-	syscall;      execute syscall stored in rax
+	mov rax, 1    ; syscall 1 "ksys_write(rdi, rsi, rdx)"
+	mov rdi, 1    ; int 1 for standard output
+	mov rsi, msg  ; pointer to message
+	mov rdx, 13   ; length of message
+	syscall       ; execute syscall stored in rax
 
-	mov rax, 60;  syscall 60 for "exit(rdi)"
-	mov rdi, 0;   int 0 for exit code
-	syscall;      execute syscall stored in rax
+	mov rax, 60   ; syscall 60 for "exit(rdi)"
+	mov rdi, 0    ; int 0 for exit code
+	syscall       ; execute syscall stored in rax
 ```
 
 If we compile and run our program, we can see the `Hello, World!` message:

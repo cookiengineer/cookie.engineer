@@ -59,7 +59,8 @@
 			<aside id="toc">
 				<a class="section" href="#requirements-and-tools">Requirements and Tools</a>
 				<a class="section" href="#hello-world-in-c">Hello World in C</a>
-				<a class="section" href="#anatomy-of-nasm-assembly">Anatomy of NASM assembly</a>
+				<a class="section" href="#binary-formats">Binary Formats</a>
+				<a class="section" href="#anatomy-of-an-elf-program">Anatomy of an ELF Program</a>
 				<a class="section" href="#syscall-values">Syscall Values</a>
 				<a class="section" href="#registers">Registers</a>
 				<a class="section" href="#hello-world-in-nasm">Hello World in NASM</a>
@@ -92,11 +93,12 @@
 				<section>
 					<h2 id="requirements-and-tools">Requirements and Tools</h2>
 					<ul>
-						<li>Install <code>nasm</code> assembler</li>
-						<li>Install <code>go</code> toolchain</li>
+						<li>Install the <code>gcc</code> compiler toolchain</li>
+						<li>Install the <code>go</code> compiler toolchain</li>
+						<li>Install the <code>nasm</code> assembler</li>
 					</ul>
 					<pre class="bash">
-sudo pacman -S go nasm;
+sudo pacman -S gcc go nasm;
 					</pre>
 				</section>
 				<section>
@@ -120,33 +122,104 @@ sudo pacman -S go nasm;
 #include &lt;stdio.h&gt;
 
 int main() {
-	printf("Hello, world!");
+	printf("Hello, World!");
 	return 0;
 }
 					</pre>
+					<p>
+						If we compile the program with
+						<code>gcc</code>
+						and execute it, it will print out our
+						<code>Hello, World!</code>
+						message
+						:
+					</p>
+					<pre class="bash">
+gcc -o main.bin main.c;
+
+chmod +x ./main.bin;
+./main.bin;
+					</pre>
 				</section>
 				<section>
-					<h2 id="anatomy-of-nasm-assembly">Anatomy of NASM assembly</h2>
+					<h2 id="binary-formats">Binary Formats</h2>
+					<p>
+						In order to understand how we can get from high-level programming language code
+						like
+						<code>C</code>
+						to our low-level programming language
+						<code>asm</code>
+						, we need to first understand
+						what binary formats are.
+					</p>
+					<p>
+						What's important is that there are different sections inside each program, and they
+						vary depending on the targeted binary format and whether or not they are a shared
+						library that contains reusable functions for other programs.
+					</p>
+					<p>
+						The most common binary formats are
+						:
+					</p>
+					<ul>
+						<li><code>COFF</code> the common object file format for Unices (but meanwhile is used in malware for sideloading)</li>
+						<li><code>ELF</code> the executable and linkable format for GNU/Linux</li>
+						<li><code>Mach-O</code> the mach object format for Darwin, MacOS and MacOSX</li>
+						<li><code>MZ</code> the format for MS-DOS, which meanwhile is somewhat migrated to <code>PE</code></li>
+						<li><code>PE</code> the portable executable format for Windows</li>
+						<li><code>PE32+</code> the ironically 64bit-targeting portable executable format for Windows</li>
+						<li><code>PRG</code> the format for the C64 (yeah I'm _that_ old)</li>
+					</ul>
+					<p>
+						The
+						<code>PE</code>
+						format is a little different here because Microsoft tried to reuse the same
+						<code>PE</code>
+						format
+						for compatibility reasons over the years, which means that newer programs usually have to
+						contain a special header to let the kernel and the users know that it cannot be run in
+						<code>MS-DOS</code>
+						mode or inside the
+						<code>cmd.exe</code>
+						environment directly. We're going to learn about the quirks of
+						<code>PE</code>
+						later in this article series.
+					</p>
+					<p>
+						Wikipedia has a really nice
+						<a class="icon-website" href="https://en.wikipedia.org/wiki/Comparison_of_executable_file_formats" target="_blank">Comparison of Executable File Formats</a>
+						article that I recommend you to check out.
+					</p>
+				</section>
+				<section>
+					<h2 id="anatomy-of-an-elf-program">Anatomy of an ELF Program</h2>
 					<p>
 						An assembly program usually tries to reflect the
 						<code>binary</code>
 						formats it is targeting.
-						In this case, we target
+						In our case, we target
 						<code>ELF</code>
-						as a format, which is divided in two different sections
+						as a format, which is divided in a couple of different
+						sections. We don't need to know about all the special sections for now, but these
+						are the most important ones that you will find in most
+						<code>ELF</code>
+						binaries
 						:
 					</p>
 					<ul>
-						<li><code>.data</code> section that contains <code>constants</code> and <code>strings</code> .</li>
-						<li><code>.bss</code> section that contains uninitialized <code>variables</code> .</li>
-						<li><code>.text</code> section that contains defined <code>methods</code> and rest of the actual program.</li>
+						<li>The program header table contains meta information about our program.</li>
+						<li><code>.text</code> section that contains defined <code>methods</code> and the references to them inside our program.</li>
+						<li><code>.rodata</code> section that contains <code>read-only</code> binary data that cannot be changed.</li>
+						<li><code>.data</code> section that contains <code>constants</code> , <code>strings</code> and changeable <code>variables</code> .</li>
+						<li><code>.shstrtab</code> section that represents the section header table (that is the index of everything)</li>
 					</ul>
 					<p>
-						The syntax of a NASM assembly line looks like this, where statements inside a square
-						bracket are optional
-						:
+						You can read more about the
+						<code>ELF</code>
+						binary format in the official
+						<a class="icon-download" href="https://refspecs.linuxfoundation.org/elf/elf.pdf" target="_blank">ELF Specification Document</a>
+						.
 					</p>
-					<p><code>[label:] instruction [operands] [; comment]</code></p>
 				</section>
 				<section>
 					<h2 id="syscall-values">Syscall Values</h2>
@@ -169,10 +242,20 @@ int main() {
 				<section>
 					<h2 id="registers">Registers</h2>
 					<p>
-						For now, we stick to the basics and the registers we need to do to call the
+						Registers are small storages inside the CPU that can be processed. They typically contain unsigned integers
+						or references (pointers) to larger data. For example, if a string exceeds the size of a register, it usually
+						is split up onto multiple registers with multiple
+						<code>mov</code>
+						instructions.
+					</p>
+					<p>
+						Registers are a little more complicated than this, there's general purpose registers and special registers
+						that can only be used for specific instructions or a specific functionality that the CPU provides.
+					</p>
+					<p>
+						But for now, we stick to the basics and only the registers we need to know about to call the
 						<code>ksys_write()</code>
-						method
-						with our given parameters. Before we know which registers to use, we need to understand how the
+						method with our given parameters. Before we know which registers to use, we need to understand how the
 						functions are defined in the
 						<code>C ABI</code>
 						of the kernel.
@@ -193,7 +276,7 @@ SYSCALL_DEFINE3(write, unsigned int, fd, const char __user *, buf, size_t, count
 }
 
 // which is equivalent to
-size_t ksys_write(unsigned int fd, const char *buffer, size_t length);
+size_t ksys_write(unsigned int fd, const char *message, size_t message_length);
 					</pre>
 					<p>
 						This means that we need the following registers to execute the
@@ -203,8 +286,8 @@ size_t ksys_write(unsigned int fd, const char *buffer, size_t length);
 					<ul>
 						<li><code>rax</code> is the temporary register that has to contain the <code>syscall number</code> .</li>
 						<li><code>rdi</code> is the 1st function argument, representing <code>unsigned int fd</code> .</li>
-						<li><code>rsi</code> is the 2nd function argument, representing the pointer to <code>const char *buffer</code> .</li>
-						<li><code>rdx</code> is the 3rd function argument, representing the message <code>size_t length</code> .</li>
+						<li><code>rsi</code> is the 2nd function argument, representing the pointer to <code>const char *message</code> .</li>
+						<li><code>rdx</code> is the 3rd function argument, representing the message <code>size_t message_length</code> .</li>
 					</ul>
 					<p>
 						The
@@ -217,11 +300,12 @@ size_t ksys_write(unsigned int fd, const char *buffer, size_t length);
 						<li><code>1</code> for <code>stdout</code> or standard output</li>
 						<li><code>2</code> for <code>stderr</code> or standard error</li>
 					</ul>
+					<p>Remember these values from bash?</p>
 					<p>
-						Remember this from bash? You can redirect those standard input, output, and error messages
-						by using e.g. something like
-						<code>program 2> /dev/null</code>
-						to ignore them.
+						You can redirect a processes standard input, output, and error messages if you redirect
+						them using something like
+						<code>program 1> out.txt 2> err.txt</code>
+						. The file descriptor values
 						<code>0</code>
 						,
 						<code>1</code>
@@ -233,8 +317,20 @@ size_t ksys_write(unsigned int fd, const char *buffer, size_t length);
 				<section>
 					<h2 id="hello-world-in-nasm">Hello World in NASM</h2>
 					<p>
-						Our Hello World program is pretty straight forward and doesn't need many registers to
-						work. We apply the previously learned knowledge and write our assembly program like this
+						The syntax of a NASM assembly line looks similar to this, where statements inside a square
+						bracket are optional
+						] instruction
+					</p>
+					<p>
+						Our Hello World program is pretty straight forward and doesn't need many registers to work with.
+						For now, our targeted binary format
+						<code>ELF</code>
+						needs only two different
+						<code>sections</code>
+						.
+					</p>
+					<p>
+						We apply the previously learned knowledge and write our assembly program
 						:
 					</p>
 					<pre class="asm">
@@ -302,15 +398,30 @@ func main() {
 						package for now, so that we can read
 						the generated assembler code.
 					</p>
-					<p>
-						If we compile the binary with the following command, it will show us the generated
-						go assembler code. It is different from our x86 / amd64 assembly code, but you should
-						be able to understand in principle what it does now
-						:
-						)
-					</p>
 					<pre class="bash">
 go build -gcflags=-S hello.go;
+					</pre>
+					<p>
+						If we compile the binary with the above command, it will print out the generated
+						go assembly code. It is different from our x86 / amd64 assembly code, because it
+						uses a different plan9-alike format, but you should be able to understand in principle
+						what happens now.
+					</p>
+					<p>
+						For example, the output of the
+						<code>syscall.Write(1, msg)</code>
+						line should look similar to this
+						:
+					</p>
+					<pre class="bash">
+(...)
+0x000e 00014 (/tmp/test/main.go:9)	MOVQ	main.msg(SB), BX
+0x0015 00021 (/tmp/test/main.go:9)	MOVQ	main.msg+8(SB), CX
+0x001c 00028 (/tmp/test/main.go:9)	MOVQ	main.msg+16(SB), DI
+0x0023 00035 (&lt;unknown line number&gt;)	NOP
+0x0023 00035 (/usr/lib/go/src/syscall/syscall_unix.go:211)	MOVL	$1, AX
+0x0028 00040 (/usr/lib/go/src/syscall/syscall_unix.go:211)	PCDATA	$1, $0
+0x0028 00040 (/usr/lib/go/src/syscall/syscall_unix.go:211)	CALL	syscall.write(SB)
 					</pre>
 				</section>
 			</article>

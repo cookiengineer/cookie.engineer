@@ -54,6 +54,30 @@ func (document *Document) Count() {
 
 }
 
+func (document *Document) CloseElement() bool {
+
+	var result bool = false
+	var element *Element = nil
+
+	if len(document.Body) > 0 {
+		element = document.Body[len(document.Body)-1]
+	}
+
+	if element != nil {
+
+		if element.Type != "#text" {
+
+			tmp := NewElement("#text")
+			document.Body = append(document.Body, &tmp)
+
+		}
+
+	}
+
+	return result
+
+}
+
 func (document *Document) GetLastElement() *Element {
 
 	var element *Element = nil
@@ -106,7 +130,7 @@ func (document *Document) Parse(value string) {
 	regexp_ul, _ := regexp.Compile("^([\\*\\-+]+)[[:space:]]")
 	regexp_ol, _ := regexp.Compile("^([0-9]+)\\.[[:space:]]")
 
-	var first_line = 0
+	first_line := 0
 
 	if lines[0] == "===" {
 
@@ -150,13 +174,19 @@ func (document *Document) Parse(value string) {
 
 		if pointer != nil && pointer.Type == "pre" {
 
-			if line == "```" {
-				element := NewElement("#text")
-				element.SetText("")
-				document.AddElement(element)
-			} else {
+			if line != "```" {
 				// Preserve indention
 				pointer.AddText(lines[l])
+			} else {
+				document.CloseElement()
+			}
+
+		} else if pointer != nil && pointer.Type == "table" {
+
+			if strings.HasPrefix(line, "|") {
+				pointer.AddText(line)
+			} else {
+				document.CloseElement()
 			}
 
 		} else if line == "" {
@@ -165,10 +195,10 @@ func (document *Document) Parse(value string) {
 				// Do Nothing
 			} else if pointer.Type == "pre" {
 				// Do Nothing
+			} else if pointer.Type == "table" {
+				document.CloseElement()
 			} else if pointer.Type == "p" {
-				element := NewElement("#text")
-				element.SetText("")
-				document.AddElement(element)
+				document.CloseElement()
 			}
 
 		} else if strings.HasPrefix(line, "![") && strings.Contains(line, "](") && strings.HasSuffix(line, ")") {
@@ -186,6 +216,14 @@ func (document *Document) Parse(value string) {
 			if pointer == nil || pointer.Type != "pre" {
 				element := NewElement("pre")
 				element.SetAttribute("class", strings.TrimSpace(line[3:]))
+				document.AddElement(element)
+			}
+
+		} else if len(line) > 3 && strings.HasPrefix(line, "|") && strings.HasSuffix(line, "|") {
+
+			if pointer == nil || pointer.Type != "table" {
+				element := NewElement("table")
+				element.SetText(line)
 				document.AddElement(element)
 			}
 

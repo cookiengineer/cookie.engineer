@@ -77,11 +77,11 @@ The most common binary formats are:
 
 - `COFF` the common object file format for Unices (but meanwhile is used in malware for sideloading)
 - `ELF` the executable and linkable format for GNU/Linux
-- `Mach-O` the mach object format for Darwin, MacOS and MacOSX
+- `Mach-O` the mach object format for Darwin, MacOS, and MacOSX
 - `MZ` the format for MS-DOS, which meanwhile is somewhat migrated to `PE`
 - `PE` the portable executable format for Windows
 - `PE32+` the ironically 64bit-targeting portable executable format for Windows
-- `PRG` the format for the C64 (yeah I'm _that_ old)
+- `PRG` the program format for the C64 (yeah I'm *that* old)
 
 The `PE` format is a little different here because Microsoft tried to reuse the same `PE` format
 for compatibility reasons over the years, which means that newer programs usually have to
@@ -104,7 +104,7 @@ are the most important ones that you will find in most `ELF` binaries:
 - `.text` section that contains defined `methods` and the references to them inside our program.
 - `.rodata` section that contains `read-only` binary data that cannot be changed.
 - `.data` section that contains `constants`, `strings` and changeable `variables`.
-- `.shstrtab` section that represents the section header table (that is the index of everything)
+- `.shstrtab` section that represents the section header table (that is the index of everything).
 
 You can read more about the `ELF` binary format in the official [ELF Specification Document](https://refspecs.linuxfoundation.org/elf/elf.pdf).
 
@@ -117,20 +117,6 @@ contains the syscall numbers for the `i386` architecture.
 
 - syscall `1` calls `ksys_write(rdi, rsi, rdx)`
 - syscall `60` calls `exit(rdi)`
-
-
-## Registers
-
-Registers are small storages inside the CPU that can be processed. They typically contain unsigned integers
-or references (pointers) to larger data. For example, if a string exceeds the size of a register, it usually
-is split up onto multiple registers with multiple `mov` instructions.
-
-Registers are a little more complicated than this, there's general purpose registers and special registers
-that can only be used for specific instructions or a specific functionality that the CPU provides.
-
-But for now, we stick to the basics and only the registers we need to know about to call the `ksys_write()`
-method with our given parameters. Before we know which registers to use, we need to understand how the
-functions are defined in the `C ABI` of the kernel.
 
 The anatomy of the `ksys_write()` function method looks like this and is defined in the
 [fs/read_write.c](https://github.com/torvalds/linux/blob/master/fs/read_write.c) file:
@@ -146,7 +132,24 @@ SYSCALL_DEFINE3(write, unsigned int, fd, const char __user *, buf, size_t, count
 size_t ksys_write(unsigned int fd, const char *message, size_t message_length);
 ```
 
-This means that we need the following registers to execute the `syscall`:
+## Registers
+
+Registers are small storages inside the CPU that can be processed. They typically contain unsigned integers
+or references (pointers) to larger data. For example, if a string exceeds the size of a register, it usually
+is split up onto multiple registers with multiple `mov` instructions.
+
+Registers are a little more complicated than this, there's general purpose registers and special registers
+that can only be used for specific instructions or a specific functionality that the CPU provides.
+
+But for now, we stick to the basics and only the registers we need to know about to call the `ksys_write()`
+method with our given parameters. Before we know which registers to use, we need to understand how the
+functions are defined in the `C ABI` of the kernel.
+
+```c
+size_t ksys_write(unsigned int fd, const char *message, size_t message_length);
+```
+
+If we take a look at our syscall method again, we can figure out what kind of registers we need to call it:
 
 - `rax` is the temporary register that has to contain the `syscall number`.
 - `rdi` is the 1st function argument, representing `unsigned int fd`.

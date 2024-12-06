@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en" prefix="og:http://ogp.me/ns#">
+	<head>
+		<title>Linux Assembly Part 3: Control Flow - Cookie Engineer's Web Log</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="apple-mobile-web-app-capable" content="yes">
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Linux Assembly Part 3: Control Flow">
+		<meta name="keywords" content="linux, assembly">
+		<meta name="generator" content="Beer and VIM night coding sessions">
+		<meta name="robots" content="index, follow">
+		<link rel="alternate" type="application/rss+xml" href="../feed.xml">
+
+		<!-- Social Meta -->
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/avatar/cookiengineer.png">
+		<meta property="og:title" content="Linux Assembly Part 3: Control Flow - Cookie Engineer's Web Log">
+		<meta property="og:site_name" content="Cookie Engineer's Web Log">
+		<meta property="og:description" content="Learn Linux assembly to do function calls.">
+		<meta property="og:type" content="article">
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Linux Assembly Part 3: Control Flow - Cookie Engineer's Web Log">
+		<meta name="twitter:description" itemprop="description" content="Learn Linux assembly to do function calls.">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/layout/index.css">
+		<link rel="stylesheet" href="/weblog/design/index.css">
+
+		<!-- Weblog Design -->
+		<link rel="stylesheet" href="/weblog/design/layout/highlight.css">
+		<link rel="stylesheet" href="/weblog/design/layout/article.css">
+		<script src="/weblog/design/layout/highlight.js"></script>
+		<script src="/weblog/design/layout/article.js" defer></script>
+
+		<!-- Website Functionality -->
+		<link rel="stylesheet" href="/design/menu/index.css">
+		<script src="/design/menu/index.js" defer></script>
+
+		<!-- Magic: Copy/Paste -->
+		<link rel="stylesheet" href="/design/magic/index.css">
+		<script src="/design/magic/index.js" defer></script>
+
+	</head>
+	<body>
+		<header>
+			<aside id="menu" class="visible">
+				<a id="menu-button" href="#menu">Menu</a>
+				<a class="icon-section" href="/index.html">About&nbsp;Me</a>
+				<a class="icon-section" href="/projects.html">Projects</a>
+				<a class="icon-section" href="/talks.html">Talks</a>
+				<a class="icon-section" href="/contact.html">Contact</a>
+				<a class="icon-section" href="/weblog/index.html">Web Log</a>
+			</aside>
+			<aside id="toc">
+				<a class="section" href="#control-flow">Control Flow</a>
+				<a class="section" href="#jump-instructions">Jump Instructions</a>
+				<a class="section" href="#static-calculator-program">Static Calculator Program</a>
+				<a class="section" href="#call-stacks">Call Stacks</a>
+				<a class="section" href="#stack-pointers">Stack Pointers</a>
+				<a class="section" href="#function-calls">Function Calls</a>
+			</aside>
+		</header>
+		<section id="article" class="article">
+			<h1>Linux Assembly Part 3: Control Flow</h1>
+			<article>
+				<section>
+					<p>
+						Previous article in this series
+						:
+						
+						<a href="/weblog/articles/linux-assembly-part-2-declaring-data.html">Linux Assembly Part 2 about Declaring Data</a>
+					</p>
+					<p>
+						This is the third article in the
+						<code>Linux Assembly</code>
+						series. This time, we will focus on how to
+						do arithmetic operations on the data types that we've learned about in the previous article.
+					</p>
+				</section>
+				<section>
+					<h2 id="control-flow">Control Flow</h2>
+					<p>
+						Programming languages usually have the ability to use conditions to create code branches via
+						<code>if/else</code>
+						or
+						<code>switch/case</code>
+						or
+						<code>goto</code>
+						statements. This is no different in assembly. The most common way you'll
+						see in programs is the
+						<code>cmp</code>
+						(comparison) instruction.
+					</p>
+					<p>
+						The
+						<code>cmp</code>
+						instruction compares 2 values, doesn't affect them, and doesn't execute anything that's
+						dependent on the result of that comparison. There is however a conditional jump instruction following
+						it, which allows to jump to different addresses or symbols. Public methods of your program are usually
+						in the symbol hash table so that you can debug a program more easily. What a symbol hash table is, is
+						not important now and we'll learn about that later in this article series.
+					</p>
+					<p>
+						For now, we'll take a look at this simple (partial) program code written in a
+						<code>C</code>
+						like language and
+						compare it with the equivalent
+						<code>nasm</code>
+						assembly code.
+					</p>
+					<pre class="cpp">
+main() {
+
+    if (rax != 1337) {
+        exit();
+    } else {
+        do_something_else();
+    }
+
+}
+					</pre>
+					<pre class="asm">
+section .text
+    global _start
+
+_start:
+    cmp rax, 1337
+    jne .exit
+    jmp .do_something_else
+
+.do_something_else:
+    ; do something else in here
+
+.exit:
+    mov rax, 60
+    mov rdi, 0
+    syscall
+					</pre>
+					<p>
+						As we can see, there's different types of jump instructions in assembly. In the above example, the
+						<code>jne</code>
+						(jump not equal) instruction is executed once the preceeding
+						<code>cmp</code>
+						(comparison) instruction fails.
+					</p>
+					<p>
+						The unconditional jumps are
+						<code>jmp</code>
+						instructions, which in our case reflect the
+						<code>else</code>
+						branch of the program.
+						A typical program has hundreds of these
+						<code>jmp</code>
+						instructions, and typically every helper method or function
+						down the line that's included or imported from a library is another
+						<code>jmp</code>
+						in the program's control flow.
+					</p>
+				</section>
+				<section>
+					<h2 id="jump-instructions">Jump Instructions</h2>
+					<p>
+						As we already know, there's different types of jump instructions available in
+						<code>nasm</code>
+						assembly. Here's a list
+						of those instructions and their meaning/behavior explained.
+					</p>
+					<table>
+						<thead>
+							<tr>
+								<th align="left">Instruction</th>
+								<th align="left">Description</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td align="left">JMP</td>
+								<td align="left">jump to label or register</td>
+							</tr>
+							<tr>
+								<td align="left">JE</td>
+								<td align="left">jump if equal</td>
+							</tr>
+							<tr>
+								<td align="left">JNE</td>
+								<td align="left">jump if not equal</td>
+							</tr>
+							<tr>
+								<td align="left">JZ</td>
+								<td align="left">jump if zero</td>
+							</tr>
+							<tr>
+								<td align="left">JNZ</td>
+								<td align="left">jump if not zero</td>
+							</tr>
+							<tr>
+								<td align="left">JL</td>
+								<td align="left">jump if first operand is lower than second operand</td>
+							</tr>
+							<tr>
+								<td align="left">JLE</td>
+								<td align="left">jump if first operand is lower than or equal to second operand</td>
+							</tr>
+							<tr>
+								<td align="left">JG</td>
+								<td align="left">jump if first operand is greater than second operand</td>
+							</tr>
+							<tr>
+								<td align="left">JGE</td>
+								<td align="left">jump if first operand is greater than or equal to second operand</td>
+							</tr>
+							<tr>
+								<td align="left">JA</td>
+								<td align="left">jump if unsigned first operand is greater than unsigned second operand</td>
+							</tr>
+							<tr>
+								<td align="left">JAE</td>
+								<td align="left">jump if unsigned first operand is greater than or equal to unsigned second operand</td>
+							</tr>
+						</tbody>
+					</table>
+				</section>
+				<section>
+					<h2 id="static-calculator-program">Static Calculator Program</h2>
+					<p>
+						Now we know everything to be able to understand what the following program in
+						<code>nasm</code>
+						assembly is doing.
+					</p>
+					<pre class="asm">
+global _start
+
+section .data
+    ; Define our numbers
+    num1: equ 13
+    num2: equ 37
+
+    ; Define our messages
+    msg1: db "Sum is correct!"
+    msg2: db "Sum is incorrect!"
+
+section .text
+
+_start:
+
+    mov rax, num1
+    mov rbx, num2
+    add rax, rbx  ; add(rax, rbx) stores the result in rax
+
+    cmp rax, 50
+    je .print_correct
+    jmp .print_incorrect
+
+.print_correct:
+
+    mov rax, 1
+    mov rdi, 1
+    mov rsi, msg1
+    mov rdx, 15
+    syscall
+    jmp .exit_correct
+
+.print_incorrect:
+
+    mov rax, 1
+    mov rdi, 1
+    mov rsi, msg2
+    mov rdx, 17
+    syscall
+    jmp .exit_incorrect
+
+.exit_correct:
+    mov rax, 60
+    mov rdi, 0
+    syscall
+
+.exit_incorrect:
+    mov rax, 60
+    mov rdi, 1
+    syscall
+					</pre>
+					<p>
+						The calculator program can also be downloaded
+						<a href="/weblog/articles/linux-assembly/calculator.asm">here</a>
+						.
+						If we compile and run our program, we can see the
+						<code>Sum is correct!</code>
+						message
+						:
+					</p>
+					<pre class="bash">
+nasm -f elf64 -o calculator.o calculator.asm;
+ld -o calculator.bin calculator.o;
+chmod +x calculator.bin;
+
+./calculator.bin;
+					</pre>
+				</section>
+				<section>
+					<h2 id="call-stacks">Call Stacks</h2>
+					<p>
+						The stack is a special region in memory, which operates on the principle of Last In, First Out.
+						This means that the entry in the stack that was added to the queue last will be processed first.
+					</p>
+					<p>
+						You can visualize this as a physical stack of todos where each new call entry will be added on top
+						of the stack, and the processor will take one todo each time from the top of the stack, process it,
+						and write down the results of it. When the bottom of the stack and the last todo is reached, the
+						program is finished.
+					</p>
+					<p>
+						In order to
+						<code>push</code>
+						things to the stack or
+						<code>pop</code>
+						things off the stack, we need to use our general
+						purpose registers that we learned about in
+						<a href="/weblog/articles/linux-assembly-part-1-syscalls.html">Linux Assembly Part 1 about Syscalls</a>
+						.
+					</p>
+					<p>
+						The 16 general purpose registers are
+						:
+						
+						<code>RAX</code>
+						,
+						<code>RBX</code>
+						,
+						<code>RCX</code>
+						,
+						<code>RDX</code>
+						,
+						<code>RDI</code>
+						,
+						<code>RSI</code>
+						,
+						<code>RBP</code>
+						,
+						<code>RSP</code>
+						and
+						<code>R8-R15</code>
+						.
+						These registers can store small amounts of data and can be accessed by all functions, as they are global
+						registers.
+					</p>
+					<pre class="asm">
+global _start
+
+section .text
+
+_start:
+    mov rax, 1
+    call .increment_rax
+    cmp rax, 2
+    jne exit
+    ; Do something
+
+.increment_rax:
+    inc rax
+    ret
+					</pre>
+					<p>
+						When we call a function, the return address is copied onto the stack and after the end of a function
+						execution, then the address is copied in the
+						<code>RIP</code>
+						register and the program continues its execution
+						from the point where it called the function from.
+					</p>
+					<p>
+						If we remember the
+						<code>syscall</code>
+						function signature from the first article, we'll also remember that almost
+						if not all syscalls using the same registers as their first arguments. The first six arguments of all
+						functions are passed via registers. If your function has more arguments, they will be passed as stack
+						pointers.
+					</p>
+					<pre class="c">
+int a_function(int rdi, int rsi, int rdx, int rcx, int r8, int r9 /*, stack pointers ... */) {
+    return (rdi + rsi - rdx + rcx - r8 + r9); // well, or something like that
+}
+					</pre>
+				</section>
+				<section>
+					<h2 id="stack-pointers">Stack Pointers</h2>
+					<p>
+						TODO
+						:
+						Explain Stack Pointers, how they change, and how they work
+					</p>
+				</section>
+				<section>
+					<h2 id="function-calls">Function Calls</h2>
+					<p>
+						TODO
+						:
+						Explain
+						<code>call</code>
+						in detail, and
+						<code>EIP</code>
+						and returns
+					</p>
+				</section>
+			</article>
+		</section>
+		<footer>
+			<p class="print-not">Made with 💔 in Heidelberg, Germany. All rights (and jokes) reserved under European Law.</p>
+			<p>&copy; Cookie Engineer (https://cookie.engineer). All rights reserved.</p>
+		</footer>
+	</body>
+</html>

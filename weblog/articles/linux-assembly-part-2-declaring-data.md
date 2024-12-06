@@ -3,23 +3,26 @@
 - name: Linux Assembly Part 2: Declaring Data
 - tags: linux, assembly
 - type: software, research
-- crux: Learn Linux assembly to do declare data and reserve memory.
+- crux: Learn Linux assembly to declare data and reserve memory.
 ===
 
 
-Previous article in this series: [Linux Assembly Part 1 about Syscalls](/weblog/linux-assembly-part-1-syscalls.html)
+Previous article in this series: [Linux Assembly Part 1 about Syscalls](/weblog/articles/linux-assembly-part-1-syscalls.html)
 
 This is the second article in the `Linux Assembly` series. This time, we will focus on how
-to represent different data types in `asm` and how to do arithmetic operations with them.
+to represent different data types in `nasm` so that we can do something with them.
 
 
 ## Registers
 
 Remember the registers we used last time?
 
-Now we need to learn a bit more about them. There are various registers available for
-different purposes. See the table below to find out how they are named, and whether or
-not they're persistent if you make a `call`.
+Assembly syntaxes sometimes feels a little special because of the way some registers are reserved
+for special purposes, so it's important to understand those registers and how they are used together
+with operators and functions.
+
+There are various registers available for different purposes. See the table below to find out how
+they are named, and whether or not they're persistent if you make a `call`.
 
 | Description                  | 64 bit    | 32 bit      | 16 bit      | 8 bit       | Persistent? |
 |:-----------------------------|-----------|-------------|-------------|-------------|-------------|
@@ -53,9 +56,10 @@ _start:
 	; (...)
 ```
 
-In the `NASM` language you can also declare other data types, which we are going to learn about
-now. Behind the scenes, everything is a `byte` or a `word` due to how `x86` as an instruction
-set is designed.
+In the `nasm` language you can also declare other data types, which we are going to learn about now.
+Behind the scenes, everything is a `byte` or a `word` due to how `x86` as an instruction set was
+designed at the time; but the `NASM` language abstracts away somewhat higher-level data types and how
+you can use them in a more typesafe manner.
 
 ### Bytes and Words
 

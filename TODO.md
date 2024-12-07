@@ -18,6 +18,29 @@ Missing Cookie Engineer Projects:
 
 ## Weblog
 
+- [ ] MX518 Repair Guide
+
+- https://web.archive.org/web/20120423073234/http://ece425web.groups.et.byu.net/stable/labs/8086InstructionSet.html
+
+- https://www.bencode.net/blob/nasmcheatsheet.pdf
+- https://github.com/Cee/NASM-Tutorial
+- https://github.com/0xAX/asm/tree/master/content
+- https://refspecs.linuxbase.org/elf/x86_64-abi-0.99.pdf
+
+
+- [ ] Linux Assembly Part 3 - Control Flow
+      - Stack Pointers
+      - Function Calls
+
+- [ ] Linux Assembly Part 4 - Arithmetic Operations
+- [ ] Linux Assembly Part 5 - String Operations
+- [ ] Linux Assembly Part 6 - Inline Assembly (Call Assembly from C)
+- [ ] Linux Assembly Part 7 - X87 FPU
+
+- [ ] Go Assembly Part 1
+
+
+
 - [ ] Human Eyes Only - How to combat LLMs with the Enigma Webfont
 - [ ] The Ugly Internet - Crime, Propaganda and War
 - [ ] The Bad Internet - Greed, Persuasion and Seduction

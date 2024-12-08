@@ -1,5 +1,5 @@
 ===
-- date: 2024-01-31
+- date: 2024-01-30
 - name: Arch Linux Installation Guide (GRUB)
 - tags: linux, devops, administration
 - type: software, legacy

@@ -86,7 +86,7 @@ of those instructions and their meaning/behavior explained.
 |:------------|:-----------------------------------------------------------------------------------|
 
 
-## Static Calculator Program
+## Calculator Program
 
 Now we know everything to be able to understand what the following program in `nasm` assembly is doing.
 
@@ -155,13 +155,13 @@ chmod +x calculator.bin;
 ```
 
 
-## Call Stacks
+## Stacks
 
 The stack is a special region in memory, which operates on the principle of Last In, First Out.
-This means that the entry in the stack that was added to the queue last will be processed first.
+This means that the frame in the stack that was added to the queue last will be processed first.
 
-You can visualize this as a physical stack of todos where each new call entry will be added on top
-of the stack, and the processor will take one todo each time from the top of the stack, process it,
+You can visualize this as a physical stack of todos where each new frame will be added on top of
+the stack, and the processor will take one todo each time from the top of the stack, process it,
 and write down the results of it. When the bottom of the stack and the last todo is reached, the
 program is finished.
 
@@ -205,9 +205,106 @@ int a_function(int rdi, int rsi, int rdx, int rcx, int r8, int r9 /*, stack poin
 ```
 
 
-## Stack Pointers
+## Stack Frames and Stack Pointers
 
-TODO: Explain Stack Pointers, how they change, and how they work
+Remember the `rbp` and `rsp` registers from the second article in the series? They are special registers
+that are needed to interact with the stack and its frame offsets.
+
+- `rbp` is the Base Pointer and it points to the start of the current frame's position
+- `rsp` is the Stack Pointer and it points to the end of the current frame's position
+
+Now we also know that the stack consists of so-called stack frames. Each stack frames is limited in its
+size to `16 bytes` and the address values of `rsp + 8` are always multiple of `16`. The 128 bytes area
+beyond the location pointed to by the `rsp` pointer is a reserved memory zone and is also called the `red zone`,
+in it you can store temporary memory that is not persisted across function calls.
+
+The registers `rbp`, `rbx` and `r12` to `r15` belong to the calling function, and the called function
+is required to preserve their values. A called function must preserve these registers' values for its
+caller. The remaining registers belong to the called function. If a calling function wants to preserve
+such a register value across a function call, it must save the value in its local stack frame.
+
+The structure of a Stack Frame with a Base Pointer looks like this:
+
+| Position         | Contents                      |
+|-----------------:|:-----------------------------:|
+|       8 + `%rbp` | return address                |
+|       0 + `%rbp` | previous `%rbp` value         |
+|      -8 + `%rbp` | variable size byte `n`        |
+|                  | (...)                         |
+|       0 + `%rsp` | variable size byte `0`        |
+|-----------------:|:-----------------------------:|
+|    -128 + `%rsp` | (temporary) red zone          |
+
+Additionally, there are two different instructions to interact with the stack:
+
+- `push <argument>` stores the argument in the stack and increments the `rsp` stack pointer afterwards
+- `pop <argument>` stores the data in the stack to the argument from a location pointed to by the stack pointer
+
+The important thing to remember is that the `push` instruction will increment the `rsp` pointer _after_
+the value was stored, which means that `rsp - 8` will be the equivalent position of `rbp` when the
+`push` instruction is called.
+
+
+## Stack Program
+
+The following example will explain how stack frames are allocated and when the `registers` are updated.
+
+```asm
+section .text
+    global _start
+
+_start:
+    ; set two registers for demonstration
+    mov rax, 13
+    mov rdx, 37
+
+    ; rax stored at address 0 * 8
+    ; increment rsp address to where the value of 13 is
+    push rax
+
+    ; rdx stored at address 1 * 8
+    ; increment rsp address to where the value of 37 is
+    push rdx
+
+    ; set rax to the value of [rsp + 8], which is 13
+    mov rax, [rsp + 8]
+
+    cmp rax, 13
+    je .success
+    jmp .failure
+
+.success:
+    mov rax, 60
+    mov rdi, 0
+    syscall
+
+.failure:
+    mov rax, 60
+    mov rdi, 1
+    syscall
+```
+
+Because the `rsp` address is incremented after the value is allocated to the stack, the program will
+have the following values in the stack of the program before it exits:
+
+| Start     |  End  | Contents | Frame |
+|----------:|------:|:--------:|:------|
+| 8 + `rsp` | `rsp` | 13       | 1     |
+|     `rsp` | `rbp` | 37       | 2     |
+|----------:|------:|:--------:|:------|
+
+
+The stack example program can also be downloaded [here](/weblog/articles/linux-assembly/stack.asm).
+If we compile and run our program, it will exit with the `exit code 0`.
+
+```bash
+nasm -f elf64 -o stack.o stack.asm;
+ld -o stack.bin stack.o;
+chmod +x stack.bin;
+
+./stack.bin;
+echo $?; # output: 0
+```
 
 
 ## Function Calls

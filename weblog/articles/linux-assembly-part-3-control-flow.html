@@ -59,9 +59,10 @@
 			<aside id="toc">
 				<a class="section" href="#control-flow">Control Flow</a>
 				<a class="section" href="#jump-instructions">Jump Instructions</a>
-				<a class="section" href="#static-calculator-program">Static Calculator Program</a>
-				<a class="section" href="#call-stacks">Call Stacks</a>
-				<a class="section" href="#stack-pointers">Stack Pointers</a>
+				<a class="section" href="#calculator-program">Calculator Program</a>
+				<a class="section" href="#stacks">Stacks</a>
+				<a class="section" href="#stack-frames-and-stack-pointers">Stack Frames and Stack Pointers</a>
+				<a class="section" href="#stack-program">Stack Program</a>
 				<a class="section" href="#function-calls">Function Calls</a>
 			</aside>
 		</header>
@@ -226,7 +227,7 @@ _start:
 					</table>
 				</section>
 				<section>
-					<h2 id="static-calculator-program">Static Calculator Program</h2>
+					<h2 id="calculator-program">Calculator Program</h2>
 					<p>
 						Now we know everything to be able to understand what the following program in
 						<code>nasm</code>
@@ -302,14 +303,14 @@ chmod +x calculator.bin;
 					</pre>
 				</section>
 				<section>
-					<h2 id="call-stacks">Call Stacks</h2>
+					<h2 id="stacks">Stacks</h2>
 					<p>
 						The stack is a special region in memory, which operates on the principle of Last In, First Out.
-						This means that the entry in the stack that was added to the queue last will be processed first.
+						This means that the frame in the stack that was added to the queue last will be processed first.
 					</p>
 					<p>
-						You can visualize this as a physical stack of todos where each new call entry will be added on top
-						of the stack, and the processor will take one todo each time from the top of the stack, process it,
+						You can visualize this as a physical stack of todos where each new frame will be added on top of
+						the stack, and the processor will take one todo each time from the top of the stack, process it,
 						and write down the results of it. When the bottom of the stack and the last todo is reached, the
 						program is finished.
 					</p>
@@ -386,12 +387,200 @@ int a_function(int rdi, int rsi, int rdx, int rcx, int r8, int r9 /*, stack poin
 					</pre>
 				</section>
 				<section>
-					<h2 id="stack-pointers">Stack Pointers</h2>
+					<h2 id="stack-frames-and-stack-pointers">Stack Frames and Stack Pointers</h2>
 					<p>
-						TODO
-						:
-						Explain Stack Pointers, how they change, and how they work
+						Remember the
+						<code>rbp</code>
+						and
+						<code>rsp</code>
+						registers from the second article in the series? They are special registers
+						that are needed to interact with the stack and its frame offsets.
 					</p>
+					<ul>
+						<li><code>rbp</code> is the Base Pointer and it points to the start of the current frame's position</li>
+						<li><code>rsp</code> is the Stack Pointer and it points to the end of the current frame's position</li>
+					</ul>
+					<p>
+						Now we also know that the stack consists of so-called stack frames. Each stack frames is limited in its
+						size to
+						<code>16 bytes</code>
+						and the address values of
+						<code>rsp + 8</code>
+						are always multiple of
+						<code>16</code>
+						. The 128 bytes area
+						beyond the location pointed to by the
+						<code>rsp</code>
+						pointer is a reserved memory zone and is also called the
+						<code>red zone</code>
+						,
+						in it you can store temporary memory that is not persisted across function calls.
+					</p>
+					<p>
+						The registers
+						<code>rbp</code>
+						,
+						<code>rbx</code>
+						and
+						<code>r12</code>
+						to
+						<code>r15</code>
+						belong to the calling function, and the called function
+						is required to preserve their values. A called function must preserve these registers' values for its
+						caller. The remaining registers belong to the called function. If a calling function wants to preserve
+						such a register value across a function call, it must save the value in its local stack frame.
+					</p>
+					<p>
+						The structure of a Stack Frame with a Base Pointer looks like this
+						:
+					</p>
+					<table>
+						<thead>
+							<tr>
+								<th align="right">Position</th>
+								<th align="justify">Contents</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td align="right">8 +<code>%rbp</code></td>
+								<td align="justify">return address</td>
+							</tr>
+							<tr>
+								<td align="right">0 +<code>%rbp</code></td>
+								<td align="justify">previous<code>%rbp</code>value</td>
+							</tr>
+							<tr>
+								<td align="right">-8 +<code>%rbp</code></td>
+								<td align="justify">variable size byte<code>n</code></td>
+							</tr>
+							<tr>
+								<td align="right"></td>
+								<td align="justify">(...)</td>
+							</tr>
+							<tr>
+								<td align="right">0 +<code>%rsp</code></td>
+								<td align="justify">variable size byte<code>0</code></td>
+							</tr>
+						</tbody>
+						<tfoot>
+							<tr>
+								<td align="right">-128 +<code>%rsp</code></td>
+								<td align="justify">(temporary) red zone</td>
+							</tr>
+						</tfoot>
+					</table>
+					<p>
+						Additionally, there are two different instructions to interact with the stack
+						:
+					</p>
+					<ul>
+						<li><code>push <argument></code> stores the argument in the stack and increments the <code>rsp</code> stack pointer afterwards</li>
+						<li><code>pop <argument></code> stores the data in the stack to the argument from a location pointed to by the stack pointer</li>
+					</ul>
+					<p>
+						The important thing to remember is that the
+						<code>push</code>
+						instruction will increment the
+						<code>rsp</code>
+						pointer _after_
+						the value was stored, which means that
+						<code>rsp - 8</code>
+						will be the equivalent position of
+						<code>rbp</code>
+						when the
+						<code>push</code>
+						instruction is called.
+					</p>
+				</section>
+				<section>
+					<h2 id="stack-program">Stack Program</h2>
+					<p>
+						The following example will explain how stack frames are allocated and when the
+						<code>registers</code>
+						are updated.
+					</p>
+					<pre class="asm">
+section .text
+    global _start
+
+_start:
+    ; set two registers for demonstration
+    mov rax, 13
+    mov rdx, 37
+
+    ; rax stored at address 0 * 8
+    ; increment rsp address to where the value of 13 is
+    push rax
+
+    ; rdx stored at address 1 * 8
+    ; increment rsp address to where the value of 37 is
+    push rdx
+
+    ; set rax to the value of [rsp + 8], which is 13
+    mov rax, [rsp + 8]
+
+    cmp rax, 13
+    je .success
+    jmp .failure
+
+.success:
+    mov rax, 60
+    mov rdi, 0
+    syscall
+
+.failure:
+    mov rax, 60
+    mov rdi, 1
+    syscall
+					</pre>
+					<p>
+						Because the
+						<code>rsp</code>
+						address is incremented after the value is allocated to the stack, the program will
+						have the following values in the stack of the program before it exits
+						:
+					</p>
+					<table>
+						<thead>
+							<tr>
+								<th align="right">Start</th>
+								<th align="right">End</th>
+								<th align="justify">Contents</th>
+								<th align="left">Frame</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td align="right">8 +<code>rsp</code></td>
+								<td align="right"><code>rsp</code></td>
+								<td align="justify">13</td>
+								<td align="left">1</td>
+							</tr>
+							<tr>
+								<td align="right"><code>rsp</code></td>
+								<td align="right"><code>rbp</code></td>
+								<td align="justify">37</td>
+								<td align="left">2</td>
+							</tr>
+						</tbody>
+					</table>
+					<p>
+						The stack example program can also be downloaded
+						<a href="/weblog/articles/linux-assembly/stack.asm">here</a>
+						.
+						If we compile and run our program, it will exit with the
+						<code>exit code 0</code>
+						.
+					</p>
+					<pre class="bash">
+nasm -f elf64 -o stack.o stack.asm;
+ld -o stack.bin stack.o;
+chmod +x stack.bin;
+
+./stack.bin;
+echo $?; # output: 0
+					</pre>
 				</section>
 				<section>
 					<h2 id="function-calls">Function Calls</h2>

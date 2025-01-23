@@ -56,202 +56,139 @@
 
 
 
-	if (global.location.search === '?debug') {
+	global.addEventListener('DOMContentLoaded', () => {
 
-		global.addEventListener('DOMContentLoaded', () => {
+		const crypto  = global.crypto;
+		const element = global.document.querySelector('#crypto input[type="password"]');
+		const ENCODER = new TextEncoder();
+		const DECODER = new TextDecoder();
 
-			let file = global.location.pathname.split('/').pop();
-			let xhr  = new XMLHttpRequest();
 
-			if (file === 'en.html') {
-				xhr.open('GET', '/cv/source/en.cv');
-			} else if (file === 'de.html') {
-				xhr.open('GET', '/cv/source/de.cv');
+		if (global.crypto !== undefined) {
+			notify('Web Crypto API initialized.');
+			element.removeAttribute('disabled');
+		} else {
+			notify('Web Crypto API not available!');
+			element.setAttribute('disabled', true);
+		}
+
+		const digest = async (password) => {
+
+			let temp   = await crypto.subtle.digest('SHA-256', ENCODER.encode(password));
+			let digest = new Uint8Array(temp);
+
+			let str = '';
+
+			for (let d = 0, dl = digest.byteLength; d < dl; d++) {
+				str += String.fromCharCode(digest[d]);
 			}
 
-			xhr.responseType = 'text';
+			let hex = '';
 
-			xhr.onerror = () => {
-				// Do nothing
-			};
+			for (let s = 0; s < str.length; s++) {
 
-			xhr.onload = async () => {
-
-				let decrypted = xhr.response;
-				if (decrypted.length > 0) {
-
-					if (
-						decrypted.includes('<section id="about">')
-						|| decrypted.includes('<section id="employers">')
-						|| decrypted.includes('<section id="education">')
-						|| decrypted.includes('<section id="volunteer">')
-					) {
-
-						replace('about',     decrypted);
-						replace('employers', decrypted);
-						replace('education', decrypted);
-						replace('volunteer', decrypted);
-
-					}
-
+				let val = str.charCodeAt(s).toString(16);
+				if (val.length < 2) {
+					val = '0' + val;
 				}
 
-			};
+				hex += val;
 
-			xhr.send();
-
-			setTimeout(() => {
-
-				let wrapper = global.document.querySelector('#crypto');
-				if (wrapper !== null) {
-					wrapper.parentNode.removeChild(wrapper);
-				}
-
-			}, 0);
-
-		});
-
-	} else {
-
-		global.addEventListener('DOMContentLoaded', () => {
-
-			const crypto  = global.crypto;
-			const element = global.document.querySelector('#crypto input[type="password"]');
-			const ENCODER = new TextEncoder();
-			const DECODER = new TextDecoder();
-
-
-			if (global.crypto !== undefined) {
-				notify('Web Crypto API initialized.');
-				element.removeAttribute('disabled');
-			} else {
-				notify('Web Crypto API not available!');
-				element.setAttribute('disabled', true);
 			}
 
+			return hex;
 
-			const digest = async (password) => {
+		};
 
-				let temp   = await crypto.subtle.digest('SHA-256', ENCODER.encode(password));
-				let digest = new Uint8Array(temp);
+		const decrypt = async (buffer, password) => {
 
-				let str = '';
+			let salt    = buffer.slice( 0, 16);
+			let iv      = buffer.slice(16, 16 + 12);
+			let pw_key  = await crypto.subtle.importKey('raw', ENCODER.encode(password), 'PBKDF2', false, [ 'deriveKey' ]);
+			let aes_key = await crypto.subtle.deriveKey({
+				name:       'PBKDF2',
+				salt:       salt,
+				iterations: 250000,
+				hash:       'SHA-256'
+			}, pw_key, {
+				name:   'AES-GCM',
+				length: 256
+			}, false, [ 'decrypt' ]);
 
-				for (let d = 0, dl = digest.byteLength; d < dl; d++) {
-					str += String.fromCharCode(digest[d]);
-				}
+			let content = await crypto.subtle.decrypt({
+				name: 'AES-GCM',
+				iv:   iv
+			}, aes_key, buffer.slice(16 + 12));
 
-				let hex = '';
+			return DECODER.decode(content);
 
-				for (let s = 0; s < str.length; s++) {
-
-					let val = str.charCodeAt(s).toString(16);
-					if (val.length < 2) {
-						val = '0' + val;
-					}
-
-					hex += val;
-
-				}
-
-				return hex;
-
-			};
-
-			const decrypt = async (buffer, password) => {
-
-				let salt    = buffer.slice( 0, 16);
-				let iv      = buffer.slice(16, 16 + 12);
-				let pw_key  = await crypto.subtle.importKey('raw', ENCODER.encode(password), 'PBKDF2', false, [ 'deriveKey' ]);
-				let aes_key = await crypto.subtle.deriveKey({
-					name:       'PBKDF2',
-					salt:       salt,
-					iterations: 250000,
-					hash:       'SHA-256'
-				}, pw_key, {
-					name:   'AES-GCM',
-					length: 256
-				}, false, [ 'decrypt' ]);
-
-				let content = await crypto.subtle.decrypt({
-					name: 'AES-GCM',
-					iv:   iv
-				}, aes_key, buffer.slice(16 + 12));
-
-				return DECODER.decode(content);
-
-			};
+		};
 
 
 
-			element.addEventListener('blur', async () => {
+		element.addEventListener('blur', async () => {
 
-				let password = element.value.trim();
-				if (password.length > 3) {
+			let password = element.value.trim();
+			if (password.length > 3) {
 
-					let filename = await digest(password);
+				let filename = await digest(password);
 
-					notify('Downloading "' + filename + '.cv" ...');
+				notify('Downloading "' + filename + '.cv" ...');
 
-					let xhr = new XMLHttpRequest();
+				let xhr = new XMLHttpRequest();
 
-					xhr.open('GET', '/cv/source/' + filename + '.cv');
-					xhr.responseType = 'arraybuffer';
+				xhr.open('GET', '/cv/source/' + filename + '.cv');
+				xhr.responseType = 'arraybuffer';
 
-					xhr.onerror = () => {
-						notify('Encrypted CV not found.');
-						notify('Password wrong or deprecated.');
-					};
+				xhr.onerror = () => {
+					notify('Encrypted CV not found.');
+					notify('Password wrong or deprecated.');
+				};
 
-					xhr.onload = async () => {
+				xhr.onload = async () => {
 
-						let decrypted = await decrypt(xhr.response, password);
-						if (decrypted.length > 0) {
+					let decrypted = await decrypt(xhr.response, password);
+					if (decrypted.length > 0) {
 
-							if (
-								decrypted.includes('<section id="about">')
-								|| decrypted.includes('<section id="employers">')
-								|| decrypted.includes('<section id="education">')
-								|| decrypted.includes('<section id="volunteer">')
-							) {
+						if (
+							decrypted.includes('<section id="profile">')
+							|| decrypted.includes('<section id="open-source">')
+							|| decrypted.includes('<section id="teaching">')
+						) {
 
-								notify('Encrypted CV found.');
-								notify('Password correct.');
+							notify('Encrypted CV found.');
+							notify('Password correct.');
 
-								notify('Decrypting CV ...');
+							notify('Decrypting CV ...');
 
-								replace('about',     decrypted);
-								replace('employers', decrypted);
-								replace('education', decrypted);
-								replace('volunteer', decrypted);
+							replace('profile',     decrypted);
+							replace('open-source', decrypted);
+							replace('teaching',    decrypted);
 
-								notify('Done. H4v3 fun :)');
+							notify('Done. H4v3 fun :)');
 
+							setTimeout(() => {
 
-								setTimeout(() => {
+								let wrapper = global.document.querySelector('#crypto');
+								if (wrapper !== null) {
+									wrapper.parentNode.removeChild(wrapper);
+								}
 
-									let wrapper = global.document.querySelector('#crypto');
-									if (wrapper !== null) {
-										wrapper.parentNode.removeChild(wrapper);
-									}
-
-								}, 1000);
-
-							}
+							}, 1000);
 
 						}
 
-					};
+					}
 
-					xhr.send();
+				};
 
-				}
+				xhr.send();
 
-			});
+			}
 
 		});
 
-	}
+	});
 
 })(typeof window !== 'undefined' ? window : this);
 

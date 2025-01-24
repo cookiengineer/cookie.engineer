@@ -1,6 +1,65 @@
 
 (function(global) {
 
+	const dispatch_profile = () => {
+
+		let profile = global.document.querySelector('#profile');
+		if (profile !== null) {
+
+			profile.addEventListener('click', (event) => {
+
+				let avatar = profile.querySelector('#avatar img');
+
+				if (event.target === avatar) {
+
+					[
+						profile.querySelector('img'),
+						profile.querySelector('figcaption b'),
+						profile.querySelector('aside a[href^="mailto:"]')
+					].filter((element) => {
+						return element !== null;
+					}).forEach((element) => {
+
+						if (element.getAttribute('data-src') !== null) {
+
+							let tmp = element.src;
+
+							element.setAttribute('src', element.getAttribute('data-src'));
+							element.setAttribute('data-src', tmp);
+
+						}
+
+						if (element.getAttribute('data-html') !== null) {
+
+							let tmp = element.innerHTML;
+
+							element.innerHTML = element.getAttribute('data-html');
+							element.setAttribute('data-html', tmp);
+
+						}
+
+						if (element.getAttribute('data-href') !== null) {
+
+							let tmp = element.href;
+
+							element.href = element.getAttribute('data-href');
+							element.setAttribute('data-href', tmp);
+
+						}
+
+					});
+
+					event.preventDefault();
+					event.stopPropagation();
+
+				}
+
+			});
+
+		}
+
+	};
+
 	const replace = (section, data) => {
 
 		let str0 = data.indexOf('<section id="' + section + '"');
@@ -78,57 +137,11 @@
 								wrapper.parentNode.removeChild(wrapper);
 							}
 
-						}, 1000);
+						}, 0);
 
 						setTimeout(() => {
-
-							let profile = global.document.querySelector('#profile');
-							if (profile !== null) {
-
-								let avatar = profile.querySelector('#avatar');
-
-								avatar.addEventListener('click', () => {
-
-									[
-										profile.querySelector('img'),
-										profile.querySelector('figcaption b'),
-										profile.querySelector('aside a[href^="mailto:"]')
-									].forEach((element) => {
-
-										if (element.getAttribute('data-src') !== null) {
-
-											let tmp = element.src;
-
-											element.setAttribute('src', element.getAttribute('data-src'));
-											element.setAttribute('data-src', tmp);
-
-										}
-
-										if (element.getAttribute('data-html') !== null) {
-
-											let tmp = element.innerHTML;
-
-											element.innerHTML = element.getAttribute('data-html');
-											element.setAttribute('data-html', tmp);
-
-										}
-
-										if (element.getAttribute('data-href') !== null) {
-
-											let tmp = element.href;
-
-											element.href = element.getAttribute('data-href');
-											element.setAttribute('data-href', tmp);
-
-										}
-
-									});
-
-								});
-
-							}
-
-						}, 1000);
+							dispatch_profile();
+						}, 100);
 
 					}
 
@@ -139,6 +152,12 @@
 			xhr.send();
 
 		});
+
+	} else {
+
+		setTimeout(() => {
+			dispatch_profile();
+		}, 100)
 
 	}
 

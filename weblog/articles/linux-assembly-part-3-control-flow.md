@@ -9,7 +9,7 @@
 Previous article in this series: [Linux Assembly Part 2 about Declaring Data](/weblog/articles/linux-assembly-part-2-declaring-data.html)
 
 This is the third article in the `Linux Assembly` series. This time, we will focus on how to
-do arithmetic operations on the data types that we've learned about in the previous article.
+do the control flow of our program that we've learned about in the previous article.
 
 
 ## Control Flow

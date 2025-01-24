@@ -16,7 +16,7 @@ func showHelp() {
 
 	console.Group("Examples")
 	console.Log("")
-	console.Log("# Write decrypted CV to /tmp/output.cv")
+	console.Log("# Write decrypted CV to ../cv/source/DECRYPTED.cv")
 	console.Log("cv decrypt \"password\";")
 	console.Log("")
 	console.Log("# Write encrypted CV to ../cv/source/<derived password>.cv")
@@ -61,7 +61,7 @@ func main() {
 
 		if action == "encrypt" {
 
-			result := actions.EncryptCV(cwd + "/cv/source", password, "/tmp/output.cv")
+			result := actions.EncryptCV(cwd + "/cv/source", password, cwd + "/cv/source/DECRYPTED.cv")
 
 			if result == true {
 				os.Exit(0)
@@ -71,7 +71,7 @@ func main() {
 
 		} else if action == "decrypt" {
 
-			result := actions.DecryptCV(cwd + "/cv/source", password, "/tmp/output.cv")
+			result := actions.DecryptCV(cwd + "/cv/source", password, cwd + "/cv/source/DECRYPTED.cv")
 
 			if result == true {
 				os.Exit(0)

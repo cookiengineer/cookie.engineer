@@ -60,37 +60,25 @@
 
 	};
 
-	const replace = (section, data) => {
+	const render = (data) => {
 
-		let str0 = data.indexOf('<section id="' + section + '"');
-		let str1 = data.indexOf('</section>', str0);
+		let template = global.document.createElement('template');
 
-		let target = global.document.querySelector('section#' + section);
-		if (target !== null && str0 !== -1 && str1 !== -1) {
+		template.innerHTML = data;
 
-			let chunk   = data.substr(str0, str1 - str0 + 10);
-			let element = global.document.createElement('this-is-a-dummy');
+		setTimeout(() => {
 
-			element.innerHTML = chunk;
+			let sections = Array.from(template.content.querySelectorAll('section'));
 
-			setTimeout(() => {
+			if (sections.length > 0) {
 
-				let elements = Array.from(element.querySelector('section#' + section).children);
-				if (elements.length > 0) {
+				sections.forEach((section) => {
+					global.document.querySelector('body').appendChild(section);
+				});
 
-					Array.from(target.children).forEach((node) => {
-						target.removeChild(node);
-					});
+			}
 
-					elements.forEach((element) => {
-						target.appendChild(element);
-					});
-
-				}
-
-			}, 0);
-
-		}
+		}, 0);
 
 	};
 
@@ -124,9 +112,7 @@
 
 						console.error('Decrypted CV found.');
 
-						replace('profile',     decrypted);
-						replace('open-source', decrypted);
-						replace('teaching',    decrypted);
+						render(decrypted);
 
 						console.error('Done. H4v3 fun :)');
 

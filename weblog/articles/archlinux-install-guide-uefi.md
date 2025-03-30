@@ -213,7 +213,7 @@ export UUID="4e31973f-1e77-4061-aadf-d77a057832b2";
 
 echo "title Arch Linux" > /boot/loader/entries/arch.conf;
 echo "linux /vmlinuz-linux" >> /boot/loader/entries/arch.conf;
-echo "initrd /initramfs-linux" >> /boot/loader/entries/arch.conf;
+echo "initrd /initramfs-linux.img" >> /boot/loader/entries/arch.conf;
 echo "options cryptdevice=UUID=$UUID:root root=/dev/mapper/root rw" >> /boot/loader/entries/arch.conf;
 ```
 

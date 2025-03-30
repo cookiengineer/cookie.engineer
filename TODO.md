@@ -1,6 +1,10 @@
 
 ## Projects
 
+Missing Tholian Projects:
+
+- [ ] Add `tholian-warps` (with Screenshots)
+
 Missing Artificial Engineering Projects:
 
 - [ ] Add `lychee.js Strainer`
@@ -11,6 +15,11 @@ Missing Artificial Engineering Projects:
 
 Missing Cookie Engineer Projects:
 
+- [ ] Add `agenda` screenshots
+- [ ] Add `gooey` WebASM framework
+- [ ] Add `gosleeper` malware infiltration framework
+- [ ] Add `goroot` privilege escalation framework
+- [ ] Add `git-evac` Git Repo Management Tool with screenshots
 - [ ] Add `evolution-of-code`
 - [ ] Add `infiltrator`
 - [ ] Add `lecture-tool` or rename it to `lecturer`?

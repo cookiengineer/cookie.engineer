@@ -210,6 +210,7 @@ int a_function(int rdi, int rsi, int rdx, int rcx, int r8, int r9 /*, stack poin
 Remember the `rbp` and `rsp` registers from the second article in the series? They are special registers
 that are needed to interact with the stack and its frame offsets.
 
+- `rip` is the Instruction Pointer and it points to the next instruction the CPU is going to execute
 - `rbp` is the Base Pointer and it points to the start of the current frame's position
 - `rsp` is the Stack Pointer and it points to the end of the current frame's position
 
@@ -222,6 +223,10 @@ The registers `rbp`, `rbx` and `r12` to `r15` belong to the calling function, an
 is required to preserve their values. A called function must preserve these registers' values for its
 caller. The remaining registers belong to the called function. If a calling function wants to preserve
 such a register value across a function call, it must save the value in its local stack frame.
+
+The `rip` instruction pointer contains the next instruction that the CPU is going to execute. When the
+CPU is at the `call` instruction to call a function, it pushes the address of the next instruction to
+run after the current function call to the stack.
 
 The structure of a Stack Frame with a Base Pointer looks like this:
 
@@ -309,5 +314,150 @@ echo $?; # output: 0
 
 ## Function Calls
 
-TODO: Explain `call` in detail, and `EIP` and returns
+Function calls in `nasm` assembly code always use the same generic registers to use access and
+manipulate declared data.
+
+Let's take a look at a typical `C` program and translate it to `nasm` to understand the limitations
+of the generic registers and when or where we need to push data to the stack to be able to use it.
+
+```cpp
+#include <stdio.h>
+
+int makesum(int arg1, int arg2, int arg3, int arg4, int arg5, int arg6, int arg7, int arg8) {
+    return arg1 + arg2 + arg3 + arg4 + arg5 + arg6 + arg7 + arg8;
+}
+
+int main() {
+    int result = makesum(1, 2, 3, 4, 5, 6, 7, 8);
+    char buffer[20];
+
+    // convert integer to string
+    sprintf(buffer, "%d", result);
+
+    // print to stdout
+    printf("%s", buffer);
+
+    // exit with code 0
+    return 0;
+}
+```
+
+Our example program has a bunch of functionality that makes it a little more complicated:
+
+- The variable `buffer` is initialized but not set, and therefore must be part of `.bss` and not `.data`
+- We need to implement `sprintf()` to convert our result to a string
+- We need to implement a conversion loop that can divide by 10
+
+```asm
+section .bss
+    buffer resb 20 ; reserve 64 bytes
+
+section .text
+    global _start
+
+_start:
+    push rbp     ; preserve base pointer
+    mov rbp, rsp ; set the new base pointer
+
+    ; stack contains the last 2 arguments
+    push 8 ; push 8th argument to stack
+    push 7 ; push 7th argument to stack
+
+    ; registers contain the first 6 arguments
+    mov rdi, 1
+    mov rsi, 2
+    mov rdx, 3
+    mov rcx, 4
+    mov r8, 5
+    mov r9, 6
+
+    call .makesum
+    add rsp, 16 ; clean up the two arguments on the stack
+
+    ; rax = input
+    ; convert rax to string, rsi = buffer, rdx = length
+    call .sprintf
+
+    ; print to stdout
+    mov rax, 1
+    mov rdi, 1
+    mov rsi, buffer
+    mov rdx, 64
+    syscall
+
+    ; exit with code 0
+    call .exit
+
+.exit:
+    mov rax, 60
+    mov rdi, 0
+    syscall
+
+.sprintf:
+    mov rcx, 0
+    mov rsi, buffer + 19 ; point to end of buffer
+    mov rbx, 10
+
+    test rax, rax
+    jnz .divide_by_10_loop
+
+    ; rax == 0 case
+    dec rsi
+    mov byte [rsi], '0'
+    mov rdx, 1
+    ret
+
+.divide_by_10_loop:
+    xor rdx, rdx
+    div rbx
+
+    add dl, '0'
+    dec rsi
+    mov [rsi], dl
+
+    inc rcx
+    test rax, rax
+    jnz .divide_by_10_loop
+
+    mov rdx, rcx
+    ret
+
+.makesum:
+    push rbp     ; preserve base pointer
+    mov rbp, rsp ; set the new base pointer
+
+    mov rax, rdi ; arg1
+    add rax, rsi ; + arg2
+    add rax, rdx ; + arg3
+    add rax, rcx ; + arg4
+    add rax, r8  ; + arg5
+    add rax, r9  ; + arg6
+
+    ; stack layout at function entry:
+    ; [rsp] -> return address
+    ; [rsp+8] -> 7th argument
+    ; [rsp+16] -> 8th argument
+
+    mov rbx, [rbp + 16] ; arg7
+    add rax, rbx
+
+    mov rbx, [rbp + 24] ; arg8
+    add rax, rbx
+
+    ; leave function and return
+    ; rax contains sum
+    pop rbp
+    ret
+```
+
+The Makesum program can also be downloaded from [here](/weblog/articles/linux-assembly/makesum.asm).
+If we compile and run our program, we can see the `36` message:
+
+```bash
+nasm -f elf64 -o makesum.o makesum.asm;
+ld -o makesum.bin makesum.o;
+
+chmod +x makesum.bin;
+./makesum.bin;
+```
 

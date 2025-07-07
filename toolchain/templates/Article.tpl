@@ -54,7 +54,7 @@
 				<a class="icon-section" href="/projects.html">Projects</a>
 				<a class="icon-section" href="/talks.html">Talks</a>
 				<a class="icon-section" href="/contact.html">Contact</a>
-				<a class="icon-section" href="/weblog/index.html">Web Log</a>
+				<a class="icon-section" href="/weblog/index.html">Web&nbsp;Log</a>
 			</aside>
 			<aside id="toc">{{range .Body}}{{if eq .Type "h2"}}
 				<a class="section" href="#{{.Attributes.id}}">{{RenderElements .Children ""}}</a>{{else if eq .Type "h3" "h4"}}

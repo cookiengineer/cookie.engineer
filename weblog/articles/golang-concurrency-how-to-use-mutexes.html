@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en" prefix="og:http://ogp.me/ns#">
+	<head>
+		<title>Golang Concurrency: How to use Mutexes - Cookie Engineer's Web Log</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="apple-mobile-web-app-capable" content="yes">
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Golang Concurrency: How to use Mutexes">
+		<meta name="keywords" content="go, software, development">
+		<meta name="generator" content="Beer and VIM night coding sessions">
+		<meta name="robots" content="index, follow">
+		<link rel="alternate" type="application/rss+xml" href="../feed.xml">
+
+		<!-- Social Meta -->
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/avatar/cookiengineer.png">
+		<meta property="og:title" content="Golang Concurrency: How to use Mutexes - Cookie Engineer's Web Log">
+		<meta property="og:site_name" content="Cookie Engineer's Web Log">
+		<meta property="og:description" content="Understanding the concurrency model behind Go's runtime and how to use Go's goroutines, and mutexes without read/write errors.">
+		<meta property="og:type" content="article">
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Golang Concurrency: How to use Mutexes - Cookie Engineer's Web Log">
+		<meta name="twitter:description" itemprop="description" content="Understanding the concurrency model behind Go's runtime and how to use Go's goroutines, and mutexes without read/write errors.">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/layout/index.css">
+		<link rel="stylesheet" href="/weblog/design/index.css">
+
+		<!-- Weblog Design -->
+		<link rel="stylesheet" href="/weblog/design/layout/highlight.css">
+		<link rel="stylesheet" href="/weblog/design/layout/article.css">
+		<script src="/weblog/design/layout/highlight.js"></script>
+		<script src="/weblog/design/layout/article.js" defer></script>
+
+		<!-- Website Functionality -->
+		<link rel="stylesheet" href="/design/menu/index.css">
+		<script src="/design/menu/index.js" defer></script>
+
+		<!-- Magic: Copy/Paste -->
+		<link rel="stylesheet" href="/design/magic/index.css">
+		<script src="/design/magic/index.js" defer></script>
+
+	</head>
+	<body>
+		<header>
+			<aside id="menu" class="visible">
+				<a id="menu-button" href="#menu">Menu</a>
+				<a class="icon-section" href="/index.html">About&nbsp;Me</a>
+				<a class="icon-section" href="/projects.html">Projects</a>
+				<a class="icon-section" href="/talks.html">Talks</a>
+				<a class="icon-section" href="/contact.html">Contact</a>
+				<a class="icon-section" href="/weblog/index.html">Web&nbsp;Log</a>
+			</aside>
+			<aside id="toc">
+				<a class="section" href="#simple-database-struct">Simple Database Struct</a>
+				<a class="section" href="#single-thread-zero-problems">Single Thread, Zero Problems</a>
+				<a class="section" href="#multiple-threads-multiple-problems">Multiple Threads, Multiple Problems</a>
+				<a class="section" href="#database-with-a-single-mutex">Database with a Single Mutex</a>
+				<a class="section" href="#database-with-multiple-mutexes-per-resource">Database with Multiple Mutexes per Resource</a>
+				<a class="section" href="#further-optimizations-with-atomics">Further Optimizations with Atomics</a>
+				<a class="section" href="#reference-implementation">Reference Implementation</a>
+			</aside>
+		</header>
+		<section id="article" class="article">
+			<h1>Golang Concurrency: How to use Mutexes</h1>
+			<article>
+				<section>
+					<p>
+						After refactoring some of my old codebases to account for usage
+						within goroutines, I decided it's probably best to manifest this
+						inside a thorough article about Go's concurrency model.
+					</p>
+					<p>
+						At first I got a little confused by the obscure error messages,
+						and it took a while how to use go's
+						<code>map</code>
+						data type safely. This
+						article aims to provide examples that break, so that you can
+						understand _why_ and _when_ to use the
+						<code>sync.Mutex</code>
+						or
+						<code>sync.RWMutex</code>
+						abstractions.
+					</p>
+				</section>
+				<section>
+					<h2 id="simple-database-struct">Simple Database Struct</h2>
+					<p>
+						Let's begin with a simple abstraction of an in-memory key-value store,
+						a
+						<code>Database struct</code>
+						that stores uniquely identifiable
+						<code>Entry struct</code>
+						instances in a map.
+					</p>
+					<pre class="go">
+// Database.go
+package example
+
+type Entry struct {
+	Name string `json:"name"`
+	// ... additional properties
+}
+
+type Database struct {
+	data map[string]*Entry `json:"-"`
+}
+
+func NewDatabase() *Database {
+	return &Database{
+		data: make(map[string]*Entry),
+	}
+}
+
+func (database *Database) Read(key string) *Entry {
+
+	var result *Entry = nil
+
+	tmp, ok := database.data[key]
+
+	if ok == true {
+		result = tmp
+	}
+
+	return result
+
+}
+
+func (database *Database) Write(key string, entry Entry) bool {
+
+	database.data[key] = &entry
+
+	return true
+
+}
+					</pre>
+				</section>
+				<section>
+					<h2 id="single-thread-zero-problems">Single Thread, Zero Problems</h2>
+					<p>
+						If we use our Database implementation in a single thread, we won't have a problem
+						and everything works as expected.
+					</p>
+					<pre class="go">
+// cmds/single-thread/main.go
+package main
+
+import "example"
+import "fmt"
+
+func main() {
+
+	database := example.NewDatabase()
+
+	database.Write("user1", example.Entry{
+		Name: "Alice",
+	})
+
+	entry1 := database.Read("user1")
+
+	fmt.Println("Read user1:", entry1.Name)
+
+}
+					</pre>
+				</section>
+				<section>
+					<h2 id="multiple-threads-multiple-problems">Multiple Threads, Multiple Problems</h2>
+					<p>
+						If we however start to use goroutines for accessing the map entries, we'll get a
+						read/write access error when the same map entry is accessed by two different go
+						routines at the same time.
+					</p>
+					<pre class="go">
+// cmds/multi-thread/main.go
+package main
+
+import "example"
+import "sync"
+import "fmt"
+
+func main() {
+
+	database  := example.NewDatabase()
+	waitgroup := sync.WaitGroup{}
+
+	// Start 100 Write threads
+	for i := 0; i &lt; 100; i++ {
+
+		waitgroup.Add(1)
+
+		go func(i int) {
+
+			defer waitgroup.Done()
+
+			key  := fmt.Sprintf("user%d", i)
+			name := fmt.Sprintf("Name%d", i)
+
+			database.Write(key, example.Entry{
+				Name: name,
+			})
+
+		}(i)
+
+	}
+
+	// Start 100 Read threads
+	for i := 0; i &lt; 100; i++ {
+
+		waitgroup.Add(1)
+
+		go func(i int) {
+
+			defer waitgroup.Done()
+
+			key   := fmt.Sprintf("user%d", i)
+			entry := database.Read(key)
+
+			if entry != nil {
+				fmt.Println("Read %s: %s", key, entry.Name)
+			}
+
+		}(i)
+
+	}
+
+	waitgroup.Wait()
+
+}
+					</pre>
+					<p>
+						The error typically looks like this, highlighting that a map was concurrently
+						being written from multiple goroutines at the same time. The stacktrace of the
+						error also includes the parent goroutines, which in our case is the main thread,
+						also known as
+						<code>goroutine 1</code>
+						.
+					</p>
+					<pre class="text">
+fatal error: concurrent map writes
+
+goroutine 74 [running]:
+internal/runtime/maps.fatal({0x4b9274?, 0x47178a?})
+	/usr/lib/go/src/runtime/panic.go:1058 +0x18
+example.(*Database).Write(...)
+	/weblog/articles/golang-concurrency-how-to-use-mutexes/example/Database.go:35
+main.main.func1(0x44)
+	/weblog/articles/golang-concurrency-how-to-use-mutexes/example/cmds/multi-thread/main.go:24 +0x149
+created by main.main in goroutine 1
+	/weblog/articles/golang-concurrency-how-to-use-mutexes/example/cmds/multi-thread/main.go:17 +0x75
+
+goroutine 1 [sync.WaitGroup.Wait]:
+sync.runtime_SemacquireWaitGroup(0xc0000fc600?)
+	/usr/lib/go/src/runtime/sema.go:110 +0x25
+sync.(*WaitGroup).Wait(0x0?)
+	/usr/lib/go/src/sync/waitgroup.go:118 +0x48
+main.main()
+	/weblog/articles/golang-concurrency-how-to-use-mutexes/example/cmds/multi-thread/main.go:52 +0x1f7
+					</pre>
+				</section>
+				<section>
+					<h2 id="database-with-a-single-mutex">Database with a Single Mutex</h2>
+					<p>
+						The easiest way to fix this is by using a
+						<code>sync.Mutex</code>
+						for the Database. This will
+						make goroutines wait when the
+						<code>mutex.Lock()</code>
+						method is being called, and they'll wait
+						until the blocking goroutine called the
+						<code>mutex.Unlock()</code>
+						method.
+					</p>
+					<p>
+						The problem with this, however, is that it's better to use a
+						<code>sync.RWMutex</code>
+						instead
+						to reflect read/write access separately. Read access can be parallelized much better
+						than Write access, meaning that only Write access will effectively block other goroutines
+						then. The methods on
+						<code>sync.Mutex</code>
+						and
+						<code>sync.RWMutex</code>
+						are a little confusing though.
+					</p>
+					<table>
+						<thead>
+							<tr>
+								<th align="left">Method</th>
+								<th align="left">Description</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td align="left"><code>sync.Mutex.Lock()</code></td>
+								<td align="left">Lock read and write access</td>
+							</tr>
+							<tr>
+								<td align="left"><code>sync.Mutex.Unlock()</code></td>
+								<td align="left">Unlock read and write access</td>
+							</tr>
+							<tr>
+								<td align="left"><code>sync.RWMutex.Lock()</code></td>
+								<td align="left">Lock write access</td>
+							</tr>
+							<tr>
+								<td align="left"><code>sync.RWMutex.Unlock()</code></td>
+								<td align="left">Unlock write access</td>
+							</tr>
+							<tr>
+								<td align="left"><code>sync.RWMutex.RLock()</code></td>
+								<td align="left">Lock read access</td>
+							</tr>
+							<tr>
+								<td align="left"><code>sync.RWMutex.RUnlock()</code></td>
+								<td align="left">Unlock read access</td>
+							</tr>
+						</tbody>
+					</table>
+					<p>
+						Now we have to add the mutex usage to our new
+						<code>DatabaseWithMutex</code>
+						implementation.
+					</p>
+					<pre class="go">
+// DatabaseWithMutex.go
+package example
+
+import "sync"
+
+type DatabaseWithMutex struct {
+	data  map[string]*Entry `json:"-"`
+	mutex *sync.RWMutex     `json:"-"`
+}
+
+func NewDatabaseWithMutex() *DatabaseWithMutex {
+	return &DatabaseWithMutex{
+		data: make(map[string]*Entry),
+		mutex: &sync.RWMutex{},
+	}
+}
+
+func (database *DatabaseWithMutex) Read(key string) *Entry {
+
+	database.mutex.RLock()
+
+	var result *Entry = nil
+
+	tmp, ok := database.data[key]
+
+	if ok == true {
+		result = tmp
+	}
+
+	database.mutex.RUnlock()
+
+	return result
+
+}
+
+func (database *DatabaseWithMutex) Write(key string, entry Entry) bool {
+
+	database.mutex.Lock()
+
+	database.data[key] = &entry
+
+	database.mutex.Unlock()
+
+	return true
+
+}
+					</pre>
+					<p>
+						Now we can use the different database in our
+						<code>main.go</code>
+						and we won't get race conditions
+						or pointer errors. We'll also change the code to use two different waitgroups, one for
+						writing all content to the Database and one for reading all content.
+					</p>
+					<p>That's not really necessary, but it's a cleaner example code.</p>
+					<pre class="go">
+// cmds/multi-thread-with-mutex/main.go
+package main
+
+import "example"
+import "sync"
+import "fmt"
+
+func main() {
+
+	database        := example.NewDatabaseWithMutex()
+	waitgroup_read  := sync.WaitGroup{}
+	waitgroup_write := sync.WaitGroup{}
+
+	// Start 100 Write threads
+	for i := 0; i &lt; 100; i++ {
+
+		waitgroup_write.Add(1)
+
+		go func(i int) {
+
+			defer waitgroup_write.Done()
+
+			key  := fmt.Sprintf("user%d", i)
+			name := fmt.Sprintf("Name%d", i)
+
+			database.Write(key, example.Entry{
+				Name: name,
+			})
+
+		}(i)
+
+	}
+
+	waitgroup_write.Wait()
+
+	// Start 100 Read threads
+	for i := 0; i &lt; 100; i++ {
+
+		waitgroup_read.Add(1)
+
+		go func(i int) {
+
+			defer waitgroup_read.Done()
+
+			key   := fmt.Sprintf("user%d", i)
+			entry := database.Read(key)
+
+			if entry != nil {
+				fmt.Println("Read %s: %s", key, entry.Name)
+			}
+
+		}(i)
+
+	}
+
+	waitgroup_read.Wait()
+
+}
+					</pre>
+				</section>
+				<section>
+					<h2 id="database-with-multiple-mutexes-per-resource">Database with Multiple Mutexes per Resource</h2>
+					<p>The next step in the process is related to concurrent access of separated entities.</p>
+					<p>
+						If you write code that uses multiple goroutines that can read/access separate entities
+						in parallel, it's best to have a structure where your Database actually uses separate
+						mutexes for each unique entity.
+					</p>
+					<p>
+						If you e.g. have a Database that serializes its data directly on-disk via
+						<code>os.WriteFile()</code>
+						,
+						you can protect the deserialized entities by using a separate
+						<code>RWMutex</code>
+						for each entity.
+						But we keep the
+						<code>Database.mutex</code>
+						to lock it when the map of mutexes changes.
+					</p>
+					<pre class="go">
+type Database struct {
+	// mutexes per-entity
+	mutexes map[string]*sync.Mutex
+}
+
+func toEntityMutex(database *Database, name string) *sync.Mutex {
+
+	database.mutex.RLock()
+	mutex, ok := database.mutexes[name]
+	database.mutex.RUnlock()
+
+	if ok == false {
+
+		database.mutex.Lock()
+		database.mutexes[name] = &sync.Mutex{}
+		mutex = database.mutexes[name]
+		database.mutex.Unlock()
+
+	}
+
+	return mutex
+
+}
+					</pre>
+					<p>
+						The little helper function above it makes things much easier and convenient to
+						use inside the publicly available methods. We can implement a borrowing memory
+						ownership model right into it, where the resource-specific mutex is locked on
+						<code>ReadEntity()</code>
+						and unlocked again on
+						<code>WriteEntity()</code>
+						, so that all goroutines
+						can work in parallel on only one entity each, preventing corruption from
+						modifications through other goroutines.
+					</p>
+					<pre class="go">
+func (database *Database) ReadEntity(name string) *Entity {
+
+	mutex := toEntityMutex(database, name)
+	mutex.Lock()
+
+	result := readEntity(database, name)
+
+	return result
+
+}
+
+func (database *database) WriteEntity(name string, entity *Entity) bool {
+
+	var result bool
+
+	if entity != nil {
+
+		result = writeEntity(database, name, entity)
+
+		mutex := toEntityMutex(database, name)
+		mutex.Unlock()
+
+	}
+
+	return result
+
+}
+					</pre>
+				</section>
+				<section>
+					<h2 id="further-optimizations-with-atomics">Further Optimizations with Atomics</h2>
+					<p>
+						If you want to optimize your code further and avoid cache misses when goroutines
+						are started on separate CPU cores, you can use the
+						<a class="icon-website" href="https://pkg.go.dev/sync/atomic" target="_blank">sync/atomic</a>
+						package.
+					</p>
+					<p>
+						In a nutshell, atomics are the idea of using data structures in a guaranteed bitlength
+						manner. In the case of a hash map, the idea is to use hashed keys and data structures
+						that don't exceed the QuadWord (QW) length, so that cache misses can be avoided.
+					</p>
+					<p>
+						In JIT-optimized VMs, usually those kind of hashed map implementations actually don't
+						reference to the
+						<code>struct</code>
+						instances directly in memory, and rather are hashed maps of
+						the unique identifiers of object instances that point to the references to references.
+					</p>
+					<p>
+						This way, the GC can reoptimize unused memory and trace the node graph much easier
+						without having to worry about changing memory usage partitions, because the size of
+						the cells doesn't change over time.
+					</p>
+					<p>
+						In Go, there's also
+						<a class="icon-github" href="https://github.com/cespare/xxhash" target="_blank">xxhash</a>
+						which generates a
+						<code>64bit</code>
+						long good-enough hash for the keys, with hopefully no collisions happening as that is
+						always a tradeoff of bit length vs uniqueness.
+					</p>
+					<p>
+						The
+						<a class="icon-github" href="https://github.com/alphadose/haxmap" target="_blank">haxmap</a>
+						implementation uses
+						<code>xxhash</code>
+						in
+						order to implement most data types as predefined maps using the generics syntax of
+						Go, in case you want to try it out. But, because of the bit length I mentioned earlier,
+						the
+						<code>hashable</code>
+						interface that haxmap relies on is pretty limited in terms of what
+						kind of data types can be hashed.
+					</p>
+				</section>
+				<section>
+					<h2 id="reference-implementation">Reference Implementation</h2>
+					<p>
+						The above implementations are available as a complete
+						<a class="icon-download" href="/weblog/articles/golang-concurrency-how-to-use-mutexes/example.zip">project zip file</a>
+						but all files are also available as separate downloads.
+					</p>
+					<ul>
+						<li><a href="/weblog/articles/golang-concurrency-how-to-use-mutexes/example/Database.go">Database.go</a></li>
+						<li><a href="/weblog/articles/golang-concurrency-how-to-use-mutexes/example/DatabaseWithMutex.go">DatabaseWithMutex.go</a></li>
+						<li><a href="/weblog/articles/golang-concurrency-how-to-use-mutexes/example/cmds/single-thread/main.go">cmds/single-thread/main.go</a></li>
+						<li><a href="/weblog/articles/golang-concurrency-how-to-use-mutexes/example/cmds/multi-thread/main.go">cmds/multi-thread/main.go</a></li>
+						<li><a href="/weblog/articles/golang-concurrency-how-to-use-mutexes/example/cmds/multi-thread-with-mutex/main.go">cmds/multi-thread-with-mutex/main.go</a></li>
+					</ul>
+				</section>
+			</article>
+		</section>
+		<footer>
+			<p class="print-not">Made with 💔 in Heidelberg, Germany. All rights (and jokes) reserved under European Law.</p>
+			<p>&copy; Cookie Engineer (https://cookie.engineer). All rights reserved.</p>
+		</footer>
+	</body>
+</html>

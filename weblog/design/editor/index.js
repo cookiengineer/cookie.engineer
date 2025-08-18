@@ -261,9 +261,17 @@ document.addEventListener('DOMContentLoaded', () => {
 			event.preventDefault();
 			event.stopPropagation();
 
-		} else if (event.ctrlKey === true && event.key === 'e') {
+		} else if (event.ctrlKey === true && (event.key === 'e' || event.key == 'o')) {
 
-			let name = window.prompt("Enter new filename", FILE.name)
+			let name = window.prompt("Enter filename", FILE.name)
+			if (name !== null) {
+
+				name = name.split("/").pop()
+				name = name.split("..").join("")
+				name = name.split(";").join("")
+
+			}
+
 			if (name !== null && name.endsWith(".md") && name !== FILE.name) {
 
 				save(name, FILE.buffer, (result1) => {

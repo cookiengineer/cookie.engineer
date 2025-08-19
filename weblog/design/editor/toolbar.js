@@ -23,17 +23,18 @@ document.addEventListener('DOMContentLoaded', () => {
 	];
 	const toolbar = {
 		// headlines
-		h1:             document.querySelector('header button[data-key="h1"]'),
-		h2:             document.querySelector('header button[data-key="h2"]'),
-		h3:             document.querySelector('header button[data-key="h3"]'),
+		h1: document.querySelector('header button[data-key="h1"]'),
+		h2: document.querySelector('header button[data-key="h2"]'),
+		h3: document.querySelector('header button[data-key="h3"]'),
 
 		// inline formatting
-		bold:           document.querySelector('header button[data-key="bold"]'),
-		italic:         document.querySelector('header button[data-key="italic"]'),
-		del:            document.querySelector('header button[data-key="del"]'),
-		quote:          document.querySelector('header button[data-key="quote"]'),
-		code:           document.querySelector('header button[data-key="code"]'),
-		link:           document.querySelector('header button[data-key="link"]'),
+		bold:   document.querySelector('header button[data-key="bold"]'),
+		italic: document.querySelector('header button[data-key="italic"]'),
+		del:    document.querySelector('header button[data-key="del"]'),
+		quote:  document.querySelector('header button[data-key="quote"]'),
+		code:   document.querySelector('header button[data-key="code"]'),
+		link:   document.querySelector('header button[data-key="link"]'),
+		image:  document.querySelector('header button[data-key="image"]'),
 
 		// lists
 		list_unordered: document.querySelector('header button[data-key="list-unordered"]'),
@@ -135,8 +136,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 			let index = prefix.lastIndexOf(' ', editor.selectionStart);
 			let limit = prefix.lastIndexOf('\n');
-
-			if (limit != -1 && index < limit) {
+			if (limit !== -1 && index < limit) {
 				index = limit;
 			}
 
@@ -145,8 +145,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
 		} else {
 
-			word   = prefix + word;
-			prefix = '';
+			let limit = prefix.lastIndexOf('\n');
+			if (limit !== -1) {
+				word   = prefix.substr(limit + 1) + word;
+				prefix = prefix.substr(0, limit + 1);
+			} else {
+				word   = prefix + word;
+				prefix = '';
+			}
 
 		}
 
@@ -154,8 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 			let index = suffix.indexOf(' ');
 			let limit = suffix.indexOf('\n');
-
-			if (limit != -1 && index > limit) {
+			if (limit !== -1 && index > limit) {
 				index = limit;
 			}
 
@@ -164,8 +169,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
 		} else {
 
-			word   = word + suffix;
-			suffix = '';
+			let limit = suffix.indexOf('\n');
+			if (limit !== -1) {
+				word   = word + suffix.substr(0, limit);
+				suffix = suffix.substr(limit);
+			} else {
+				word   = word + suffix;
+				suffix = '';
+			}
 
 		}
 
@@ -175,15 +186,6 @@ document.addEventListener('DOMContentLoaded', () => {
 			suffix:    suffix
 		};
 
-	};
-
-	const markup = {
-		bold:           [ '**', '**' ],
-		italic:         [ '*', '*' ],
-		quote:          [ '`', '`' ],
-		code:           [ '```{{type}}\n', '\n```' ],
-		list_unordered: [ '- ', '' ],
-		list_ordered:   [ '- ', '' ]
 	};
 
 	if (toolbar.h1 !== null) {
@@ -408,7 +410,55 @@ document.addEventListener('DOMContentLoaded', () => {
 	if (toolbar.link !== null) {
 
 		toolbar.link.addEventListener('click', () => {
-			// TODO: Link Formatting
+
+			let { prefix, selection, suffix } = select_word();
+
+			if (selection.startsWith('[') === true && selection.includes('](') === true && selection.endsWith(')') === true) {
+				selection = selection.substr(1, selection.indexOf('](') - 1).trim();
+			} else {
+
+				let url = window.prompt('Enter URL:', '');
+				if (url !== null && url !== '') {
+					selection = '[' + selection + '](' + url + ')';
+				} else {
+					selection = '[' + selection + '](...)';
+				}
+
+			}
+
+			editor.value = prefix + selection + suffix;
+			editor.selectionStart = prefix.length;
+			editor.selectionEnd = prefix.length + selection.length;
+			editor.focus();
+
+		});
+
+	}
+
+	if (toolbar.image !== null) {
+
+		toolbar.image.addEventListener('click', () => {
+
+			let { prefix, selection, suffix } = select_word();
+
+			if (selection.startsWith('![') === true && selection.includes('](') === true && selection.endsWith(')') === true) {
+				selection = selection.substr(2, selection.indexOf('](') - 2).trim();
+			} else {
+
+				let url = window.prompt('Enter Image URL:', '');
+				if (url !== null && url !== '') {
+					selection = '![' + selection + '](' + url + ')';
+				} else {
+					selection = '![' + selection + '](...)';
+				}
+
+			}
+
+			editor.value = prefix + selection + suffix;
+			editor.selectionStart = prefix.length;
+			editor.selectionEnd = prefix.length + selection.length;
+			editor.focus();
+
 		});
 
 	}

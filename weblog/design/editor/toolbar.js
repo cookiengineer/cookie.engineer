@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
 
-	const editor  = document.querySelector('textarea[data-key="editor"]');
+	const editor = document.querySelector('textarea[data-key="editor"]');
 	const languages = [
 		'c',
 		'cc',
@@ -543,6 +543,34 @@ document.addEventListener('DOMContentLoaded', () => {
 				selection = selection.split(' ').slice(1).join(' ').trim();
 			} else {
 				selection = (number).toString() + '. ' + selection;
+			}
+
+			editor.value = prefix + selection + suffix;
+			editor.selectionStart = prefix.length;
+			editor.selectionEnd = prefix.length + selection.length;
+			editor.focus();
+
+		});
+
+	}
+
+	if (toolbar.list_task !== null) {
+
+		toolbar.list_task.addEventListener('click', () => {
+
+			const regexp_ul = /^([*\-+]+)\s/;
+			const regexp_ol = /^([0-9]+)\.\s/;
+
+			let { prefix, selection, suffix } = select_line();
+
+			if (selection.startsWith('- [ ] ') === true || selection.startsWith('- [x] ') === true) {
+				selection = selection.substr(6).trim();
+			} else if (regexp_ul.test(selection) === true) {
+				selection = '- [ ] ' + selection.split(' ').slice(1).join(' ').trim();
+			} else if (regexp_ol.test(selection) === true) {
+				selection = '- [ ] ' + selection.split(' ').slice(1).join(' ').trim();
+			} else {
+				selection = '- [ ] ' + selection;
 			}
 
 			editor.value = prefix + selection + suffix;

@@ -3,6 +3,7 @@ import { IsPlaying          } from "../common/music/IsPlaying.mjs";
 import { PlayMusic          } from "../common/music/PlayMusic.mjs";
 import { StopMusic          } from "../common/music/StopMusic.mjs";
 import { PlaySoundAt        } from "../common/sound/PlaySoundAt.mjs";
+import { Camera             } from "./components/Camera.mjs";
 import { Consent            } from "./components/gui/Consent.mjs";
 import { Dialog             } from "./components/gui/Dialog.mjs";
 import { Cookie             } from "./entities/Cookie.mjs";
@@ -22,10 +23,10 @@ import { Level as Level2    } from "./levels/Level2.mjs";
 import { Level as Level3    } from "./levels/Level3.mjs";
 import { Level as Secret    } from "./levels/Secret.mjs";
 
-export const Game = function(avatar, wrapper, width, height) {
+export const Game = function(avatar, wrapper, screen_width, screen_height) {
 
-	width  = typeof width === "number"  ? width  : 1280;
-	height = typeof height === "number" ? height : 960;
+	screen_width  = typeof screen_width === "number"  ? screen_width  : 1280;
+	screen_height = typeof screen_height === "number" ? screen_height : 960;
 
 	this.debug   = false;
 	this.canvas  = document.createElement("canvas");
@@ -43,7 +44,8 @@ export const Game = function(avatar, wrapper, width, height) {
 
 	// Special Game Entities
 	this.player    = new Spaceship(this.canvas.width, this.canvas.height);
-	this.starfield = new Starfield(width, height);
+	this.starfield = new Starfield(screen_width, screen_height);
+	this.camera    = new Camera(this.player);
 	this.status    = new Status();
 
 	// Browser UI
@@ -91,7 +93,7 @@ export const Game = function(avatar, wrapper, width, height) {
 
 	this.__time = Date.now();
 
-	this.ResizeTo(width, height);
+	this.ResizeTo(screen_width, screen_height);
 
 };
 
@@ -143,6 +145,8 @@ Game.prototype = {
 
 		}
 
+		this.avatar.figure.style.display = "block";
+
 		if (this.running === true) {
 			this.Stop();
 		}
@@ -166,9 +170,21 @@ Game.prototype = {
 			this.statistics[name].killed  = 0;
 			this.statistics[name].spawned = 0;
 
+			let world_width  = this.canvas.width;
+			let world_height = this.canvas.height;
+			if (world_width < 1280) {
+				world_width = 1280;
+			}
+
 			this.level = this.levels[name];
 			this.level.id = name;
-			this.level.Reset(this.canvas.width, this.canvas.height);
+			this.level.Reset(world_width, world_height);
+
+			if (this.level.id === "secret") {
+				this.avatar.figure.style.display = "none";
+			} else {
+				this.avatar.figure.style.display = "block";
+			}
 
 			if (IsPlaying() === true) {
 				StopMusic();
@@ -234,7 +250,7 @@ Game.prototype = {
 	ExplodeAt: function(x, y) {
 
 		this.entities.effects.push(new Explosion(x, y));
-		PlaySoundAt("explosion", (x / this.canvas.width) * 2.0 - 1.0);
+		PlaySoundAt("explosion", (x / (this.canvas.width / 2)) * 2.0 - 1.0);
 
 		this.events.shake.start     = Date.now();
 		this.events.shake.duration  = 100 + (Math.random() * 300);
@@ -252,8 +268,8 @@ Game.prototype = {
 
 				if (this.running === true) {
 
-					let position_x = event.clientX;
-					let position_y = event.clientY;
+					let position_x = event.clientX - (this.canvas.width  / 2) + this.camera.position.x;
+					let position_y = event.clientY - (this.canvas.height / 2) + this.camera.position.y;
 
 					this.ShootAt(position_x, position_y);
 					this.TargetAt(position_x, position_y);
@@ -307,6 +323,9 @@ Game.prototype = {
 
 		this.starfield.Render(this.context, delta);
 
+		this.context.translate(width / 2, height / 2);
+		this.context.translate(-this.camera.position.x, -this.camera.position.y);
+
 		if (this.running === true) {
 
 			if (this.events.shake.start !== null) {
@@ -348,34 +367,36 @@ Game.prototype = {
 				DrawCollisionModel(this.context, delta, this.player);
 			}
 
-			this.status.Render(this.context, delta);
-
-			if (this.events.shake.start !== null) {
-				this.context.restore();
-			}
-
 		}
+
+		this.context.restore();
+
+		this.status.Render(this.context, delta);
 
 	},
 
-	ResizeTo: function(width, height) {
+	ResizeTo: function(screen_width, screen_height) {
 
-		this.player.MoveTo(width / 2, null);
-		this.starfield.ResizeTo(width, height);
-		this.status.SetPosition(100 + 16, height - 50 - 16);
+		this.player.MoveTo(0, null);
 
-		this.canvas.width  = width;
-		this.canvas.height = height;
+		this.starfield.ResizeTo(screen_width, screen_height);
+		this.status.SetPosition(100 + 16, screen_height - 50 - 16);
 
-		this.canvas.style.width  = width  + "px";
-		this.canvas.style.height = height + "px";
+		this.camera.screen.width  = screen_width;
+		this.camera.screen.height = screen_height;
+
+		this.canvas.width  = screen_width;
+		this.canvas.height = screen_height;
+
+		this.canvas.style.width  = screen_width  + "px";
+		this.canvas.style.height = screen_height + "px";
 
 	},
 
 	RippleAt: function(x, y) {
 
 		this.entities.effects.push(new Ripple(x, y));
-		PlaySoundAt("ripple", (x / this.canvas.width) * 2.0 - 1.0);
+		PlaySoundAt("ripple", (x / (this.canvas.width / 2)) * 2.0 - 1.0);
 
 		this.events.shake.start     = Date.now();
 		this.events.shake.duration  = 100 + (Math.random() * 300);
@@ -436,7 +457,7 @@ Game.prototype = {
 						1
 					));
 
-					PlaySoundAt("lazer", (this.player.position.x / this.canvas.width) * 2.0 - 1.0);
+					PlaySoundAt("lazer", (this.player.position.x / (this.canvas.width / 2)) * 2.0 - 1.0);
 					this.events.shoot.timeout = Date.now() + 175;
 
 				}
@@ -548,7 +569,7 @@ Game.prototype = {
 				this.player.position.y = (this.canvas.height - this.player.height - 32) | 0;
 			}
 
-			this.player.MoveTo(this.canvas.width / 2, null);
+			this.player.MoveTo(0, null);
 			this.player.SetHealth(100);
 			this.EnterLevel(level, () => {
 				this.locked = false;
@@ -595,13 +616,16 @@ Game.prototype = {
 
 			if (this.player !== null) {
 
-				if (position_x < this.player.width / 2) {
-					position_x = this.player.width / 2;
-				} else if (position_x > this.canvas.width - this.player.width / 2) {
-					position_x = this.canvas.width - this.player.width / 2;
+				let canvas_half_width = this.canvas.width / 2;
+				let player_half_width = this.player.width / 2;
+
+				if (position_x < (-canvas_half_width + player_half_width)) {
+					position_x = -canvas_half_width + player_half_width;
+				} else if (position_x > (canvas_half_width - player_half_width)) {
+					position_x = canvas_half_width - player_half_width;
 				}
 
-				position_y = this.canvas.height - this.player.height / 2;
+				position_y = (this.canvas.height / 2) - (this.player.height / 2) - 64;
 
 				this.player.MoveTo(position_x, position_y);
 
@@ -622,10 +646,15 @@ Game.prototype = {
 
 	Update: function(delta) {
 
-		let width  = this.canvas.width;
-		let height = this.canvas.height;
+		this.starfield.Update(delta, this.canvas.width, this.canvas.height);
+		this.camera.Update(delta, this.canvas.width, this.canvas.height);
 
-		this.starfield.Update(delta, width, height);
+		let world_width  = this.canvas.width;
+		let world_height = this.canvas.height;
+
+		if (world_width < 1280) {
+			world_width = 1280;
+		}
 
 		if (this.running === true && this.paused === false) {
 
@@ -634,7 +663,7 @@ Game.prototype = {
 				let enemy  = this.entities.enemies[e];
 				let damage = enemy.health;
 
-				enemy.Update(delta, width, height);
+				enemy.Update(delta, world_width, world_height);
 
 				let destroyed = false;
 
@@ -652,17 +681,17 @@ Game.prototype = {
 				if (destroyed === false) {
 
 					// Make them enemies bounce!
-					if (enemy.position.x < 0 && enemy.speed.x < 0) {
+					if (enemy.position.x < (-world_width / 2) && enemy.speed.x < 0) {
 						enemy.speed.x = -1 * enemy.speed.x;
-					} else if (enemy.position.x > width && enemy.speed.x > 0) {
+					} else if (enemy.position.x > (+world_width / 2) && enemy.speed.x > 0) {
 						enemy.speed.x = -1 * enemy.speed.x;
-					} else if (enemy.position.y < 0 && enemy.speed.y < 0) {
+					} else if (enemy.position.y < (-world_height / 2) && enemy.speed.y < 0) {
 						enemy.speed.y = -1 * enemy.speed.y;
-					} else if (enemy.position.y >= height && enemy.speed.y > 0) {
+					} else if (enemy.position.y >= (+world_height / 2) && enemy.speed.y > 0) {
 
 						this.statistics[this.level.id].missed++;
 
-						this.ExplodeAt(enemy.position.x, height);
+						this.ExplodeAt(enemy.position.x, world_height / 2);
 						destroyed = true;
 
 						this.player.Hit(damage);
@@ -683,7 +712,7 @@ Game.prototype = {
 
 				let lazer = this.entities.lazers[l];
 
-				lazer.Update(delta, width, height);
+				lazer.Update(delta, world_width, world_height);
 
 				if (lazer.health >= 1.0) {
 
@@ -745,7 +774,7 @@ Game.prototype = {
 
 				let explosion = this.entities.effects[e];
 
-				explosion.Update(delta, width, height);
+				explosion.Update(delta, world_width, world_height);
 
 				if (explosion.life <= 0) {
 					this.entities.effects.splice(e, 1);
@@ -766,10 +795,11 @@ Game.prototype = {
 
 			}
 
-			this.player.Update(delta, width, height);
+			this.player.Update(delta, world_width, world_height);
 
 
-			this.status.Update(delta, width, height);
+			// TODO: This is wrong
+			this.status.Update(delta, world_width, world_height);
 
 			if (this.level !== null) {
 

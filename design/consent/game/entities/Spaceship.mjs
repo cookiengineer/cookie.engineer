@@ -2,7 +2,7 @@
 import { GetImage         } from "../../common/image/GetImage.mjs";
 import { InterpolateColor } from "../math/InterpolateColor.mjs";
 
-export const Spaceship = function(width, height) {
+export const Spaceship = function(screen_width, screen_height) {
 
 	this.image = GetImage("Spaceship");
 
@@ -10,8 +10,8 @@ export const Spaceship = function(width, height) {
 	this.width  = 128;
 	this.height = 80;
 	this.position = {
-		x: (width / 2)    | 0,
-		y: (height - 100) | 0
+		x: 0,
+		y: ((screen_height / 2) - this.height - 32) | 0
 	};
 
 	this.exhaust_left  = [];
@@ -180,19 +180,19 @@ Spaceship.prototype = {
 
 	},
 
-	Reset: function(width, height, callback) {
+	Reset: function(screen_width, screen_height, callback) {
 
 		callback = typeof callback === "function" ? callback : null;
 
 		this.health = 1;
-		this.position.x = (width / 2) | 0;
-		this.position.y = (height + 128) | 0;
+		this.position.x = 0;
+		this.position.y = ((screen_height / 2) + this.height + 64) | 0;
 
 		this.speed.x = 0;
 		this.speed.y = -100;
 
-		this.target.x = (width / 2);
-		this.target.y = height - this.height - 32;
+		this.target.x = 0;
+		this.target.y = ((screen_height / 2) - (this.height / 2) - 64) | 0;
 
 		let interval = setInterval(() => {
 
@@ -268,34 +268,6 @@ Spaceship.prototype = {
 			this.speed.y = 0;
 		}
 
-		// if (this.position.x - this.width / 2 < 0) {
-
-		// 	if (this.speed.x < 0) {
-		// 		this.speed.x = 0;
-		// 	}
-
-		// } else if (this.position.x + this.width / 2 > width) {
-
-		// 	if (this.speed.x > 0) {
-		// 		this.speed.x = 0;
-		// 	}
-
-		// }
-
-		// if (this.position.y - this.height / 2 < 0) {
-
-		// 	if (this.speed.y < 0) {
-		// 		this.speed.y = 0;
-		// 	}
-
-		// } else if (this.position.y + this.height / 2 > height) {
-
-		// 	if (this.speed.y > 0) {
-		// 		this.speed.y = 0;
-		// 	}
-
-		// }
-
 		for (let e = 0, el = this.exhaust_left.length; e < el; e++) {
 
 			let particle = this.exhaust_left[e];
@@ -328,6 +300,6 @@ Spaceship.prototype = {
 
 		}
 
-	},
+	}
 
 };

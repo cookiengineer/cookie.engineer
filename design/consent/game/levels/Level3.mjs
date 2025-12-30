@@ -42,13 +42,12 @@ Level.prototype = {
 
 	Reset: function(width, height) {
 
-		let center  = width / 2;
 		let counted = 0;
 		let offset  = 256;
-		let wave_1  = -1 * 128;
-		let wave_2  = -1 * 128 - 3 * offset; // star destroyer
+		let wave_1  = (-height / 2) - 1 * 128;
+		let wave_2  = (-height / 2) - 1 * 128 - 3 * offset; // star destroyer
 
-		InterpolateLine(width, center - 320, wave_1 - 128, center - 32, wave_1, 48, (x, y) => {
+		InterpolateLine(width, -320, wave_1 - 128, -32, wave_1, 48, (x, y) => {
 
 			let cookie = new Cookie();
 
@@ -58,7 +57,7 @@ Level.prototype = {
 
 		});
 
-		InterpolateLine(width, center + 32, wave_1, center + 320, wave_1 - 128, 48, (x, y) => {
+		InterpolateLine(width, +32, wave_1, +320, wave_1 - 128, 48, (x, y) => {
 
 			let cookie = new Cookie();
 
@@ -69,7 +68,7 @@ Level.prototype = {
 		});
 
 		this.boss.Reset();
-		this.boss.SetPosition(width * 3/4, wave_2);
+		this.boss.SetPosition((+width / 2) - this.boss.radius - 64, wave_2);
 		this.boss.SetSpeed(0, 30);
 		this.game.Spawn(this.boss);
 		counted++;

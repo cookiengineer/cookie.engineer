@@ -240,7 +240,7 @@ CookieEngineer.prototype = {
 				this.target.x = this.game.player.position.x;
 				this.target.y = this.game.player.position.y;
 
-				PlaySoundAt("CookieEngineerCharge", (this.position.x / width) * 2.0 - 1.0);
+				PlaySoundAt("CookieEngineerCharge", (this.position.x / (width / 2)) * 2.0 - 1.0);
 				this.events.charge = Date.now() + CookieEngineer.Durations.ChargeLightning;
 
 			} else if (Date.now() > this.events.charge) {
@@ -256,12 +256,12 @@ CookieEngineer.prototype = {
 
 				if (this.target.x !== null && this.target.y !== null) {
 
-					PlaySoundAt("CookieEngineerLightning", (this.position.x / width) * 2.0 - 1.0);
+					PlaySoundAt("CookieEngineerLightning", (this.position.x / (width / 2)) * 2.0 - 1.0);
 
 					this.game.Spawn(new Lightning(
 						"enemy",
 						this.position.x,
-						this.position.y,
+						this.position.y + this.radius,
 						this.target.x,
 						this.target.y,
 						20
@@ -335,7 +335,21 @@ CookieEngineer.prototype = {
 
 	Render: function(ctx, delta) {
 
-		// Do Nothing, Avatar is already rendered in DOM
+		ctx.save();
+		ctx.translate(this.position.x, this.position.y);
+		ctx.globalAlpha = 1.0;
+		ctx.drawImage(
+			this.game.avatar.canvas,
+			0,
+			0,
+			256,
+			256,
+			-128,
+			-128,
+			256,
+			256
+		);
+		ctx.restore();
 
 	}
 

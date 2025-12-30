@@ -74,11 +74,15 @@ export const Init = (avatar, wrapper) => {
 
 				setTimeout(() => {
 
-					if (game.running === false) {
+					if (window.innerWidth >= 800) {
 
-						game.avatar.Speak("me-want-cookies", () => {
-							game.consent.Show();
-						});
+						if (game.running === false) {
+
+							game.avatar.Speak("me-want-cookies", () => {
+								game.consent.Show();
+							});
+
+						}
 
 					}
 

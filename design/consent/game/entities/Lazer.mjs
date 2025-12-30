@@ -186,11 +186,11 @@ Lazer.prototype = {
 		this.angle = Math.atan2(this.speed.y, this.speed.x) * 180 / Math.PI;
 		this.angle = (this.angle % 360 + 360) % 360;
 
-		if (this.position.x < 0 || this.position.x > width) {
+		if (this.position.x < (-width / 2) || this.position.x > (+width / 2)) {
 			this.health = 0.0;
 		}
 
-		if (this.position.y + this.height < 0 || this.position.y - this.height > height) {
+		if (this.position.y < (-height / 2) || this.position.y > (+height / 2)) {
 			this.health = 0.0;
 		}
 

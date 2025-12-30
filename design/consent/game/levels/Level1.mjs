@@ -10,7 +10,7 @@ export const Level = function(game) {
 	this.game = game;
 
 	// Accessed by the Game's Update Loop
-	this.enemies = 76;
+	this.enemies = 78;
 
 };
 
@@ -31,26 +31,15 @@ Level.prototype = {
 
 	Reset: function(width, height) {
 
-		let center  = width / 2;
 		let counted = 0;
 		let offset  = 256;
-		let wave_1  = -1 * 128;
-		let wave_2  = -1 * 128 - 1 * offset;
-		let wave_3  = -1 * 128 - 2 * offset;
-		let wave_4  = -1 * 128 - 4 * offset;
-		let wave_5  = -1 * 128 - 7 * offset;
+		let wave_1  = (-height / 2) - 1 * 128;
+		let wave_2  = (-height / 2) - 1 * 128 - 1 * offset;
+		let wave_3  = (-height / 2) - 1 * 128 - 2 * offset;
+		let wave_4  = (-height / 2) - 1 * 128 - 4 * offset;
+		let wave_5  = (-height / 2) - 1 * 128 - 7 * offset;
 
-		InterpolateLine(width, center - 128, wave_1, center + 128, wave_1, 48, (x, y) => {
-
-			let cookie = new Cookie();
-
-			cookie.SetPosition(x, y);
-			this.game.Spawn(cookie);
-			counted++;
-
-		});
-
-		InterpolateLine(width, center - 256, wave_2, center + 256, wave_2, 48, (x, y) => {
+		InterpolateLine(width, -128, wave_1, +128, wave_1, 48, (x, y) => {
 
 			let cookie = new Cookie();
 
@@ -60,7 +49,17 @@ Level.prototype = {
 
 		});
 
-		InterpolateLine(width, center - 384, wave_3, center + 384, wave_3, 48, (x, y) => {
+		InterpolateLine(width, -256, wave_2, +256, wave_2, 48, (x, y) => {
+
+			let cookie = new Cookie();
+
+			cookie.SetPosition(x, y);
+			this.game.Spawn(cookie);
+			counted++;
+
+		});
+
+		InterpolateLine(width, -384, wave_3, +384, wave_3, 48, (x, y) => {
 
 			let cookie = new Cookie();
 
@@ -89,7 +88,7 @@ Level.prototype = {
 
 			});
 
-		})(center, wave_4);
+		})(0, wave_4);
 
 		((x, y) => {
 
@@ -110,7 +109,7 @@ Level.prototype = {
 
 			});
 
-		})(center, wave_5);
+		})(0, wave_5);
 
 		if (this.game.entities.enemies.length === counted) {
 			console.info("Level1: Spawned all " + (counted).toString() + " enemies correctly.");

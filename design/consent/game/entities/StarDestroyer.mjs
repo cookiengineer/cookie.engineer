@@ -185,7 +185,9 @@ StarDestroyer.prototype = {
 
 		if (this.action === StarDestroyer.Actions.Idle) {
 
-			if (this.position.y <= 256) {
+			let boundary = (-height / 2) + this.radius + 64;
+
+			if (this.position.y <= boundary) {
 
 				this.angle += 30 * dt;
 				this.angle  = (this.angle % 360 + 360) % 360;
@@ -279,7 +281,7 @@ StarDestroyer.prototype = {
 
 			if (this.events.charge === null) {
 
-				PlaySoundAt("StarDestroyerCannonCharge", (this.position.x / width) * 2.0 - 1.0);
+				PlaySoundAt("StarDestroyerCannonCharge", (this.position.x / (width / 2)) * 2.0 - 1.0);
 				this.events.charge = Date.now() + StarDestroyer.Durations.ChargeCannon;
 
 			} else if (Date.now() > this.events.charge) {
@@ -295,7 +297,7 @@ StarDestroyer.prototype = {
 
 				if (this.target.x !== null && this.target.y !== null) {
 
-					PlaySoundAt("StarDestroyerCannonLazer", (this.position.x / width) * 2.0 - 1.0);
+					PlaySoundAt("StarDestroyerCannonLazer", (this.position.x / (width / 2)) * 2.0 - 1.0);
 
 					let dx  = (this.position.x - this.target.x);
 					let dy  = (this.position.y - this.target.y);
@@ -402,32 +404,31 @@ StarDestroyer.prototype = {
 		let color2 = [ 255,  15,  90 ];
 		let color  = InterpolateColor(color1, color2, f);
 
+		ctx.save();
+		ctx.translate(this.position.x, this.position.y);
 
+		// Shield Halo
 		if (shield_percentage > 0.0) {
 
 			let gradient = ctx.createRadialGradient(
-				this.position.x, this.position.y, this.radius,
-				this.position.x, this.position.y, this.radius * 1.3
+				0, 0, this.radius,
+				0, 0, this.radius * 1.3
 			);
-			// gradient.addColorStop(0, "rgba(" + color[0] + "," + color[1] + "," + color[2] + ", 0)");
+
 			gradient.addColorStop(0, "rgba(" + color[0] + "," + color[1] + "," + color[2] + ", 0.3)");
 			gradient.addColorStop(1, "rgba(" + color[0] + "," + color[1] + "," + color[2] + ", 0)");
 
-			// Outer Shield Halo
-			ctx.save();
 			ctx.globalAlpha = 0.2 + (shield_percentage * 0.8);
 			ctx.fillStyle = gradient;
 			ctx.beginPath();
-			ctx.arc(this.position.x, this.position.y, this.radius * 1.3, 0, Math.PI * 2);
+			ctx.arc(0, 0, this.radius * 1.3, 0, Math.PI * 2);
 			ctx.fill();
 			ctx.closePath();
-			ctx.restore();
 
 		}
 
-		ctx.save();
-		ctx.translate(this.position.x, this.position.y);
 		ctx.rotate((this.angle + 90) * (Math.PI / 180));
+		ctx.globalAlpha = 1.0;
 		ctx.drawImage(
 			this.image,
 			0,
@@ -440,6 +441,8 @@ StarDestroyer.prototype = {
 			256
 		);
 
+		// Cannon
+
 		ctx.save();
 
 		if (shield_percentage > 0.0) {
@@ -448,6 +451,7 @@ StarDestroyer.prototype = {
 		}
 
 		ctx.translate(0, -160);
+		ctx.globalAlpha = 1.0;
 		ctx.drawImage(
 			this.cannon,
 			0,
@@ -460,27 +464,29 @@ StarDestroyer.prototype = {
 			144
 		);
 		ctx.restore();
-		ctx.restore();
 
-
-		// Shield
+		// Shield Outline
 		if (shield_percentage > 0.0) {
+
 			ctx.globalAlpha = 0.2 + (shield_percentage * 0.8);
 			ctx.lineWidth = (2 + shield_percentage * 8) | 0;
 			ctx.strokeStyle = "rgb(" + color[0] + "," + color[1] + "," + color[2] + ")";
 			ctx.shadowColor = "rgba(" + color[0] + "," + color[1] + "," + color[2] + ", 1)";
 			ctx.shadowBlur  = (5 + shield_percentage * 15) | 0;
+
 			ctx.beginPath();
-			ctx.arc(this.position.x, this.position.y, this.radius - (ctx.lineWidth / 2), 0, Math.PI * 2);
+			ctx.arc(0, 0, this.radius - (ctx.lineWidth / 2), 0, Math.PI * 2);
 			ctx.stroke();
 			ctx.closePath();
-			ctx.globalAlpha = 1.0;
+
 		}
 
 		// Reset global properties
 		ctx.shadowColor = "";
 		ctx.shadowBlur = 0;
 		ctx.globalAlpha = 1.0;
+
+		ctx.restore();
 
 	}
 

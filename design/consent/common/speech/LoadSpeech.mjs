@@ -89,7 +89,17 @@ export const LoadSpeech = (name, config_url, audio_urls) => {
 						return response.json();
 					}).then((config) => {
 
-						let speech = ParseSpeech(config);
+						let speech = {
+							"length":   0,
+							"phonemes": [],
+							"timeline": []
+						};
+
+						if (Object.prototype.toString.call(config["phonemes"]) === "[object Array]") {
+							speech = config;
+						} else if (Object.prototype.toString.call(config["sentence"]) === "[object Array]") {
+							speech = ParseSpeech(config);
+						}
 
 						audio_buffers[name]  = buffer;
 						config_buffers[name] = config;

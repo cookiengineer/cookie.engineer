@@ -32,27 +32,16 @@ Level.prototype = {
 
 	Reset: function(width, height) {
 
-		let center  = width / 2;
 		let counted = 0;
 		let offset  = 256;
-		let wave_1  = -1 * 128;
-		let wave_2  = -1 * 128 - 1 * offset;
-		let wave_3  = -1 * 128 - 2 * offset;
-		let wave_4  = -1 * 128 - 4 * offset; // meteor
-		let wave_5  = -1 * 128 - 6 * offset;
-		let wave_6  = -1 * 128 - 8 * offset; // meteor
+		let wave_1  = (-height / 2) - 1 * 128;
+		let wave_2  = (-height / 2) - 1 * 128 - 1 * offset;
+		let wave_3  = (-height / 2) - 1 * 128 - 2 * offset;
+		let wave_4  = (-height / 2) - 1 * 128 - 4 * offset; // meteor
+		let wave_5  = (-height / 2) - 1 * 128 - 6 * offset;
+		let wave_6  = (-height / 2) - 1 * 128 - 8 * offset; // meteor
 
-		InterpolateLine(width, center - 128, wave_1, center + 128, wave_1, 48, (x, y) => {
-
-			let cookie = new Cookie();
-
-			cookie.SetPosition(x, y);
-			this.game.Spawn(cookie);
-			counted++;
-
-		});
-
-		InterpolateGrid(width, center - 144, wave_2, center + 144, wave_2 - 256, 64, (x, y) => {
+		InterpolateLine(width, -128, wave_1, +128, wave_1, 48, (x, y) => {
 
 			let cookie = new Cookie();
 
@@ -62,7 +51,17 @@ Level.prototype = {
 
 		});
 
-		InterpolateLine(width, center - 144, wave_3, center + 256, wave_3 - 256, 64, (x, y) => {
+		InterpolateGrid(width, -144, wave_2, +144, wave_2 - 256, 64, (x, y) => {
+
+			let cookie = new Cookie();
+
+			cookie.SetPosition(x, y);
+			this.game.Spawn(cookie);
+			counted++;
+
+		});
+
+		InterpolateLine(width, -144, wave_3, +256, wave_3 - 256, 64, (x, y) => {
 
 			let cookie = new Cookie();
 
@@ -91,10 +90,10 @@ Level.prototype = {
 
 			});
 
-		})(center - 128, wave_4);
+		})(-128, wave_4);
 
 
-		InterpolateLine(width, center + 256, wave_5, center - 256, wave_5 - 256, 64, (x, y) => {
+		InterpolateLine(width, +256, wave_5, -256, wave_5 - 256, 64, (x, y) => {
 
 			let cookie = new Cookie();
 
@@ -123,7 +122,7 @@ Level.prototype = {
 
 			});
 
-		})(center + 128, wave_6);
+		})(+128, wave_6);
 
 		if (this.game.entities.enemies.length === counted) {
 			console.info("Level2: Spawned all " + (counted).toString() + " enemies correctly.");

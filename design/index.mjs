@@ -179,6 +179,31 @@ hljs.registerLanguage("yaml",       language_yaml);
 	let aside = document.querySelector("body > div > aside");
 	if (aside !== null) {
 
+		const on_resize = () => {
+
+			if (window.innerWidth < 1280 && aside.className === "visible") {
+
+				aside.className = "";
+
+				if (toggle_aside !== null) {
+					toggle_aside.className = "";
+				}
+
+			} else if (window.innerWidth > 1280 && aside.className === "") {
+
+				aside.className = "visible";
+
+				if (toggle_aside !== null) {
+					toggle_aside.className = "visible";
+				}
+
+			}
+
+		};
+
+		window.addEventListener("resize", on_resize, true);
+		on_resize();
+
 		let pathname = window.location.pathname || "/index.html";
 		let links    = Array.from(aside.querySelectorAll("a[href]"));
 		if (links.length > 0) {
@@ -276,9 +301,7 @@ hljs.registerLanguage("yaml",       language_yaml);
 		});
 
 		window.Join = () => {
-
-			// TODO: Open E-Mail Dialog?
-
+			type_message("Join the Final Cookie Order by writing to cookiengineer at the LeaveNoCrumbs email service");
 		};
 
 		window.Refuse = () => {

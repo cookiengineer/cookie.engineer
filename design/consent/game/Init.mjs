@@ -70,7 +70,7 @@ export const Init = (avatar, wrapper) => {
 				game.Start("level1");
 			};
 
-			wrapper.addEventListener("click", () => {
+			wrapper.addEventListener("click", (event) => {
 
 				setTimeout(() => {
 
@@ -86,7 +86,10 @@ export const Init = (avatar, wrapper) => {
 
 					}
 
-				}, 3000);
+				}, 250);
+
+				event.stopPropagation();
+				event.preventDefault();
 
 			}, {
 				once: true

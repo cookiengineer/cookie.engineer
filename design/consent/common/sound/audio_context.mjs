@@ -3,7 +3,7 @@ export const audio_context = new AudioContext();
 
 (() => {
 
-	document.addEventListener("click", () => {
+	document.addEventListener("pointerdown", () => {
 
 		if (audio_context.state === "suspended") {
 

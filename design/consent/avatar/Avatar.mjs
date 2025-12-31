@@ -63,9 +63,8 @@ export const Avatar = function(figure, width, height) {
 	};
 
 	this.__listeners = {
-		click:     null,
-		mousemove: null,
-		touchmove: null
+		pointerdown: null,
+		pointermove: null
 	};
 
 	// Integration API
@@ -103,14 +102,12 @@ Avatar.prototype = {
 
 		if (this.canvas.parentNode !== null) {
 
-			document.body.removeEventListener("mousemove", this.__listeners.mousemove);
-			document.body.removeEventListener("touchmove", this.__listeners.touchmove);
-			this.canvas.removeEventListener("click", this.__listeners.click);
+			document.body.removeEventListener("pointermove", this.__listeners.pointermove);
+			this.canvas.removeEventListener("pointerdown", this.__listeners.pointerdown);
 			this.canvas.parentNode.removeChild(this.canvas);
 
-			this.__listeners.click = null;
-			this.__listeners.mousemove = null;
-			this.__listeners.touchmove = null;
+			this.__listeners.pointerdown = null;
+			this.__listeners.pointermove = null;
 
 		}
 
@@ -209,7 +206,7 @@ Avatar.prototype = {
 
 			this.ResizeTo(this.width, this.height);
 
-			this.__listeners.click = () => {
+			this.__listeners.pointerdown = () => {
 
 				if (this.IsRunning() === true && this.IsFeeling("angry") === false) {
 
@@ -260,17 +257,13 @@ Avatar.prototype = {
 
 			};
 
-			this.__listeners.mousemove = (event) => {
+			this.__listeners.pointermove = (event) => {
 
 				if (this.IsRunning() === true) {
 
 					let rect = this.canvas.getBoundingClientRect();
-					let px   = event.pageX - rect.left - 16;
-					let py   = event.pageY - rect.top  - 16;
-
-					if (window.scrollY > 0) {
-						py += window.scrollY;
-					}
+					let px   = event.clientX - rect.left - 16;
+					let py   = event.clientY - rect.top  - 16;
 
 					this.LookAt(px, py);
 
@@ -278,27 +271,8 @@ Avatar.prototype = {
 
 			};
 
-			this.__listeners.touchmove = (event) => {
-
-				if (this.IsRunning() === true) {
-
-					let rect = this.canvas.getBoundingClientRect();
-					let px   = event.touches[0].pageX - rect.left - 16;
-					let py   = event.touches[0].pageY - rect.top  - 16;
-
-					if (window.scrollY > 0) {
-						py += window.scrollY;
-					}
-
-					this.LookAt(px, py);
-
-				}
-
-			};
-
-			this.canvas.addEventListener("click", this.__listeners.click, true);
-			document.body.addEventListener("mousemove", this.__listeners.mousemove, true);
-			document.body.addEventListener("touchmove", this.__listeners.touchmove, true);
+			this.canvas.addEventListener("pointerdown", this.__listeners.pointerdown, true);
+			document.body.addEventListener("pointermove", this.__listeners.pointermove, true);
 
 			this.figure.appendChild(this.canvas);
 

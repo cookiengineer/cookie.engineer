@@ -70,7 +70,7 @@ export const Init = (avatar, wrapper) => {
 				game.Start("level1");
 			};
 
-			wrapper.addEventListener("click", (event) => {
+			document.addEventListener("pointerdown", (event) => {
 
 				setTimeout(() => {
 
@@ -92,7 +92,8 @@ export const Init = (avatar, wrapper) => {
 				event.preventDefault();
 
 			}, {
-				once: true
+				capture: true,
+				once:    true
 			});
 
 			wrapper.appendChild(game.consent.element);

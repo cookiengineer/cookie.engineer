@@ -192,7 +192,7 @@ Spaceship.prototype = {
 		this.speed.y = -100;
 
 		this.target.x = 0;
-		this.target.y = ((screen_height / 2) - (this.height / 2) - 64) | 0;
+		this.target.y = ((screen_height / 2) - (this.height / 2) - 32) | 0;
 
 		let interval = setInterval(() => {
 
@@ -258,14 +258,20 @@ Spaceship.prototype = {
 		this.position.x = this.position.x + (dt * this.speed.x);
 		this.position.y = this.position.y + (dt * this.speed.y);
 
-		if (Math.abs(this.target.x - this.position.x) < this.width / 2) {
+		if (Math.abs(this.target.x - this.position.x) < 8) {
 			this.target.x = this.position.x;
 			this.speed.x = 0;
 		}
 
-		if (Math.abs(this.target.y - this.position.y) < this.height / 2) {
+		if (Math.abs(this.target.y - this.position.y) < 8) {
 			this.target.y = this.position.y;
 			this.speed.y = 0;
+		}
+
+		if (this.position.x > (+width / 2)) {
+			this.position.x = (+width / 2);
+		} else if (this.position.x < (-width / 2)) {
+			this.position.x = (-width / 2);
 		}
 
 		for (let e = 0, el = this.exhaust_left.length; e < el; e++) {

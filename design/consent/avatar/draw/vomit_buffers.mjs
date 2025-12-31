@@ -20,6 +20,8 @@ export const vomit_buffer2 = document.createElement("canvas");
 	vomit_buffer2.style["bottom"]         = "0px";
 	vomit_buffer2.style["left"]           = "0px";
 	vomit_buffer2.style["pointer-events"] = "none";
+	vomit_buffer2.style["touch-action"]   = "none";
+	vomit_buffer2.style["user-select"]    = "none";
 
 	let body = document.querySelector("body");
 	if (body !== null) {

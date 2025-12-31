@@ -18,6 +18,7 @@ import { Starfield          } from "./entities/Starfield.mjs";
 import { StarDestroyer      } from "./entities/StarDestroyer.mjs";
 import { Status             } from "./entities/gui/Status.mjs";
 import { DrawCollisionModel } from "./draw/DrawCollisionModel.mjs";
+import { DrawWorldModel     } from "./draw/DrawWorldModel.mjs";
 import { Level as Level1    } from "./levels/Level1.mjs";
 import { Level as Level2    } from "./levels/Level2.mjs";
 import { Level as Level3    } from "./levels/Level3.mjs";
@@ -83,7 +84,7 @@ export const Game = function(avatar, wrapper, screen_width, screen_height) {
 	};
 
 	this.__listeners = {
-		click: null
+		pointerdown: null
 	};
 
 	this.__loops = {
@@ -139,7 +140,7 @@ Game.prototype = {
 
 		if (this.canvas.parentNode !== null) {
 
-			this.canvas.removeEventListener("click", this.__listeners.click);
+			this.canvas.removeEventListener("pointerdown", this.__listeners.pointerdown);
 			this.canvas.parentNode.removeChild(this.canvas);
 			this.__listeners.click = null;
 
@@ -264,7 +265,7 @@ Game.prototype = {
 
 			this.wrapper.setAttribute("data-mode", "game");
 
-			this.__listeners.click = (event) => {
+			this.__listeners.pointerdown = (event) => {
 
 				if (this.running === true) {
 
@@ -278,7 +279,7 @@ Game.prototype = {
 
 			};
 
-			this.canvas.addEventListener("click", this.__listeners.click, true);
+			this.canvas.addEventListener("pointerdown", this.__listeners.pointerdown, true);
 			this.canvas.setAttribute("id", "consent-game");
 
 			this.wrapper.appendChild(this.canvas);
@@ -324,7 +325,12 @@ Game.prototype = {
 		this.starfield.Render(this.context, delta);
 
 		this.context.translate(width / 2, height / 2);
+
 		this.context.translate(-this.camera.position.x, -this.camera.position.y);
+
+		if (this.debug === true) {
+			DrawWorldModel(this.context, delta, this.canvas.width >= 1280 ? this.canvas.width : 1280, this.canvas.height);
+		}
 
 		if (this.running === true) {
 
@@ -379,11 +385,9 @@ Game.prototype = {
 
 		this.player.MoveTo(0, null);
 
+		this.camera.ResizeTo(screen_width, screen_height);
 		this.starfield.ResizeTo(screen_width, screen_height);
 		this.status.SetPosition(100 + 16, screen_height - 50 - 16);
-
-		this.camera.screen.width  = screen_width;
-		this.camera.screen.height = screen_height;
 
 		this.canvas.width  = screen_width;
 		this.canvas.height = screen_height;
@@ -565,8 +569,8 @@ Game.prototype = {
 
 		} else {
 
-			if (this.player.position.y < this.canvas.height / 2) {
-				this.player.position.y = (this.canvas.height - this.player.height - 32) | 0;
+			if (this.player.position.y > (this.canvas.height / 2) || this.player.position === 0) {
+				this.player.position.y = ((this.canvas.height / 2) - (this.player.height / 2) - 32) | 0;
 			}
 
 			this.player.MoveTo(0, null);
@@ -616,13 +620,13 @@ Game.prototype = {
 
 			if (this.player !== null) {
 
-				let canvas_half_width = this.canvas.width / 2;
-				let player_half_width = this.player.width / 2;
+				let min_x = ((-1280 / 2) + (this.player.width / 2)) | 0;
+				let max_x = ((+1280 / 2) - (this.player.width / 2)) | 0;
 
-				if (position_x < (-canvas_half_width + player_half_width)) {
-					position_x = -canvas_half_width + player_half_width;
-				} else if (position_x > (canvas_half_width - player_half_width)) {
-					position_x = canvas_half_width - player_half_width;
+				if (position_x < min_x) {
+					position_x = min_x;
+				} else if (position_x > max_x) {
+					position_x = max_x;
 				}
 
 				position_y = (this.canvas.height / 2) - (this.player.height / 2) - 64;

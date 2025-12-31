@@ -15,8 +15,8 @@ export const DrawCollisionModel = (ctx, delta, entity) => {
 		ctx.lineWidth = 1;
 		ctx.strokeStyle = "#00ff00";
 		ctx.strokeRect(
-			entity.position.x - entity.width / 2,
-			entity.position.y - entity.height / 2,
+			entity.position.x - (entity.width  / 2),
+			entity.position.y - (entity.height / 2),
 			entity.width,
 			entity.height
 		);

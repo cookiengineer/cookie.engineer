@@ -155,7 +155,7 @@ Lazer.prototype = {
 		ctx.globalAlpha = 1.0;
 		ctx.fillStyle = "#ff0f5a";
 		ctx.fillRect(
-			-this.width  / 2,
+			-(this.width / 2),
 			0,
 			this.width,
 			length

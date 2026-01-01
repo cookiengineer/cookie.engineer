@@ -251,7 +251,7 @@ Game.prototype = {
 	ExplodeAt: function(x, y) {
 
 		this.entities.effects.push(new Explosion(x, y));
-		PlaySoundAt("explosion", (x / (this.canvas.width / 2)) * 2.0 - 1.0);
+		PlaySoundAt("explosion", x / (this.camera.world.width / 2));
 
 		this.events.shake.start     = Date.now();
 		this.events.shake.duration  = 100 + (Math.random() * 300);
@@ -329,7 +329,7 @@ Game.prototype = {
 		this.context.translate(-this.camera.position.x, -this.camera.position.y);
 
 		if (this.debug === true) {
-			DrawWorldModel(this.context, delta, this.canvas.width >= 1280 ? this.canvas.width : 1280, this.canvas.height);
+			DrawWorldModel(this.context, delta, this.camera.world.width, this.camera.world.height);
 		}
 
 		if (this.running === true) {
@@ -400,7 +400,7 @@ Game.prototype = {
 	RippleAt: function(x, y) {
 
 		this.entities.effects.push(new Ripple(x, y));
-		PlaySoundAt("ripple", (x / (this.canvas.width / 2)) * 2.0 - 1.0);
+		PlaySoundAt("ripple", x / (this.camera.world.width / 2));
 
 		this.events.shake.start     = Date.now();
 		this.events.shake.duration  = 100 + (Math.random() * 300);
@@ -437,8 +437,8 @@ Game.prototype = {
 
 					this.entities.lazers.push(new Lazer(
 						"player",
-						this.player.position.x - 49,
-						this.player.position.y - 20,
+						this.player.position.x - 58,
+						this.player.position.y - 16,
 						vx1,
 						vy1,
 						20,
@@ -453,15 +453,16 @@ Game.prototype = {
 
 					this.entities.lazers.push(new Lazer(
 						"player",
-						this.player.position.x + 49,
-						this.player.position.y - 20,
+						this.player.position.x + 58,
+						this.player.position.y - 16,
 						vx2,
 						vy2,
 						20,
 						1
 					));
 
-					PlaySoundAt("lazer", (this.player.position.x / (this.canvas.width / 2)) * 2.0 - 1.0);
+					PlaySoundAt("lazer", this.player.position.x / (this.camera.world.width / 2));
+
 					this.events.shoot.timeout = Date.now() + 175;
 
 				}
@@ -653,12 +654,8 @@ Game.prototype = {
 		this.starfield.Update(delta, this.canvas.width, this.canvas.height);
 		this.camera.Update(delta, this.canvas.width, this.canvas.height);
 
-		let world_width  = this.canvas.width;
-		let world_height = this.canvas.height;
-
-		if (world_width < 1280) {
-			world_width = 1280;
-		}
+		let world_width  = this.camera.world.width;
+		let world_height = this.camera.world.height;
 
 		if (this.running === true && this.paused === false) {
 

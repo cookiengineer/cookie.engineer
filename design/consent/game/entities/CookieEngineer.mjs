@@ -240,7 +240,7 @@ CookieEngineer.prototype = {
 				this.target.x = this.game.player.position.x;
 				this.target.y = this.game.player.position.y;
 
-				PlaySoundAt("CookieEngineerCharge", (this.position.x / (width / 2)) * 2.0 - 1.0);
+				PlaySoundAt("CookieEngineerCharge", this.position.x / (width / 2));
 				this.events.charge = Date.now() + CookieEngineer.Durations.ChargeLightning;
 
 			} else if (Date.now() > this.events.charge) {
@@ -256,7 +256,7 @@ CookieEngineer.prototype = {
 
 				if (this.target.x !== null && this.target.y !== null) {
 
-					PlaySoundAt("CookieEngineerLightning", (this.position.x / (width / 2)) * 2.0 - 1.0);
+					PlaySoundAt("CookieEngineerLightning", this.position.x / (width / 2));
 
 					this.game.Spawn(new Lightning(
 						"enemy",

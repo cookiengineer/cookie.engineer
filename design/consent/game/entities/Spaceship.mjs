@@ -8,7 +8,7 @@ export const Spaceship = function(screen_width, screen_height) {
 
 	this.health = 100;
 	this.width  = 128;
-	this.height = 80;
+	this.height = 128;
 	this.position = {
 		x: 0,
 		y: ((screen_height / 2) - this.height - 32) | 0
@@ -23,14 +23,14 @@ export const Spaceship = function(screen_width, screen_height) {
 			life: Math.random() * 5.0,
 			r:    (1 + Math.random() * 5) | 0,
 			x:    (this.position.x - 14 + (Math.random() * 4)) | 0,
-			y:    this.position.y + 35,
+			y:    this.position.y + (this.height / 2)
 		});
 
 		this.exhaust_right.push({
 			life: Math.random() * 5.0,
 			r:    (1 + Math.random() * 5) | 0,
 			x:    (this.position.x + 14 - (Math.random() * 4)) | 0,
-			y:    this.position.y + 35,
+			y:    this.position.y + (this.height / 2)
 		});
 
 	}
@@ -234,7 +234,7 @@ Spaceship.prototype = {
 			particle.life = Math.random() * 5.0;
 			particle.r    = (1 + Math.random() * 5) | 0;
 			particle.x    = (this.position.x - 14 + (Math.random() * 4)) | 0;
-			particle.y    = this.position.y + 35;
+			particle.y    = this.position.y + (this.height / 2);
 
 		}
 
@@ -245,7 +245,7 @@ Spaceship.prototype = {
 			particle.life = Math.random() * 5.0;
 			particle.r    = (1 + Math.random() * 5) | 0;
 			particle.x    = (this.position.x + 14 - (Math.random() * 4)) | 0;
-			particle.y    = this.position.y + 35;
+			particle.y    = this.position.y + (this.height / 2);
 
 		}
 
@@ -285,7 +285,7 @@ Spaceship.prototype = {
 				particle.life = Math.random() * 5.0;
 				particle.r    = (1 + Math.random() * 5) | 0;
 				particle.x    = (this.position.x - 14 + (Math.random() * 4)) | 0;
-				particle.y    = this.position.y + 35;
+				particle.y    = this.position.y + (this.height / 2);
 			}
 
 		}
@@ -301,7 +301,7 @@ Spaceship.prototype = {
 				particle.life = Math.random() * 5.0;
 				particle.r    = (1 + Math.random() * 5) | 0;
 				particle.x    = (this.position.x + 14 - (Math.random() * 4)) | 0;
-				particle.y    = this.position.y + 35;
+				particle.y    = this.position.y + (this.height / 2);
 			}
 
 		}

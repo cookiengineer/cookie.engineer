@@ -281,7 +281,7 @@ StarDestroyer.prototype = {
 
 			if (this.events.charge === null) {
 
-				PlaySoundAt("StarDestroyerCannonCharge", (this.position.x / (width / 2)) * 2.0 - 1.0);
+				PlaySoundAt("StarDestroyerCannonCharge", this.position.x / (width / 2));
 				this.events.charge = Date.now() + StarDestroyer.Durations.ChargeCannon;
 
 			} else if (Date.now() > this.events.charge) {
@@ -297,7 +297,7 @@ StarDestroyer.prototype = {
 
 				if (this.target.x !== null && this.target.y !== null) {
 
-					PlaySoundAt("StarDestroyerCannonLazer", (this.position.x / (width / 2)) * 2.0 - 1.0);
+					PlaySoundAt("StarDestroyerCannonLazer", this.position.x / (width / 2));
 
 					let dx  = (this.position.x - this.target.x);
 					let dy  = (this.position.y - this.target.y);

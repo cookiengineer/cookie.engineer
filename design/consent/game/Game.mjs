@@ -422,49 +422,64 @@ Game.prototype = {
 
 			if (this.player.position.y > target_y) {
 
-				let dx    = target_x - this.player.position.x;
-				let dy    = target_y - (this.player.position.y - 20);
-				let angle = Math.atan2(dx, -dy) * (180 / Math.PI);
+				// a is dx, b is dy, hypotenuse is unknown
+				let dx_left     = (this.player.position.x - 58) - target_x;
+				let dy_left     = (this.player.position.y - 16) - target_y;
+				let angle_left  = Math.atan(dx_left / dy_left) * (180 / Math.PI);
+				let dx_right    = (this.player.position.x + 58) - target_x;
+				let dy_right    = (this.player.position.y - 16) - target_y;
+				let angle_right = Math.atan(dx_right / dy_right) * (180 / Math.PI);
+				let fired       = false;
 
-				// Allow to shoot only within 60 degrees range in both directions
-				if (angle >= -60 && angle <= 60) {
+				// angle left to left side: 20 degrees
+				// angle left to right side: -30 degrees
 
-					let dx1  = (this.player.position.x - 49) - target_x;
-					let dy1  = (this.player.position.y - 20) - target_y;
-					let len1 = Math.hypot(dx1, dy1);
-					let vx1  = (dx1 / len1) * -200;
-					let vy1  = (dy1 / len1) * -200;
+				if (angle_left > -30 && angle_left < 20) {
+
+					fired = true;
+
+					let len_left = Math.hypot(dx_left, dy_left);
+					let vx_left  = (dx_left / len_left) * -200;
+					let vy_left  = (dy_left / len_left) * -200;
 
 					this.entities.lazers.push(new Lazer(
 						"player",
 						this.player.position.x - 58,
 						this.player.position.y - 16,
-						vx1,
-						vy1,
+						vx_left,
+						vy_left,
 						20,
 						1
 					));
 
-					let dx2  = (this.player.position.x + 49) - target_x;
-					let dy2  = (this.player.position.y - 20) - target_y;
-					let len2 = Math.hypot(dx2, dy2);
-					let vx2  = (dx2 / len2) * -200;
-					let vy2  = (dy2 / len2) * -200;
+				}
+
+				// angle right to left side: 30 degrees
+				// angle right to right side: -20 degrees
+
+				if (angle_right > -20 && angle_right < 30) {
+
+					fired = true;
+
+					let len_right = Math.hypot(dx_right, dy_right);
+					let vx_right  = (dx_right / len_right) * -200;
+					let vy_right  = (dy_right / len_right) * -200;
 
 					this.entities.lazers.push(new Lazer(
 						"player",
 						this.player.position.x + 58,
 						this.player.position.y - 16,
-						vx2,
-						vy2,
+						vx_right,
+						vy_right,
 						20,
 						1
 					));
 
+				}
+
+				if (fired === true) {
 					PlaySoundAt("lazer", this.player.position.x / (this.camera.world.width / 2));
-
 					this.events.shoot.timeout = Date.now() + 175;
-
 				}
 
 			}

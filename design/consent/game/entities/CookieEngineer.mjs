@@ -27,6 +27,10 @@ export const CookieEngineer = function(game) {
 		x: 0,
 		y: 0
 	};
+	this.speed = {
+		x: 0,
+		y: 30
+	};
 	this.target = {
 		x: null,
 		y: null
@@ -163,6 +167,16 @@ CookieEngineer.prototype = {
 
 	},
 
+	SetSpeed: function(x, y) {
+
+		x = typeof x === "number" ? x : this.speed.x;
+		y = typeof y === "number" ? y : this.speed.y;
+
+		this.speed.x = x;
+		this.speed.y = y;
+
+	},
+
 	Update: function(delta, width, height) {
 
 		let dt = delta / 1000;
@@ -189,6 +203,17 @@ CookieEngineer.prototype = {
 					this.events.idle = Date.now() + CookieEngineer.Durations.SpawnCookieShield;
 
 				}
+
+			}
+
+			let boundary = (-height / 2) + this.radius + 64;
+
+			if (this.position.y <= boundary) {
+
+				this.position.x += (dt * this.speed.x);
+				this.position.y += (dt * this.speed.y);
+
+				this.events.idle = Date.now() + CookieEngineer.Actions.Idle;
 
 			} else {
 

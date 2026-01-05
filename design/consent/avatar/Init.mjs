@@ -17,7 +17,6 @@ export const Init = (figure) => {
 			LoadSound("vomit", [ new URL("./sounds/vomit.m4a", base), new URL("./sounds/vomit.mp3", base), new URL("./sounds/vomit.opus", base) ]),
 			LoadSpeech("angry1", new URL("./speeches/angry1.json", base), [ new URL("./speeches/angry1.m4a", base), new URL("./speeches/angry1.mp3", base), new URL("./speeches/angry1.opus", base) ]),
 			LoadSpeech("angry2", new URL("./speeches/angry2.json", base), [ new URL("./speeches/angry2.m4a", base), new URL("./speeches/angry2.mp3", base), new URL("./speeches/angry2.opus", base) ]),
-			LoadSpeech("angry3", new URL("./speeches/angry3.json", base), [ new URL("./speeches/angry3.m4a", base), new URL("./speeches/angry3.mp3", base), new URL("./speeches/angry3.opus", base) ])
 		]).then(() => {
 
 			if (figure !== null) {

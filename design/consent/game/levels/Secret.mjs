@@ -1,8 +1,9 @@
 
-import { Cookie          } from "../entities/Cookie.mjs";
-import { CookieEngineer  } from "../entities/CookieEngineer.mjs";
-import { StarDestroyer   } from "../entities/StarDestroyer.mjs";
-import { InterpolateLine } from "../math/InterpolateLine.mjs";
+import { Cookie            } from "../entities/Cookie.mjs";
+import { CookieEngineer    } from "../entities/CookieEngineer.mjs";
+import { StarDestroyer     } from "../entities/StarDestroyer.mjs";
+import { InterpolateCircle } from "../math/InterpolateCircle.mjs";
+import { InterpolateLine   } from "../math/InterpolateLine.mjs";
 
 export const Level = function(game) {
 
@@ -51,15 +52,89 @@ Level.prototype = {
 
 		let counted = 0;
 		let offset  = 256;
-		let wave_1  = (-height / 2) - 1 * 128; // cookie engineer and star destroyer
+		let wave_1  = (-height / 2) - 1 * 128;              // R.I.P.
+		let wave_2  = (-height / 2) - 1 * 128 - 4 * offset; // cookie engineer and star destroyer
+
+		let rip = [];
+
+		InterpolateLine(width, -320, wave_1, -320, wave_1 - 256, 48, (x, y) => {
+
+			let found = rip.find((pos) => pos.x === x && pos.y === y) || null;
+			if (found === null) {
+				rip.push({ x: x, y: y });
+			}
+
+		});
+
+		InterpolateLine(width, -320 + 128, wave_1, -320, wave_1 - 128, 48, (x, y) => {
+
+			let found = rip.find((pos) => pos.x === x && pos.y === y) || null;
+			if (found === null) {
+				rip.push({ x: x, y: y });
+			}
+
+		});
+
+		InterpolateCircle(-320 + 64, wave_1 - 128 - 64, 64, -90, 135, 4, (x, y) => {
+
+			let found = rip.find((pos) => pos.x === x && pos.y === y) || null;
+			if (found === null) {
+				rip.push({ x: x, y: y });
+			}
+
+		});
+
+		InterpolateLine(width, 0, wave_1, 0, wave_1 - 256, 48, (x, y) => {
+
+			let found = rip.find((pos) => pos.x === x && pos.y === y) || null;
+			if (found === null) {
+				rip.push({ x: x, y: y });
+			}
+
+		});
+
+		InterpolateCircle(192 + 64, wave_1 - 128 - 64, 64, -90, 135, 4, (x, y) => {
+
+			let found = rip.find((pos) => pos.x === x && pos.y === y) || null;
+			if (found === null) {
+				rip.push({ x: x, y: y });
+			}
+
+		});
+
+		InterpolateLine(width, 192, wave_1, 192, wave_1 - 256, 48, (x, y) => {
+
+			let found = rip.find((pos) => pos.x === x && pos.y === y) || null;
+			if (found === null) {
+				rip.push({ x: x, y: y });
+			}
+
+		});
+
+		rip.push({x: -96,      y: wave_1 });
+		rip.push({x:  96,      y: wave_1 });
+		rip.push({x: 192 + 96, y: wave_1 });
+
+		rip.forEach((position) => {
+
+			let cookie = new Cookie();
+
+			cookie.SetPosition(position.x, position.y);
+			this.game.Spawn(cookie);
+			counted++;
+
+		});
+
 
 		this.boss1.Reset();
-		this.boss1.SetPosition((-width / 2) + this.boss1.radius + 64 + 16, (-height / 2) + this.boss1.radius + 64 + 16);
+		// this.boss1.SetPosition(-416, (-height / 2) + this.boss1.radius + 16 + 16);
+		this.boss1.SetPosition(-416, wave_2);
+		this.boss1.SetSpeed(0, 30);
 		this.game.Spawn(this.boss1);
 		counted++;
 
 		this.boss2.Reset();
-		this.boss2.SetPosition((+width / 2) - this.boss2.radius - 64, wave_1);
+		this.boss2.SetPosition(+384, wave_2);
 		this.boss2.SetSpeed(0, 30);
 		this.game.Spawn(this.boss2);
 		counted++;

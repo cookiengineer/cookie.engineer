@@ -25,7 +25,7 @@ Camera.prototype = {
 			this.width  = screen_width;
 			this.height = screen_height;
 
-			// this.world.width  = 1280;
+			this.world.width  = screen_width;
 			this.world.height = screen_height;
 
 		} else {
@@ -33,7 +33,7 @@ Camera.prototype = {
 			this.width  = screen_width;
 			this.height = screen_height;
 
-			// this.world.width  = 1280;
+			this.world.width  = 1280;
 			this.world.height = screen_height;
 
 		}

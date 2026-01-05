@@ -213,9 +213,7 @@ Avatar.prototype = {
 					let count = this.Increase("angry");
 					if (count >= 6) {
 
-						this.Speak("angry3", () => {
-							this.OnGameStart("level1");
-						});
+						this.OnGameStart("level1");
 
 					} else if (count == 5) {
 
@@ -235,16 +233,9 @@ Avatar.prototype = {
 
 					} else if (count == 2) {
 
-						this.Feel("angry", 900);
-						PlaySound("ouch");
-
-						setTimeout(() => {
-
-							this.Speak("angry1", () => {
-								this.Feel("okay");
-							});
-
-						}, 900);
+						this.Speak("angry1", () => {
+							this.Feel("okay");
+						});
 
 					} else {
 

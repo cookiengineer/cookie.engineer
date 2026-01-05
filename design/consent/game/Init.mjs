@@ -66,8 +66,11 @@ export const Init = (avatar, wrapper) => {
 			};
 
 			avatar.OnGameStart = () => {
+
 				game.Init();
+				game.UnlockSecret();
 				game.Start("level1");
+
 			};
 
 			document.addEventListener("pointerdown", (event) => {

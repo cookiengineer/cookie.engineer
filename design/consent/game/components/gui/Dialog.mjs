@@ -7,17 +7,21 @@ const ranks = (() => {
 	const base = new URL(".", import.meta.url);
 
 	return {
-		"rank1": {
+		"level1": {
 			"title": "First Cookie Order Cadet",
 			"image": new URL("./DialogRank1.png", base)
 		},
-		"rank2": {
+		"level2": {
 			"title": "Cookie Rebel Alliance Commander",
 			"image": new URL("./DialogRank2.png", base)
 		},
-		"rank3": {
+		"level3": {
 			"title": "Cookie Destroyer Destroyer",
 			"image": new URL("./DialogRank3.png", base)
+		},
+		"secret": {
+			"title": "Cookie Doxxing Brigade",
+			"image": new URL("./DialogRankSecret.png", base)
 		}
 	};
 
@@ -100,7 +104,7 @@ Dialog.prototype = {
 
 	Show: function(statistics) {
 
-		let rank = ranks["rank1"];
+		let rank = ranks["level1"];
 
 		// ex gratia
 		let level1_5_percent = (statistics.level1.spawned * 0.05);
@@ -109,18 +113,22 @@ Dialog.prototype = {
 
 		if (statistics.level1.killed > 0 && statistics.level1.killed >= (statistics.level1.spawned - level1_5_percent)) {
 
-			rank = ranks["rank1"];
+			rank = ranks["level1"];
 
 			if (statistics.level2.killed > 0 && statistics.level2.killed >= (statistics.level2.spawned - level2_3_percent)) {
 
-				rank = ranks["rank2"];
+				rank = ranks["level2"];
 
 				if (statistics.level3.killed > 0 && statistics.level3.killed >= (statistics.level3.killed - level3_1_percent)) {
-					rank = ranks["rank3"];
+					rank = ranks["level3"];
 				}
 
 			}
 
+		}
+
+		if (statistics.secret !== undefined) {
+			rank = ranks["secret"];
 		}
 
 		let rank_title = this.element.querySelector("[data-name=\"rank-title\"]");

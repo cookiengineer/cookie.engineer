@@ -82,6 +82,10 @@ Explosion.prototype = {
 
 		}
 
+		if (this.particles.length === 0) {
+			this.life = 0.0;
+		}
+
 	}
 
 };

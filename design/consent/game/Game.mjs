@@ -636,8 +636,9 @@ Game.prototype = {
 
 			if (this.player !== null) {
 
-				let min_x = ((-1280 / 2) + (this.player.width / 2)) | 0;
-				let max_x = ((+1280 / 2) - (this.player.width / 2)) | 0;
+				let width = this.canvas.width >= 1280 ? this.canvas.width : 1280;
+				let min_x = ((-width / 2) + (this.player.width / 2)) | 0;
+				let max_x = ((+width / 2) - (this.player.width / 2)) | 0;
 
 				if (position_x < min_x) {
 					position_x = min_x;
@@ -660,7 +661,7 @@ Game.prototype = {
 		this.levels["secret"]     = new Secret(this);
 		this.statistics["secret"] = { missed: 0, killed: 0, spawned: 0 };
 
-		console.log("Congrats! You unlocked the secret Level!");
+		console.info("Congrats! You unlocked the secret Level!");
 
 	},
 
@@ -859,6 +860,11 @@ Game.prototype = {
 							this.paused = true;
 							this.Stop(true);
 						}
+
+					} else if (this.level.id === "secret") {
+
+						this.paused = true;
+						this.Stop(true);
 
 					}
 

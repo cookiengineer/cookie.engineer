@@ -1,30 +1,5 @@
 
-import { phonemes as sorted_phonemes } from "./phonemes.mjs";
-
-const parse_word_into_phonemes = (word, start_time, end_time) => {
-
-	let phonemes = [];
-	let timeline = [];
-
-	while (word.length > 0) {
-
-		let found = sorted_phonemes.find((str) => word.startsWith(str)) || null;
-		if (found !== null) {
-			phonemes.push(found);
-			word = word.substr(found.length);
-		}
-
-	}
-
-	let time_per_phoneme = (end_time - start_time) / phonemes.length;
-
-	for (let t = 0; t < phonemes.length; t++) {
-		timeline.push((start_time + time_per_phoneme * t) | 0);
-	}
-
-	return { phonemes, timeline };
-
-};
+import { ParseWordIntoPhonemes } from "./ParseWordIntoPhonemes.mjs";
 
 export const ParseSpeech = (config) => {
 
@@ -48,7 +23,7 @@ export const ParseSpeech = (config) => {
 
 			} else if (s < config["sentence"].length - 1) {
 
-				let { phonemes, timeline } = parse_word_into_phonemes(word, config["timeline"][s], config["timeline"][s + 1]);
+				let { phonemes, timeline } = ParseWordIntoPhonemes(word, config["timeline"][s], config["timeline"][s + 1]);
 
 				phonemes.forEach((phoneme) => {
 					speech["phonemes"].push(phoneme);
@@ -60,7 +35,7 @@ export const ParseSpeech = (config) => {
 
 			} else {
 
-				let { phonemes, timeline } = parse_word_into_phonemes(word, config["timeline"][s], config["length"]);
+				let { phonemes, timeline } = ParseWordIntoPhonemes(word, config["timeline"][s], config["length"]);
 
 				phonemes.forEach((phoneme) => {
 					speech["phonemes"].push(phoneme);

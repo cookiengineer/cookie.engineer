@@ -147,18 +147,18 @@ import { PhonemeDebugger    } from "./avatar/debug/PhonemeDebugger.mjs";
 		]).then((image) => {
 
 			[
-				[ "a", "e", "i" ],
-				[ "o" ],
-				[ "ou", "u" ],
-				[ "c", "d", "n", "s", "x", "z" ],
-				[ "g", "k" ],
-				[ "l", "r" ],
-				[ "b", "m", "p" ],
-				[ "f", "v" ],
-				[ "ea", "ee" ],
-				[ "th", "t", "h" ],
-				[ "ch", "sh", "j" ],
-				[ "q", "y", "w" ]
+				[ "AE", "AE0", "AE1", "AE2", "EH", "EH0", "EH1", "EH2" ],
+				[ "AO", "AO0", "AO1", "AO2", "OW", "OW0", "OW1", "OW2" ],
+				[ "UH", "UH0", "UH1", "UH2", "UW", "UW0", "UW1", "UW2", "AW", "AW0", "AW1", "AW2" ],
+				[ "D", "N", "S", "Z" ],
+				[ "G", "K" ],
+				[ "L", "R", "ER", "ER0", "ER1", "ER2" ],
+				[ "B", "M", "P" ],
+				[ "F", "V" ],
+				[ "IH", "IH0", "IH1", "IH2", "IY", "IY0", "IY1", "IY2" ],
+				[ "T", "TH", "DH", "HH" ],
+				[ "CH", "SH", "JH", "ZH" ],
+				[ "W", "Y" ]
 			].forEach((phoneme_group) => {
 
 				let identifier       = phoneme_group.join("_");

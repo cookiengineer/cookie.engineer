@@ -1,7 +1,10 @@
 
 export const Phonemes = {};
 
-[ "a", "e", "i" ].forEach((phoneme) => {
+[
+	"AE", "AE0", "AE1", "AE2",
+	"EH", "EH0", "EH1", "EH2",
+].forEach((phoneme) => {
 
 	Phonemes[phoneme] = [{
 		"start": { x:  44, y: 124 },
@@ -17,7 +20,10 @@ export const Phonemes = {};
 
 });
 
-[ "o" ].forEach((phoneme) => {
+[
+	"AO", "AO0", "AO1", "AO2",
+	"OW", "OW0", "OW1", "OW2"
+].forEach((phoneme) => {
 
 	Phonemes[phoneme] = [{
 		"start": { x:  68, y: 153 },
@@ -33,7 +39,11 @@ export const Phonemes = {};
 
 });
 
-[ "ou", "u" ].forEach((phoneme) => {
+[
+	"UH", "UH0", "UH1", "UH2",
+	"UW", "UW0", "UW1", "UW2",
+	"AW", "AW0", "AW1", "AW2"
+].forEach((phoneme) => {
 
 	Phonemes[phoneme] = [{
 		"start": { x:  72, y: 170 },
@@ -49,7 +59,9 @@ export const Phonemes = {};
 
 });
 
-[ "c", "d", "n", "s", "x", "z" ].forEach((phoneme) => {
+[
+	"D", "N", "S", "Z"
+].forEach((phoneme) => {
 
 	Phonemes[phoneme] = [{
 		"start": { x:  30, y: 135 },
@@ -65,7 +77,9 @@ export const Phonemes = {};
 
 });
 
-[ "ck", "g", "k" ].forEach((phoneme) => {
+[
+	"G", "K"
+].forEach((phoneme) => {
 
 	Phonemes[phoneme] = [{
 		"start": { x:  46, y: 160 },
@@ -81,7 +95,10 @@ export const Phonemes = {};
 
 });
 
-[ "l", "r" ].forEach((phoneme) => {
+[
+	"L", "R",
+	"ER", "ER0", "ER1", "ER2"
+].forEach((phoneme) => {
 
 	Phonemes[phoneme] = [{
 		"start": { x:  15, y: 120 },
@@ -97,7 +114,9 @@ export const Phonemes = {};
 
 });
 
-[ "b", "m", "p" ].forEach((phoneme) => {
+[
+	"B", "M", "P"
+].forEach((phoneme) => {
 
 	Phonemes[phoneme] = [{
 		"start": { x:  55, y: 170 },
@@ -113,7 +132,9 @@ export const Phonemes = {};
 
 });
 
-[ "f", "v" ].forEach((phoneme) => {
+[
+	"F", "V"
+].forEach((phoneme) => {
 
 	Phonemes[phoneme] = [{
 		"start": { x:  45, y: 150 },
@@ -129,7 +150,10 @@ export const Phonemes = {};
 
 });
 
-[ "ea", "ee" ].forEach((phoneme) => {
+[
+	"IH", "IH0", "IH1", "IH2",
+	"IY", "IY0", "IY1", "IY2"
+].forEach((phoneme) => {
 
 	Phonemes[phoneme] = [{
 		"start": { x:  46, y: 160 },
@@ -145,7 +169,9 @@ export const Phonemes = {};
 
 });
 
-[ "th", "t", "h" ].forEach((phoneme) => {
+[
+	"T", "TH", "DH", "HH"
+].forEach((phoneme) => {
 
 	Phonemes[phoneme] = [{
 		"start": { x:  40, y: 155 },
@@ -161,7 +187,9 @@ export const Phonemes = {};
 
 });
 
-[ "ch", "sh", "j" ].forEach((phoneme) => {
+[
+	"CH", "SH", "JH", "ZH"
+].forEach((phoneme) => {
 
 	Phonemes[phoneme] = [{
 		"start": { x:  38, y: 135 },
@@ -177,7 +205,9 @@ export const Phonemes = {};
 
 });
 
-[ "q", "y", "w" ].forEach((phoneme) => {
+[
+	"W", "Y"
+].forEach((phoneme) => {
 
 	Phonemes[phoneme] = [{
 		"start": { x:  70, y: 160 },

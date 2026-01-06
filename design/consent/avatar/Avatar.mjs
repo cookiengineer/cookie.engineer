@@ -211,9 +211,42 @@ Avatar.prototype = {
 				if (this.IsRunning() === true && this.IsFeeling("angry") === false) {
 
 					let count = this.Increase("angry");
-					if (count >= 6) {
+					if (count > 10) {
 
-						this.OnGameStart("level1");
+						this.Feel("angry", 900);
+						PlaySound("ouch");
+
+					} else if (count == 10) {
+
+						this.Speak("angry5", () => {
+
+							this.Feel("okay");
+
+							this.OnGameStart("level1");
+
+						});
+
+					} else if (count == 9) {
+
+						this.Feel("angry", 900);
+						PlaySound("ouch");
+
+					} else if (count == 8) {
+
+						this.Speak("angry4", () => {
+							this.Feel("okay");
+						});
+
+					} else if (count == 7) {
+
+						this.Feel("angry", 900);
+						PlaySound("ouch");
+
+					} else if (count == 6) {
+
+						this.Speak("angry3", () => {
+							this.Feel("okay");
+						});
 
 					} else if (count == 5) {
 

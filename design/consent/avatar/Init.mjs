@@ -12,11 +12,17 @@ export const Init = (figure) => {
 	return new Promise((resolve, reject) => {
 
 		return Promise.all([
+
 			LoadSound("burp",  [ new URL("./sounds/burp.m4a", base),  new URL("./sounds/burp.mp3", base),  new URL("./sounds/burp.opus", base) ]),
 			LoadSound("ouch",  [ new URL("./sounds/ouch.m4a", base),  new URL("./sounds/ouch.mp3", base),  new URL("./sounds/ouch.opus", base) ]),
 			LoadSound("vomit", [ new URL("./sounds/vomit.m4a", base), new URL("./sounds/vomit.mp3", base), new URL("./sounds/vomit.opus", base) ]),
+
 			LoadSpeech("angry1", new URL("./speeches/angry1.json", base), [ new URL("./speeches/angry1.m4a", base), new URL("./speeches/angry1.mp3", base), new URL("./speeches/angry1.opus", base) ]),
 			LoadSpeech("angry2", new URL("./speeches/angry2.json", base), [ new URL("./speeches/angry2.m4a", base), new URL("./speeches/angry2.mp3", base), new URL("./speeches/angry2.opus", base) ]),
+			LoadSpeech("angry3", new URL("./speeches/angry3.json", base), [ new URL("./speeches/angry3.m4a", base), new URL("./speeches/angry3.mp3", base), new URL("./speeches/angry3.opus", base) ]),
+			LoadSpeech("angry4", new URL("./speeches/angry4.json", base), [ new URL("./speeches/angry4.m4a", base), new URL("./speeches/angry4.mp3", base), new URL("./speeches/angry4.opus", base) ]),
+			LoadSpeech("angry5", new URL("./speeches/angry5.json", base), [ new URL("./speeches/angry5.m4a", base), new URL("./speeches/angry5.mp3", base), new URL("./speeches/angry5.opus", base) ]),
+
 		]).then(() => {
 
 			if (figure !== null) {

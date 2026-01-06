@@ -31,6 +31,9 @@ import { Init as InitAvatar } from "./avatar/Init.mjs";
 			// Avatar Speeches
 			LoadSpeech("angry1", new URL("./avatar/speeches/angry1.json", base), [ new URL("./avatar/speeches/angry1.mp3", base) ]),
 			LoadSpeech("angry2", new URL("./avatar/speeches/angry2.json", base), [ new URL("./avatar/speeches/angry2.mp3", base) ]),
+			LoadSpeech("angry3", new URL("./avatar/speeches/angry3.json", base), [ new URL("./avatar/speeches/angry3.mp3", base) ]),
+			LoadSpeech("angry4", new URL("./avatar/speeches/angry4.json", base), [ new URL("./avatar/speeches/angry4.mp3", base) ]),
+			LoadSpeech("angry5", new URL("./avatar/speeches/angry5.json", base), [ new URL("./avatar/speeches/angry5.mp3", base) ]),
 
 			// Game Speeches
 			LoadSpeech("consent",         new URL("./game/speeches/consent.json",         base), [ new URL("./game/speeches/consent.mp3",         base) ]),
@@ -47,6 +50,9 @@ import { Init as InitAvatar } from "./avatar/Init.mjs";
 			[
 				"angry1",
 				"angry2",
+				"angry3",
+				"angry4",
+				"angry5",
 				"consent",
 				"game-level1",
 				"game-level2",

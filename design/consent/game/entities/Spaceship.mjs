@@ -20,14 +20,14 @@ export const Spaceship = function(screen_width, screen_height) {
 	for (let e = 0; e < 40; e++) {
 
 		this.exhaust_left.push({
-			life: Math.random() * 5.0,
+			life: 0.0,
 			r:    (1 + Math.random() * 5) | 0,
 			x:    (this.position.x - 14 + (Math.random() * 4)) | 0,
 			y:    this.position.y + (this.height / 2)
 		});
 
 		this.exhaust_right.push({
-			life: Math.random() * 5.0,
+			life: 0.0,
 			r:    (1 + Math.random() * 5) | 0,
 			x:    (this.position.x + 14 - (Math.random() * 4)) | 0,
 			y:    this.position.y + (this.height / 2)
@@ -281,7 +281,7 @@ Spaceship.prototype = {
 			particle.life = particle.life - dt;
 			particle.y    = particle.y + dt * 60;
 
-			if (particle.life < 0.0 || particle.y >= height) {
+			if (particle.life <= 0.0 || particle.y >= height) {
 				particle.life = Math.random() * 5.0;
 				particle.r    = (1 + Math.random() * 5) | 0;
 				particle.x    = (this.position.x - 14 + (Math.random() * 4)) | 0;
@@ -297,7 +297,7 @@ Spaceship.prototype = {
 			particle.life = particle.life - dt;
 			particle.y    = particle.y + dt * 60;
 
-			if (particle.life < 0.0 || particle.y >= height) {
+			if (particle.life <= 0.0 || particle.y >= height) {
 				particle.life = Math.random() * 5.0;
 				particle.r    = (1 + Math.random() * 5) | 0;
 				particle.x    = (this.position.x + 14 - (Math.random() * 4)) | 0;

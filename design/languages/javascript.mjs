@@ -163,23 +163,16 @@ var hljsGrammar = (function () {
 	);
 
 	/*
-  Language: JavaScript
-  Description: JavaScript (JS) is a lightweight, interpreted, or just-in-time compiled programming language with first-class functions.
-  Category: common, scripting, web
-  Website: https://developer.mozilla.org/en-US/docs/Web/JavaScript
-  */
+	 * Language: JavaScript
+	 * Description: JavaScript (JS) is a lightweight, interpreted, or just-in-time compiled programming language with first-class functions.
+	 * Category: common, scripting, web
+	 * Website: https://developer.mozilla.org/en-US/docs/Web/JavaScript
+	 */
 
 
 	/** @type LanguageFn */
 	function javascript(hljs) {
 		const regex = hljs.regex;
-		/**
-     * Takes a string like "<Booger" and checks to see
-     * if we can find a matching "</Booger" later in the
-     * content.
-     * @param {RegExpMatchArray} match
-     * @param {{after:number}} param1
-     */
 		const hasClosingTag = (match, { after }) => {
 			const tag = "</" + match[0].slice(1);
 			const pos = match.input.indexOf(tag, after);
@@ -196,52 +189,28 @@ var hljsGrammar = (function () {
 		const XML_TAG = {
 			begin: /<[A-Za-z0-9\\._:-]+/,
 			end: /\/[A-Za-z0-9\\._:-]+>|\/>/,
-			/**
-       * @param {RegExpMatchArray} match
-       * @param {CallbackResponse} response
-       */
 			isTrulyOpeningTag: (match, response) => {
 				const afterMatchIndex = match[0].length + match.index;
 				const nextChar = match.input[afterMatchIndex];
-				if (
-				// HTML should not include another raw `<` inside a tag
-				// nested type?
-				// `<Array<Array<number>>`, etc.
-					nextChar === "<" ||
-          // the , gives away that this is not HTML
-          // `<T, A extends keyof T, V>`
-          nextChar === ","
-				) {
+				if (nextChar === "<" || nextChar === ",") {
 					response.ignoreMatch();
 					return;
 				}
 
-				// `<something>`
-				// Quite possibly a tag, lets look for a matching closing tag...
 				if (nextChar === ">") {
-					// if we cannot find a matching closing tag, then we
-					// will ignore it
 					if (!hasClosingTag(match, { after: afterMatchIndex })) {
 						response.ignoreMatch();
 					}
 				}
 
-				// `<blah />` (self-closing)
-				// handled by simpleSelfClosing rule
-
 				let m;
 				const afterMatch = match.input.substring(afterMatchIndex);
 
-				// some more template typing stuff
-				//  <T = any>(key?: string) => Modify<
 				if ((m = afterMatch.match(/^\s*=/))) {
 					response.ignoreMatch();
 					return;
 				}
 
-				// `<From extends string>`
-				// technically this could be HTML, but it smells like a type
-				// NOTE: This is ugh, but added specifically for https://github.com/highlightjs/highlight.js/issues/3276
 				if ((m = afterMatch.match(/^\s+extends\s+/))) {
 					if (m.index === 0) {
 						response.ignoreMatch();
@@ -269,8 +238,7 @@ var hljsGrammar = (function () {
 			className: "number",
 			variants: [
 				// DecimalLiteral
-				{ begin: `(\\b(${decimalInteger})((${frac})|\\.)?|(${frac}))` +
-          `[eE][+-]?(${decimalDigits})\\b` },
+				{ begin: `(\\b(${decimalInteger})((${frac})|\\.)?|(${frac}))[eE][+-]?(${decimalDigits})\\b` },
 				{ begin: `\\b(${decimalInteger})\\b((${frac})\\b|\\.)?|(${frac})\\b` },
 
 				// DecimalBigIntegerLiteral
@@ -404,17 +372,16 @@ var hljsGrammar = (function () {
 			// See https://github.com/highlightjs/highlight.js/issues/3288
 			// hljs.REGEXP_MODE
 		];
-		SUBST.contains = SUBST_INTERNALS
-			.concat({
-				// we need to pair up {} inside our subst to prevent
-				// it from ending too early by matching another }
-				begin: /\{/,
-				end: /\}/,
-				keywords: KEYWORDS$1,
-				contains: [
-					"self"
-				].concat(SUBST_INTERNALS)
-			});
+		SUBST.contains = SUBST_INTERNALS.concat({
+			// we need to pair up {} inside our subst to prevent
+			// it from ending too early by matching another }
+			begin: /\{/,
+			end: /\}/,
+			keywords: KEYWORDS$1,
+			contains: [
+				"self"
+			].concat(SUBST_INTERNALS)
+		});
 		const SUBST_AND_COMMENTS = [].concat(COMMENT, SUBST.contains);
 		const PARAMS_CONTAINS = SUBST_AND_COMMENTS.concat([
 			// eat recursive parens in sub expressions
@@ -475,21 +442,20 @@ var hljsGrammar = (function () {
 
 		const CLASS_REFERENCE = {
 			relevance: 0,
-			match:
-      regex.either(
-      	// Hard coded exceptions
-      	/\bJSON/,
-      	// Float32Array, OutT
-      	/\b[A-Z][a-z]+([A-Z][a-z]*|\d)*/,
-      	// CSSFactory, CSSFactoryT
-      	/\b[A-Z]{2,}([A-Z][a-z]+|\d)+([A-Z][a-z]*)*/,
-      	// FPs, FPsT
-      	/\b[A-Z]{2,}[a-z]+([A-Z][a-z]+|\d)*([A-Z][a-z]*)*/,
-      	// P
-      	// single letters are not highlighted
-      	// BLAH
-      	// this will be flagged as a UPPER_CASE_CONSTANT instead
-      ),
+			match: regex.either(
+				// Hard coded exceptions
+				/\bJSON/,
+				// Float32Array, OutT
+				/\b[A-Z][a-z]+([A-Z][a-z]*|\d)*/,
+				// CSSFactory, CSSFactoryT
+				/\b[A-Z]{2,}([A-Z][a-z]+|\d)+([A-Z][a-z]*)*/,
+				// FPs, FPsT
+				/\b[A-Z]{2,}[a-z]+([A-Z][a-z]+|\d)*([A-Z][a-z]*)*/,
+				// P
+				// single letters are not highlighted
+				// BLAH
+				// this will be flagged as a UPPER_CASE_CONSTANT instead
+			),
 			className: "title.class",
 			keywords: {
 				_: [
@@ -552,7 +518,8 @@ var hljsGrammar = (function () {
 					"super",
 					"import"
 				].map((x) => `${x}\\s*\\(`)),
-				IDENT_RE$1, regex.lookahead(/\s*\(/)),
+				IDENT_RE$1, regex.lookahead(/\s*\(/)
+			),
 			className: "title.function",
 			relevance: 0
 		};
@@ -587,13 +554,15 @@ var hljsGrammar = (function () {
 			]
 		};
 
-		const FUNC_LEAD_IN_RE = "(\\(" +
-      "[^()]*(\\(" +
-      "[^()]*(\\(" +
-      "[^()]*" +
-      "\\)[^()]*)*" +
-      "\\)[^()]*)*" +
-      "\\)|" + hljs.UNDERSCORE_IDENT_RE + ")\\s*=>";
+		const FUNC_LEAD_IN_RE = [
+			"(\\(",
+			"[^()]*(\\(",
+			"[^()]*(\\(",
+			"[^()]*",
+			"\\)[^()]*)*",
+			"\\)[^()]*)*",
+			"\\)|" + hljs.UNDERSCORE_IDENT_RE + ")\\s*=>"
+		].join("");
 
 		const FUNCTION_VARIABLE = {
 			match: [
@@ -726,14 +695,16 @@ var hljsGrammar = (function () {
 					// we have to count the parens to make sure we actually have the correct
 					// bounding ( ).  There could be any number of sub-expressions inside
 					// also surrounded by parens.
-					begin: "\\b(?!function)" + hljs.UNDERSCORE_IDENT_RE +
-            "\\(" + // first parens
-            "[^()]*(\\(" +
-              "[^()]*(\\(" +
-                "[^()]*" +
-              "\\)[^()]*)*" +
-            "\\)[^()]*)*" +
-            "\\)\\s*\\{", // end parens
+					begin: [
+						"\\b(?!function)" + hljs.UNDERSCORE_IDENT_RE,
+						"\\(", // first parens
+						"[^()]*(\\(",
+						"[^()]*(\\(",
+						"[^()]*",
+						"\\)[^()]*)*",
+						"\\)[^()]*)*",
+						"\\)\\s*\\{" // end parens
+					].join(""),
 					returnBegin:true,
 					label: "func.def",
 					contains: [

@@ -3,13 +3,13 @@ var hljsGrammar = (function () {
 	"use strict";
 
 	/*
-  Language: PowerShell
-  Description: PowerShell is a task-based command-line shell and scripting language built on .NET.
-  Author: David Mohundro <david@mohundro.com>
-  Contributors: Nicholas Blumhardt <nblumhardt@nblumhardt.com>, Victor Zhou <OiCMudkips@users.noreply.github.com>, Nicolas Le Gall <contact@nlegall.fr>
-  Website: https://docs.microsoft.com/en-us/powershell/
-  Category: scripting
-  */
+	 * Language: PowerShell
+	 * Description: PowerShell is a task-based command-line shell and scripting language built on .NET.
+	 * Author: David Mohundro <david@mohundro.com>
+	 * Contributors: Nicholas Blumhardt <nblumhardt@nblumhardt.com>, Victor Zhou <OiCMudkips@users.noreply.github.com>, Nicolas Le Gall <contact@nlegall.fr>
+	 * Website: https://docs.microsoft.com/en-us/powershell/
+	 * Category: scripting
+	 */
 
 	function powershell(hljs) {
 		const TYPES = [
@@ -30,45 +30,47 @@ var hljsGrammar = (function () {
 		];
 
 		// https://docs.microsoft.com/en-us/powershell/scripting/developer/cmdlet/approved-verbs-for-windows-powershell-commands
-		const VALID_VERBS =
-      "Add|Clear|Close|Copy|Enter|Exit|Find|Format|Get|Hide|Join|Lock|"
-      + "Move|New|Open|Optimize|Pop|Push|Redo|Remove|Rename|Reset|Resize|"
-      + "Search|Select|Set|Show|Skip|Split|Step|Switch|Undo|Unlock|"
-      + "Watch|Backup|Checkpoint|Compare|Compress|Convert|ConvertFrom|"
-      + "ConvertTo|Dismount|Edit|Expand|Export|Group|Import|Initialize|"
-      + "Limit|Merge|Mount|Out|Publish|Restore|Save|Sync|Unpublish|Update|"
-      + "Approve|Assert|Build|Complete|Confirm|Deny|Deploy|Disable|Enable|Install|Invoke|"
-      + "Register|Request|Restart|Resume|Start|Stop|Submit|Suspend|Uninstall|"
-      + "Unregister|Wait|Debug|Measure|Ping|Repair|Resolve|Test|Trace|Connect|"
-      + "Disconnect|Read|Receive|Send|Write|Block|Grant|Protect|Revoke|Unblock|"
-      + "Unprotect|Use|ForEach|Sort|Tee|Where";
+		const VALID_VERBS = [
+			"Add|Clear|Close|Copy|Enter|Exit|Find|Format|Get|Hide|Join|Lock|",
+			"Move|New|Open|Optimize|Pop|Push|Redo|Remove|Rename|Reset|Resize|",
+			"Search|Select|Set|Show|Skip|Split|Step|Switch|Undo|Unlock|",
+			"Watch|Backup|Checkpoint|Compare|Compress|Convert|ConvertFrom|",
+			"ConvertTo|Dismount|Edit|Expand|Export|Group|Import|Initialize|",
+			"Limit|Merge|Mount|Out|Publish|Restore|Save|Sync|Unpublish|Update|",
+			"Approve|Assert|Build|Complete|Confirm|Deny|Deploy|Disable|Enable|Install|Invoke|",
+			"Register|Request|Restart|Resume|Start|Stop|Submit|Suspend|Uninstall|",
+			"Unregister|Wait|Debug|Measure|Ping|Repair|Resolve|Test|Trace|Connect|",
+			"Disconnect|Read|Receive|Send|Write|Block|Grant|Protect|Revoke|Unblock|",
+			"Unprotect|Use|ForEach|Sort|Tee|Where"
+		].join("");
 
-		const COMPARISON_OPERATORS =
-      "-and|-as|-band|-bnot|-bor|-bxor|-casesensitive|-ccontains|-ceq|-cge|-cgt|"
-      + "-cle|-clike|-clt|-cmatch|-cne|-cnotcontains|-cnotlike|-cnotmatch|-contains|"
-      + "-creplace|-csplit|-eq|-exact|-f|-file|-ge|-gt|-icontains|-ieq|-ige|-igt|"
-      + "-ile|-ilike|-ilt|-imatch|-in|-ine|-inotcontains|-inotlike|-inotmatch|"
-      + "-ireplace|-is|-isnot|-isplit|-join|-le|-like|-lt|-match|-ne|-not|"
-      + "-notcontains|-notin|-notlike|-notmatch|-or|-regex|-replace|-shl|-shr|"
-      + "-split|-wildcard|-xor";
+		const COMPARISON_OPERATORS = [
+			"-and|-as|-band|-bnot|-bor|-bxor|-casesensitive|-ccontains|-ceq|-cge|-cgt|",
+			"-cle|-clike|-clt|-cmatch|-cne|-cnotcontains|-cnotlike|-cnotmatch|-contains|",
+			"-creplace|-csplit|-eq|-exact|-f|-file|-ge|-gt|-icontains|-ieq|-ige|-igt|",
+			"-ile|-ilike|-ilt|-imatch|-in|-ine|-inotcontains|-inotlike|-inotmatch|",
+			"-ireplace|-is|-isnot|-isplit|-join|-le|-like|-lt|-match|-ne|-not|",
+			"-notcontains|-notin|-notlike|-notmatch|-or|-regex|-replace|-shl|-shr|",
+			"-split|-wildcard|-xor"
+		].join("");
 
 		const KEYWORDS = {
 			$pattern: /-?[A-z\.\-]+\b/,
-			keyword:
-        "if else foreach return do while until elseif begin for trap data dynamicparam "
-        + "end break throw param continue finally in switch exit filter try process catch "
-        + "hidden static parameter",
-			// "echo" relevance has been set to 0 to avoid auto-detect conflicts with shell transcripts
-			built_in:
-        "ac asnp cat cd CFS chdir clc clear clhy cli clp cls clv cnsn compare copy cp "
-        + "cpi cpp curl cvpa dbp del diff dir dnsn ebp echo|0 epal epcsv epsn erase etsn exsn fc fhx "
-        + "fl ft fw gal gbp gc gcb gci gcm gcs gdr gerr ghy gi gin gjb gl gm gmo gp gps gpv group "
-        + "gsn gsnp gsv gtz gu gv gwmi h history icm iex ihy ii ipal ipcsv ipmo ipsn irm ise iwmi "
-        + "iwr kill lp ls man md measure mi mount move mp mv nal ndr ni nmo npssc nsn nv ogv oh "
-        + "popd ps pushd pwd r rbp rcjb rcsn rd rdr ren ri rjb rm rmdir rmo rni rnp rp rsn rsnp "
-        + "rujb rv rvpa rwmi sajb sal saps sasv sbp sc scb select set shcm si sl sleep sls sort sp "
-        + "spjb spps spsv start stz sujb sv swmi tee trcm type wget where wjb write"
-			// TODO: 'validate[A-Z]+' can't work in keywords
+			keyword: [
+				"if else foreach return do while until elseif begin for trap data dynamicparam",
+				"end break throw param continue finally in switch exit filter try process catch",
+				"hidden static parameter"
+			].join(" "),
+			built_in: [
+				"ac asnp cat cd CFS chdir clc clear clhy cli clp cls clv cnsn compare copy cp",
+				"cpi cpp curl cvpa dbp del diff dir dnsn ebp echo|0 epal epcsv epsn erase etsn exsn fc fhx",
+				"fl ft fw gal gbp gc gcb gci gcm gcs gdr gerr ghy gi gin gjb gl gm gmo gp gps gpv group",
+				"gsn gsnp gsv gtz gu gv gwmi h history icm iex ihy ii ipal ipcsv ipmo ipsn irm ise iwmi",
+				"iwr kill lp ls man md measure mi mount move mp mv nal ndr ni nmo npssc nsn nv ogv oh",
+				"popd ps pushd pwd r rbp rcjb rcsn rd rdr ren ri rjb rm rmdir rmo rni rnp rp rsn rsnp",
+				"rujb rv rvpa rwmi sajb sal saps sasv sbp sc scb select set shcm si sl sleep sls sort sp",
+				"spjb spps spsv start stz sujb sv swmi tee trcm type wget where wjb write"
+			].join(" ")
 		};
 
 		const TITLE_NAME_RE = /\w[\w\d]*((-)[\w\d]+)*/;
@@ -251,8 +253,8 @@ var hljsGrammar = (function () {
 				{
 					className: "keyword",
 					begin: "(".concat(
-						KEYWORDS.keyword.toString().replace(/\s/g, "|"
-						), ")\\b"),
+						KEYWORDS.keyword.toString().replace(/\s/g, "|"), ")\\b"
+					),
 					endsParent: true,
 					relevance: 0
 				},

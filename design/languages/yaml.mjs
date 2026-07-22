@@ -3,14 +3,15 @@ var hljsGrammar = (function () {
 	"use strict";
 
 	/*
-  Language: YAML
-  Description: Yet Another Markdown Language
-  Author: Stefan Wienert <stwienert@gmail.com>
-  Contributors: Carl Baxter <carl@cbax.tech>
-  Requires: ruby.js
-  Website: https://yaml.org
-  Category: common, config
-  */
+	 * Language: YAML
+	 * Description: Yet Another Markdown Language
+	 * Author: Stefan Wienert <stwienert@gmail.com>
+	 * Contributors: Carl Baxter <carl@cbax.tech>
+	 * Requires: ruby.js
+	 * Website: https://yaml.org
+	 * Category: common, config
+	 */
+
 	function yaml(hljs) {
 		const LITERALS = "true false yes no null";
 
@@ -32,7 +33,6 @@ var hljsGrammar = (function () {
 					begin: /'[\w*@][\w*@ :()\./-]*':(?=[ \t]|$)/ },
 			]
 		};
-    
 		const TEMPLATE_VARIABLES = {
 			className: "template-variable",
 			variants: [
@@ -136,10 +136,6 @@ var hljsGrammar = (function () {
 				relevance: 10
 			},
 			{ // multi line string
-				// Blocks start with a | or > followed by a newline
-				//
-				// Indentation of subsequent lines must be the same to
-				// be considered part of the block
 				className: "string",
 				begin: "[\\|>]([1-9]?[+-])?[ ]*\\n( +)[^ ][^\\n]*\\n(\\2[^\\n]+\\n?)*"
 			},

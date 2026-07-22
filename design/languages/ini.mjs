@@ -3,12 +3,12 @@ var hljsGrammar = (function () {
 	"use strict";
 
 	/*
-  Language: TOML, also INI
-  Description: TOML aims to be a minimal configuration file format that's easy to read due to obvious semantics.
-  Contributors: Guillaume Gomez <guillaume1.gomez@gmail.com>
-  Category: common, config
-  Website: https://github.com/toml-lang/toml
-  */
+	 * Language: TOML, also INI
+	 * Description: TOML aims to be a minimal configuration file format that's easy to read due to obvious semantics.
+	 * Contributors: Guillaume Gomez <guillaume1.gomez@gmail.com>
+	 * Category: common, config
+	 * Website: https://github.com/toml-lang/toml
+	 */
 
 	function ini(hljs) {
 		const regex = hljs.regex;

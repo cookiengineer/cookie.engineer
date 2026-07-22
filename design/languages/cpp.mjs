@@ -3,10 +3,10 @@ var hljsGrammar = (function () {
 	"use strict";
 
 	/*
-  Language: C++
-  Category: common, system
-  Website: https://isocpp.org
-  */
+	 * Language: C++
+	 * Category: common, system
+	 * Website: https://isocpp.org
+	 */
 
 	/** @type LanguageFn */
 	function cpp(hljs) {
@@ -18,11 +18,7 @@ var hljsGrammar = (function () {
 		const DECLTYPE_AUTO_RE = "decltype\\(auto\\)";
 		const NAMESPACE_RE = "[a-zA-Z_]\\w*::";
 		const TEMPLATE_ARGUMENT_RE = "<[^<>]+>";
-		const FUNCTION_TYPE_RE = "(?!struct)("
-      + DECLTYPE_AUTO_RE + "|"
-      + regex.optional(NAMESPACE_RE)
-      + "[a-zA-Z_]\\w*" + regex.optional(TEMPLATE_ARGUMENT_RE)
-    + ")";
+		const FUNCTION_TYPE_RE = "(?!struct)(" + DECLTYPE_AUTO_RE + "|" + regex.optional(NAMESPACE_RE) + "[a-zA-Z_]\\w*" + regex.optional(TEMPLATE_ARGUMENT_RE) + ")";
 
 		const CPP_PRIMITIVE_TYPES = {
 			className: "type",
@@ -57,42 +53,44 @@ var hljsGrammar = (function () {
 			className: "number",
 			variants: [
 				// Floating-point literal.
-				{ begin:
-          "[+-]?(?:" // Leading sign.
-            // Decimal.
-            + "(?:"
-              +"[0-9](?:'?[0-9])*\\.(?:[0-9](?:'?[0-9])*)?"
-              + "|\\.[0-9](?:'?[0-9])*"
-            + ")(?:[Ee][+-]?[0-9](?:'?[0-9])*)?"
-            + "|[0-9](?:'?[0-9])*[Ee][+-]?[0-9](?:'?[0-9])*"
-            // Hexadecimal.
-            + "|0[Xx](?:"
-              +"[0-9A-Fa-f](?:'?[0-9A-Fa-f])*(?:\\.(?:[0-9A-Fa-f](?:'?[0-9A-Fa-f])*)?)?"
-              + "|\\.[0-9A-Fa-f](?:'?[0-9A-Fa-f])*"
-            + ")[Pp][+-]?[0-9](?:'?[0-9])*"
-          + ")(?:" // Literal suffixes.
-            + "[Ff](?:16|32|64|128)?"
-            + "|(BF|bf)16"
-            + "|[Ll]"
-            + "|" // Literal suffix is optional.
-          + ")"
+				{
+					begin: [
+						"[+-]?(?:", // Leading sign.
+						// Decimal.
+						"(?:",
+						"[0-9](?:'?[0-9])*\\.(?:[0-9](?:'?[0-9])*)?",
+						"|\\.[0-9](?:'?[0-9])*",
+						")(?:[Ee][+-]?[0-9](?:'?[0-9])*)?",
+						"|[0-9](?:'?[0-9])*[Ee][+-]?[0-9](?:'?[0-9])*",
+						// Hexadecimal.
+						"|0[Xx](?:",
+						"[0-9A-Fa-f](?:'?[0-9A-Fa-f])*(?:\\.(?:[0-9A-Fa-f](?:'?[0-9A-Fa-f])*)?)?",
+						"|\\.[0-9A-Fa-f](?:'?[0-9A-Fa-f])*",
+						")[Pp][+-]?[0-9](?:'?[0-9])*",
+						")(?:", // Literal suffixes.
+						"[Ff](?:16|32|64|128)?",
+						"|(BF|bf)16",
+						"|[Ll]",
+						"|", // Literal suffix is optional.
+						")"
+					].join("")
 				},
 				// Integer literal.
-				{ begin:
-          "[+-]?\\b(?:" // Leading sign.
-            + "0[Bb][01](?:'?[01])*" // Binary.
-            + "|0[Xx][0-9A-Fa-f](?:'?[0-9A-Fa-f])*" // Hexadecimal.
-            + "|0(?:'?[0-7])*" // Octal or just a lone zero.
-            + "|[1-9](?:'?[0-9])*" // Decimal.
-          + ")(?:" // Literal suffixes.
-            + "[Uu](?:LL?|ll?)"
-            + "|[Uu][Zz]?"
-            + "|(?:LL?|ll?)[Uu]?"
-            + "|[Zz][Uu]"
-            + "|" // Literal suffix is optional.
-          + ")"
-          // Note: there are user-defined literal suffixes too, but perhaps having the custom suffix not part of the
-          // literal highlight actually makes it stand out more.
+				{
+					begin: [
+						"[+-]?\\b(?:", // Leading sign.
+						"0[Bb][01](?:'?[01])*", // Binary.
+						"|0[Xx][0-9A-Fa-f](?:'?[0-9A-Fa-f])*", // Hexadecimal.
+						"|0(?:'?[0-7])*", // Octal or just a lone zero.
+						"|[1-9](?:'?[0-9])*", // Decimal.
+						")(?:", // Literal suffixes.
+						"[Uu](?:LL?|ll?)",
+						"|[Uu][Zz]?",
+						"|(?:LL?|ll?)[Uu]?",
+						"|[Zz][Uu]",
+						"|", // Literal suffix is optional.
+						")"
+					].join("")
 				}
 			],
 			relevance: 0
@@ -102,9 +100,12 @@ var hljsGrammar = (function () {
 			className: "meta",
 			begin: /#\s*[a-z]+\b/,
 			end: /$/,
-			keywords: { keyword:
-          "if else elif endif define undef warning error line "
-          + "pragma _Pragma ifdef ifndef include" },
+			keywords: {
+				keyword: [
+					"if else elif endif define undef warning error line",
+					"pragma _Pragma ifdef ifndef include"
+				].join(" ")
+			},
 			contains: [
 				{
 					begin: /\\\n/,
@@ -435,7 +436,8 @@ var hljsGrammar = (function () {
 				/(?!switch)/,
 				/(?!while)/,
 				hljs.IDENT_RE,
-				regex.lookahead(/(<[^<>]+>|)\s*\(/))
+				regex.lookahead(/(<[^<>]+>|)\s*\(/)
+			)
 		};
 
 		const EXPRESSION_CONTAINS = [
@@ -602,7 +604,8 @@ var hljsGrammar = (function () {
 							3: "title.class"
 						}
 					}
-				])
+				]
+			)
 		};
 	}
 

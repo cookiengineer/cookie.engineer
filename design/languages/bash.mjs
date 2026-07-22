@@ -3,12 +3,12 @@ var hljsGrammar = (function () {
 	"use strict";
 
 	/*
-  Language: Bash
-  Author: vah <vahtenberg@gmail.com>
-  Contributrors: Benjamin Pannell <contact@sierrasoftworks.com>
-  Website: https://www.gnu.org/software/bash/
-  Category: common, scripting
-  */
+	 * Language: Bash
+	 * Author: vah <vahtenberg@gmail.com>
+	 * Contributrors: Benjamin Pannell <contact@sierrasoftworks.com>
+	 * Website: https://www.gnu.org/software/bash/
+	 * Category: common, scripting
+	 */
 
 	/** @type LanguageFn */
 	function bash(hljs) {

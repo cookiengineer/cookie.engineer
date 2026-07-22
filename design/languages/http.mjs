@@ -3,12 +3,12 @@ var hljsGrammar = (function () {
 	"use strict";
 
 	/*
-  Language: HTTP
-  Description: HTTP request and response headers with automatic body highlighting
-  Author: Ivan Sagalaev <maniac@softwaremaniacs.org>
-  Category: protocols, web
-  Website: https://developer.mozilla.org/en-US/docs/Web/HTTP/Overview
-  */
+	 * Language: HTTP
+	 * Description: HTTP request and response headers with automatic body highlighting
+	 * Author: Ivan Sagalaev <maniac@softwaremaniacs.org>
+	 * Category: protocols, web
+	 * Website: https://developer.mozilla.org/en-US/docs/Web/HTTP/Overview
+	 */
 
 	function http(hljs) {
 		const regex = hljs.regex;
@@ -17,17 +17,19 @@ var hljsGrammar = (function () {
 		const HEADER = {
 			className: "attribute",
 			begin: regex.concat("^", HEADER_NAME, "(?=\\:\\s)"),
-			starts: { contains: [
-				{
-					className: "punctuation",
-					begin: /: /,
-					relevance: 0,
-					starts: {
-						end: "$",
-						relevance: 0
+			starts: {
+				contains: [
+					{
+						className: "punctuation",
+						begin: /: /,
+						relevance: 0,
+						starts: {
+							end: "$",
+							relevance: 0
+						}
 					}
-				}
-			] }
+				]
+			}
 		};
 		const HEADERS_AND_BODY = [
 			HEADER,

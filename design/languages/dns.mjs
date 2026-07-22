@@ -3,11 +3,11 @@ var hljsGrammar = (function () {
 	"use strict";
 
 	/*
-  Language: DNS Zone
-  Author: Tim Schumacher <tim@datenknoten.me>
-  Category: config
-  Website: https://en.wikipedia.org/wiki/Zone_file
-  */
+	 * Language: DNS Zone
+	 * Author: Tim Schumacher <tim@datenknoten.me>
+	 * Category: config
+	 * Website: https://en.wikipedia.org/wiki/Zone_file
+	 */
 
 	/** @type LanguageFn */
 	function dns(hljs) {

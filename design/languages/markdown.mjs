@@ -3,12 +3,12 @@ var hljsGrammar = (function () {
 	"use strict";
 
 	/*
-  Language: Markdown
-  Requires: xml.js
-  Author: John Crepezzi <john.crepezzi@gmail.com>
-  Website: https://daringfireball.net/projects/markdown/
-  Category: common, markup
-  */
+	 * Language: Markdown
+	 * Requires: xml.js
+	 * Author: John Crepezzi <john.crepezzi@gmail.com>
+	 * Website: https://daringfireball.net/projects/markdown/
+	 * Category: common, markup
+	 */
 
 	function markdown(hljs) {
 		const regex = hljs.regex;

@@ -3,11 +3,11 @@ var hljsGrammar = (function () {
 	"use strict";
 
 	/*
-  Language: HTML, XML
-  Website: https://www.w3.org/XML/
-  Category: common, web
-  Audit: 2020
-  */
+	 * Language: HTML, XML
+	 * Website: https://www.w3.org/XML/
+	 * Category: common, web
+	 * Audit: 2020
+	 */
 
 	/** @type LanguageFn */
 	function xml(hljs) {
@@ -153,11 +153,6 @@ var hljsGrammar = (function () {
 				},
 				{
 					className: "tag",
-					/*
-          The lookahead pattern (?=...) ensures that 'begin' only matches
-          '<style' as a single word, followed by a whitespace or an
-          ending bracket.
-          */
 					begin: /<style(?=\s|>)/,
 					end: />/,
 					keywords: { name: "style" },

@@ -1,0 +1,1422 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>TCP | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="TCP">
+		<meta name="keywords" content="fundamentals, networking, protocols, tcp">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="TCP">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="The Transmission Control Protocol and its three-way handshake and connection state machine.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/fundamentals/tcp.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="TCP">
+		<meta name="twitter:description" itemprop="description" content="The Transmission Control Protocol and its three-way handshake and connection state machine.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tcp-segment">TCP Segment</a></b>
+					<ul>
+						<li><a href="#tcp-segment-fields">TCP Segment Fields</a></li>
+						<li><a href="#tcp-segment-flags">TCP Segment Flags</a></li>
+						<li><a href="#tcp-three-way-handshake">TCP Three-Way Handshake</a></li>
+						<li><a href="#tcpdump-flags">tcpdump Flags</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tcp-sequencing">TCP Sequencing</a></b>
+					<ul>
+						<li><a href="#sequence-numbers">Sequence Numbers</a></li>
+						<li><a href="#acknowledgment-numbers">Acknowledgment Numbers</a></li>
+						<li><a href="#tcp-four-way-close">TCP Four-Way Close</a></li>
+						<li><a href="#maximum-segment-lifetime">Maximum Segment Lifetime</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tcp-state-machine">TCP State Machine</a></b>
+					<ul>
+						<li><a href="#connection-states">Connection States</a></li>
+						<li><a href="#negotation-of-options">Negotation of Options</a></li>
+						<li><a href="#maximum-segment-size">Maximum Segment Size</a></li>
+						<li><a href="#window-scale">Window Scale</a></li>
+						<li><a href="#selective-acknowledgment">Selective Acknowledgment</a></li>
+						<li><a href="#timestamps">Timestamps</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tcp-flow-control">TCP Flow Control</a></b>
+					<ul>
+						<li><a href="#sliding-windows">Sliding Windows</a></li>
+						<li><a href="#fast-open">Fast Open</a></li>
+						<li><a href="#simultaneous-open">Simultaneous Open</a></li>
+						<li><a href="#simultaneous-close">Simultaneous Close</a></li>
+						<li><a href="#reset">Reset</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tcp-debugging">TCP Debugging</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/fundamentals/index.html">Fundamentals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/fundamentals/tcp.html">Tcp</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="tcp">TCP</h2>
+					<p>The Transmission Control Protocol and its three-way handshake and connection state machine.</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							<abbr title="Internet Protocol">IP</abbr>
+							is unreliable by design. Datagrams can be lost, duplicated, reordered,
+							or corrupted.
+							<abbr title="Internet Protocol">IP</abbr>
+							provides a best-effort delivery service and nothing more.
+							If a router's queue overflows, it drops the packet. If a link fails, packets silently disappear.
+							<abbr title="Internet Protocol">IP</abbr>
+							does not detect loss, does not retransmit, and does not guarantee order.
+						</p>
+						<p>
+							The
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							protocol builds reliable, ordered, byte-stream communication
+							on top of this unreliable foundation. The purpose of the
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							protocol is the following:
+						</p>
+						<ul>
+							<li>Every byte is delivered exactly once.</li>
+							<li>Every byte is delivered in-order.</li>
+							<li>The sender knows which bytes were received.</li>
+							<li>The receiver knows how much bytes are coming.</li>
+							<li>Both sides agree on connection state.</li>
+						</ul>
+						<p>
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							achieves this through sequence numbers, acknowledgments,
+							timers, retransmission, flow control, and a formal connection lifecycle.
+						</p>
+					</section>
+					<section>
+						<h3 id="tcp-segment">TCP Segment</h3>
+						<p>
+							Every
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							segment has a
+							<code>20 bytes</code>
+							long header, which can be
+							up to
+							<code>60 bytes</code>
+							with additional options:
+						</p>
+						<pre class="plaintext">
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|          Source Port (16)      |        Destination Port (16) |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                        Sequence Number (32)                   |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                     Acknowledgment Number (32)                |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+| Data  |           |U|A|P|R|S|F|                               |
+| Offset| Reserved  |R|C|S|S|Y|I|         Window (16)           |
+| (4)   |           |G|K|H|T|N|N|                               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|          Checksum (16)        |       Urgent Pointer (16)     |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                    Options (variable, 0-40 bytes)             |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                    Data (variable)                            |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+						</pre>
+						<h4 id="tcp-segment-fields">TCP Segment Fields</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="left">Field</th>
+									<th align="right">Bits</th>
+									<th align="left">Purpose</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="left">Source Port</td>
+									<td align="right">16</td>
+									<td align="left">Sending application's port number</td>
+								</tr>
+								<tr>
+									<td align="left">Destination Port</td>
+									<td align="right">16</td>
+									<td align="left">Receiving application's port number</td>
+								</tr>
+								<tr>
+									<td align="left">Sequence Number</td>
+									<td align="right">32</td>
+									<td align="left">Byte position of first data byte in this segment</td>
+								</tr>
+								<tr>
+									<td align="left">Acknowledgment Number</td>
+									<td align="right">32</td>
+									<td align="left">Next expected sequence number from the other side</td>
+								</tr>
+								<tr>
+									<td align="left">Data Offset</td>
+									<td align="right">4</td>
+									<td align="left">Header length in 32-bit words (minimum 5 = 20 bytes)</td>
+								</tr>
+								<tr>
+									<td align="left">Reserved</td>
+									<td align="right">3</td>
+									<td align="left">Reserved for future use (must be zero)</td>
+								</tr>
+								<tr>
+									<td align="left">NS</td>
+									<td align="right">1</td>
+									<td align="left">ECN-nonce concealment protection (RFC 3540)</td>
+								</tr>
+								<tr>
+									<td align="left">CWR</td>
+									<td align="right">1</td>
+									<td align="left">Congestion Window Reduced (ECN signal)</td>
+								</tr>
+								<tr>
+									<td align="left">ECE</td>
+									<td align="right">1</td>
+									<td align="left">ECN-Echo (ECN signal)</td>
+								</tr>
+								<tr>
+									<td align="left">URG</td>
+									<td align="right">1</td>
+									<td align="left">Urgent pointer field is valid</td>
+								</tr>
+								<tr>
+									<td align="left">ACK</td>
+									<td align="right">1</td>
+									<td align="left">Acknowledgment field is valid</td>
+								</tr>
+								<tr>
+									<td align="left">PSH</td>
+									<td align="right">1</td>
+									<td align="left">Push data to application immediately</td>
+								</tr>
+								<tr>
+									<td align="left">RST</td>
+									<td align="right">1</td>
+									<td align="left">Reset the connection</td>
+								</tr>
+								<tr>
+									<td align="left">SYN</td>
+									<td align="right">1</td>
+									<td align="left">Synchronize sequence numbers (connection initiation)</td>
+								</tr>
+								<tr>
+									<td align="left">FIN</td>
+									<td align="right">1</td>
+									<td align="left">No more data from sender (connection termination)</td>
+								</tr>
+								<tr>
+									<td align="left">Window</td>
+									<td align="right">16</td>
+									<td align="left">Amount of bytes the sender can accept</td>
+								</tr>
+								<tr>
+									<td align="left">Checksum</td>
+									<td align="right">16</td>
+									<td align="left">Error-checking over pseudo-header + TCP segment</td>
+								</tr>
+								<tr>
+									<td align="left">Urgent Pointer</td>
+									<td align="right">16</td>
+									<td align="left">Offset from sequence number to last urgent byte</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="tcp-segment-flags">TCP Segment Flags</h4>
+						<p>Each flag triggers specific protocol behavior:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="justify">Flag</th>
+									<th align="right">Value</th>
+									<th align="left">Cause</th>
+									<th align="left">Effect</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="justify">SYN</td>
+									<td align="right"><code>0x02</code></td>
+									<td align="left">Connection initiation</td>
+									<td align="left">Synchronizes sequence numbers, starts a connection</td>
+								</tr>
+								<tr>
+									<td align="justify">ACK</td>
+									<td align="right"><code>0x10</code></td>
+									<td align="left">Almost every segment after SYN</td>
+									<td align="left">Validates the Acknowledgment Number field</td>
+								</tr>
+								<tr>
+									<td align="justify">FIN</td>
+									<td align="right"><code>0x01</code></td>
+									<td align="left">No more data to send</td>
+									<td align="left">Initiates graceful connection close</td>
+								</tr>
+								<tr>
+									<td align="justify">RST</td>
+									<td align="right"><code>0x04</code></td>
+									<td align="left">Error, refusal, abort</td>
+									<td align="left">Immediately terminates the connection</td>
+								</tr>
+								<tr>
+									<td align="justify">PSH</td>
+									<td align="right"><code>0x08</code></td>
+									<td align="left">Application wants immediate delivery</td>
+									<td align="left">Bypass buffering, deliver to application now</td>
+								</tr>
+								<tr>
+									<td align="justify">URG</td>
+									<td align="right"><code>0x20</code></td>
+									<td align="left">Out-of-band data is present</td>
+									<td align="left">Urgent Pointer field indicates where urgent data ends</td>
+								</tr>
+								<tr>
+									<td align="justify">CWR</td>
+									<td align="right"><code>0x80</code></td>
+									<td align="left">ECN: sender reduced congestion window</td>
+									<td align="left">Congestion notification from sender</td>
+								</tr>
+								<tr>
+									<td align="justify">ECE</td>
+									<td align="right"><code>0x40</code></td>
+									<td align="left">ECN: receiver saw congestion</td>
+									<td align="left">Congestion notification to sender</td>
+								</tr>
+								<tr>
+									<td align="justify">NS</td>
+									<td align="right"><code>0x01</code></td>
+									<td align="left">ECN nonce sum</td>
+									<td align="left">Experimental ECN nonce protection</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>Practical immediate and urgent flag use cases:</p>
+						<ul>
+							<li>Telnet sets PSH flag on every keystroke segment so that the remote shell displays characters immediately.</li>
+							<li>Bulk data transfers (e.g. <abbr title="Hypertext Transfer Protocol">HTTP</abbr> or <abbr title="File Transfer Protocol">FTP</abbr> ) typically don't set the PSH flag, and the receiving <abbr title="Transmission Control Protocol">TCP</abbr> stack delivers data when the buffer is full or a timer expires.</li>
+							<li>The URG flag indicates the byte offset from the sequence number where the urgent data ends. It's actually not really used anymore and ignored by modern <abbr title="Application Programming Interface">API</abbr> s. Good attack vector for pentesting <abbr title="Internet of Things">IoT</abbr> implementations.</li>
+						</ul>
+						<h4 id="tcp-three-way-handshake">TCP Three-Way Handshake</h4>
+						<p>
+							The
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							handshake serves three purposes:
+						</p>
+						<ol>
+							<li>Both sides agree a connection exists.</li>
+							<li>Both sides exchange their Initial Sequence Numbers (ISN).</li>
+							<li>Both sides negotiate <abbr title="Transmission Control Protocol">TCP</abbr> options ( <abbr title="Maximum Segment Size">MSS</abbr> , Window Scale, SACK, Timestamps).</li>
+						</ol>
+						<p>
+							Control Flow of a
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							Three-Way Handshake:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Step</th>
+									<th align="left">Active Client</th>
+									<th align="center"></th>
+									<th align="right">Passive Server</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">1</td>
+									<td align="left"><code>seq=x</code>,<code>SYN</code></td>
+									<td align="center">-></td>
+									<td align="right"></td>
+								</tr>
+								<tr>
+									<td align="center">2</td>
+									<td align="left"></td>
+									<td align="center"><-</td>
+									<td align="right"><code>seq=y</code>,<code>ack=x+1</code>,<code>SYN</code>,<code>ACK</code></td>
+								</tr>
+								<tr>
+									<td align="center">3</td>
+									<td align="left"><code>seq=x+1</code>,<code>ack=y+1</code>,<code>ACK</code></td>
+									<td align="center">-></td>
+									<td align="right"></td>
+								</tr>
+								<tr>
+									<td align="center">4</td>
+									<td align="left"></td>
+									<td align="center"></td>
+									<td align="right"></td>
+								</tr>
+							</tbody>
+						</table>
+						<ol>
+							<li>Client sends packet with <code>seq=x</code> and <code>SYN</code> flag set. <code>x</code> is randomized. Client enters state <code>SYN_SENT</code> .</li>
+							<li>Server receives packet and enters state <code>SYN_RECEIVED</code> . Server sends packet with <code>seq=y</code> , <code>ack=x+1</code> and <code>SYN</code> and <code>ACK</code> flags set. <code>y</code> is randomized.</li>
+							<li>Client receives packet and enters state <code>ESTABLISHED</code> . Client sends packet with <code>seq=x+1</code> , <code>ack=y+1</code> and <code>ACK</code> flag set.</li>
+							<li>Server receives packet and enters state <code>ESTABLISHED</code> .</li>
+						</ol>
+						<p>
+							The Sequence number accounting is byte-oriented, meaning that the
+							<abbr title="Synchronize">SYN</abbr>
+							flag consumes
+							one sequence number even though it carries no data. This is why the
+							<code>ACK</code>
+							in
+							<code>Step 2</code>
+							acknowledges
+							<code>x+1</code>
+							, and the
+							<code>SYN</code>
+							consumed byte
+							<code>x</code>
+							. The
+							<code>SYN-ACK</code>
+							consumes sequence number
+							<code>y</code>
+							, so the
+							client acknowledges
+							<code>y+1</code>
+							in
+							<code>Step 3</code>
+							.
+						</p>
+						<p>
+							With the programs
+							<code>nc</code>
+							and
+							<code>tcpdump</code>
+							we can observe a
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							handshake
+							in the terminal:
+						</p>
+						<pre class="bash">
+# Terminal 1: Start a listener
+nc -l 1337;
+
+# Terminal 2: Start packet capture
+sudo tcpdump -i lo -nn -v &#39;tcp port 1337&#39;;
+
+# Terminal 3: Connect
+nc localhost 1337;
+# Type &#34;hello&#34; and press Enter, then Ctrl+C to close
+
+# Terminal 2 output:
+# 1. CLIENT -&gt; SERVER: Flags [S], seq 3920611123, options [mss 65495,sackOK,TS val 1234 ecr 0,nop,wscale 7]
+# 2. SERVER -&gt; CLIENT: Flags [S.], seq 3004532999, ack 3920611124, options [mss 65495,sackOK,TS val 5678 ecr 1234,nop,wscale 7]
+# 3. CLIENT -&gt; SERVER: Flags [.], seq 3920611124, ack 3004533000
+# 4. CLIENT -&gt; SERVER: Flags [P.], seq 3920611124:3920611130, ack 3004533000, length 6 (data: &#34;hello\n&#34;)
+# 5. SERVER -&gt; CLIENT: Flags [.], ack 3920611130
+# 6. CLIENT -&gt; SERVER: Flags [F.], seq 3920611130, ack 3004533000
+# 7. SERVER -&gt; CLIENT: Flags [F.], seq 3004533000, ack 3920611131
+# 8. CLIENT -&gt; SERVER: Flags [.], ack 3004533001
+						</pre>
+						<h4 id="tcpdump-flags">tcpdump Flags</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="justify">tcpdump</th>
+									<th align="justify">Meaning</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="justify"><code>[S]</code></td>
+									<td align="justify">SYN</td>
+								</tr>
+								<tr>
+									<td align="justify"><code>[S.]</code></td>
+									<td align="justify">SYN-ACK</td>
+								</tr>
+								<tr>
+									<td align="justify"><code>[.]</code></td>
+									<td align="justify">ACK</td>
+								</tr>
+								<tr>
+									<td align="justify"><code>[F.]</code></td>
+									<td align="justify">FIN-ACK</td>
+								</tr>
+								<tr>
+									<td align="justify"><code>[R.]</code></td>
+									<td align="justify">RST-ACK</td>
+								</tr>
+								<tr>
+									<td align="justify"><code>[P.]</code></td>
+									<td align="justify">PSH-ACK</td>
+								</tr>
+								<tr>
+									<td align="justify"><code>[F.]</code></td>
+									<td align="justify">FIN-ACK</td>
+								</tr>
+								<tr>
+									<td align="justify"><code>seq 10:15</code></td>
+									<td align="justify">Bytes 10, 11, 12, 13, 14 (length 5)</td>
+								</tr>
+								<tr>
+									<td align="justify"><code>ack 100</code></td>
+									<td align="justify">Expecting sequence number 100 next</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="tcp-sequencing">TCP Sequencing</h3>
+						<p>
+							The
+							<abbr title="Initial Sequence Number">ISN</abbr>
+							is the starting value for the sequence number counter on
+							each side. Each side chooses its own ISN independently and randomly, they are not synchronized.
+							If an attacker can predict the ISN that a server will use, they can inject data into a connection.
+							Modern kernels use cryptographic hash functions based on the connection
+							<code>4-tuple</code>
+							(
+							<code>src IP</code>
+							,
+							<code>dst IP</code>
+							,
+							<code>src port</code>
+							,
+							<code>dst port</code>
+							) and a secret key to generate unpredictable ISNs.
+						</p>
+						<pre class="bash">
+# Check Linux if ISN generation is enabled
+cat /proc/sys/net/ipv4/tcp_timestamps;
+# 1 = timestamps enabled (provides additional ISN entropy)
+
+# View the ISN of a connection
+sudo tcpdump -i any -nn -c 1 &#39;tcp[tcpflags] &amp; tcp-syn != 0&#39;;
+						</pre>
+						<h4 id="sequence-numbers">Sequence Numbers</h4>
+						<p>
+							Each byte of data increments the sequence number by 1.
+							<code>SYN</code>
+							and
+							<code>FIN</code>
+							flags each consume one
+							sequence number. So a segment with
+							<code>SYN</code>
+							flag and
+							<code>100 bytes</code>
+							of data would have
+							<code>seq=x</code>
+							, and
+							the next expected sequence number would be
+							<code>x+101</code>
+							(
+							<code>100 bytes</code>
+							for data and
+							<code>1 byte</code>
+							for
+							<code>SYN</code>
+							).
+						</p>
+						<p>
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							sequence numbers wrap around at
+							<code>2^32 bits</code>
+							. With modern
+							high-speed networks (
+							<code>100 Gbps</code>
+							), this wrap could occur in
+							<code>~5.5 seconds</code>
+							. Timestamps (as
+							defined in RFC 7323) protect against ambiguity from wrapped sequence numbers through
+							<abbr title="Protection Against Wrapped Sequences">PAWS</abbr>
+							.
+						</p>
+						<h4 id="acknowledgment-numbers">Acknowledgment Numbers</h4>
+						<p>
+							The
+							<code>ACK</code>
+							field confirms that all bytes up to (but not including) the specified number have
+							been received. The next byte after the
+							<code>ACK</code>
+							field is expected to be the specified number. A
+							single
+							<code>ACK</code>
+							acknowledges all bytes up to a specified byte length. If the sender transmitted
+							bytes
+							<code>100-199</code>
+							,
+							<code>200-299</code>
+							, and
+							<code>300-399</code>
+							, and segment
+							<code>200-299</code>
+							was lost, the receiver responds
+							with
+							<code>ACK=200</code>
+							(the first missing byte). The sender must retransmit from byte
+							<code>200</code>
+							onward.
+							This is called the
+							<code>Go-Back-N</code>
+							retransmission.
+						</p>
+						<p>
+							Selective
+							<code>ACK</code>
+							, or the
+							<code>SACK</code>
+							option allows the receiver to acknowledge non-contigous blocks.
+							For example, that segment
+							<code>100-199</code>
+							and
+							<code>300-399</code>
+							were received but
+							<code>200-299</code>
+							were lost along
+							the way. The sender then retransmits only the missing segment.
+							<code>SACK</code>
+							is negotiated during the
+							handshake via the
+							<code>SACK-permitted</code>
+							option.
+						</p>
+						<pre class="bash">
+# Check if SACK is enabled
+cat /proc/sys/net/ipv4/tcp_sack;
+# 1 = enabled (default)
+
+# Check statistics including retransmissions
+ss -ti; # Show TCP info including retransmits, RTT, etc.
+
+nstat -az | grep -i retrans;
+						</pre>
+						<h4 id="tcp-four-way-close">TCP Four-Way Close</h4>
+						<p>
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							is a full-duplex protocol. The data flows in both directions
+							independently. Closing a
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							connection requires closing each
+							direction separately, so it is necessary to transmit four segments for a mutual close.
+						</p>
+						<p>
+							Control Flow of a
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							Four-Way Close:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Step</th>
+									<th align="left">Active</th>
+									<th align="center"></th>
+									<th align="right">Passive</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">1</td>
+									<td align="left"><code>seq=u</code>,<code>FIN</code></td>
+									<td align="center">-></td>
+									<td align="right"></td>
+								</tr>
+								<tr>
+									<td align="center">2</td>
+									<td align="left"></td>
+									<td align="center"><-</td>
+									<td align="right"><code>seq=v</code>,<code>ack=u+1</code></td>
+								</tr>
+								<tr>
+									<td align="center">3</td>
+									<td align="left"></td>
+									<td align="center"></td>
+									<td align="right"></td>
+								</tr>
+								<tr>
+									<td align="center">4</td>
+									<td align="left"></td>
+									<td align="center"><-</td>
+									<td align="right"><code>seq=w</code>,<code>ack=u+1</code>,<code>FIN</code></td>
+								</tr>
+								<tr>
+									<td align="center">5</td>
+									<td align="left"><code>seq=u+1</code>,<code>ack=w+1</code></td>
+									<td align="center">-></td>
+									<td align="right"></td>
+								</tr>
+								<tr>
+									<td align="center">6</td>
+									<td align="left"></td>
+									<td align="center"></td>
+									<td align="right"></td>
+								</tr>
+								<tr>
+									<td align="center">7</td>
+									<td align="left"></td>
+									<td align="center"></td>
+									<td align="right"></td>
+								</tr>
+							</tbody>
+						</table>
+						<ol>
+							<li>Active closer sends packet with <code>seq=u</code> and <code>FIN</code> flag set. Active closer enters state <code>FIN_WAIT_1</code> .</li>
+							<li>Passive closer receives packet and enters state <code>CLOSE_WAIT</code> . Passive closer sends packet with <code>seq=v</code> and <code>ack=u+1</code> .</li>
+							<li>Active closer receives packet and enters state <code>FIN_WAIT_2</code> . Active closer's connection is now half-closed. Passive closer's connection remains half-open.</li>
+						</ol>
+						<ol>
+							<li>Passive closer sends packet with <code>seq=w</code> and <code>ack=u+1</code> and <code>FIN</code> flag set. Passive closer enters state <code>LAST_ACK</code> .</li>
+							<li>Active closer receives packet and enters state <code>TIME_WAIT</code> . Active closer sends packet with <code>seq=u+1</code> and <code>ack=w+1</code> set.</li>
+							<li>Passive closer receives packet and enters state <code>CLOSED</code> . Passive closer's connection is closed now.</li>
+							<li>After the timeout of <code>2 * MSL</code> has been reached, active closer enters state <code>CLOSED</code> , too.</li>
+						</ol>
+						<h4 id="maximum-segment-lifetime">Maximum Segment Lifetime</h4>
+						<p>
+							On most systems, the
+							<abbr title="Maximum Segment Lifetime">MSL</abbr>
+							timeout value is defaulted with values
+							between 60 and 120 seconds. The reason the
+							<code>TIME_WAIT</code>
+							state exists in
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							connections is the following:
+						</p>
+						<ul>
+							<li>If the active closer's <code>ACK</code> (step 4) is lost, the passive closer retransmits its <code>FIN</code> packet. The active closer must remain in <code>TIME_WAIT</code> to retransmit <code>ACK</code> the packet that retransmitted the <code>FIN</code> .</li>
+							<li>If the active closer transitioned directly to <code>CLOSED</code> , a retransmitted <code>FIN</code> would arrive at a port with no connection, and result in an <code>RST</code> packet which the passive closer would misinterpret as an error.</li>
+							<li>After a connection closes, delayed duplicate segments from that connection must expire before the same 4-tuple ( <code>src IP</code> , <code>src port</code> , <code>dst IP</code> , <code>dst port</code> ) can be reused.</li>
+							<li><abbr title="Maximum Segment Lifetime">MSL</abbr> is the maximum time a segment can exist in the network along its paths. After the <code>2 * MSL</code> timeout, any old segment from the previous communications of this 4-tuple has been destroyed.</li>
+						</ul>
+						<pre class="bash">
+# Check MSL on Linux
+cat /proc/sys/net/ipv4/tcp_fin_timeout;
+# Seconds in FIN_WAIT_2 before timeout (default 60)
+
+# See TIME_WAIT connections
+ss -tanp state time-wait;
+netstat -tan | grep TIME_WAIT;
+
+# Count connections per state
+ss -tan | awk &#39;{print $1}&#39; | sort | uniq -c | sort -rn;
+						</pre>
+					</section>
+					<section>
+						<h3 id="tcp-state-machine">TCP State Machine</h3>
+						<p>
+							The
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							State Machine can be pretty complicated, so here's
+							a diagram visualizing the transmissions of the network packets and their counterparts.
+						</p>
+						<pre class="plaintext">
+   Active / Client   Passive / Server
+  +--------------+   +--------------+
+  |    CLOSED    |   |    CLOSED    |
+  +--------------+   +--------------+
+              |         |
+    connect() |         | listen()
+              v         v
+  +--------------+   +--------------+
+  |   SYN_SENT   |   |    LISTEN    |
+  +--------------+   +--------------+
+          |                 |
+          |&lt;--- SYN+ACK ----+
+          |                 | recv SYN
+          |                 v
+          |          +--------------+
+          |          | SYN_RECEIVED |
+          |          +--------------+
+          |                 |
+          +------ ACK ------+
+                   |
+                   v
+            +-------------+
+            | ESTABLISHED |
+            +-------------+
+              |         |
+ active close |         | passive close
+     send FIN |         | recv FIN
+              |         |
+              v         v
+  +--------------+   +--------------+
+  |  FIN_WAIT_1  |   |  CLOSE_WAIT  |
+  +--------------+   +--------------+
+          |                 |
+ recv ACK |                 | send FIN
+          v                 v
+  +--------------+   +--------------+
+  |  FIN_WAIT_2  |   |   LAST_ACK   |
+  +--------------+   +--------------+
+          |                 |
+ recv FIN |                 | recv ACK
+ send ACK |                 |
+          v                 |
+  +--------------+          |
+  |  TIME_WAIT   |          |
+  +--------------+          |
+          |                 |
+          | 2 * MSL timeout |
+          |                 |
+          +--------+--------+
+                   |
+                   v
+            +-------------+
+            |   CLOSED    |
+            +-------------+
+						</pre>
+						<h4 id="connection-states">Connection States</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="left">Connection State</th>
+									<th align="left">Meaning</th>
+									<th align="left">What Happens Next</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="left"><code>LISTEN</code></td>
+									<td align="left">Server socket waiting for<code>SYN</code></td>
+									<td align="left">Receive<code>SYN</code>sets state to<code>SYN_RECEIVED</code></td>
+								</tr>
+								<tr>
+									<td align="left"><code>SYN_SENT</code></td>
+									<td align="left">Client sent<code>SYN</code>, waiting for<code>SYN-ACK</code></td>
+									<td align="left">Receive<code>SYN-ACK</code>sets state to<code>ESTABLISHED</code></td>
+								</tr>
+								<tr>
+									<td align="left"><code>SYN_RECEIVED</code></td>
+									<td align="left">Server received<code>SYN</code>, sent<code>SYN-ACK</code>, waiting for<code>ACK</code></td>
+									<td align="left">Receive<code>ACK</code>sets state to<code>ESTABLISHED</code></td>
+								</tr>
+								<tr>
+									<td align="left"><code>ESTABLISHED</code></td>
+									<td align="left">Connection open, data transfer</td>
+									<td align="left">Send/Receive data. Close sets state to<code>FIN_WAIT_1</code>or<code>CLOSE_WAIT</code></td>
+								</tr>
+								<tr>
+									<td align="left"><code>FIN_WAIT_1</code></td>
+									<td align="left">Active closer sent<code>FIN</code></td>
+									<td align="left">Receive<code>ACK</code>sets state to<code>FIN_WAIT_2</code>. Receive<code>FIN</code>sets state to<code>CLOSING</code>. Receive<code>FIN+ACK</code>sets state to<code>TIME_WAIT</code></td>
+								</tr>
+								<tr>
+									<td align="left"><code>FIN_WAIT_2</code></td>
+									<td align="left">Active closer received<code>ACK</code>for<code>FIN</code>, waiting for peer's<code>FIN</code></td>
+									<td align="left">Receive<code>FIN</code>sets state to<code>TIME_WAIT</code></td>
+								</tr>
+								<tr>
+									<td align="left"><code>CLOSING</code></td>
+									<td align="left">Both sides sent<code>FIN</code>simultaneously (rare)</td>
+									<td align="left">Receive<code>ACK</code>sets state to<code>TIME_WAIT</code></td>
+								</tr>
+								<tr>
+									<td align="left"><code>TIME_WAIT</code></td>
+									<td align="left">Active closer waiting for 2*MSL</td>
+									<td align="left">Timeout sets state to<code>CLOSED</code></td>
+								</tr>
+								<tr>
+									<td align="left"><code>CLOSE_WAIT</code></td>
+									<td align="left">Passive closer received<code>FIN</code>, waiting for app to close</td>
+									<td align="left">Server sets state to<code>LAST_ACK</code></td>
+								</tr>
+								<tr>
+									<td align="left"><code>LAST_ACK</code></td>
+									<td align="left">Passive closer sent<code>FIN</code>, waiting for<code>ACK</code></td>
+									<td align="left">Receive<code>ACK</code>sets state to<code>CLOSED</code></td>
+								</tr>
+								<tr>
+									<td align="left"><code>CLOSED</code></td>
+									<td align="left">Connection closed</td>
+									<td align="left">N/A</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							With the program
+							<code>ss</code>
+							we can observe changing
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							states in
+							the terminal:
+						</p>
+						<pre class="bash">
+ss -tanp;
+# Output columns: State, Recv-Q, Send-Q, Local Address:Port, Peer Address:Port, Process
+
+# Filter by state
+ss -tanp state established;
+ss -tanp state time-wait;
+ss -tanp state listen;
+
+# Count connections per state
+ss -tan | awk &#39;NR&gt;1 {print $1}&#39; | sort | uniq -c | sort -rn;
+
+# Watch state changes in real-time
+watch -n 1 &#39;ss -tan | head -20&#39;;
+						</pre>
+						<h4 id="negotation-of-options">Negotation of Options</h4>
+						<p>
+							The
+							<code>SYN</code>
+							and
+							<code>SYN-ACK</code>
+							segments carry
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							options that negotiate
+							connection parameters. Options use a
+							<abbr title="Type Length Value">TLV</abbr>
+							format. Common options appear
+							in the
+							<code>SYN</code>
+							in this order:
+						</p>
+						<ol>
+							<li><abbr title="Maximum Segment Size">MSS</abbr></li>
+							<li>Window Scale</li>
+							<li>SACK-Permitted</li>
+							<li>Timestamps</li>
+							<li>NOP (padding for 32-bit alignment)</li>
+						</ol>
+						<h4 id="maximum-segment-size">Maximum Segment Size</h4>
+						<p>
+							The Maximum Segment Size option has
+							<code>Kind: 2</code>
+							and
+							<code>Length: 4 bytes</code>
+							.
+						</p>
+						<p>
+							The largest
+							<code>TCP</code>
+							segment (
+							<code>header + data</code>
+							) the sender can receive is called
+							<abbr title="Maximum Segment Size">MSS</abbr>
+							. Both sides announce their
+							<abbr title="Maximum Segment Size">MSS</abbr>
+							. The connection uses the minimum of
+							the two values. Typically the
+							<abbr title="Maximum Segment Size">MSS</abbr>
+							is set to
+							<code>MTU - 40</code>
+							. For an MTU
+							of
+							<code>1500 bytes</code>
+							that means:
+						</p>
+						<ul>
+							<li><code>MTU</code> is <code>1500 bytes</code></li>
+							<li><code>1500 bytes - 20 bytes</code> ( <abbr title="Internet Protocol">IP</abbr> header)</li>
+							<li><code>1480 bytes - 20 bytes</code> ( <abbr title="Transmission Control Protocol">TCP</abbr> header)</li>
+							<li><code>MSS</code> is <code>1460 bytes</code></li>
+						</ul>
+						<pre class="bash">
+# Check MTU and derive MSS
+ip link show eth0 | grep mtu;
+# mtu 1500 → MSS = 1460 (minus IP header and TCP header)
+
+# Force a specific MSS
+sudo ip route change default via 192.168.1.1 dev eth0 advmss 1400;
+						</pre>
+						<p>
+							If a router on the network path has a smaller MTU (for example
+							<code>PPPoE: 1492 bytes</code>
+							or
+							<code>VPN tunnel: ~1400 bytes</code>
+							), then the packets exceeding that
+							<code>MTU</code>
+							must be fragmented or dropped.
+							<abbr title="Path MTU Discovery">PMTUD</abbr>
+							uses the
+							<abbr title="Internet Control Message Protocol">ICMP</abbr>
+							
+							<code>Fragmentation Needed</code>
+							messages to discover
+							this, but PMTUD often breaks because firewalls block
+							<abbr title="Internet Control Message Protocol">ICMP</abbr>
+							packets.
+							<code>MSS</code>
+							clamping at the firewall ensures that
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							connections
+							stay within path
+							<code>MTU</code>
+							limits.
+						</p>
+						<h4 id="window-scale">Window Scale</h4>
+						<p>
+							The Window Scale option has
+							<code>Kind: 3</code>
+							and
+							<code>Length: 3 bytes</code>
+							.
+						</p>
+						<p>
+							The
+							<code>Window</code>
+							field in the
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							header is
+							<code>16 bits</code>
+							, limiting
+							the receive window to a maximum of
+							<code>65535 bytes</code>
+							. On high-bandwidth, high-latency links, this
+							limits throughput. Window Scale multiplies the window by
+							<code>2^n</code>
+							where
+							<code>n</code>
+							is the scale factor
+							set to
+							<code>0-14</code>
+							and which is negotiated during handshake.
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="right">Window Scale</th>
+									<th align="right">Multiplier</th>
+									<th align="right">Window Size</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="right">0</td>
+									<td align="right">1</td>
+									<td align="right">64 KB</td>
+								</tr>
+								<tr>
+									<td align="right">1</td>
+									<td align="right">2</td>
+									<td align="right">128 KB</td>
+								</tr>
+								<tr>
+									<td align="right">2</td>
+									<td align="right">4</td>
+									<td align="right">256 KB</td>
+								</tr>
+								<tr>
+									<td align="right">3</td>
+									<td align="right">8</td>
+									<td align="right">512 KB</td>
+								</tr>
+								<tr>
+									<td align="right">4</td>
+									<td align="right">16</td>
+									<td align="right">1 MB</td>
+								</tr>
+								<tr>
+									<td align="right">5</td>
+									<td align="right">32</td>
+									<td align="right">2 MB</td>
+								</tr>
+								<tr>
+									<td align="right">6</td>
+									<td align="right">64</td>
+									<td align="right">4 MB</td>
+								</tr>
+								<tr>
+									<td align="right">7</td>
+									<td align="right">128</td>
+									<td align="right">8 MB</td>
+								</tr>
+								<tr>
+									<td align="right">8</td>
+									<td align="right">256</td>
+									<td align="right">16 MB</td>
+								</tr>
+								<tr>
+									<td align="right">9</td>
+									<td align="right">512</td>
+									<td align="right">32 MB</td>
+								</tr>
+								<tr>
+									<td align="right">10</td>
+									<td align="right">1024</td>
+									<td align="right">64 MB</td>
+								</tr>
+								<tr>
+									<td align="right">11</td>
+									<td align="right">2048</td>
+									<td align="right">128 MB</td>
+								</tr>
+								<tr>
+									<td align="right">12</td>
+									<td align="right">4096</td>
+									<td align="right">256 MB</td>
+								</tr>
+								<tr>
+									<td align="right">13</td>
+									<td align="right">8192</td>
+									<td align="right">512 MB</td>
+								</tr>
+								<tr>
+									<td align="right">14</td>
+									<td align="right">16384</td>
+									<td align="right">1 GB</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Check window scale settings
+cat /proc/sys/net/ipv4/tcp_window_scaling;
+# 1 = enabled (default)
+
+# Check BDP for your link
+# BDP = bandwidth (bits/sec) * RTT (sec) / 8
+#
+# Example:
+# 1 Gbps * 10ms RTT
+# = 1000000,000 * 0.01 / 8
+# = 1250000 bytes
+# TCP window must be at least this large to saturate the link.
+						</pre>
+						<h4 id="selective-acknowledgment">Selective Acknowledgment</h4>
+						<p>
+							The Selective Acknowledgement option has either
+							<code>Kind: 4</code>
+							and
+							<code>Length: 2 bytes</code>
+							in the handshake
+							for
+							<code>SACK-permitted</code>
+							. Following SACK option fields have
+							<code>Kind: 5</code>
+							and a variable byte length.
+							The
+							<code>SACK-Permitted</code>
+							flag option in the
+							<code>SYN</code>
+							packet enables
+							<code>SACK</code>
+							for following segment transfers.
+							During data transfer,
+							<code>SACK</code>
+							blocks specify the received byte ranges so that the sender retransmits
+							only the missing segments, and not everything after a packet loss.
+						</p>
+						<pre class="bash">
+# Verify SACK is active on a connection
+ss -ti sport = :80;
+# Look for &#34;sack&#34; in the output
+
+# Kernel SACK settings
+cat /proc/sys/net/ipv4/tcp_sack;  # Enable SACK (1)
+cat /proc/sys/net/ipv4/tcp_dsack; # Duplicate SACK (1)
+cat /proc/sys/net/ipv4/tcp_fack;  # Forward ACK (0 = disabled in newer kernels)
+						</pre>
+						<h4 id="timestamps">Timestamps</h4>
+						<p>
+							The Timestamp option has
+							<code>Kind: 8</code>
+							and
+							<code>Length: 10 bytes</code>
+							where the
+							<abbr title="Timestamp Value">TSval</abbr>
+							and
+							<abbr title="Timestamp Echo Reply">TSecr</abbr>
+							have each a
+							<code>4 byte</code>
+							encoded timestamp value. The TSecr value
+							is the echo of the other peer's last TSval. This allows
+							<abbr title="Round-Trip Time Measurement">RTTM</abbr>
+							.
+						</p>
+						<ol>
+							<li>The sender sends a packet with <code>TSval</code> set.</li>
+							<li>The receiver responds with a packet that echoes the value as <code>TSecr</code> .</li>
+							<li>The sender calculates <code>RTT = now() - TSecr</code> .</li>
+						</ol>
+						<p>
+							Additionally, timestamps prevent older delayed segments from being accepted after the sequence
+							numbers have wrapped. A segment with a timestamp older than the most recent timestamp from that
+							peer is discarded automatically. This mechanism is called
+							<abbr title="Protection Against Wrapped Sequences">PAWS</abbr>
+							.
+						</p>
+						<pre class="bash">
+# Check timestamp settings
+cat /proc/sys/net/ipv4/tcp_timestamps;
+# 1 = enabled (default, required for high-performance TCP)
+						</pre>
+					</section>
+					<section>
+						<h3 id="tcp-flow-control">TCP Flow Control</h3>
+						<p>
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							flow control prevents a fast sender from overwhelming a
+							slow receiver. The receiver advertises its available buffer space in the Window field of every
+							segment.
+						</p>
+						<pre class="plaintext">
+  Sender&#39;s view:              Receiver&#39;s view:
++----------------------+    +---------------------+
+| Bytes sent:     1000 |    | Bytes received: 500 |
+| Bytes ACKed:     800 |    | Bytes read:     400 |
+| Bytes in flight: 200 |    | Buffer used:    100 |
+| Window:          500 |    | Window offered: 500 |
+| Can send:        500 |    |                     |
++----------------------+    +---------------------+
+						</pre>
+						<h4 id="sliding-windows">Sliding Windows</h4>
+						<p>
+							The sender maintains:
+							<code>last_byte_sent - last_byte_acked &lt;= receiver_window</code>
+							. When the receiver's
+							window reaches
+							<code>0</code>
+							, the sender stops and waits. The receiver sends a window update when the
+							application reads data. This is called the
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							sliding window
+							protocol.
+						</p>
+						<p>
+							If the window update is lost, both sides deadlock. The sender periodically sends Zero Window
+							Probes which are
+							<code>1 byte</code>
+							segments that force the receiver to re-advertise its window.
+						</p>
+						<pre class="bash">
+# Check current window sizes on connections
+ss -tmi
+# Look for &#34;wscale:X,Y&#34; where X = local scale, Y = peer scale
+						</pre>
+						<h4 id="fast-open">Fast Open</h4>
+						<p>
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							Fast Open allows data to be sent during the three-way handshake,
+							eliminating one
+							<abbr title="Round-Trip Time">RTT</abbr>
+							for repeat connections. The client obtains a cryptographic
+							cookie from the server on the first connection. On subsequent connections, the client includes
+							the cookie and data in the
+							<abbr title="Synchronize">SYN</abbr>
+							packet. The server validates the cookie and delivers
+							the data to the application before the handshake completes.
+						</p>
+						<pre class="bash">
+# Enable TFO on Linux (requires kernel 3.7+)
+echo 3 &gt; /proc/sys/net/ipv4/tcp_fastopen
+# 0 = disabled, 1 = client only, 2 = server only, 3 = both
+
+# Verify TFO support with curl
+curl --tcp-fastopen -o /dev/null https://example.com
+
+# TFO handshake (simplified):
+# First connection:
+# Client: SYN + TFO cookie request
+# Server: SYN-ACK + TFO cookie &#34;abc123&#34;
+# Client: ACK
+# (Data starts after handshake — 1 RTT penalty for first connection)
+#
+# Subsequent connections:
+# Client: SYN + TFO cookie &#34;abc123&#34; + DATA &#34;GET / HTTP/1.1\r\n...&#34;
+# Server: SYN-ACK + DATA (response)
+# Client: ACK
+# (Data in both directions during handshake — 0 RTT for repeat connections)
+						</pre>
+						<h4 id="simultaneous-open">Simultaneous Open</h4>
+						<p>
+							Both sides send
+							<abbr title="Synchronize">SYN</abbr>
+							to each other at the same time using a
+							<code>SYN_SENT</code>
+							packet.
+							Each side receives a
+							<code>SYN</code>
+							packet, then transitions to
+							<code>SYN_RECEIVED</code>
+							, and then sends a
+							<code>SYN-ACK</code>
+							. Both end up with connection state
+							<code>ESTABLISHED</code>
+							with a single connection. This occurs rarely
+							in practice but is specified in
+							<code>RFC 793 section 3.4</code>
+							.
+						</p>
+						<h4 id="simultaneous-close">Simultaneous Close</h4>
+						<p>
+							Both sides send a
+							<code>FIN</code>
+							packet at the same time. Both enter the
+							<code>CLOSING</code>
+							connection state instead
+							of transitioning to
+							<code>FIN_WAIT_1</code>
+							and then to
+							<code>FIN_WAIT_2</code>
+							. In the
+							<code>CLOSING</code>
+							connection state,
+							each side waits for an
+							<code>ACK</code>
+							of its
+							<code>FIN</code>
+							flag before transitioning to
+							<code>TIME_WAIT</code>
+							.
+						</p>
+						<h4 id="reset">Reset</h4>
+						<p>
+							The
+							<code>RST</code>
+							packet immediately aborts a connection. Unlike
+							<code>FIN</code>
+							, there is no graceful shutdown.
+							The receiving side drops the connection immediately without notifying the application. The next
+							<code>read()</code>
+							call on the socket returns an
+							<code>ECONNRESET</code>
+							error.
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="left">Scenario</th>
+									<th align="justify">RST From</th>
+									<th align="left">Behavior</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="left"><code>SYN</code>to a port with no listener</td>
+									<td align="justify">Server</td>
+									<td align="left"><code>RST-ACK</code></td>
+								</tr>
+								<tr>
+									<td align="left">Data sent on a closed connection</td>
+									<td align="justify">Receiver</td>
+									<td align="left"><code>RST</code></td>
+								</tr>
+								<tr>
+									<td align="left">Connection abort (<code>SO_LINGER</code>with<code>timeout 0</code>)</td>
+									<td align="justify">Sender</td>
+									<td align="left"><code>RST</code>instead of<code>FIN</code></td>
+								</tr>
+								<tr>
+									<td align="left">Half-open connection detected</td>
+									<td align="justify">Either side</td>
+									<td align="left"><code>RST</code></td>
+								</tr>
+								<tr>
+									<td align="left"><code>SYN</code>received on an existing connection with wrong parameters</td>
+									<td align="justify">Receiver</td>
+									<td align="left"><code>RST</code></td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Demonstrate RST: connect to a closed port
+nc -zv localhost 65432
+# &#34;Connection refused&#34; = RST received
+
+# Capture the RST
+sudo tcpdump -i lo -nn -v &#39;tcp port 65432&#39;
+# Output: Flags [R.], seq 0, ack 1234567890
+# RST does not consume a sequence number (seq=0 indicates no data)
+						</pre>
+					</section>
+					<section>
+						<h3 id="tcp-debugging">TCP Debugging</h3>
+						<pre class="bash">
+ss -tanp;             # All TCP sockets with process info
+ss -tmi;              # TCP memory and detailed info (cwnd, rtt, retrans)
+ss -ti &#39;sport = :22&#39;; # Filter by source port
+
+# Detailed TCP info for a specific connection
+ss -tiep | grep -A 10 &#34;:443&#34;;
+
+# View TCP kernel parameters
+sysctl net.ipv4.tcp_ | sort;
+
+# Key parameters:
+sysctl net.ipv4.tcp_fin_timeout;      # 60: seconds in FIN_WAIT_2
+sysctl net.ipv4.tcp_keepalive_time;   # 7200: seconds before keepalive probe
+sysctl net.ipv4.tcp_keepalive_intvl;  # 75: seconds between keepalive probes
+sysctl net.ipv4.tcp_keepalive_probes; # 9: number of keepalive probes before failure
+sysctl net.ipv4.tcp_max_syn_backlog;  # Max half-open SYNs queued
+sysctl net.ipv4.tcp_syn_retries;      # 6: SYN retransmission attempts
+sysctl net.ipv4.tcp_retries2;         # 15: data retransmission attempts
+
+# Monitor connection state transitions via netlink
+conntrack -E;
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc9293" target="_blank">RFC 9293 - Transmission Control Protocol (TCP)</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc7323" target="_blank">RFC 7323 - TCP Extensions for High Performance (Window Scale, Timestamps, PAWS)</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc2018" target="_blank">RFC 2018 - TCP Selective Acknowledgment Options</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc7413" target="_blank">RFC 7413 - TCP Fast Open</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc6528" target="_blank">RFC 6528 - Defending Against Sequence Number Attacks</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc793" target="_blank">RFC 793 - Original TCP Specification (transmission)</a></li>
+							<li><a class="icon-website" href="https://en.wikipedia.org/wiki/Transmission_Control_Protocol#Protocol_operation" target="_blank">TCP State Machine - Wikipedia</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

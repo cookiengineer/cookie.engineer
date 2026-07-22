@@ -3,26 +3,10 @@ var hljsGrammar = (function () {
 	"use strict";
 
 	/*
-   Language: SQL
-   Website: https://en.wikipedia.org/wiki/SQL
-   Category: common, database
-   */
-
-	/*
-
-  Goals:
-
-  SQL is intended to highlight basic/common SQL keywords and expressions
-
-  - If pretty much every single SQL server includes supports, then it's a canidate.
-  - It is NOT intended to include tons of vendor specific keywords (Oracle, MySQL,
-    PostgreSQL) although the list of data types is purposely a bit more expansive.
-  - For more specific SQL grammars please see:
-    - PostgreSQL and PL/pgSQL - core
-    - T-SQL - https://github.com/highlightjs/highlightjs-tsql
-    - sql_more (core)
-
-   */
+	 * Language: SQL
+	 * Website: https://en.wikipedia.org/wiki/SQL
+	 * Category: common, database
+	 */
 
 	function sql(hljs) {
 		const regex = hljs.regex;
@@ -46,8 +30,7 @@ var hljsGrammar = (function () {
 		const LITERALS = [
 			"true",
 			"false",
-			// Not sure it's correct to call NULL literal, and clauses like IS [NOT] NULL look strange that way.
-			// "null",
+			"null",
 			"unknown"
 		];
 
@@ -670,8 +653,7 @@ var hljsGrammar = (function () {
 			illegal: /[{}]|<\//,
 			keywords: {
 				$pattern: /\b[\w\.]+/,
-				keyword:
-          reduceRelevancy(KEYWORDS, { when: (x) => x.length < 3 }),
+				keyword: reduceRelevancy(KEYWORDS, { when: (x) => x.length < 3 }),
 				literal: LITERALS,
 				type: TYPES,
 				built_in: POSSIBLE_WITHOUT_PARENS

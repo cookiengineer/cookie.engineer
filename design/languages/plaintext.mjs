@@ -3,11 +3,11 @@ var hljsGrammar = (function () {
 	"use strict";
 
 	/*
-  Language: Plain text
-  Author: Egor Rogov (e.rogov@postgrespro.ru)
-  Description: Plain text without any highlighting.
-  Category: common
-  */
+	 * Language: Plain text
+	 * Author: Egor Rogov (e.rogov@postgrespro.ru)
+	 * Description: Plain text without any highlighting.
+	 * Category: common
+	 */
 
 	function plaintext(hljs) {
 		return {

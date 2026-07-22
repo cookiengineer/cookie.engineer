@@ -3,12 +3,12 @@ var hljsGrammar = (function () {
 	"use strict";
 
 	/*
-  Language: Diff
-  Description: Unified and context diff
-  Author: Vasily Polovnyov <vast@whiteants.net>
-  Website: https://www.gnu.org/software/diffutils/
-  Category: common
-  */
+	 * Language: Diff
+	 * Description: Unified and context diff
+	 * Author: Vasily Polovnyov <vast@whiteants.net>
+	 * Website: https://www.gnu.org/software/diffutils/
+	 * Category: common
+	 */
 
 	/** @type LanguageFn */
 	function diff(hljs) {

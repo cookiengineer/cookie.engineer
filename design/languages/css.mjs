@@ -29,15 +29,7 @@ var hljsGrammar = (function () {
 			},
 			CSS_NUMBER_MODE: {
 				scope: "number",
-				begin: hljs.NUMBER_RE + "(" +
-          "%|em|ex|ch|rem" +
-          "|vw|vh|vmin|vmax" +
-          "|cm|mm|in|pt|pc|px" +
-          "|deg|grad|rad|turn" +
-          "|s|ms" +
-          "|Hz|kHz" +
-          "|dpi|dpcm|dppx" +
-          ")?",
+				begin: hljs.NUMBER_RE + "(%|em|ex|ch|rem|vw|vh|vmin|vmax|cm|mm|in|pt|pc|px|deg|grad|rad|turn|s|ms|Hz|kHz|dpi|dpcm|dppx)?",
 				relevance: 0
 			},
 			CSS_VARIABLE: {
@@ -815,10 +807,10 @@ var hljsGrammar = (function () {
 	].sort().reverse();
 
 	/*
-  Language: CSS
-  Category: common, css, web
-  Website: https://developer.mozilla.org/en-US/docs/Web/CSS
-  */
+	 * Language: CSS
+	 * Category: common, css, web
+	 * Website: https://developer.mozilla.org/en-US/docs/Web/CSS
+	 */
 
 
 	/** @type LanguageFn */
@@ -842,7 +834,8 @@ var hljsGrammar = (function () {
 			classNameAliases: {
 				// for visual continuity with `tag {}` and because we
 				// don't have a great class for this?
-				keyframePosition: "selector-tag" },
+				keyframePosition: "selector-tag"
+			},
 			contains: [
 				modes.BLOCK_COMMENT,
 				VENDOR_PREFIX,

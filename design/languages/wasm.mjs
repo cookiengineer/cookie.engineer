@@ -3,12 +3,12 @@ var hljsGrammar = (function () {
 	"use strict";
 
 	/*
-  Language: WebAssembly
-  Website: https://webassembly.org
-  Description:  Wasm is designed as a portable compilation target for programming languages, enabling deployment on the web for client and server applications.
-  Category: web, common
-  Audit: 2020
-  */
+	 * Language: WebAssembly
+	 * Website: https://webassembly.org
+	 * Description:  Wasm is designed as a portable compilation target for programming languages, enabling deployment on the web for client and server applications.
+	 * Category: web, common
+	 * Audit: 2020
+	 */
 
 	/** @type LanguageFn */
 	function wasm(hljs) {
@@ -91,7 +91,6 @@ var hljsGrammar = (function () {
 		const NUMBER = {
 			className: "number",
 			relevance: 0,
-			// borrowed from Prism, TODO: split out into variants
 			match: /[+-]?\b(?:\d(?:_?\d)*(?:\.\d(?:_?\d)*)?(?:[eE][+-]?\d(?:_?\d)*)?|0x[\da-fA-F](?:_?[\da-fA-F])*(?:\.[\da-fA-F](?:_?[\da-fA-D])*)?(?:[pP][+-]?\d(?:_?\d)*)?)\b|\binf\b|\bnan(?::0x[\da-fA-F](?:_?[\da-fA-D])*)?\b/
 		};
 
@@ -103,7 +102,6 @@ var hljsGrammar = (function () {
 
 		const MATH_OPERATIONS = {
 			className: "keyword",
-			// borrowed from Prism, TODO: split out into variants
 			match: /\b(f32|f64|i32|i64)(?:\.(?:abs|add|and|ceil|clz|const|convert_[su]\/i(?:32|64)|copysign|ctz|demote\/f64|div(?:_[su])?|eqz?|extend_[su]\/i32|floor|ge(?:_[su])?|gt(?:_[su])?|le(?:_[su])?|load(?:(?:8|16|32)_[su])?|lt(?:_[su])?|max|min|mul|nearest|neg?|or|popcnt|promote\/f32|reinterpret\/[fi](?:32|64)|rem_[su]|rot[lr]|shl|shr_[su]|store(?:8|16|32)?|sqrt|sub|trunc(?:_[su]\/f(?:32|64))?|wrap\/i64|xor))\b/
 		};
 

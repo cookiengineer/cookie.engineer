@@ -6,14 +6,17 @@ import language_cpp        from "./languages/cpp.mjs";
 import language_css        from "./languages/css.mjs";
 import language_diff       from "./languages/diff.mjs";
 import language_dns        from "./languages/dns.mjs";
+import language_dockerfile from "./languages/dockerfile.mjs";
 import language_go         from "./languages/go.mjs";
 import language_http       from "./languages/http.mjs";
 import language_ini        from "./languages/ini.mjs";
 import language_javascript from "./languages/javascript.mjs";
 import language_json       from "./languages/json.mjs";
+import language_makefile   from "./languages/makefile.mjs";
 import language_markdown   from "./languages/markdown.mjs";
 import language_plaintext  from "./languages/plaintext.mjs";
 import language_powershell from "./languages/powershell.mjs";
+import language_python     from "./languages/python.mjs";
 import language_rust       from "./languages/rust.mjs";
 import language_sql        from "./languages/sql.mjs";
 import language_wasm       from "./languages/wasm.mjs";
@@ -23,20 +26,24 @@ import language_yaml       from "./languages/yaml.mjs";
 
 
 
+hljs.registerLanguage("asm",        language_nasm);
 hljs.registerLanguage("bash",       language_bash);
 hljs.registerLanguage("c",          language_c);
 hljs.registerLanguage("cpp",        language_cpp);
 hljs.registerLanguage("css",        language_css);
 hljs.registerLanguage("diff",       language_diff);
 hljs.registerLanguage("dns",        language_dns);
+hljs.registerLanguage("dockerfile", language_dockerfile);
 hljs.registerLanguage("go",         language_go);
 hljs.registerLanguage("http",       language_http);
 hljs.registerLanguage("ini",        language_ini);
 hljs.registerLanguage("javascript", language_javascript);
 hljs.registerLanguage("json",       language_json);
+hljs.registerLanguage("makefile",   language_makefile);
 hljs.registerLanguage("markdown",   language_markdown);
 hljs.registerLanguage("plaintext",  language_plaintext);
 hljs.registerLanguage("powershell", language_powershell);
+hljs.registerLanguage("python",     language_python);
 hljs.registerLanguage("rust",       language_rust);
 hljs.registerLanguage("sql",        language_sql);
 hljs.registerLanguage("wasm",       language_wasm);
@@ -101,25 +108,49 @@ hljs.registerLanguage("yaml",       language_yaml);
 
 	}
 
+	let open_website = document.querySelector("header button[data-action=\"open-website\"]");
+	if (open_website !== null) {
+
+		open_website.addEventListener("click", () => {
+			window.location.pathname = "/index.html";
+		});
+
+	}
+
+	let open_wiki = document.querySelector("header button[data-action=\"open-wiki\"]");
+	if (open_wiki !== null) {
+
+		open_wiki.addEventListener("click", () => {
+			window.location.pathname = "/wiki/index.html";
+		});
+
+	}
+
 	let toggle_aside = document.querySelector("header button[data-action=\"toggle-aside\"]");
 	if (toggle_aside !== null) {
 
-		toggle_aside.addEventListener("click", () => {
+		if (document.querySelector("body > div > aside") !== null) {
 
-			let aside = document.querySelector("body > div > aside");
-			if (aside !== null) {
+			toggle_aside.addEventListener("click", () => {
 
-				if (aside.className !== "visible") {
-					toggle_aside.className = "visible";
-					aside.className = "visible";
-				} else {
-					toggle_aside.className = "";
-					aside.className = "";
+				let aside = document.querySelector("body > div > aside");
+				if (aside !== null) {
+
+					if (aside.className !== "visible") {
+						toggle_aside.className = "visible";
+						aside.className = "visible";
+					} else {
+						toggle_aside.className = "";
+						aside.className = "";
+					}
+
 				}
 
-			}
+			});
 
-		});
+		} else {
+			toggle_aside.parentNode.removeChild(toggle_aside);
+		}
 
 	}
 

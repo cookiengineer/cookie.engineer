@@ -3,10 +3,10 @@ var hljsGrammar = (function () {
 	"use strict";
 
 	/*
-  Language: C
-  Category: common, system
-  Website: https://en.wikipedia.org/wiki/C_(programming_language)
-  */
+	 * Language: C
+	 * Category: common, system
+	 * Website: https://en.wikipedia.org/wiki/C_(programming_language)
+	 */
 
 	/** @type LanguageFn */
 	function c(hljs) {
@@ -18,12 +18,7 @@ var hljsGrammar = (function () {
 		const DECLTYPE_AUTO_RE = "decltype\\(auto\\)";
 		const NAMESPACE_RE = "[a-zA-Z_]\\w*::";
 		const TEMPLATE_ARGUMENT_RE = "<[^<>]+>";
-		const FUNCTION_TYPE_RE = "("
-      + DECLTYPE_AUTO_RE + "|"
-      + regex.optional(NAMESPACE_RE)
-      + "[a-zA-Z_]\\w*" + regex.optional(TEMPLATE_ARGUMENT_RE)
-    + ")";
-
+		const FUNCTION_TYPE_RE = "(" + DECLTYPE_AUTO_RE + "|" + regex.optional(NAMESPACE_RE) + "[a-zA-Z_]\\w*" + regex.optional(TEMPLATE_ARGUMENT_RE) + ")";
 
 		const TYPES = {
 			className: "type",
@@ -31,7 +26,6 @@ var hljsGrammar = (function () {
 				{ begin: "\\b[a-z\\d_]*_t\\b" },
 				{ match: /\batomic_[a-z]{3,6}\b/ }
 			]
-
 		};
 
 		// https://en.cppreference.com/w/cpp/language/escape
@@ -61,21 +55,24 @@ var hljsGrammar = (function () {
 		const NUMBERS = {
 			className: "number",
 			variants: [
-				{ match: /\b(0b[01']+)/ },  
-				{ match: /(-?)\b([\d']+(\.[\d']*)?|\.[\d']+)((ll|LL|l|L)(u|U)?|(u|U)(ll|LL|l|L)?|f|F|b|B)/ },  
-				{ match: /(-?)\b(0[xX][a-fA-F0-9]+(?:'[a-fA-F0-9]+)*(?:\.[a-fA-F0-9]*(?:'[a-fA-F0-9]*)*)?(?:[pP][-+]?[0-9]+)?(l|L)?(u|U)?)/ },  
-				{ match: /(-?)\b\d+(?:'\d+)*(?:\.\d*(?:'\d*)*)?(?:[eE][-+]?\d+)?/ }  
+				{ match: /\b(0b[01']+)/ },
+				{ match: /(-?)\b([\d']+(\.[\d']*)?|\.[\d']+)((ll|LL|l|L)(u|U)?|(u|U)(ll|LL|l|L)?|f|F|b|B)/ },
+				{ match: /(-?)\b(0[xX][a-fA-F0-9]+(?:'[a-fA-F0-9]+)*(?:\.[a-fA-F0-9]*(?:'[a-fA-F0-9]*)*)?(?:[pP][-+]?[0-9]+)?(l|L)?(u|U)?)/ },
+				{ match: /(-?)\b\d+(?:'\d+)*(?:\.\d*(?:'\d*)*)?(?:[eE][-+]?\d+)?/ }
 			],
 			relevance: 0
-		};  
-    
+		};
+
 		const PREPROCESSOR = {
 			className: "meta",
 			begin: /#\s*[a-z]+\b/,
 			end: /$/,
-			keywords: { keyword:
-          "if else elif endif define undef warning error line "
-          + "pragma _Pragma ifdef ifndef elifdef elifndef include" },
+			keywords: {
+				keyword: [
+					"if else elif endif define undef warning error line",
+					"pragma _Pragma ifdef ifndef elifdef elifndef include"
+				].join(" ")
+			},
 			contains: [
 				{
 					begin: /\\\n/,
@@ -186,15 +183,17 @@ var hljsGrammar = (function () {
 			type: C_TYPES,
 			literal: "true false NULL",
 			// TODO: apply hinting work similar to what was done in cpp.js
-			built_in: "std string wstring cin cout cerr clog stdin stdout stderr stringstream istringstream ostringstream "
-        + "auto_ptr deque list queue stack vector map set pair bitset multiset multimap unordered_set "
-        + "unordered_map unordered_multiset unordered_multimap priority_queue make_pair array shared_ptr abort terminate abs acos "
-        + "asin atan2 atan calloc ceil cosh cos exit exp fabs floor fmod fprintf fputs free frexp "
-        + "fscanf future isalnum isalpha iscntrl isdigit isgraph islower isprint ispunct isspace isupper "
-        + "isxdigit tolower toupper labs ldexp log10 log malloc realloc memchr memcmp memcpy memset modf pow "
-        + "printf putchar puts scanf sinh sin snprintf sprintf sqrt sscanf strcat strchr strcmp "
-        + "strcpy strcspn strlen strncat strncmp strncpy strpbrk strrchr strspn strstr tanh tan "
-        + "vfprintf vprintf vsprintf endl initializer_list unique_ptr",
+			built_in: [
+				"std string wstring cin cout cerr clog stdin stdout stderr stringstream istringstream ostringstream",
+				"auto_ptr deque list queue stack vector map set pair bitset multiset multimap unordered_set",
+				"unordered_map unordered_multiset unordered_multimap priority_queue make_pair array shared_ptr abort terminate abs acos",
+				"asin atan2 atan calloc ceil cosh cos exit exp fabs floor fmod fprintf fputs free frexp",
+				"fscanf future isalnum isalpha iscntrl isdigit isgraph islower isprint ispunct isspace isupper",
+				"isxdigit tolower toupper labs ldexp log10 log malloc realloc memchr memcmp memcpy memset modf pow",
+				"printf putchar puts scanf sinh sin snprintf sprintf sqrt sscanf strcat strchr strcmp",
+				"strcpy strcspn strlen strncat strncmp strncpy strpbrk strrchr strspn strstr tanh tan",
+				"vfprintf vprintf vsprintf endl initializer_list unique_ptr"
+			].join(" ")
 		};
 
 		const EXPRESSION_CONTAINS = [

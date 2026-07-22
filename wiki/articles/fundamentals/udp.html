@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>UDP | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="UDP">
+		<meta name="keywords" content="icmp, nmap, port-scanning, python, socket, techniques, udp-scanning">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="UDP">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="UDP port scanning mechanics, ICMP rate limiting, and service-specific probes.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/fundamentals/udp.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="UDP">
+		<meta name="twitter:description" itemprop="description" content="UDP port scanning mechanics, ICMP rate limiting, and service-specific probes.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#udp-datagram">UDP Datagram</a></b>
+					<ul>
+						<li><a href="#checksums">Checksums</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#udp-scanning">UDP Scanning</a></b>
+					<ul>
+						<li><a href="#udp-states">UDP States</a></li>
+						<li><a href="#udp-challenges">UDP Challenges</a></li>
+						<li><a href="#icmp-port-unreachable">ICMP Port Unreachable</a></li>
+						<li><a href="#icmp-rate-limiting">ICMP Rate Limiting</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ipv6-scanning">IPv6 Scanning</a></b>
+					<ul>
+						<li><a href="#nmap">nmap</a></li>
+						<li><a href="#nmap-timing-tricks">nmap Timing Tricks</a></li>
+						<li><a href="#nmap-scan-results">nmap Scan Results</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#service-specific-probes">Service-Specific Probes</a></b>
+					<ul>
+						<li><a href="#dns-probing">DNS Probing</a></li>
+						<li><a href="#snmp-probing">SNMP Probing</a></li>
+						<li><a href="#dhcp-probing">DHCP Probing</a></li>
+						<li><a href="#other-udp-services">Other UDP Services</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#firewalls">Firewalls</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/fundamentals/index.html">Fundamentals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/fundamentals/udp.html">Udp</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="udp">UDP</h2>
+					<p>
+						<abbr title="User Datagram Protocol">UDP</abbr>
+						port scanning mechanics,
+						<abbr title="Internet Control Message Protocol">ICMP</abbr>
+						rate limiting, and service-specific probes.
+					</p>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/network-scanning.html">Network Scanning</a> - host discovery, port scanning fundamentals, nmap basics</li>
+							<li><a href="/wiki/articles/fundamentals/tcp.html">TCP</a> - <abbr title="Transmission Control Protocol">TCP</abbr> flags, handshake, state machine, connection lifecycle</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							is connection-oriented. A
+							<code>SYN</code>
+							packet sent to an open
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							port receives a
+							<code>SYN-ACK</code>
+							. A
+							<code>SYN</code>
+							packet to a closed
+							port receives a
+							<code>RST</code>
+							in return. The response is guaranteed at the protocol level. Every
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							implementation must respond to a
+							<code>SYN</code>
+							packet, whether the port is open or closed.
+						</p>
+						<p>
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							has none of this.
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							is connectionless
+							and therefore there is no handshake, no acknowledgment, no state machine. An application sends
+							a datagram and the transport layer delivers it on a best-effort basis. The recipient may or
+							may not process it, and the sender receives no feedback whatsoever from the
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							protocol itself.
+						</p>
+						<p>
+							This fundamental difference makes
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							scanning a lot harder than
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							scanning:
+						</p>
+						<pre class="plaintext">
+TCP: SYN      -&gt; SYN-ACK (open) or RST              (closed) # always responds
+UDP: datagram -&gt; ???     (open) or ICMP Unreachable (closed) # unpredictable
+						</pre>
+						<p>
+							A
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							listener on an open port is not obligated to respond. A
+							<abbr title="Domain Name System">DNS</abbr>
+							server responds to a valid
+							<abbr title="Domain Name System">DNS</abbr>
+							query, but it might ignore a malformed
+							one. A random
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							echo service might respond to any data. The operating
+							system has no standard behavior for a response packet flow. The scanner must wait for a timeout
+							and infer that silence might mean the port is open, or that the response was lost.
+						</p>
+					</section>
+					<section>
+						<h3 id="udp-datagram">UDP Datagram</h3>
+						<p>
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							is defined in RFC 768 and is intentionally minimal. The entire
+							header is 8 bytes:
+						</p>
+						<pre class="plaintext">
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|          Source Port          |       Destination Port        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|            Length             |           Checksum            |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                    Data (variable)                            |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+						</pre>
+						<table>
+							<thead>
+								<tr>
+									<th align="left">Field</th>
+									<th align="center">Bits</th>
+									<th align="left">Purpose</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="left">Source Port</td>
+									<td align="center">16</td>
+									<td align="left">Port on sending host (<code>0</code>if no reply expected)</td>
+								</tr>
+								<tr>
+									<td align="left">Destination Port</td>
+									<td align="center">16</td>
+									<td align="left">Port on receiving host</td>
+								</tr>
+								<tr>
+									<td align="left">Length</td>
+									<td align="center">16</td>
+									<td align="left">Total datagram length in bytes</td>
+								</tr>
+								<tr>
+									<td align="left">Checksum</td>
+									<td align="center">16</td>
+									<td align="left">Error detection</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="checksums">Checksums</h4>
+						<p>
+							The checksum is calculated over a pseudo-header that includes source and destination
+							<abbr title="Internet Protocol">IP</abbr>
+							addresses, the protocol number
+							<code>17</code>
+							for
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							, and the
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							length that is the same as the
+							<abbr title="Internet Protocol">IP</abbr>
+							header. This ties the transport layer
+							to the network layer, making accidental delivery to the wrong host detectable.
+						</p>
+						<pre class="python">
+import struct
+
+def udp_checksum(source_ip: str, dest_ip: str, source_port: int,
+                 dest_port: int, data: bytes) -&gt; int:
+    &#34;&#34;&#34;
+    Calculate UDP checksum over the pseudo-header + UDP header + payload.
+    This is what the kernel does before sending a UDP datagram.
+    &#34;&#34;&#34;
+    ### Pseudo-header fields
+    src_ip = struct.unpack(&#34;!4B&#34;, socket.inet_aton(source_ip))
+    dst_ip = struct.unpack(&#34;!4B&#34;, socket.inet_aton(dest_ip))
+    protocol = socket.IPPROTO_UDP  # 17
+    udp_length = 8 + len(data)
+
+    pseudo_header = struct.pack(
+        &#34;!4B4BxBH&#34;,
+        *src_ip, *dst_ip, protocol, udp_length
+    )
+
+    udp_header = struct.pack(
+        &#34;!HHHH&#34;,
+        source_port, dest_port, udp_length, 0  # checksum=0 for calculation
+    )
+
+    ### Sum 16-bit words
+    combined = pseudo_header + udp_header + data
+    if len(combined) % 2:
+        combined += b&#39;\x00&#39;
+
+    total = 0
+    for i in range(0, len(combined), 2):
+        total += struct.unpack(&#34;!H&#34;, combined[i:i+2])[0]
+
+    while total &gt;&gt; 16:
+        total = (total &amp; 0xFFFF) + (total &gt;&gt; 16)
+
+    return (~total) &amp; 0xFFFF
+						</pre>
+						<p>
+							When a
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							datagram arrives at a closed port, the receiving host sends
+							back an
+							<abbr title="Internet Control Message Protocol">ICMP</abbr>
+							Port Unreachable (
+							<code>Type 3</code>
+							,
+							<code>Code 3</code>
+							).
+							This is the only reliable indicator of a closed
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							port. If no
+							<abbr title="Internet Control Message Protocol">ICMP</abbr>
+							response arrives, the port is either open and the application accepted the datagram silently,
+							or filtered by a firewall that dropped the packet.
+						</p>
+					</section>
+					<section>
+						<h3 id="udp-scanning">UDP Scanning</h3>
+						<h4 id="udp-states">UDP States</h4>
+						<p>
+							A
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							scanner reads the
+							<abbr title="Internet Control Message Protocol">ICMP</abbr>
+							response, extracts the quoted
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							header, and maps it back to the
+							original probe. This is how
+							<code>nmap</code>
+							determines a port is
+							<code>closed</code>
+							in a
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							scan.
+						</p>
+						<pre class="bash">
+nmap UDP scan result codes:
+  open          # No ICMP error received (datagram was accepted)
+  open|filtered # No response at all     (could be open or filtered)
+  closed        # ICMP Port Unreachable received
+  filtered      # ICMP Admin Prohibited or other ICMP error
+						</pre>
+						<p>
+							The ambiguity between
+							<code>open</code>
+							and
+							<code>filtered</code>
+							is the core problem of
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							scanning. An open port that doesn't respond looks exactly like a firewall silently dropping
+							packets.
+						</p>
+						<h4 id="udp-challenges">UDP Challenges</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="left">Challenge</th>
+									<th align="left">Reason</th>
+									<th align="left">Mitigation</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="left">No guaranteed response</td>
+									<td align="left">UDP is connectionless</td>
+									<td align="left">Use service-specific probes</td>
+								</tr>
+								<tr>
+									<td align="left">Open vs filtered ambiguity</td>
+									<td align="left">Silence could mean either</td>
+									<td align="left">Version detection (<code>nmap -sV</code>)</td>
+								</tr>
+								<tr>
+									<td align="left">ICMP rate limiting</td>
+									<td align="left">Kernel throttles ICMP errors</td>
+									<td align="left">Disable ratelimit</td>
+								</tr>
+								<tr>
+									<td align="left">Slow scan speed</td>
+									<td align="left">Timeouts + retries per port</td>
+									<td align="left">Reduce retries, increase parallelism</td>
+								</tr>
+								<tr>
+									<td align="left">Firewall DROP</td>
+									<td align="left">No ICMP response at all</td>
+									<td align="left"><code>nmap -sV</code>with protocol payloads</td>
+								</tr>
+								<tr>
+									<td align="left">Packet loss</td>
+									<td align="left">UDP has no retransmission</td>
+									<td align="left">Multiple retries per port</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							scanning is fundamentally about patience and protocol knowledge.
+							You cannot scan
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							the way you scan
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							. You must understand what each service expects to receive and send exactly that. Without a
+							protocol-aware probe, the scanner is blind.
+						</p>
+						<h4 id="icmp-port-unreachable">ICMP Port Unreachable</h4>
+						<p>
+							When a host receives a
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							datagram for a port with no listening socket,
+							the kernel generates an
+							<abbr title="Internet Control Message Protocol">ICMP</abbr>
+							
+							<code>Destination Unreachable</code>
+							message with
+							<code>Code 3</code>
+							for
+							<code>Port Unreachable</code>
+							. The
+							<abbr title="Internet Control Message Protocol">ICMP</abbr>
+							response quotes the
+							<abbr title="Internet Protocol">IP</abbr>
+							header and first
+							<code>8 bytes</code>
+							of the original
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							datagram:
+						</p>
+						<pre class="plaintext">
+Original UDP datagram sent to port 161 (closed):
+  IP: src=192.168.1.100, dst=192.168.1.50, proto=UDP
+  UDP: sport=45678, dport=161, len=32, checksum=0xABCD
+
+ICMP Port Unreachable response:
+  Type=3 (Destination Unreachable)
+  Code=3 (Port Unreachable)
+  IP header quoted: src=192.168.1.100→192.168.1.50, proto=UDP
+  UDP header quoted: sport=45678, dport=161
+  (Only the first 8 bytes are quoted which is enough to identify the socket)
+						</pre>
+						<h4 id="icmp-rate-limiting">ICMP Rate Limiting</h4>
+						<p>
+							Linux enforces a rate limit on outgoing
+							<abbr title="Internet Control Message Protocol">ICMP</abbr>
+							error messages.
+							The kernel does not want to be used as an amplifier in denial-of-service attacks, so it throttles
+							the rate at which it generates
+							<abbr title="Internet Control Message Protocol">ICMP</abbr>
+							
+							<code>Destination Unreachable</code>
+							responses.
+						</p>
+						<pre class="bash">
+# View current ICMP rate limit
+cat /proc/sys/net/ipv4/icmp_ratelimit;
+# Default: 1000 (milliseconds between bursts)
+
+cat /proc/sys/net/ipv4/icmp_ratemask;
+# Bitmask of ICMP types subject to rate limiting
+
+# The rate limiting works per-destination by default
+# Global hard limit on ICMP unreachable messages per second:
+cat /proc/sys/net/ipv4/icmp_msgs_per_sec;
+						</pre>
+						<p>
+							The default
+							<code>icmp_ratelimit</code>
+							of
+							<code>1000</code>
+							means Linux sends at most one
+							<abbr title="Internet Control Message Protocol">ICMP</abbr>
+							unreachable per second to any given destination for certain
+							<abbr title="Internet Control Message Protocol">ICMP</abbr>
+							types. If you scan
+							<code>1000</code>
+							
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							ports in one second, only one or two
+							closed ports will actually generate
+							<abbr title="Internet Control Message Protocol">ICMP</abbr>
+							responses. The
+							rest of the datagrams are silently dropped by the kernel's rate limiter. This makes fast
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							scanning impossible from a standard Linux host.
+						</p>
+						<pre class="bash">
+# Disable ICMP rate limiting (not recommended on production systems)
+echo 0 | sudo tee /proc/sys/net/ipv4/icmp_ratelimit;
+
+# Verify
+cat /proc/sys/net/ipv4/icmp_ratelimit;
+# 0
+
+# Restore on reboot via sysctl
+echo &#34;net.ipv4.icmp_ratelimit = 0&#34; | sudo tee /etc/sysctl.d/99-udp-scan.conf;
+sudo sysctl -p /etc/sysctl.d/99-udp-scan.conf;
+						</pre>
+						<p>
+							Even with rate limiting disabled, firewalls often apply their own limits.
+							<code>iptables</code>
+							has a
+							<code>limit</code>
+							module that can be used to rate-limit
+							<abbr title="Internet Control Message Protocol">ICMP</abbr>
+							:
+						</p>
+						<pre class="bash">
+# Check if iptables limits ICMP
+sudo iptables -L -nv | grep -i icmp;
+
+# Common restrictive rule
+sudo iptables -A OUTPUT -p icmp --icmp-type destination-unreachable -m limit --limit 1/s -j ACCEPT;
+sudo iptables -A OUTPUT -p icmp --icmp-type destination-unreachable -j DROP;
+						</pre>
+					</section>
+					<section>
+						<h3 id="ipv6-scanning">IPv6 Scanning</h3>
+						<p>
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							scanning works the same way over
+							<abbr title="Internet Protocol Version 6">IPv6</abbr>
+							with one key difference:
+							<abbr title="Internet Control Message Protocol">ICMP</abbr>
+							v6 replaces
+							<abbr title="Internet Control Message Protocol">ICMP</abbr>
+							v4, and the
+							<abbr title="Internet Control Message Protocol">ICMP</abbr>
+							v6 Destination Unreachable codes differ
+							slightly:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">ICMPv6 Type</th>
+									<th align="center">Code</th>
+									<th align="left">Meaning</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">1</td>
+									<td align="center">0</td>
+									<td align="left">No route to destination</td>
+								</tr>
+								<tr>
+									<td align="center">1</td>
+									<td align="center">1</td>
+									<td align="left">Communication administratively prohibited</td>
+								</tr>
+								<tr>
+									<td align="center">1</td>
+									<td align="center">3</td>
+									<td align="left">Address unreachable</td>
+								</tr>
+								<tr>
+									<td align="center">1</td>
+									<td align="center">4</td>
+									<td align="left">Port unreachable</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# IPv6 UDP scan with nmap
+sudo nmap -6 -sU -p 53,123 fe80::1
+						</pre>
+						<h4 id="nmap">nmap</h4>
+						<p>
+							<code>nmap</code>
+							combines
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							probes with
+							<abbr title="Internet Control Message Protocol">ICMP</abbr>
+							error monitoring to determine port state. The basic
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							scanning workflow
+							looks like this:
+						</p>
+						<ol>
+							<li>Send <abbr title="User Datagram Protocol">UDP</abbr> datagram probe to target port</li>
+							<li>Start timer</li>
+							<li>While timer is active, if <abbr title="Internet Control Message Protocol">ICMP</abbr> port unreachable arrives, mark port as <code>closed</code> . If <abbr title="User Datagram Protocol">UDP</abbr> response arrives, mark port as <code>open</code> . If timer expires with no response, mark port as <code>open or filtered</code> .</li>
+							<li>For common <abbr title="User Datagram Protocol">UDP</abbr> ports, send service-specific payloads (e.g. <abbr title="Domain Name System">DNS</abbr> query, <abbr title="Simple Network Management Protocol">SNMP</abbr> get) to increase chance of getting a response from open ports.</li>
+						</ol>
+						<pre class="bash">
+# Basic UDP scan (top 1000 ports)
+sudo nmap -sU 192.168.1.0/24
+
+# UDP scan of specific ports with version detection
+sudo nmap -sU -sV -p 53,67,68,123,161,162 192.168.1.1
+
+# Aggressive timing to reduce scan duration
+sudo nmap -sU -T4 --host-timeout 10m 192.168.1.0/24
+
+# UDP scan with custom data payload
+sudo nmap -sU --data-length 32 -p 161 192.168.1.1
+
+# Combine TCP and UDP scan
+sudo nmap -sS -sU -p U:53,161,T:22,80,443 192.168.1.1
+
+# Service-specific UDP probes (nmap uses built-in probe database)
+sudo nmap -sU -sV --version-intensity 9 192.168.1.1
+						</pre>
+						<p>
+							nmap's
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							scan (
+							<code>nmap -sU</code>
+							) sends probes in batches, waiting for
+							<abbr title="Internet Control Message Protocol">ICMP</abbr>
+							responses between rounds. Each probe that doesn't
+							receive a response is retried. The default
+							<code>--max-retries</code>
+							parameter is essentially unbounded,
+							which makes
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							scans extremely slow and often taking hours for a
+							simple
+							<code>/24</code>
+							
+							<abbr title="Internet Protocol Version 4">IPv4</abbr>
+							subnet.
+						</p>
+						<pre class="bash">
+# Control retry behavior
+sudo nmap -sU --max-retries 1 192.168.1.0/24; # 1 retry per port
+sudo nmap -sU --max-retries 0 192.168.1.0/24; # No retries (risks false negatives)
+
+# Control timeout per host
+sudo nmap -sU --host-timeout 30s 192.168.1.0/24;
+
+# Use faster timing template
+sudo nmap -sU -T5 --max-retries 1 --host-timeout 30s 192.168.1.0/24;
+						</pre>
+						<h4 id="nmap-timing-tricks">nmap Timing Tricks</h4>
+						<pre class="bash">
+# Reduce RTT timeout (initial + max)
+sudo nmap -sU --initial-rtt-timeout 100ms --max-rtt-timeout 500ms 192.168.1.0/24
+
+# Set scan delay between probes (evasion + reliability tradeoff)
+sudo nmap -sU --scan-delay 0ms -T5 192.168.1.1
+
+# Limit number of parallel probes
+sudo nmap -sU --min-parallelism 10 --max-parallelism 100 192.168.1.0/24
+
+# Use masscan for initial sweep (masscan supports UDP)
+sudo masscan -pU:53,123,161 192.168.1.0/24 --rate=1000
+
+# Then verify with nmap on discovered ports
+sudo nmap -sU -sV -p 53,123,161 192.168.1.1
+
+# Test specific service with crafted payload
+echo -n &#34;test&#34; | nc -u -w2 192.168.1.1 161
+
+# Use nmap NSE scripts for UDP
+sudo nmap -sU -p 161 --script snmp-info 192.168.1.1
+sudo nmap -sU -p 53 --script dns-nsid 192.168.1.1
+sudo nmap -sU -p 123 --script ntp-info 192.168.1.1
+						</pre>
+						<h4 id="nmap-scan-results">nmap Scan Results</h4>
+						<pre class="bash">
+# Sample nmap UDP scan output
+sudo nmap -sU -p 53,67,123,161,500 192.168.1.1
+
+# Typical output:
+#
+# PORT    STATE         SERVICE
+# 53/udp  open          domain
+# 67/udp  open|filtered dhcps
+# 123/udp open          ntp
+# 161/udp closed        snmp
+# 500/udp open|filtered isakmp
+						</pre>
+						<p>Understanding each network port state:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">State</th>
+									<th align="left">Means</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>open</code></td>
+									<td align="left">Received a UDP response. Port is definitely open.</td>
+								</tr>
+								<tr>
+									<td align="center"><code>closed</code></td>
+									<td align="left">Received ICMP Port Unreachable (<code>Type 3</code>,<code>Code 3</code>). Kernel says no listener.</td>
+								</tr>
+								<tr>
+									<td align="center"><code>open or filtered</code></td>
+									<td align="left">No response. Either open (no response) or filtered (firewall dropped).</td>
+								</tr>
+								<tr>
+									<td align="center"><code>filtered</code></td>
+									<td align="left">Received ICMP error that is NOT Port Unreachable e.g., Admin Prohibited (<code>Type 3</code>,<code>Code 13</code>).</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							The
+							<code>open|filtered</code>
+							ambiguity cannot be resolved without a service-level probe that forces a
+							response. This is why nmap's
+							<code>-sV</code>
+							(version detection) is essential for
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							because it sends protocol-specific payloads that the target service will respond to.
+						</p>
+						<pre class="bash">
+# Resolve &#34;open|filtered&#34; with version detection
+sudo nmap -sU -sV -p 67,500 192.168.1.1
+
+# Version detection sends:
+# port 67  →  DHCPDISCOVER
+# port 500 →  IKE main mode proposal
+# If a response arrives, port is &#34;open&#34; instead of &#34;open|filtered&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="service-specific-probes">Service-Specific Probes</h3>
+						<p>
+							An open
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							port might stay completely silent. In order to get a response,
+							the scanner sends a payload that the target service is likely to respond to.
+							<code>nmap</code>
+							ships with
+							<code>nmap-service-probes</code>
+							which is a database of service identification payloads. For
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							, these are critical parts of the scanning workflow.
+						</p>
+						<h4 id="dns-probing">DNS Probing</h4>
+						<p>
+							A
+							<abbr title="Domain Name System">DNS</abbr>
+							query for a known domain from a valid
+							<abbr title="Domain Name System">DNS</abbr>
+							server will always get a response.
+							<code>nmap</code>
+							sends a query for a domain like
+							<code>www.google.com</code>
+							of
+							<code>type A</code>
+							.
+						</p>
+						<pre class="python">
+import socket
+
+def dns_probe(target: str, port: int = 53) -&gt; bool:
+    &#34;&#34;&#34;Send a DNS A query for example.com to test if port 53 is open.&#34;&#34;&#34;
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.settimeout(2)
+
+    # DNS query for example.com A record
+    # Transaction ID: 0x1234, Flags: standard query, 1 question
+    dns_query = bytes([
+        0x12, 0x34, # Transaction ID
+        0x01, 0x00, # Flags: standard query, recursion desired
+        0x00, 0x01, # Questions: 1
+        0x00, 0x00, # Answer RRs: 0
+        0x00, 0x00, # Authority RRs: 0
+        0x00, 0x00, # Additional RRs: 0
+        # Query: example.com
+        # 7, &#39;e&#39;,&#39;x&#39;,&#39;a&#39;,&#39;m&#39;,&#39;p&#39;,&#39;l&#39;,&#39;e&#39;, 3, &#39;c&#39;,&#39;o&#39;,&#39;m&#39;, 0
+        0x07, ord(&#39;e&#39;), ord(&#39;x&#39;), ord(&#39;a&#39;), ord(&#39;m&#39;),
+        ord(&#39;p&#39;), ord(&#39;l&#39;), ord(&#39;e&#39;),
+        0x03, ord(&#39;c&#39;), ord(&#39;o&#39;), ord(&#39;m&#39;), 0x00,
+        0x00, 0x01, # Type: A
+        0x00, 0x01, # Class: IN
+    ])
+
+    try:
+        sock.sendto(dns_query, (target, port))
+        data, addr = sock.recvfrom(512)
+        sock.close()
+        return len(data) &gt; 0
+    except socket.timeout:
+        sock.close()
+        return False
+						</pre>
+						<h4 id="snmp-probing">SNMP Probing</h4>
+						<p>
+							<abbr title="Simple Network Management Protocol">SNMP</abbr>
+							listens on the port
+							<code>161</code>
+							and uses
+							<abbr title="Autonomous System Number">ASN1</abbr>
+							BER encoding. A get-request for
+							<code>sysDescr.0</code>
+							(OID
+							<code>1.3.6.1.2.1.1.1.0</code>
+							) will elicit a response
+							from any
+							<abbr title="Simple Network Management Protocol">SNMP</abbr>
+							enabled device even with the default "public"
+							community string:
+						</p>
+						<pre class="python">
+import socket
+import struct
+
+def snmp_get_request(target: str, port: int = 161, community: str = &#34;public&#34;) -&gt; bytes | None:
+    &#34;&#34;&#34;Send an SNMPv1 GetRequest for sysDescr.0.&#34;&#34;&#34;
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.settimeout(2)
+
+    ### ASN.1 BER encoded SNMPv1 GetRequest PDU
+    ### This is a minimal hand-rolled SNMP packet
+    packet = bytes([
+        0x30, 0x26,             # SEQUENCE, length 38
+        0x02, 0x01, 0x00,       # Version: SNMPv1
+        0x04, len(community),   # Community string (length varies)
+    ]) + community.encode() + bytes([
+        0xA0, 0x19,             # GetRequest-PDU
+        0x02, 0x01, 0x01,       # Request ID: 1
+        0x02, 0x01, 0x00,       # Error status: 0
+        0x02, 0x01, 0x00,       # Error index: 0
+        0x30, 0x0E,             # Varbind list
+        0x30, 0x0C,             # Varbind
+        0x06, 0x08,             # OID
+        0x2B, 0x06, 0x01, 0x02, 0x01, 0x01, 0x01, 0x00,  # 1.3.6.1.2.1.1.1.0
+        0x05, 0x00,             # NULL value
+    ])
+
+    try:
+        sock.sendto(packet, (target, port))
+        data, addr = sock.recvfrom(4096)
+        sock.close()
+        return data
+    except socket.timeout:
+        sock.close()
+        return None
+						</pre>
+						<h4 id="dhcp-probing">DHCP Probing</h4>
+						<p>
+							<abbr title="Dynamic Host Configuration Protocol">DHCP</abbr>
+							listens on the ports
+							<code>67</code>
+							and
+							<code>68</code>
+							.
+						</p>
+						<pre class="python">
+def dhcp_discover(interface: str = &#34;eth0&#34;) -&gt; bytes | None:
+    &#34;&#34;&#34;Send a DHCPDISCOVER broadcast. Listens for DHCPOFFER responses.&#34;&#34;&#34;
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    sock.settimeout(5)
+
+    ### Bind to client port 68
+    sock.bind((&#34;0.0.0.0&#34;, 68))
+
+    ### DHCPDISCOVER packet (minimal)
+    dhcp = bytes([
+        0x01,                    # OP: BOOTREQUEST
+        0x01,                    # HTYPE: Ethernet
+        0x06,                    # HLEN: 6
+        0x00,                    # HOPS: 0
+        0x00, 0x00, 0x00, 0x00,  # XID: transaction ID
+        0x00, 0x00,              # SECS: 0
+        0x80, 0x00,              # FLAGS: broadcast
+        0x00, 0x00, 0x00, 0x00,  # CIADDR
+        0x00, 0x00, 0x00, 0x00,  # YIADDR
+        0x00, 0x00, 0x00, 0x00,  # SIADDR
+        0x00, 0x00, 0x00, 0x00,  # GIADDR
+        ### CHADDR (16 bytes — client MAC)
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ### BOOTP legacy (64+128 bytes of padding — condensed here)
+        0x63, 0x82, 0x53, 0x63,  # DHCP Magic Cookie
+        0x35, 0x01, 0x01,        # Option 53: DHCPDISCOVER
+        0xff,                    # Option 255: END
+    ])
+
+    try:
+        sock.sendto(dhcp, (&#34;255.255.255.255&#34;, 67))
+        data, addr = sock.recvfrom(4096)
+        sock.close()
+        return data
+    except socket.timeout:
+        sock.close()
+        return None
+						</pre>
+						<h4 id="other-udp-services">Other UDP Services</h4>
+						<p>
+							There are several other common
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							services that require probing techniques.
+							Some of them are exposed when using a Microsoft
+							<abbr title="Internet Information Services">IIS</abbr>
+							server,
+							and if successfully exploited will usually gain domain control over the target network. That
+							makes them wanted attack targets, and therefore could also be likely honeypots.
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="right">Port</th>
+									<th align="center">Service</th>
+									<th align="left">Default Probe</th>
+									<th align="left">Expected Response</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="right">53</td>
+									<td align="center">DNS</td>
+									<td align="left">A-record query for a known domain</td>
+									<td align="left">DNS response packet</td>
+								</tr>
+								<tr>
+									<td align="right">67/68</td>
+									<td align="center">DHCP</td>
+									<td align="left"><code>DHCPDISCOVER</code>request</td>
+									<td align="left"><code>DHCPOFFER</code>response</td>
+								</tr>
+								<tr>
+									<td align="right">69</td>
+									<td align="center">TFTP</td>
+									<td align="left">Read request for a file</td>
+									<td align="left">TFTP<code>DATA</code>or<code>ERROR</code>response</td>
+								</tr>
+								<tr>
+									<td align="right">123</td>
+									<td align="center">NTP</td>
+									<td align="left"><code>Mode 3</code>(client) request</td>
+									<td align="left"><code>Mode 4</code>(server) response with timestamp</td>
+								</tr>
+								<tr>
+									<td align="right">137</td>
+									<td align="center">NetBIOS-NS</td>
+									<td align="left">Name query for<code>*</code></td>
+									<td align="left">Name query response</td>
+								</tr>
+								<tr>
+									<td align="right">138</td>
+									<td align="center">NetBIOS-DGM</td>
+									<td align="left">Datagram</td>
+									<td align="left">Varies</td>
+								</tr>
+								<tr>
+									<td align="right">161</td>
+									<td align="center">SNMP</td>
+									<td align="left">GetRequest for<code>sysDescr.0</code></td>
+									<td align="left">GetResponse with system description</td>
+								</tr>
+								<tr>
+									<td align="right">162</td>
+									<td align="center">SNMP Trap</td>
+									<td align="left">Trap listener (no probe sent)</td>
+									<td align="left">Spontaneous traps from agents</td>
+								</tr>
+								<tr>
+									<td align="right">389</td>
+									<td align="center">LDAP</td>
+									<td align="left">Search request</td>
+									<td align="left">Search result entry</td>
+								</tr>
+								<tr>
+									<td align="right">500</td>
+									<td align="center">IKE (IPsec)</td>
+									<td align="left">ISAKMP-SA proposal</td>
+									<td align="left">ISAKMP-SA response</td>
+								</tr>
+								<tr>
+									<td align="right">514</td>
+									<td align="center">Syslog</td>
+									<td align="left">Trap listener (no probe sent)</td>
+									<td align="left">Syslog messages</td>
+								</tr>
+								<tr>
+									<td align="right">520</td>
+									<td align="center">RIP</td>
+									<td align="left">RIP request</td>
+									<td align="left">RIP response</td>
+								</tr>
+								<tr>
+									<td align="right">623</td>
+									<td align="center">IPMI</td>
+									<td align="left">RMCP ping request</td>
+									<td align="left">RMCP pong response</td>
+								</tr>
+								<tr>
+									<td align="right">1194</td>
+									<td align="center">OpenVPN</td>
+									<td align="left">OpenVPN handshake</td>
+									<td align="left">HMAC reset or control packet</td>
+								</tr>
+								<tr>
+									<td align="right">1900</td>
+									<td align="center">SSDP</td>
+									<td align="left"><code>M-SEARCH</code>for<code>*</code></td>
+									<td align="left"><code>NOTIFY</code>or<code>200 OK</code></td>
+								</tr>
+								<tr>
+									<td align="right">5353</td>
+									<td align="center">mDNS</td>
+									<td align="left">Multicast query</td>
+									<td align="left">Multicast response</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="firewalls">Firewalls</h3>
+						<p>
+							Firewalls handle
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							differently from
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							because there is no state to track:
+						</p>
+						<pre class="bash">
+# iptables rule to block all UDP to a port
+sudo iptables -A INPUT -p udp --dport 161 -j DROP;
+# nmap result: &#34;open|filtered&#34; (no ICMP response)
+
+# iptables rule to REJECT with ICMP port unreachable
+sudo iptables -A INPUT -p udp --dport 161 -j REJECT --reject-with icmp-port-unreachable;
+# nmap result: &#34;closed&#34; (ICMP response received)
+
+# nftables equivalent
+sudo nft add rule inet filter input udp dport 161 drop;
+sudo nft add rule inet filter input udp dport 161 reject with icmp type port-unreachable;
+						</pre>
+						<p>
+							The firewall's
+							<code>REJECT</code>
+							vs
+							<code>DROP</code>
+							policy directly determines whether nmap sees the
+							<code>closed</code>
+							or
+							<code>open|filtered</code>
+							. A
+							<code>REJECT</code>
+							rule tells you the port exists but is firewalled, whereas a
+							<code>DROP</code>
+							rule sends no information back.
+						</p>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

@@ -3,12 +3,12 @@ var hljsGrammar = (function () {
 	"use strict";
 
 	/*
-  Language: Rust
-  Author: Andrey Vlasovskikh <andrey.vlasovskikh@gmail.com>
-  Contributors: Roman Shmatov <romanshmatov@gmail.com>, Kasper Andersen <kma_untrusted@protonmail.com>
-  Website: https://www.rust-lang.org
-  Category: common, system
-  */
+	 * Language: Rust
+	 * Author: Andrey Vlasovskikh <andrey.vlasovskikh@gmail.com>
+	 * Contributors: Roman Shmatov <romanshmatov@gmail.com>, Kasper Andersen <kma_untrusted@protonmail.com>
+	 * Website: https://www.rust-lang.org
+	 * Category: common, system
+	 */
 
 	/** @type LanguageFn */
 
@@ -27,7 +27,8 @@ var hljsGrammar = (function () {
 				/\b/,
 				/(?!let|for|while|if|else|match\b)/,
 				IDENT_RE,
-				regex.lookahead(/\s*\(/))
+				regex.lookahead(/\s*\(/)
+			)
 		};
 		const NUMBER_SUFFIX = "([ui](8|16|32|64|128|size)|f(32|64))\?";
 		const KEYWORDS = [
@@ -229,8 +230,7 @@ var hljsGrammar = (function () {
 						{ begin: "\\b0b([01_]+)" + NUMBER_SUFFIX },
 						{ begin: "\\b0o([0-7_]+)" + NUMBER_SUFFIX },
 						{ begin: "\\b0x([A-Fa-f0-9_]+)" + NUMBER_SUFFIX },
-						{ begin: "\\b(\\d[\\d_]*(\\.[0-9_]+)?([eE][+-]?[0-9_]+)?)"
-                     + NUMBER_SUFFIX }
+						{ begin: "\\b(\\d[\\d_]*(\\.[0-9_]+)?([eE][+-]?[0-9_]+)?)" + NUMBER_SUFFIX }
 					],
 					relevance: 0
 				},

@@ -3,13 +3,13 @@ var hljsGrammar = (function () {
 	"use strict";
 
 	/*
-  Language: Go
-  Author: Stephan Kountso aka StepLg <steplg@gmail.com>
-  Contributors: Evgeny Stepanischev <imbolk@gmail.com>
-  Description: Google go language (golang). For info about language
-  Website: http://golang.org/
-  Category: common, system
-  */
+	 * Language: Go
+	 * Author: Stephan Kountso aka StepLg <steplg@gmail.com>
+	 * Contributors: Evgeny Stepanischev <imbolk@gmail.com>
+	 * Description: Google go language (golang). For info about language
+	 * Website: http://golang.org/
+	 * Category: common, system
+	 */
 
 	function go(hljs) {
 		const LITERALS = [
@@ -134,7 +134,8 @@ var hljsGrammar = (function () {
 						}
 					]
 				},
-				{ begin: /:=/ // relevance booster
+				{
+					begin: /:=/ // relevance booster
 				},
 				{
 					className: "function",

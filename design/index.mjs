@@ -55,6 +55,64 @@ hljs.registerLanguage("yaml",       language_yaml);
 
 (() => {
 
+	let lightbox = null;
+
+	const render_lightbox = (image) => {
+
+		if (lightbox === null) {
+
+			lightbox = document.createElement("figure");
+			lightbox.setAttribute("id", "lightbox");
+
+			lightbox.onclick = () => {
+				lightbox.className = "";
+			};
+
+			lightbox.className = "";
+
+			document.body.appendChild(lightbox);
+
+		}
+
+		let old = lightbox.querySelector("img");
+		if (old !== null) {
+			old.parentNode.removeChild(old);
+		}
+
+		let clone = document.createElement("img");
+
+		clone.onload = () => {
+			lightbox.className = "visible";
+		};
+
+		clone.setAttribute("src", image.getAttribute("src"));
+
+		lightbox.appendChild(clone);
+
+	};
+
+	let galleries = Array.from(document.querySelectorAll("figure.gallery"));
+	if (galleries.length > 0) {
+
+		galleries.forEach((gallery) => {
+
+			let images = Array.from(document.querySelectorAll("img"));
+			if (images.length > 0) {
+
+				images.forEach((image) => {
+
+					image.addEventListener("click", () => {
+						render_lightbox(image);
+					});
+
+				});
+
+			}
+
+		});
+
+	}
+
 	let codes = Array.from(document.querySelectorAll("pre[class]"));
 	if (codes.length > 0) {
 

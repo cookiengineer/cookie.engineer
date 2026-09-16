@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Network Traffic Analysis | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Network Traffic Analysis">
+		<meta name="keywords" content="forensics, malware-analysis, network, reverse-engineering">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Network Traffic Analysis">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Capturing and analyzing malware network behavior with tcpdump, tshark, and Go tooling, plus protocol identification and C2 beacon detection.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/reverse-engineering/network-analysis.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Network Traffic Analysis">
+		<meta name="twitter:description" itemprop="description" content="Capturing and analyzing malware network behavior with tcpdump, tshark, and Go tooling, plus protocol identification and C2 beacon detection.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#traffic-capture-setup">1. Traffic Capture Setup</a></b>
+					<ul>
+						<li><a href="#tcpdump-fundamentals">1.1 tcpdump Fundamentals</a></li>
+						<li><a href="#capturing-container-traffic">1.2 Capturing Container Traffic</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#pcap-analysis-with-tcpdump">2. pcap Analysis with tcpdump</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tshark-and-wireshark-filters">3. tshark and Wireshark Filters</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#c2-traffic-analysis">4. C2 Traffic Analysis</a></b>
+					<ul>
+						<li><a href="#dns-c2-patterns">4.1 DNS C2 Patterns</a></li>
+						<li><a href="#httphttps-c2-patterns">4.2 HTTP/HTTPS C2 Patterns</a></li>
+						<li><a href="#raw-tcp-custom-protocols">4.3 Raw TCP / Custom Protocols</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#protocol-identification">5. Protocol Identification</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#inetsim-fake-internet-services">6. INetSim: Fake Internet Services</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#scapy-based-pcap-analysis-script">7. Scapy-Based pcap Analysis Script</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#beacon-detection-algorithms">8. Beacon Detection Algorithms</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#file-carving-from-pcap">9. File Carving from pcap</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#dns-sinkholing-for-analysis">10. DNS Sinkholing for Analysis</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#wireshark-display-filters-reference">11. Wireshark Display Filters Reference</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#practical-workflow-unknown-sample">12. Practical Workflow: Unknown Sample</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/reverse-engineering/index.html">Reverse Engineering</a></li>
+						<li aria-current="page"><a href="/wiki/articles/reverse-engineering/network-analysis.html">Network Analysis</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="network-traffic-analysis">Network Traffic Analysis</h2>
+					<p>
+						Capturing and analyzing malware network behavior with tcpdump, tshark, and Go tooling, plus
+						protocol identification and
+						<abbr title="Command and Control">C2</abbr>
+						beacon detection.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Malware without network communication is a file on disk. Malware with network communication
+							is an incident. The network layer reveals who controls it (
+							<abbr title="Command and Control">C2</abbr>
+							), what
+							it steals (exfiltration), how it spreads (propagation), and when it operates (beaconing). This
+							article starts with packet capture, moves through tshark and Scapy analysis, and ends with a
+							Go tool that extracts
+							<abbr title="Command and Control">C2</abbr>
+							indicators from a pcap.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/reverse-engineering/sandbox-analysis.html">Sandbox Analysis</a> - sandbox setup, container network isolation, traffic capture architecture</li>
+							<li><a href="/wiki/articles/reverse-engineering/tracing.html">Tracing</a> - strace, connect/sendto syscalls, behavioral tracing</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="traffic-capture-setup">1. Traffic Capture Setup</h3>
+						<h4 id="tcpdump-fundamentals">1.1 tcpdump Fundamentals</h4>
+						<p>
+							tcpdump captures raw packets from network interfaces using libpcap. It operates in promiscuous
+							mode by default - capturing packets not addressed to the capturing interface.
+						</p>
+						<pre class="bash">
+# Core tcpdump flags:
+# -i IFACE    Capture on specific interface
+# -w FILE     Write raw packets to pcap file (no parsing overhead)
+# -r FILE     Read pcap file for analysis
+# -n          Do NOT resolve hostnames (DNS resolution leaks analysis)
+# -nn         No hostname OR port resolution
+# -s SNAPLEN  Snapshot length (0 = full packet, default 262144)
+# -c COUNT    Stop after COUNT packets
+# -A          Print packets in ASCII (see HTTP payloads)
+# -X          Print packets in hex and ASCII
+# -e          Print link-level headers (MAC addresses)
+# -q          Quiet — less protocol information
+# -v / -vv    Verbose / very verbose protocol decoding
+# -t          Don&#39;t print timestamps
+# -tt         Print unformatted timestamps (epoch)
+# -ttt        Print delta between current and previous packet
+# -tttt       Print human-readable timestamps
+
+# Capture everything on eth0, full packet, no DNS:
+sudo tcpdump -i eth0 -nn -s 0 -w capture.pcap
+
+# Capture only TCP SYN packets (connection attempts):
+sudo tcpdump -i eth0 -nn &#39;tcp[tcpflags] &amp; (tcp-syn) != 0 and tcp[tcpflags] &amp; (tcp-ack) == 0&#39;
+
+# Capture traffic to/from a specific IP:
+sudo tcpdump -i eth0 -nn &#39;host 192.168.1.100&#39;
+
+# Exclude SSH traffic from capture:
+sudo tcpdump -i eth0 -nn &#39;not port 22&#39;
+
+# Capture with ASCII output (for text-based protocols):
+sudo tcpdump -i eth0 -nn -A &#39;port 80 or port 8080&#39;
+
+# Capture only DNS queries:
+sudo tcpdump -i eth0 -nn &#39;udp port 53&#39;
+						</pre>
+						<h4 id="capturing-container-traffic">1.2 Capturing Container Traffic</h4>
+						<pre class="bash">
+# Option A: tcpdump INSIDE the container (requires CAP_NET_RAW)
+podman run --rm --network bridge \
+  --cap-add=CAP_NET_RAW \
+  -v &#34;$(pwd):/tmp/results:rw&#34; \
+  malware-sandbox \
+  bash -c &#39;tcpdump -i eth0 -nn -s 0 -w /tmp/results/capture.pcap &amp; 
+           timeout 60 /malware; kill %1&#39;
+
+# Option B: tcpdump ON HOST capturing container veth interface
+# Find the veth interface for the container:
+podman run --rm -d --name mal-session --network bridge archlinux sleep 300
+VETH=$(podman inspect mal-session --format \
+  &#39;{{index .NetworkSettings.SandboxKey}}&#39; | xargs -I{} ls /proc/1/ns/net -l 2&gt;/dev/null)
+# Alternative: match by container PID
+CTR_PID=$(podman inspect --format &#39;{{.State.Pid}}&#39; mal-session)
+VETH_INDEX=$(nsenter -t $CTR_PID -n ip link show | grep eth0 | awk -F: &#39;{print $1}&#39;)
+# The veth pair is visible on host:
+ip link show | grep veth
+# Capture:
+sudo tcpdump -i vethXXXXXXXX -nn -s 0 -w /tmp/host-capture.pcap
+
+# Option C: Capture on podman bridge interface directly
+sudo tcpdump -i podman0 -nn -s 0 -w /tmp/bridge-capture.pcap
+						</pre>
+					</section>
+					<section>
+						<h3 id="pcap-analysis-with-tcpdump">2. pcap Analysis with tcpdump</h3>
+						<p>Reading back captures:</p>
+						<pre class="bash">
+# Read pcap, show all packets:
+tcpdump -nn -r capture.pcap
+
+# Count packets and bytes:
+tcpdump -nn -r capture.pcap -q | wc -l
+
+# Filter on read: show only DNS queries
+tcpdump -nn -r capture.pcap &#39;udp port 53&#39;
+
+# Show HTTP Host headers (ASCII mode, filter port 80):
+tcpdump -nn -r capture.pcap -A &#39;tcp port 80&#39; | grep -i &#39;Host:&#39;
+
+# Show all unique destination IPs contacted:
+tcpdump -nn -r capture.pcap | grep -oP &#39;\d+\.\d+\.\d+\.\d+(?=\s*&gt;)&#39; | sort -u
+
+# Show unique destination ports:
+tcpdump -nn -r capture.pcap | grep -oP &#39;(?&lt;=\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\.)\d+(?=\s*&gt;)&#39; | sort -n | uniq
+
+# Show TCP sessions with bytes transferred:
+tcpdump -nn -r capture.pcap -q | awk &#39;{print $3}&#39; | sort | uniq -c | sort -rn
+
+# Extract connection timestamps (for beaconing analysis):
+tcpdump -nn -r capture.pcap -tt &#39;tcp[tcpflags] &amp; (tcp-syn) != 0&#39; | \
+  awk &#39;{print $1}&#39; &gt; syn-timestamps.txt
+						</pre>
+					</section>
+					<section>
+						<h3 id="tshark-and-wireshark-filters">3. tshark and Wireshark Filters</h3>
+						<p>tshark is the command-line equivalent of Wireshark. It supports display filters and field extraction.</p>
+						<pre class="bash">
+# Core tshark commands:
+# -r FILE          Read pcap file
+# -Y FILTER        Display filter (Wireshark syntax)
+# -T fields        Output specific fields
+# -e FIELD         Field to extract (repeatable)
+# -E separator=,   CSV output
+# -t ad            Absolute timestamps with date
+# -t r             Relative timestamps
+# -V               Verbose packet details
+# -z STATISTIC     Built-in statistics
+
+# Extract all DNS queries from a pcap:
+tshark -r capture.pcap -Y &#39;dns.qry.type == 1&#39; \
+  -T fields -e frame.time -e ip.src -e ip.dst -e dns.qry.name
+
+# Extract HTTP requests with Host headers:
+tshark -r capture.pcap -Y &#39;http.request&#39; \
+  -T fields -e frame.time -e ip.src -e ip.dst -e http.host -e http.request.uri
+
+# Extract TLS SNI (Server Name Indication):
+tshark -r capture.pcap -Y &#39;tls.handshake.type == 1&#39; \
+  -T fields -e tls.handshake.extensions_server_name
+
+# Extract all unique IP conversations:
+tshark -r capture.pcap -q -z conv,ip
+
+# Protocol hierarchy statistics:
+tshark -r capture.pcap -q -z io,phs
+
+# HTTP user agents:
+tshark -r capture.pcap -Y &#39;http.user_agent&#39; \
+  -T fields -e http.user_agent
+
+# Extract raw TCP payloads as hex:
+tshark -r capture.pcap -Y &#39;tcp.payload&#39; \
+  -T fields -e tcp.payload
+
+# Find beaconing: time deltas between packets to same destination:
+tshark -r capture.pcap -Y &#39;tcp.flags.syn == 1&#39; \
+  -T fields -e frame.time_epoch -e ip.dst -e tcp.dstport | \
+  awk &#39;{print $1, $2&#34;:&#34;$3}&#39; &gt; beacon-data.txt
+						</pre>
+					</section>
+					<section>
+						<h3 id="c2-traffic-analysis">4. C2 Traffic Analysis</h3>
+						<h4 id="dns-c2-patterns">4.1 DNS C2 Patterns</h4>
+						<p>
+							<abbr title="Domain Name System">DNS</abbr>
+							is often used for
+							<abbr title="Command and Control">C2</abbr>
+							because it's rarely blocked
+							and blends with legitimate traffic.
+						</p>
+						<pre class="bash">
+# Common DNS C2 indicators:
+# 1. High entropy subdomains (Base64-encoded data)
+# 2. Very long domain names (&gt; 52 chars for subdomain)
+# 3. Repeated TXT/MX queries to unusual domains
+# 4. NXDOMAIN bursts (DGA — Domain Generation Algorithm)
+# 5. Unusual query types (NULL, CNAME on A-queries)
+
+# Extract all DNS query names and check entropy:
+tshark -r capture.pcap -Y &#39;dns.qry.name&#39; \
+  -T fields -e dns.qry.name | sort -u | while read domain; do
+    ent=$(echo &#34;$domain&#34; | python3 -c &#34;
+import sys, math
+data = sys.stdin.read().strip()
+if not data:
+    print(0)
+    sys.exit()
+freq = {}
+for c in data:
+    freq[c] = freq.get(c, 0) + 1
+l = len(data)
+h = -sum((f/l) * math.log2(f/l) for f in freq.values())
+print(round(h, 2))
+&#34; 2&gt;/dev/null)
+    echo &#34;$ent $domain&#34;
+done | sort -rn | head -20
+
+# DGA detection: look for NXDOMAIN bursts
+tshark -r capture.pcap -Y &#39;dns.flags.rcode == 3&#39; \
+  -T fields -e dns.qry.name | sort | uniq -c | sort -rn
+# A DGA-based malware will generate many NXDOMAINs before hitting the real C2.
+						</pre>
+						<h4 id="httphttps-c2-patterns">4.2 HTTP/HTTPS C2 Patterns</h4>
+						<pre class="bash">
+# HTTP beacon characteristics:
+tshark -r capture.pcap -Y &#39;http.request&#39; \
+  -T fields -e frame.time_epoch -e ip.src -e ip.dst -e http.request.method \
+  -e http.request.uri -e http.host -e http.content_length
+
+# Look for:
+# 1. POST to /index.php?data=&lt;base64 blob&gt;
+# 2. User-Agent strings that don&#39;t match legitimate browsers
+# 3. Same URI pattern at regular intervals (beaconing)
+# 4. Cookies with encoded data in values
+# 5. Unusual Content-Type headers
+
+# Beacon interval calculation:
+tshark -r capture.pcap -Y &#39;http.request&#39; \
+  -T fields -e frame.time_epoch | python3 -c &#34;
+import sys
+times = [float(x.strip()) for x in sys.stdin if x.strip()]
+if len(times) &gt; 1:
+    deltas = [times[i] - times[i-1] for i in range(1, len(times))]
+    avg = sum(deltas) / len(deltas)
+    min_d = min(deltas)
+    max_d = max(deltas)
+    jitter = max_d - min_d
+    print(f&#39;Beacon count: {len(times)}&#39;)
+    print(f&#39;Avg interval: {avg:.2f}s&#39;)
+    print(f&#39;Min interval: {min_d:.2f}s&#39;)
+    print(f&#39;Max interval: {max_d:.2f}s&#39;)
+    print(f&#39;Jitter: {jitter:.2f}s&#39;)
+    print(f&#39;Periodic: {\&#34;YES\&#34; if jitter &lt; avg * 0.3 else \&#34;POSSIBLE\&#34; if jitter &lt; avg * 0.5 else \&#34;NO\&#34;}&#39;  )
+&#34;
+
+# TLS handshake analysis — extract server certificates:
+tshark -r capture.pcap -Y &#39;tls.handshake.certificate&#39; \
+  -T fields -e tls.handshake.certificate 2&gt;/dev/null | \
+  xxd -r -p &gt; /tmp/certs.der 2&gt;/dev/null
+# Inspect certificate:
+openssl x509 -in /tmp/certs.der -text -noout 2&gt;/dev/null
+						</pre>
+						<h4 id="raw-tcp-custom-protocols">4.3 Raw TCP / Custom Protocols</h4>
+						<pre class="bash">
+# Identify non-standard protocols:
+tshark -r capture.pcap -q -z conv,tcp
+
+# Extract payload of TCP stream to a specific IP:
+tshark -r capture.pcap -Y &#39;ip.dst == 10.0.0.1&#39; -T fields -e tcp.payload | \
+  tr -d &#39;\n:&#39;
+
+# Reconstruct TCP stream with tcpflow:
+tcpflow -r capture.pcap -o /tmp/streams/
+# Creates files like: 010.000.000.001.12345-010.000.000.002.54321
+# One for each direction.
+
+# Entropy check on extracted payloads:
+for f in /tmp/streams/*; do
+  ent=$(python3 -c &#34;
+import sys, math
+with open(&#39;$f&#39;, &#39;rb&#39;) as fh:
+    data = fh.read()
+if not data:
+    print(&#39;EMPTY&#39;)
+    sys.exit()
+freq = {}
+for b in data:
+    freq[b] = freq.get(b, 0) + 1
+l = len(data)
+h = -sum((f/l) * math.log2(f/l) for f in freq.values())
+print(round(h, 2))
+&#34;)
+  echo &#34;$ent $f $(stat -c%s &#34;$f&#34;)&#34;
+done
+# High entropy (&gt; 7.0) strongly suggests encryption or compression.
+# Low entropy (&lt; 4.0) suggests text protocol or known structure.
+						</pre>
+					</section>
+					<section>
+						<h3 id="protocol-identification">5. Protocol Identification</h3>
+						<p>Malware uses known and custom protocols. Port numbers are hints, not guarantees.</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Port</th>
+									<th align="center">Protocol</th>
+									<th align="center">Malware Use</th>
+									<th align="center">C2 Frameworks</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">80</td>
+									<td align="center">HTTP</td>
+									<td align="center">C2 via GET/POST, payload download</td>
+									<td align="center">Empire, PoshC2, Merlin</td>
+								</tr>
+								<tr>
+									<td align="center">443</td>
+									<td align="center">HTTPS/TLS</td>
+									<td align="center">Encrypted C2 with valid or self-signed certs</td>
+									<td align="center">Cobalt Strike, Metasploit, Sliver</td>
+								</tr>
+								<tr>
+									<td align="center">53</td>
+									<td align="center">DNS</td>
+									<td align="center">DNS tunneling (iodine), DGA C2</td>
+									<td align="center">dnscat2, Cobalt Strike</td>
+								</tr>
+								<tr>
+									<td align="center">8080/8443</td>
+									<td align="center">HTTP/S Alt</td>
+									<td align="center">Same as 80/443, alternate ports</td>
+									<td align="center">Any</td>
+								</tr>
+								<tr>
+									<td align="center">4444</td>
+									<td align="center">Metasploit default</td>
+									<td align="center">Reverse TCP shell</td>
+									<td align="center">Metasploit (default)</td>
+								</tr>
+								<tr>
+									<td align="center">6667</td>
+									<td align="center">IRC</td>
+									<td align="center">Botnet C2 via IRC channels</td>
+									<td align="center">Kaiten, Tsunami</td>
+								</tr>
+								<tr>
+									<td align="center">1337</td>
+									<td align="center">"Elite"</td>
+									<td align="center">Various custom C2</td>
+									<td align="center">Many</td>
+								</tr>
+								<tr>
+									<td align="center">31337</td>
+									<td align="center">"Eleet"</td>
+									<td align="center">Back Orifice, custom</td>
+									<td align="center">BO, custom backdoors</td>
+								</tr>
+								<tr>
+									<td align="center">5555</td>
+									<td align="center">Android debug</td>
+									<td align="center">ADB exploitation</td>
+									<td align="center">adb-based malware</td>
+								</tr>
+								<tr>
+									<td align="center">9090</td>
+									<td align="center">HTTP Alt</td>
+									<td align="center">Web-based C2 panels</td>
+									<td align="center">Cockpit, custom panels</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Identify protocol by analyzing the first few bytes of a TCP stream:
+tshark -r capture.pcap -Y &#39;tcp.payload&#39; \
+  -T fields -e tcp.payload | head -1 | cut -c 1-40
+
+# Common protocol signatures (first bytes):
+# 16 03 01 ... TLS 1.0 ClientHello
+# 47 45 54 ... &#34;GET &#34; (HTTP)
+# 50 4F 53 ... &#34;POST&#34; (HTTP)
+# 53 53 48 ... &#34;SSH-&#34; (SSH banner)
+# 50 41 53 ... &#34;PASS&#34; (IRC)
+# 4E 49 43 ... &#34;NICK&#34; (IRC)
+# 01 ...       IRC CTCP
+# 03 00 ...    RDP (TPKT + X.224)
+# FF FB ...    Telnet
+						</pre>
+					</section>
+					<section>
+						<h3 id="inetsim-fake-internet-services">6. INetSim: Fake Internet Services</h3>
+						<p>
+							INetSim responds to common protocols with fake but valid responses. The malware thinks it's
+							connecting to real services, but ALL responses come from INetSim.
+						</p>
+						<pre class="bash">
+# Install and configure:
+sudo pacman -S inetsim  # Or build from source
+sudo mkdir -p /var/lib/inetsim
+sudo inetsim --data /var/lib/inetsim
+
+# Configuration (/etc/inetsim/inetsim.conf):
+# start_service dns
+# start_service http
+# start_service https
+# start_service smtp
+# start_service pop3
+# start_service ftp
+# start_service irc
+# start_service ntp
+# start_service syslog
+# start_service tftp
+# start_service time
+
+# Default binds to 0.0.0.0 on each port. For sandbox use:
+# service_bind_address 10.13.37.1
+
+# With podman:
+podman network create --subnet 10.13.37.0/24 inetsim
+# Host INetSim listens on an interface in that subnet.
+# Container routes through INetSim.
+
+# What INetSim returns:
+# DNS: resolves all A queries to 10.13.37.1 (your fake host)
+# HTTP: returns fake 200 with dummy HTML
+# HTTPS: presents a self-signed cert (malware may check cert validity)
+# SMTP: 220 fake.mail.server ESMTP — accepts mail, saves to files
+# FTP: 220 FTP server ready — accepts logins, stores uploaded files
+# IRC: MOTD, channel join succeeds
+						</pre>
+					</section>
+					<section>
+						<h3 id="scapy-based-pcap-analysis-script">7. Scapy-Based pcap Analysis Script</h3>
+						<p>Scapy provides programmatic pcap analysis in Python. Full analysis script:</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;
+pcap-analyze.py — Extract IOCs from pcap: DNS, HTTP, IPs, beaconing intervals.
+Usage: python3 pcap-analyze.py capture.pcap
+&#34;&#34;&#34;
+import sys
+import math
+import statistics
+from collections import defaultdict, Counter
+from scapy.all import rdpcap, IP, TCP, UDP, DNS, DNSQR, Raw
+from scapy.layers.http import HTTPRequest, HTTPResponse
+
+def entropy(data):
+    if not data:
+        return 0.0
+    freq = Counter(data)
+    l = len(data)
+    return -sum((c / l) * math.log2(c / l) for c in freq.values())
+
+def analyze_pcap(pcap_path):
+    print(f&#34;[*] Loading: {pcap_path}&#34;)
+    pkts = rdpcap(pcap_path)
+    print(f&#34;[*] Total packets: {len(pkts)}&#34;)
+
+    # --- 1. Connection Summary ---
+    ip_pairs = Counter()
+    ip_ports = defaultdict(set)
+    syn_times = defaultdict(list)
+    dns_queries = []
+    http_hosts = []
+    http_uris = []
+    http_user_agents = []
+    tls_snis = []
+
+    for pkt in pkts:
+        if IP not in pkt:
+            continue
+
+        src = pkt[IP].src
+        dst = pkt[IP].dst
+        proto = pkt[IP].proto
+        timestamp = float(pkt.time)
+
+        # TCP connections
+        if TCP in pkt:
+            sport = pkt[TCP].sport
+            dport = pkt[TCP].dport
+            pair = f&#34;{src}:{sport} -&gt; {dst}:{dport}&#34;
+            ip_pairs[f&#34;{src} -&gt; {dst}&#34;] += 1
+            ip_ports[dst].add(dport)
+
+            # SYN packets for beaconing detection
+            if pkt[TCP].flags &amp; 0x02 and not (pkt[TCP].flags &amp; 0x10):
+                syn_times[(src, dst, dport)].append(timestamp)
+
+        # DNS queries
+        if UDP in pkt and (pkt[UDP].sport == 53 or pkt[UDP].dport == 53):
+            if DNS in pkt and pkt[DNS].qr == 0:  # query
+                for i in range(pkt[DNS].qdcount):
+                    qname = pkt[DNSQR].qname.decode(errors=&#39;replace&#39;)
+                    dns_queries.append((timestamp, src, dst, qname))
+
+        # HTTP requests
+        if TCP in pkt and Raw in pkt:
+            payload = bytes(pkt[Raw])
+            if payload.startswith(b&#39;GET &#39;) or payload.startswith(b&#39;POST &#39;):
+                try:
+                    lines = payload.decode(errors=&#39;replace&#39;).split(&#39;\r\n&#39;)
+                    for line in lines:
+                        if line.lower().startswith(&#39;host:&#39;):
+                            http_hosts.append(line.split(&#39;:&#39;, 1)[1].strip())
+                        if line.startswith(&#39;GET &#39;) or line.startswith(&#39;POST &#39;):
+                            parts = line.split()
+                            if len(parts) &gt;= 2:
+                                http_uris.append(parts[1])
+                        if line.lower().startswith(&#39;user-agent:&#39;):
+                            http_user_agents.append(line.split(&#39;:&#39;, 1)[1].strip())
+                except:
+                    pass
+
+        # TLS SNIs
+        if TCP in pkt and Raw in pkt:
+            payload = bytes(pkt[Raw])
+            if len(payload) &gt; 5 and payload[0] == 0x16:  # TLS handshake
+                # Simplified SNI extraction (production code would parse full TLS)
+                pass
+
+    # --- Output ---
+    print(&#34;\n=== DNS QUERIES ===&#34;)
+    for ts, src, dst, qname in sorted(set(dns_queries)):
+        print(f&#34;  [{ts:.2f}] {qname}&#34;)
+
+    print(&#34;\n=== HTTP HOST HEADERS ===&#34;)
+    for host in sorted(set(http_hosts)):
+        print(f&#34;  {host}&#34;)
+
+    print(&#34;\n=== HTTP REQUEST URIs ===&#34;)
+    for uri in sorted(set(http_uris)):
+        print(f&#34;  {uri}&#34;)
+
+    print(&#34;\n=== USER AGENTS ===&#34;)
+    for ua in sorted(set(http_user_agents)):
+        print(f&#34;  {ua}&#34;)
+
+    print(&#34;\n=== DESTINATION IPs ===&#34;)
+    for dst in sorted(set(pkt[IP].dst for pkt in pkts if IP in pkt)):
+        ports = ip_ports[dst]
+        print(f&#34;  {dst} — ports: {sorted(ports)}&#34;)
+
+    print(&#34;\n=== CONNECTION SUMMARY ===&#34;)
+    for pair, count in ip_pairs.most_common(20):
+        print(f&#34;  {pair} — {count} packets&#34;)
+
+    print(&#34;\n=== BEACONING ANALYSIS ===&#34;)
+    for (src, dst, dport), times in syn_times.items():
+        if len(times) &lt; 3:
+            continue
+        deltas = [times[i] - times[i-1] for i in range(1, len(times))]
+        if not deltas:
+            continue
+        avg_delta = statistics.mean(deltas)
+        std_delta = statistics.stdev(deltas) if len(deltas) &gt; 1 else 0
+        jitter = max(deltas) - min(deltas)
+        cv = std_delta / avg_delta if avg_delta &gt; 0 else 0  # coefficient of variation
+
+        # Low CV = regular intervals = likely beacon
+        if cv &lt; 0.2 and len(times) &gt;= 3:
+            print(f&#34;  BEACON DETECTED: {src} -&gt; {dst}:{dport}&#34;)
+            print(f&#34;    Intervals: {len(deltas)} between {len(times)} SYNs&#34;)
+            print(f&#34;    Avg: {avg_delta:.2f}s, Stdev: {std_delta:.2f}s, Jitter: {jitter:.2f}s&#34;)
+            print(f&#34;    CV: {cv:.3f} ({&#39;HIGH CONFIDENCE&#39; if cv &lt; 0.1 else &#39;MODERATE&#39;})&#34;)
+
+    # --- Entropy of payloads ---
+    print(&#34;\n=== PAYLOAD ENTROPY ===&#34;)
+    stream_bytes = defaultdict(bytearray)
+    for pkt in pkts:
+        if IP in pkt and TCP in pkt and Raw in pkt:
+            key = (pkt[IP].src, pkt[TCP].sport, pkt[IP].dst, pkt[TCP].dport)
+            stream_bytes[key].extend(bytes(pkt[Raw]))
+
+    for key, data in sorted(stream_bytes.items(), key=lambda x: len(x[1]), reverse=True)[:10]:
+        ent = entropy(data)
+        tag = &#34;ENCRYPTED&#34; if ent &gt; 7.0 else &#34;TEXT&#34; if ent &lt; 5.0 else &#34;MIXED&#34;
+        print(f&#34;  {key[0]}:{key[1]} -&gt; {key[2]}:{key[3]} — {len(data)} bytes, entropy={ent:.2f} ({tag})&#34;)
+
+    print(&#34;\n[*] Analysis complete.&#34;)
+
+if __name__ == &#34;__main__&#34;:
+    if len(sys.argv) &lt; 2:
+        print(f&#34;Usage: {sys.argv[0]} &lt;capture.pcap&gt;&#34;)
+        sys.exit(1)
+    analyze_pcap(sys.argv[1])
+						</pre>
+					</section>
+					<section>
+						<h3 id="beacon-detection-algorithms">8. Beacon Detection Algorithms</h3>
+						<p>
+							Beacons are periodic connections from implant to
+							<abbr title="Command and Control">C2</abbr>
+							. Key characteristics:
+						</p>
+						<pre class="plaintext">
+                     BEACON SIGNAL
+    ┌──────────────────────────────────────────────────────►
+    │                                                      time
+    │
+    CONN    CONN    CONN    CONN    CONN    CONN    CONN
+    │  Δt   │  Δt   │  Δt   │  Δt   │  Δt   │  Δt   │
+    ▼       ▼       ▼       ▼       ▼       ▼       ▼
+   60s     62s     59s     61s     58s     60s     63s
+    ◄─────── JITTER ±3s ───────►
+    ◄─────────── AVERAGE INTERVAL 60.3s ───────────►
+						</pre>
+						<p>Detection metrics:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Metric</th>
+									<th align="center">Formula</th>
+									<th align="center">Threshold</th>
+									<th align="center">Meaning</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Mean interval</td>
+									<td align="center">sum(dt) / n</td>
+									<td align="center">30-3600s</td>
+									<td align="center">Typical C2 check-in range</td>
+								</tr>
+								<tr>
+									<td align="center">Coefficient of Variation</td>
+									<td align="center">sigma / mean</td>
+									<td align="center">< 0.2</td>
+									<td align="center">Low CV = highly regular</td>
+								</tr>
+								<tr>
+									<td align="center">Jitter range</td>
+									<td align="center">max(dt) - min(dt)</td>
+									<td align="center">< 0.1*mean</td>
+									<td align="center">Tight jitter = algorithm-driven</td>
+								</tr>
+								<tr>
+									<td align="center">Sleep consistency</td>
+									<td align="center">std(sleeps)</td>
+									<td align="center">any</td>
+									<td align="center">Small std = consistent behavior</td>
+								</tr>
+								<tr>
+									<td align="center">Byte symmetry</td>
+									<td align="center">bytes_sent / bytes_recv</td>
+									<td align="center">~1.0</td>
+									<td align="center">Check-in/response ratio</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>Implementation of beacon detection with FFT:</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;Detect periodic beaconing via FFT analysis of connection timestamps.&#34;&#34;&#34;
+import sys
+import numpy as np
+from scapy.all import rdpcap, IP, TCP
+
+def detect_beacons_fft(pcap_path, min_period=30, max_period=7200, threshold=3.0):
+    pkts = rdpcap(pcap_path)
+
+    # Collect SYN timestamps per destination
+    from collections import defaultdict
+    dst_times = defaultdict(list)
+
+    for pkt in pkts:
+        if IP in pkt and TCP in pkt:
+            if pkt[TCP].flags &amp; 0x02 and not (pkt[TCP].flags &amp; 0x10):
+                dst_times[(pkt[IP].dst, pkt[TCP].dport)].append(float(pkt.time))
+
+    for (dst, dport), times in dst_times.items():
+        if len(times) &lt; 4:
+            continue
+
+        # Convert times to binary signal
+        t_min = min(times)
+        t_max = max(times)
+        duration = t_max - t_min
+        if duration &lt; 120:  # At least 2 minutes of data
+            continue
+
+        # Resample to 1-second bins
+        bins = int(duration) + 1
+        signal = np.zeros(bins)
+        for t in times:
+            idx = int(t - t_min)
+            if 0 &lt;= idx &lt; bins:
+                signal[idx] = 1.0
+
+        # FFT
+        fft = np.abs(np.fft.rfft(signal))
+        freqs = np.fft.rfftfreq(bins, d=1.0)  # frequencies in Hz
+
+        # Convert frequency to period (seconds)
+        periods = 1.0 / freqs[1:]  # skip DC component
+        magnitudes = fft[1:]
+
+        # Find peaks in the period range of interest
+        mask = (periods &gt;= min_period) &amp; (periods &lt;= max_period)
+        if not np.any(mask):
+            continue
+
+        valid_periods = periods[mask]
+        valid_magnitudes = magnitudes[mask]
+
+        peak_idx = np.argmax(valid_magnitudes)
+        peak_period = valid_periods[peak_idx]
+        peak_mag = valid_magnitudes[peak_idx]
+
+        # Check if peak is significant (z-score &gt; threshold)
+        mean_mag = np.mean(valid_magnitudes)
+        std_mag = np.std(valid_magnitudes)
+        if std_mag &gt; 0:
+            zscore = (peak_mag - mean_mag) / std_mag
+        else:
+            zscore = 0
+
+        if zscore &gt; threshold:
+            # Verify: check if expected packet count matches
+            expected_packets = duration / peak_period
+            actual_packets = len(times)
+            accuracy = min(expected_packets, actual_packets) / max(expected_packets, actual_packets)
+
+            print(f&#34;BEACON: {dst}:{dport}&#34;)
+            print(f&#34;  Period: {peak_period:.1f}s ({peak_period/60:.1f}min)&#34;)
+            print(f&#34;  Confidence: z={zscore:.1f}, accuracy={accuracy:.1%}&#34;)
+            print(f&#34;  Connections: {actual_packets} over {duration:.0f}s&#34;)
+            print(f&#34;  Expected: {expected_packets:.1f} connections&#34;)
+            print()
+
+if __name__ == &#34;__main__&#34;:
+    if len(sys.argv) &lt; 2:
+        print(f&#34;Usage: {sys.argv[0]} &lt;capture.pcap&gt;&#34;)
+        sys.exit(1)
+    detect_beacons_fft(sys.argv[1])
+						</pre>
+					</section>
+					<section>
+						<h3 id="file-carving-from-pcap">9. File Carving from pcap</h3>
+						<p>
+							Malware downloads payloads over
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							,
+							<abbr title="File Transfer Protocol">FTP</abbr>
+							, or raw
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							. Extract them:
+						</p>
+						<pre class="bash">
+# tcpflow: reconstruct each TCP stream into a file
+tcpflow -r capture.pcap -o /tmp/streams/
+ls -la /tmp/streams/
+# Files named: SRCIP.SRCPORT-DSTIP.DSTPORT
+
+# Manual carving with foremost (treat pcap as raw data):
+foremost -t all -o /tmp/carved/ capture.pcap
+
+# scapy-based extractor for HTTP downloads:
+python3 -c &#34;
+from scapy.all import *
+pkts = rdpcap(&#39;capture.pcap&#39;)
+payloads = {}
+for p in pkts:
+    if TCP in p and Raw in p:
+        key = (p[IP].src, p[TCP].sport, p[IP].dst, p[TCP].dport)
+        payloads.setdefault(key, b&#39;&#39;); payloads[key] += bytes(p[Raw])
+
+for (src, sport, dst, dport), data in payloads.items():
+    if data.startswith(b&#39;HTTP/1&#39;) and b&#39;\r\n\r\n&#39; in data:
+        hdr, body = data.split(b&#39;\r\n\r\n&#39;, 1)
+        fname = f&#39;/tmp/carved/{src}_{sport}_{dst}_{dport}.bin&#39;
+        with open(fname, &#39;wb&#39;) as f:
+            f.write(body)
+        print(f&#39;Extracted {len(body)} bytes to {fname}&#39;)
+&#34;
+
+# Extract certificates from TLS handshakes:
+tshark -r capture.pcap -Y &#39;tls.handshake.certificate&#39; \
+  -T fields -e tls.handshake.certificate | while read -r cert; do
+    [[ -n &#34;$cert&#34; ]] &amp;&amp; echo &#34;$cert&#34; | xxd -r -p &gt; /tmp/tls-cert-$(date +%s).der
+done
+						</pre>
+					</section>
+					<section>
+						<h3 id="dns-sinkholing-for-analysis">10. DNS Sinkholing for Analysis</h3>
+						<p>
+							Sinkholing redirects malware's
+							<abbr title="Domain Name System">DNS</abbr>
+							queries to your controlled server instead
+							of the real
+							<abbr title="Command and Control">C2</abbr>
+							.
+						</p>
+						<pre class="bash">
+# With dnsmasq as a fake DNS server:
+# /etc/dnsmasq.conf:
+# address=/#/10.13.37.1     # All queries resolve to your fake host
+# log-queries                # Log all queries
+# log-facility=/var/log/dnsmasq.log
+
+# Start dnsmasq:
+sudo dnsmasq -d -C /etc/dnsmasq.conf
+
+# Configure container to use your DNS:
+podman run --rm --dns 10.13.37.1 sandbox ./malware
+
+# Monitor DNS queries:
+tail -f /var/log/dnsmasq.log
+# Shows every domain the malware attempts to resolve.
+
+# Combined approach: DNS sinkhole + INetSim
+# Your DNS resolves everything to 10.13.37.1
+# INetSim on 10.13.37.1 responds to HTTP/SMTP/FTP/etc
+# Malware thinks it reached its C2.
+# You capture ALL communication.
+
+# If malware uses DOH (DNS over HTTPS), your DNS sinkhole is useless.
+# You need TLS interception (mitmproxy) or packet-level manipulation.
+						</pre>
+					</section>
+					<section>
+						<h3 id="wireshark-display-filters-reference">11. Wireshark Display Filters Reference</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Filter</th>
+									<th align="center">Matches</th>
+									<th align="center">Use Case</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>http.request</code></td>
+									<td align="center">HTTP requests</td>
+									<td align="center">C2 communication, payload download</td>
+								</tr>
+								<tr>
+									<td align="center"><code>http.response</code></td>
+									<td align="center">HTTP responses</td>
+									<td align="center">Server responses, payload inspection</td>
+								</tr>
+								<tr>
+									<td align="center"><code>dns.qry.name contains &#34;evil&#34;</code></td>
+									<td align="center">DNS queries containing string</td>
+									<td align="center">Specific domain tracking</td>
+								</tr>
+								<tr>
+									<td align="center"><code>dns.flags.rcode == 3</code></td>
+									<td align="center">NXDOMAIN responses</td>
+									<td align="center">DGA detection</td>
+								</tr>
+								<tr>
+									<td align="center"><code>tcp.flags.syn == 1 and tcp.flags.ack == 0</code></td>
+									<td align="center">TCP SYN (connection attempts)</td>
+									<td align="center">Port scans, C2 attempts</td>
+								</tr>
+								<tr>
+									<td align="center"><code>tcp.analysis.retransmission</code></td>
+									<td align="center">TCP retransmissions</td>
+									<td align="center">Unstable C2, overloaded server</td>
+								</tr>
+								<tr>
+									<td align="center"><code>ip.src == 192.168.1.0/24</code></td>
+									<td align="center">Source in subnet</td>
+									<td align="center">Internal spread, lateral movement</td>
+								</tr>
+								<tr>
+									<td align="center"><code>tls.handshake.type == 1</code></td>
+									<td align="center">TLS ClientHello</td>
+									<td align="center">SNI extraction, cipher list analysis</td>
+								</tr>
+								<tr>
+									<td align="center"><code>tls.handshake.certificate</code></td>
+									<td align="center">Server certificate</td>
+									<td align="center">C2 server certificate inspection</td>
+								</tr>
+								<tr>
+									<td align="center"><code>frame.time_delta &gt; 300</code></td>
+									<td align="center">Gap > 5 minutes between packets</td>
+									<td align="center">Long sleep beacons, inactivity</td>
+								</tr>
+								<tr>
+									<td align="center"><code>tcp.len &gt; 0</code></td>
+									<td align="center">Packets with TCP payload</td>
+									<td align="center">Payload analysis</td>
+								</tr>
+								<tr>
+									<td align="center"><code>icmp</code></td>
+									<td align="center">ICMP packets</td>
+									<td align="center">ICMP tunneling, ping sweeps</td>
+								</tr>
+								<tr>
+									<td align="center"><code>smtp</code></td>
+									<td align="center">SMTP traffic</td>
+									<td align="center">Spam bot detection</td>
+								</tr>
+								<tr>
+									<td align="center"><code>irc</code></td>
+									<td align="center">IRC traffic</td>
+									<td align="center">IRC-based botnet C2</td>
+								</tr>
+								<tr>
+									<td align="center"><code>!(arp or dns or icmp or stp)</code></td>
+									<td align="center">Exclude noise</td>
+									<td align="center">Focus on actual data traffic</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="practical-workflow-unknown-sample">12. Practical Workflow: Unknown Sample</h3>
+						<pre class="bash">
+# 1. Start capture on container bridge
+sudo tcpdump -i podman0 -nn -s 0 -w /tmp/analysis.pcap &amp;
+TCPDUMP_PID=$!
+
+# 2. Run sample in sandbox with network
+podman run --rm --name session-1 --network bridge \
+  --cap-drop=ALL --cap-add=CAP_NET_RAW \
+  --security-opt=no-new-privileges \
+  --memory 256m --pids-limit 20 \
+  -v $(pwd)/results:/tmp/results:rw \
+  sandbox /opt/run-sample.sh /samples/malware.bin 120 session-1
+
+# 3. Stop capture
+sleep 3
+sudo kill $TCPDUMP_PID
+
+# 4. Basic pcap stats
+capinfos /tmp/analysis.pcap
+# File size: 1.2 MB
+# Packets: 3,847
+# Duration: 127 seconds
+# Data size: 892 KB
+
+# 5. Protocol breakdown
+tshark -q -z io,phs -r /tmp/analysis.pcap
+
+# 6. Extract conversations
+tshark -q -z conv,tcp -r /tmp/analysis.pcap
+#                                     | Bytes    | Frames  |
+# 10.0.2.100:41234 &lt;-&gt; 185.220.101.34:443  847 KB    2,103   (PRIMARY C2)
+# 10.0.2.100:41235 &lt;-&gt; 8.8.8.8:53            1 KB        4    (DNS lookups)
+
+# 7. Inspect primary C2 connection
+tshark -r /tmp/analysis.pcap -Y &#39;ip.addr == 185.220.101.34&#39; \
+  -T fields -e frame.time_relative -e ip.src -e ip.dst -e tcp.len | head -20
+
+# 8. Extract TLS SNI
+tshark -r /tmp/analysis.pcap -Y &#39;tls.handshake.extensions_server_name&#39; \
+  -T fields -e tls.handshake.extensions_server_name
+# px1.malware-c2.net
+
+# 9. Export TLS certificate
+tshark -r /tmp/analysis.pcap -Y &#39;tls.handshake.certificate&#39; \
+  -T fields -e tls.handshake.certificate | xxd -r -p &gt; /tmp/c2-cert.der
+openssl x509 -in /tmp/c2-cert.der -noout -text 2&gt;/dev/null | head -20
+
+# 10. Check for beaconing
+python3 pcap-analyze.py /tmp/analysis.pcap
+# BEACON DETECTED: 10.0.2.100 -&gt; 185.220.101.34:443
+#   Avg: 61.3s, Stdev: 2.1s, Jitter: 8.0s
+#   CV: 0.034 (HIGH CONFIDENCE)
+
+# 11. Identify IOCs
+echo &#34;=== IOCS ===&#34;
+echo &#34;IP: 185.220.101.34&#34;
+echo &#34;Port: 443 (TLS)&#34;
+echo &#34;SNI: px1.malware-c2.net&#34;
+echo &#34;Beacon: ~60s interval&#34;
+echo &#34;Protocol: HTTPS (encrypted C2)&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that reads a pcap file and reports
+							<abbr title="Command and Control">C2</abbr>
+							indicators: every
+							<abbr title="Domain Name System">DNS</abbr>
+							question, every unique destination
+							<abbr title="Internet Protocol">IP</abbr>
+							and port,
+							and the inter-arrival times of
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							
+							<abbr title="Synchronize">SYN</abbr>
+							packets
+							per destination. Flag a destination as a likely beacon when the coefficient of variation of
+							its
+							<abbr title="Synchronize">SYN</abbr>
+							intervals is below
+							<code>0.2</code>
+							.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;flag&#34;
+	&#34;fmt&#34;
+	&#34;math&#34;
+	&#34;os&#34;
+	&#34;sort&#34;
+
+	&#34;github.com/google/gopacket&#34;
+	&#34;github.com/google/gopacket/layers&#34;
+	&#34;github.com/google/gopacket/pcapgo&#34;
+)
+
+type flowKey struct {
+	dst  string
+	port uint16
+}
+
+func main() {
+	path := flag.String(&#34;r&#34;, &#34;&#34;, &#34;pcap file to read&#34;)
+	flag.Parse()
+	if *path == &#34;&#34; {
+		fmt.Fprintln(os.Stderr, &#34;usage: pcapanalyze -r capture.pcap&#34;)
+		os.Exit(1)
+	}
+
+	f, err := os.Open(*path)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer f.Close()
+
+	r, err := pcapgo.NewReader(f)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	synTimes := map[flowKey][]float64{}
+	dstPorts := map[string]map[uint16]bool{}
+	src := gopacket.NewPacketSource(r, r.LinkType())
+
+	for pkt := range src.Packets() {
+		ts := pkt.Metadata().Timestamp.Seconds()
+
+		if dns, ok := pkt.Layer(layers.LayerTypeDNS).(*layers.DNS); ok &amp;&amp; !dns.QR {
+			for _, q := range dns.Questions {
+				fmt.Printf(&#34;DNS %s\n&#34;, q.Name)
+			}
+		}
+
+		ip, ok := pkt.NetworkLayer().(*layers.IPv4)
+		if !ok {
+			continue
+		}
+		tcp, ok := pkt.TransportLayer().(*layers.TCP)
+		if !ok {
+			continue
+		}
+
+		if dstPorts[ip.DstIP.String()] == nil {
+			dstPorts[ip.DstIP.String()] = map[uint16]bool{}
+		}
+		dstPorts[ip.DstIP.String()][uint16(tcp.DstPort)] = true
+
+		if tcp.SYN &amp;&amp; !tcp.ACK {
+			key := flowKey{ip.DstIP.String(), uint16(tcp.DstPort)}
+			synTimes[key] = append(synTimes[key], ts)
+		}
+	}
+
+	fmt.Println(&#34;--- destinations ---&#34;)
+	for dst, ports := range dstPorts {
+		list := make([]int, 0, len(ports))
+		for p := range ports {
+			list = append(list, int(p))
+		}
+		sort.Ints(list)
+		fmt.Printf(&#34;%s ports=%v\n&#34;, dst, list)
+	}
+
+	fmt.Println(&#34;--- beacon candidates ---&#34;)
+	for key, times := range synTimes {
+		if len(times) &lt; 3 {
+			continue
+		}
+		deltas := make([]float64, 0, len(times)-1)
+		for i := 1; i &lt; len(times); i++ {
+			deltas = append(deltas, times[i]-times[i-1])
+		}
+		mean := 0.0
+		for _, d := range deltas {
+			mean += d
+		}
+		mean /= float64(len(deltas))
+		if mean == 0 {
+			continue
+		}
+		variance := 0.0
+		for _, d := range deltas {
+			variance += (d - mean) * (d - mean)
+		}
+		variance /= float64(len(deltas))
+		cv := math.Sqrt(variance) / mean
+		if cv &lt; 0.2 {
+			fmt.Printf(&#34;BEACON %s:%d mean=%.1fs cv=%.3f\n&#34;, key.dst, key.port, mean, cv)
+		}
+	}
+}
+						</pre>
+						<p>Build and run it against the capture from the workflow above:</p>
+						<pre class="bash">
+go mod init pcapanalyze
+go get github.com/google/gopacket
+go run . -r /tmp/analysis.pcap
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc9293" target="_blank">RFC 9293 - Transmission Control Protocol</a> - transport layer that carries <abbr title="Command and Control">C2</abbr> traffic</li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc1035" target="_blank">RFC 1035 - Domain Name System</a> - <abbr title="Domain Name System">DNS</abbr> message format abused by <abbr title="Domain Name System">DNS</abbr>  <abbr title="Command and Control">C2</abbr></li>
+							<li><a class="icon-website" href="https://www.tcpdump.org/manpages/tcpdump.1.html" target="_blank">tcpdump manual</a> - capture flags and BPF filter syntax</li>
+							<li><a class="icon-website" href="https://www.wireshark.org/docs/dfref/" target="_blank">Wireshark display filter reference</a> - field names used by tshark</li>
+							<li><a class="icon-website" href="https://pkg.go.dev/github.com/google/gopacket" target="_blank">gopacket documentation</a> - Go packet parsing library</li>
+							<li><a class="icon-website" href="https://www.inetsim.org/" target="_blank">INetSim</a> - fake internet services for malware sandboxes</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

@@ -1,0 +1,1114 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Sandbox Analysis | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Sandbox Analysis">
+		<meta name="keywords" content="containers, isolation, malware-analysis, namespaces, podman, reverse-engineering, sandbox, seccomp">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Sandbox Analysis">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Build a disposable malware analysis sandbox with podman that isolates, observes, and records the behavior of an unknown binary.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/reverse-engineering/sandbox-analysis.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Sandbox Analysis">
+		<meta name="twitter:description" itemprop="description" content="Build a disposable malware analysis sandbox with podman that isolates, observes, and records the behavior of an unknown binary.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#threat-model">1. Threat Model</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#container-isolation-layers">2. Container Isolation Layers</a></b>
+					<ul>
+						<li><a href="#user-namespace-root-root">2.1 User Namespace: Root != Root</a></li>
+						<li><a href="#pid-namespace-isolated-process-tree">2.2 PID Namespace: Isolated Process Tree</a></li>
+						<li><a href="#network-namespace-air-gap">2.3 Network Namespace: Air Gap</a></li>
+						<li><a href="#mount-namespace-read-only-root">2.4 Mount Namespace: Read-Only Root</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#seccomp-system-call-filtering">3. seccomp: System Call Filtering</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#capabilities-drop">4. Capabilities Drop</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#resource-limits">5. Resource Limits</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#network-setup-strategies">6. Network Setup Strategies</a></b>
+					<ul>
+						<li><a href="#air-gapped-network-none">6.1 Air-Gapped (--network none)</a></li>
+						<li><a href="#fake-internet-with-inetsim">6.2 Fake Internet with INetSim</a></li>
+						<li><a href="#capture-only-network">6.3 Capture-Only Network</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#building-the-sandbox-container">7. Building the Sandbox Container</a></b>
+					<ul>
+						<li><a href="#containerfile-architecture">7.1 Containerfile Architecture</a></li>
+						<li><a href="#runner-script-optrun-samplesh">7.2 Runner Script: /opt/run-sample.sh</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#running-the-malware-sandbox">8. Running the Malware Sandbox</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#automated-sandbox-runner">9. Automated Sandbox Runner</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#defense-in-depth-vm-container">10. Defense-in-Depth: VM + Container</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#practical-analysis-walkthrough">11. Practical Analysis Walkthrough</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#sandbox-limitations">12. Sandbox Limitations</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#syscall-categories">Syscall Categories</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#podman-sandbox-flags">Podman Sandbox Flags</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/reverse-engineering/index.html">Reverse Engineering</a></li>
+						<li aria-current="page"><a href="/wiki/articles/reverse-engineering/sandbox-analysis.html">Sandbox Analysis</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="sandbox-analysis">Sandbox Analysis</h2>
+					<p>
+						Build a disposable malware analysis sandbox with podman that isolates, observes, and records
+						the behavior of an unknown binary.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							You have an unknown binary that you cannot safely run on your host. This article builds a disposable
+							container that isolates the sample with namespaces and seccomp, captures its system calls and
+							network traffic, and produces a behavioral report you can read afterward. It covers the isolation
+							layers, the observability tooling, and the sidecar Containerfile that ties them together.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/containers.html">Containers</a> - Linux namespaces, cgroups, OverlayFS, podman architecture</li>
+							<li><a href="/wiki/articles/reverse-engineering/process-monitoring.html">Process Monitoring</a> - /proc inspection, process trees, resource monitoring</li>
+							<li><a href="/wiki/articles/reverse-engineering/tracing.html">System Call Tracing</a> - strace, ltrace, syscall interception, behavioral logging</li>
+						</ul>
+						<p>---</p>
+						<p>
+							You have an unknown binary. You cannot run it on your host. If it's malware, it will infect
+							you. If it's a crypter, it will encrypt your home directory. If it's a bot, it will phone home
+							and flag your
+							<abbr title="Internet Protocol">IP</abbr>
+							as an analyst.
+						</p>
+						<p>
+							The solution: execute it in a disposable, isolated, observable container. Every action visible.
+							Every network packet captured. Every file write recorded. When analysis is complete, destroy
+							the container. Start fresh next time.
+						</p>
+					</section>
+					<section>
+						<h3 id="threat-model">1. Threat Model</h3>
+						<p>Before designing the sandbox, define what you're defending against:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Threat</th>
+									<th align="center">Mechanism</th>
+									<th align="center">Sandbox Mitigation</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Filesystem encryption</td>
+									<td align="center">write(), open() with O_CREAT</td>
+									<td align="center">Read-only rootfs</td>
+								</tr>
+								<tr>
+									<td align="center">Reverse shell</td>
+									<td align="center">connect(), socket()</td>
+									<td align="center">--network none or fake network</td>
+								</tr>
+								<tr>
+									<td align="center">Data exfiltration</td>
+									<td align="center">sendto(), write() to fd</td>
+									<td align="center">Network isolation + file auditing</td>
+								</tr>
+								<tr>
+									<td align="center">Credential theft</td>
+									<td align="center">open()~/.ssh/, read() /etc/shadow</td>
+									<td align="center">User namespace + read-only sensitive dirs</td>
+								</tr>
+								<tr>
+									<td align="center">Fork bomb</td>
+									<td align="center">clone(), fork()</td>
+									<td align="center">--pids-limit</td>
+								</tr>
+								<tr>
+									<td align="center">Memory exhaustion</td>
+									<td align="center">mmap(), brk()</td>
+									<td align="center">--memory limit</td>
+								</tr>
+								<tr>
+									<td align="center">Kernel exploit</td>
+									<td align="center">CVE-20XX-XXXX abuse</td>
+									<td align="center">Defense-in-depth: VM + seccomp + unprivileged user</td>
+								</tr>
+								<tr>
+									<td align="center">Container escape</td>
+									<td align="center">CVE-2019-5736 runc vuln</td>
+									<td align="center">Use VM as outer boundary</td>
+								</tr>
+								<tr>
+									<td align="center">Debugger detection</td>
+									<td align="center">ptrace(), /proc/self/status</td>
+									<td align="center">Scripting: bypass or patch (see anti-debugging article)</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>The sandbox is not a guarantee. It's a layered defense. Every layer reduces attack surface.</p>
+					</section>
+					<section>
+						<h3 id="container-isolation-layers">2. Container Isolation Layers</h3>
+						<p>Podman orchestrates Linux kernel features. Each flag enables a specific namespace or restriction.</p>
+						<h4 id="user-namespace-root-root">2.1 User Namespace: Root != Root</h4>
+						<pre class="plaintext">
+Container UID       Host UID (rootless, no keep-id)
+0 (root)       &lt;-&gt;  100000 (first subordinate UID)
+1000 (user)    &lt;-&gt;  1000  (with --userns keep-id)
+						</pre>
+						<p>
+							Without
+							<code>--userns keep-id</code>
+							, root in the container maps to the first subordinate UID on the
+							host, not to the host's real root. The container process thinks it is root - it can
+							<code>chown</code>
+							,
+							<code>setuid</code>
+							,
+							<code>mknod</code>
+							- but those operations apply to the mapped subordinate UIDs, not the host
+							root.
+						</p>
+						<pre class="bash">
+# Verify user namespace mapping
+podman run --rm --userns keep-id archlinux cat /proc/self/uid_map
+# Output:
+#          0       1000          1
+#  container_uid host_uid range_length
+
+# Without --userns keep-id, root maps to subuid range
+podman run --rm archlinux cat /proc/self/uid_map
+# Output:
+#          0   100000      65536
+# container root (0) maps to host UID 100000
+
+# The host sees container root processes as UID 100000
+podman top mycontainer user huser
+						</pre>
+						<h4 id="pid-namespace-isolated-process-tree">2.2 PID Namespace: Isolated Process Tree</h4>
+						<pre class="bash">
+# Without an init process (PID namespaces enabled by default):
+podman run --rm archlinux cat /proc/self/status | grep Pid
+# Pid: 1
+# The process sees ITSELF as PID 1.
+
+# On the host, the container&#39;s PID 1 is some large number:
+CONTAINER_PID=$(podman inspect --format &#39;{{.State.Pid}}&#39; mycontainer)
+echo &#34;$CONTAINER_PID&#34;  # e.g., 28471 on host
+
+# Compare: what the container sees vs host reality
+podman exec mycontainer cat /proc/1/cmdline | tr &#39;\0&#39; &#39; &#39;  # Container&#39;s PID 1
+cat /proc/$CONTAINER_PID/cmdline | tr &#39;\0&#39; &#39; &#39;             # Host&#39;s view
+						</pre>
+						<p>
+							This matters for malware: if it uses
+							<code>kill(1, SIGKILL)</code>
+							to kill all processes, it only kills
+							processes in its namespace. The host is unaffected.
+						</p>
+						<h4 id="network-namespace-air-gap">2.3 Network Namespace: Air Gap</h4>
+						<pre class="bash">
+# Complete isolation: no network devices except loopback
+podman run --rm --network none archlinux ip link show
+# 1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu 65536 ...
+# No eth0, no internet access.
+
+# NAT&#39;d network: container gets a private IP behind NAT
+podman run --rm archlinux ip addr show eth0
+# inet 10.0.2.100/24
+# Container can reach internet through host&#39;s network stack.
+
+# Custom bridge with traffic capture on host:
+podman network create --subnet 192.168.99.0/24 sandbox-net
+podman run --rm --network sandbox-net --ip 192.168.99.10 sandbox ./malware
+# On host, capture veth interface traffic:
+sudo tcpdump -i veth* -w /tmp/malware.pcap
+						</pre>
+						<h4 id="mount-namespace-read-only-root">2.4 Mount Namespace: Read-Only Root</h4>
+						<pre class="bash">
+# Read-only rootfs: any attempt to write to / fails with EROFS
+podman run --rm --read-only archlinux touch /test
+# touch: cannot touch &#39;/test&#39;: Read-only file system
+
+# Malware expects writable /tmp and /var/run. Mount tmpfs:
+podman run --rm --read-only \
+  --tmpfs /tmp:rw,noexec,nosuid,size=64M \
+  --tmpfs /run:rw,noexec,nosuid,size=16M \
+  --tmpfs /var/tmp:rw,noexec,nosuid,size=64M \
+  sandbox ./malware
+
+# Mount read-only analysis tools:
+podman run --rm --read-only \
+  -v /opt/analysis-tools:/tools:ro \
+  sandbox /tools/strace -f /malware
+
+# Mount results directory read-write:
+podman run --rm --read-only \
+  -v $(pwd)/results:/tmp/results:rw \
+  sandbox ./malware
+						</pre>
+					</section>
+					<section>
+						<h3 id="seccomp-system-call-filtering">3. seccomp: System Call Filtering</h3>
+						<p>
+							Seccomp-bpf filters intercept syscalls during
+							<code>syscall</code>
+							/
+							<code>sysenter</code>
+							transition. The kernel
+							evaluates a BPF program and returns:
+							<code>SECCOMP_RET_ALLOW</code>
+							,
+							<code>SECCOMP_RET_KILL</code>
+							,
+							<code>SECCOMP_RET_ERRNO</code>
+							,
+							<code>SECCOMP_RET_TRAP</code>
+							.
+						</p>
+						<p>Podman's default seccomp profile blocks~44 syscalls:</p>
+						<pre class="json">
+{
+  &#34;defaultAction&#34;: &#34;SCMP_ACT_ALLOW&#34;,
+  &#34;syscalls&#34;: [
+    {
+      &#34;names&#34;: [&#34;reboot&#34;, &#34;kexec_load&#34;, &#34;kexec_file_load&#34;, &#34;init_module&#34;,
+                &#34;finit_module&#34;, &#34;delete_module&#34;, &#34;create_module&#34;,
+                &#34;iopl&#34;, &#34;ioperm&#34;, &#34;swapon&#34;, &#34;swapoff&#34;, &#34;settimeofday&#34;,
+                &#34;stime&#34;, &#34;clock_settime&#34;, &#34;adjtimex&#34;, &#34;add_key&#34;,
+                &#34;request_key&#34;, &#34;keyctl&#34;, &#34;mbind&#34;, &#34;migrate_pages&#34;,
+                &#34;move_pages&#34;, &#34;set_mempolicy&#34;, &#34;acct&#34;, &#34;bpf&#34;,
+                &#34;fanotify_init&#34;, &#34;lookup_dcookie&#34;, &#34;perf_event_open&#34;,
+                &#34;personality&#34;, &#34;process_vm_readv&#34;, &#34;process_vm_writev&#34;,
+                &#34;ptrace&#34;, &#34;quotactl&#34;, &#34;kcmp&#34;, &#34;userfaultfd&#34;,
+                &#34;uselib&#34;, &#34;vmsplice&#34;, &#34;name_to_handle_at&#34;,
+                &#34;open_by_handle_at&#34;, &#34;nfsservctl&#34;, &#34;_sysctl&#34;,
+                &#34;clone3&#34;, &#34;setns&#34;, &#34;unshare&#34;,
+                &#34;clock_adjtime&#34;, &#34;mount_setattr&#34;],
+      &#34;action&#34;: &#34;SCMP_ACT_ERRNO&#34;,
+      &#34;errnoRet&#34;: 1
+    }
+  ]
+}
+						</pre>
+						<p>Custom seccomp profile for malware analysis - allow only what's needed:</p>
+						<pre class="json">
+{
+  &#34;defaultAction&#34;: &#34;SCMP_ACT_KILL&#34;,
+  &#34;architectures&#34;: [&#34;SCMP_ARCH_X86_64&#34;],
+  &#34;syscalls&#34;: [
+    { &#34;names&#34;: [&#34;read&#34;,&#34;write&#34;,&#34;open&#34;,&#34;openat&#34;,&#34;close&#34;,&#34;stat&#34;,&#34;fstat&#34;,&#34;lstat&#34;,
+                &#34;lseek&#34;,&#34;pread64&#34;,&#34;pwrite64&#34;,&#34;readv&#34;,&#34;writev&#34;,&#34;access&#34;,
+                &#34;dup&#34;,&#34;dup2&#34;,&#34;pipe&#34;,&#34;pipe2&#34;,&#34;select&#34;,&#34;poll&#34;,&#34;epoll_create1&#34;,
+                &#34;epoll_ctl&#34;,&#34;epoll_wait&#34;,&#34;eventfd2&#34;,&#34;fcntl&#34;,&#34;ioctl&#34;],
+      &#34;action&#34;: &#34;SCMP_ACT_ALLOW&#34; },
+    { &#34;names&#34;: [&#34;mmap&#34;,&#34;mprotect&#34;,&#34;munmap&#34;,&#34;brk&#34;,&#34;mremap&#34;,&#34;madvise&#34;,
+                &#34;msync&#34;,&#34;mincore&#34;,&#34;remap_file_pages&#34;],
+      &#34;action&#34;: &#34;SCMP_ACT_ALLOW&#34; },
+    { &#34;names&#34;: [&#34;rt_sigaction&#34;,&#34;rt_sigprocmask&#34;,&#34;rt_sigreturn&#34;,
+                &#34;sigaltstack&#34;,&#34;restart_syscall&#34;,&#34;tgkill&#34;,&#34;tkill&#34;],
+      &#34;action&#34;: &#34;SCMP_ACT_ALLOW&#34; },
+    { &#34;names&#34;: [&#34;clone&#34;,&#34;fork&#34;,&#34;vfork&#34;,&#34;execve&#34;,&#34;exit&#34;,&#34;exit_group&#34;,
+                &#34;wait4&#34;,&#34;getpid&#34;,&#34;gettid&#34;,&#34;getppid&#34;,&#34;arch_prctl&#34;,
+                &#34;set_tid_address&#34;,&#34;set_robust_list&#34;,&#34;futex&#34;,&#34;nanosleep&#34;],
+      &#34;action&#34;: &#34;SCMP_ACT_ALLOW&#34; },
+    { &#34;names&#34;: [&#34;getrandom&#34;,&#34;gettimeofday&#34;,&#34;clock_gettime&#34;,&#34;clock_getres&#34;,
+                &#34;time&#34;,&#34;getrusage&#34;,&#34;sysinfo&#34;,&#34;uname&#34;,&#34;getuid&#34;,&#34;geteuid&#34;,
+                &#34;getgid&#34;,&#34;getegid&#34;,&#34;getcwd&#34;],
+      &#34;action&#34;: &#34;SCMP_ACT_ALLOW&#34; },
+    { &#34;names&#34;: [&#34;connect&#34;,&#34;sendto&#34;,&#34;sendmsg&#34;,&#34;recvfrom&#34;,&#34;recvmsg&#34;,
+                &#34;socket&#34;,&#34;bind&#34;,&#34;getsockname&#34;,&#34;getpeername&#34;,
+                &#34;setsockopt&#34;,&#34;getsockopt&#34;,&#34;shutdown&#34;,&#34;socketpair&#34;],
+      &#34;action&#34;: &#34;SCMP_ACT_ALLOW&#34; },
+    { &#34;names&#34;: [&#34;writev&#34;,&#34;preadv&#34;,&#34;pwritev&#34;,&#34;copy_file_range&#34;],
+      &#34;action&#34;: &#34;SCMP_ACT_ALLOW&#34; }
+  ]
+}
+						</pre>
+						<p>
+							Key omissions from the allow-list:
+							<code>ptrace</code>
+							,
+							<code>process_vm_readv</code>
+							,
+							<code>process_vm_writev</code>
+							,
+							<code>setns</code>
+							,
+							<code>unshare</code>
+							,
+							<code>mount</code>
+							,
+							<code>chroot</code>
+							,
+							<code>pivot_root</code>
+							,
+							<code>kexec_load</code>
+							,
+							<code>bpf</code>
+							,
+							<code>personality</code>
+							,
+							<code>init_module</code>
+							,
+							<code>finit_module</code>
+							,
+							<code>delete_module</code>
+							,
+							<code>kcmp</code>
+							,
+							<code>userfaultfd</code>
+							.
+						</p>
+						<p>Apply custom profile:</p>
+						<pre class="bash">
+podman run --rm --security-opt seccomp=custom-seccomp.json sandbox ./malware
+						</pre>
+					</section>
+					<section>
+						<h3 id="capabilities-drop">4. Capabilities Drop</h3>
+						<p>
+							Linux capabilities break root's monolithic power into discrete permissions. By default, podman
+							drops nearly all capabilities:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Capability</th>
+									<th align="center">Allows</th>
+									<th align="center">Blocked by default?</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">CAP_SYS_ADMIN</td>
+									<td align="center">mount, swapon, sethostname, pivot_root</td>
+									<td align="center">YES</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_SYS_PTRACE</td>
+									<td align="center">ptrace, process_vm_readv</td>
+									<td align="center">YES</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_SYS_MODULE</td>
+									<td align="center">init_module, delete_module</td>
+									<td align="center">YES</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_NET_RAW</td>
+									<td align="center">raw sockets</td>
+									<td align="center">YES</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_NET_ADMIN</td>
+									<td align="center">interface config, routing</td>
+									<td align="center">YES</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_NET_BIND_SERVICE</td>
+									<td align="center">bind to ports < 1024</td>
+									<td align="center">YES</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_SYS_BOOT</td>
+									<td align="center">reboot</td>
+									<td align="center">YES</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_SYS_CHROOT</td>
+									<td align="center">chroot</td>
+									<td align="center">YES</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_DAC_OVERRIDE</td>
+									<td align="center">bypass file permissions</td>
+									<td align="center">YES</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_SETUID</td>
+									<td align="center">setuid, seteuid</td>
+									<td align="center">YES</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Default bounding set for a rootless container
+podman run --rm archlinux capsh --print
+# Current: = cap_chown,cap_dac_override,cap_fowner,cap_fsetid,cap_kill,
+#            cap_setgid,cap_setuid,cap_setpcap,cap_net_bind_service,
+#            cap_net_raw,cap_sys_chroot,cap_mknod,cap_audit_write,
+#            cap_setfcap+i
+# (podman grants a small default set)
+
+# Drop every capability: the result is an empty set
+podman run --rm --cap-drop=ALL archlinux capsh --print
+# Current: =
+
+# Absolute minimum: drop everything, add explicit
+podman run --rm --cap-drop=ALL --cap-add=CAP_SYS_PTRACE sandbox ./malware
+# Only ptrace is permitted now.
+						</pre>
+					</section>
+					<section>
+						<h3 id="resource-limits">5. Resource Limits</h3>
+						<p>Prevent denial-of-service and resource exhaustion:</p>
+						<pre class="bash">
+podman run --rm \
+  --memory 512m \           # Hard limit: 512 MB RAM
+  --memory-swap 512m \      # No swap (same as memory = no swap)
+  --cpus 1.5 \              # 1.5 CPU cores max
+  --cpu-shares 512 \        # Relative weight (1024 default)
+  --pids-limit 50 \         # Max 50 PIDs (prevents fork bombs)
+  --ulimit nofile=256:512 \ # Max 256 open files (soft), 512 (hard)
+  --ulimit nproc=50:100 \   # Max 50 processes (soft), 100 (hard)
+  --blkio-weight 100 \      # 10% of disk I/O (default 500)
+  sandbox ./malware
+
+# Verify limits work:
+# Fork bomb inside container with --pids-limit 10:
+podman run --rm --pids-limit 10 archlinux bash -c &#39;f() { f | f &amp; }; f&#39;
+# Container OOM kills the process tree quickly.
+						</pre>
+					</section>
+					<section>
+						<h3 id="network-setup-strategies">6. Network Setup Strategies</h3>
+						<h4 id="air-gapped-network-none">6.1 Air-Gapped (--network none)</h4>
+						<pre class="bash">
+podman run --rm --network none --name samplesandbox sandbox ./malware
+# Malware has no network reachability. socket() works for AF_UNIX only.
+# tcpdump sees nothing. strace will show failed connect() calls.
+						</pre>
+						<p>
+							Use when: you want to see what the malware
+							<em>tries</em>
+							to connect to without letting it succeed.
+						</p>
+						<h4 id="fake-internet-with-inetsim">6.2 Fake Internet with INetSim</h4>
+						<p>
+							INetSim simulates internet services:
+							<abbr title="Domain Name System">DNS</abbr>
+							,
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							,
+							<abbr title="Hypertext Transfer Protocol Secure">HTTPS</abbr>
+							,
+							<abbr title="Simple Mail Transfer Protocol">SMTP</abbr>
+							,
+							<abbr title="File Transfer Protocol">FTP</abbr>
+							,
+							<abbr title="Internet Relay Chat">IRC</abbr>
+							,
+							<abbr title="Network Time Protocol">NTP</abbr>
+							, Syslog. Every connection succeeds;
+							responses are fake but protocol-conformant.
+						</p>
+						<pre class="bash">
+# Host: start INetSim
+sudo inetsim --data /var/lib/inetsim --report /tmp/inetsim-report
+
+# Create a network with fake gateway
+podman network create \
+  --subnet 10.13.37.0/24 \
+  --gateway 10.13.37.1 \
+  inetsim-net
+
+# Route container traffic through INetSim
+# INetSim listens on 10.13.37.1 by default
+# DNS: configure container to use 10.13.37.1 as DNS server
+podman run --rm --network inetsim-net \
+  --dns 10.13.37.1 \
+  sandbox ./malware
+						</pre>
+						<h4 id="capture-only-network">6.3 Capture-Only Network</h4>
+						<p>Let malware reach the internet but capture everything:</p>
+						<pre class="bash">
+# On host, find the veth pair for the container:
+podman run --rm -d --name sample --network bridge sandbox sleep 3600
+VETH=$(ip link | grep veth | awk -F: &#39;{print $2}&#39; | head -1 | xargs)
+
+# Capture all traffic on the veth interface:
+sudo tcpdump -i &#34;$VETH&#34; -w /tmp/malware-capture.pcap -s 0 -n &amp;
+
+# Run analysis
+podman exec sample /opt/analyze.sh /malware
+
+# Stop capture
+sudo kill %1
+podman stop sample
+						</pre>
+					</section>
+					<section>
+						<h3 id="building-the-sandbox-container">7. Building the Sandbox Container</h3>
+						<h4 id="containerfile-architecture">7.1 Containerfile Architecture</h4>
+						<p>
+							The sandbox container needs: analysis tools preinstalled, a runner script, writable scratch
+							directories.
+						</p>
+						<p>Tools list:</p>
+						<pre class="plaintext">
+strace        - system call tracing
+ltrace        - library call tracing
+gdb           - GNU debugger
+tcpdump       - packet capture
+binutils      - strings, objdump, readelf, nm, objcopy, strip, size, addr2line
+file          - magic-based file type detection
+xxd/hexdump   - hex dump utilities
+python3       - scripting + pefile, pyelftools, yara-python, scapy
+sqlite3       - database for analysis results
+curl/wget     - fetch samples
+lsof          - list open files
+procps-ng     - ps, top, pgrep, pkill
+						</pre>
+						<p>
+							Full Containerfile in
+							<code>sandbox-analysis.Containerfile</code>
+							.
+						</p>
+						<h4 id="runner-script-optrun-samplesh">7.2 Runner Script: /opt/run-sample.sh</h4>
+						<p>This script orchestrates a single sample analysis run:</p>
+						<pre class="bash">
+#!/bin/bash
+# run-sample.sh - execute a binary under full instrumentation
+# Usage: run-sample.sh /path/to/malware [timeout_seconds] [sample_id]
+
+SAMPLE=&#34;${1:?Usage: run-sample.sh &lt;binary&gt; [timeout] [id]}&#34;
+TIMEOUT=&#34;${2:-60}&#34;
+SAMPLE_ID=&#34;${3:-$(date +%s)}&#34;
+RESULT_DIR=&#34;/tmp/results/${SAMPLE_ID}&#34;
+mkdir -p &#34;$RESULT_DIR&#34;
+
+echo &#34;[*] Analyzing sample: $SAMPLE (ID: $SAMPLE_ID, timeout: ${TIMEOUT}s)&#34;
+
+# 1. Static triage
+echo &#34;[*] Running static triage...&#34;
+file &#34;$SAMPLE&#34; &gt; &#34;$RESULT_DIR/file-type.txt&#34;
+readelf -h &#34;$SAMPLE&#34; &gt; &#34;$RESULT_DIR/elf-header.txt&#34; 2&gt;&amp;1 || true
+readelf -l &#34;$SAMPLE&#34; &gt; &#34;$RESULT_DIR/elf-segments.txt&#34; 2&gt;&amp;1 || true
+readelf -d &#34;$SAMPLE&#34; &gt; &#34;$RESULT_DIR/elf-dynamic.txt&#34; 2&gt;&amp;1 || true
+strings -n 6 &#34;$SAMPLE&#34; | sort -u &gt; &#34;$RESULT_DIR/strings.txt&#34;
+objdump -d &#34;$SAMPLE&#34; &gt; &#34;$RESULT_DIR/disassembly.txt&#34; 2&gt;&amp;1 || true
+LD_LIBRARY_PATH= ldd &#34;$SAMPLE&#34; &gt; &#34;$RESULT_DIR/ldd-output.txt&#34; 2&gt;&amp;1 || true
+
+# 2. Start network capture on loopback (inter-container traffic)
+tcpdump -i lo -w &#34;$RESULT_DIR/network.pcap&#34; -s 0 -n -U &amp;
+TCPDUMP_PID=$!
+sleep 0.5
+
+# 3. System call trace with fork follow
+strace -f -tt -T -e trace=file,process,network,ipc \
+  -o &#34;$RESULT_DIR/strace.log&#34; \
+  timeout &#34;$TIMEOUT&#34; &#34;$SAMPLE&#34; &amp;
+SAMPLE_PID=$!
+
+# 4. Wait for completion or timeout
+wait $SAMPLE_PID 2&gt;/dev/null
+SAMPLE_EXIT=$?
+
+# 5. Stop capture
+sleep 1
+kill $TCPDUMP_PID 2&gt;/dev/null
+wait $TCPDUMP_PID 2&gt;/dev/null
+
+# 6. Post-run collection
+lsof -p $SAMPLE_PID &gt; &#34;$RESULT_DIR/open-files.txt&#34; 2&gt;&amp;1 || true
+cp /proc/$SAMPLE_PID/maps &#34;$RESULT_DIR/proc-maps.txt&#34; 2&gt;/dev/null || true
+
+# 7. Generate summary
+{
+  echo &#34;=== ANALYSIS SUMMARY ===&#34;
+  echo &#34;Sample: $SAMPLE&#34;
+  echo &#34;Exit code: $SAMPLE_EXIT&#34;
+  echo &#34;Syscall count: $(wc -l &lt; &#34;$RESULT_DIR/strace.log&#34;)&#34;
+  echo &#34;Unique files accessed:&#34;
+  grep -oP &#39;&#34;(/[^&#34;]*)&#34;&#39; &#34;$RESULT_DIR/strace.log&#34; | sort -u
+  echo &#34;Network connections:&#34;
+  grep -E &#39;(connect|socket|bind|sendto)&#39; &#34;$RESULT_DIR/strace.log&#34;
+  echo &#34;Child processes:&#34;
+  grep -E &#39;(clone|fork|execve)&#39; &#34;$RESULT_DIR/strace.log&#34;
+} &gt; &#34;$RESULT_DIR/summary.txt&#34;
+
+echo &#34;[*] Results saved to: $RESULT_DIR&#34;
+cat &#34;$RESULT_DIR/summary.txt&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="running-the-malware-sandbox">8. Running the Malware Sandbox</h3>
+						<p>Complete invocation:</p>
+						<pre class="bash">
+podman run --rm \
+  --name &#34;malware-$(date +%s)&#34; \
+  --hostname sandbox \
+  --network none \
+  --read-only \
+  --read-only-tmpfs=false \
+  --tmpfs /tmp:rw,noexec,nosuid,size=128M \
+  --tmpfs /run:rw,noexec,nosuid,size=16M \
+  --tmpfs /var/tmp:rw,noexec,nosuid,size=64M \
+  --tmpfs /dev/shm:rw,noexec,nosuid,size=32M \
+  --cap-drop=ALL \
+  --cap-add=CAP_SYS_PTRACE \
+  --security-opt=no-new-privileges \
+  --security-opt=seccomp=sandbox-seccomp.json \
+  --memory 512m \
+  --memory-swap 512m \
+  --cpus 1 \
+  --pids-limit 50 \
+  --ulimit nofile=256:512 \
+  --ulimit nproc=50:100 \
+  -v &#34;$(pwd)/samples:/samples:ro&#34; \
+  -v &#34;$(pwd)/results:/tmp/results:rw&#34; \
+  malware-sandbox \
+  /opt/run-sample.sh /samples/unknown.bin 120 sample-001
+						</pre>
+					</section>
+					<section>
+						<h3 id="automated-sandbox-runner">9. Automated Sandbox Runner</h3>
+						<p>Batch analysis wrapper script:</p>
+						<pre class="bash">
+#!/bin/bash
+# auto-sandbox.sh - analyze multiple samples in parallel
+SAMPLES_DIR=&#34;${1:-./samples}&#34;
+RESULTS_DIR=&#34;${2:-./results}&#34;
+MAX_PARALLEL=&#34;${3:-4}&#34;
+TIMEOUT=&#34;${4:-120}&#34;
+
+mkdir -p &#34;$RESULTS_DIR&#34;
+
+running=0
+for sample in &#34;$SAMPLES_DIR&#34;/*; do
+    [[ -f &#34;$sample&#34; ]] || continue
+    sid=&#34;$(basename &#34;$sample&#34;)-$(date +%s)&#34;
+    echo &#34;[*] Launching sandbox for: $sample (ID: $sid)&#34;
+
+    podman run --rm -d --name &#34;sandbox-$sid&#34; \
+      --network none --read-only \
+      --tmpfs /tmp:rw,noexec,nosuid,size=128M \
+      --tmpfs /run:rw,noexec,nosuid,size=16M \
+      --cap-drop=ALL --security-opt=no-new-privileges \
+      --memory 512m --cpus 1 --pids-limit 50 \
+      -v &#34;$(realpath &#34;$sample&#34;):/tmp/malware:ro&#34; \
+      -v &#34;$(realpath &#34;$RESULTS_DIR&#34;):/tmp/results:rw&#34; \
+      malware-sandbox \
+      /opt/run-sample.sh /tmp/malware &#34;$TIMEOUT&#34; &#34;$sid&#34; \
+      &amp;&gt;/dev/null &amp;
+
+    ((running++))
+    if (( running &gt;= MAX_PARALLEL )); then
+        wait -n 2&gt;/dev/null || true
+        ((running--))
+    fi
+done
+wait
+
+echo &#34;[*] All samples analyzed. Results in: $RESULTS_DIR&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="defense-in-depth-vm-container">10. Defense-in-Depth: VM + Container</h3>
+						<p>
+							If the sample contains a kernel exploit, it escapes the container (same kernel). Defense: run
+							the sandbox inside a lightweight
+							<abbr title="Virtual Machine">VM</abbr>
+							.
+						</p>
+						<pre class="bash">
+# Using qemu with minimal ArchLinux image:
+qemu-system-x86_64 \
+  -enable-kvm \
+  -m 1G \
+  -smp 2 \
+  -drive file=arch-sandbox.qcow2,if=virtio \
+  -netdev user,id=net0,restrict=on \
+  -device virtio-net,netdev=net0 \
+  -nographic \
+  -append &#34;console=ttyS0 root=/dev/vda1 rw&#34;
+
+# Inside the VM, podman runs containers as above.
+# Even a kernel escape now lands inside the VM guest kernel, not the host.
+						</pre>
+						<p>Nested isolation table:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Layer</th>
+									<th align="center">Escape Required</th>
+									<th align="center">Difficulty</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Container (user ns)</td>
+									<td align="center">Kernel exploit + user ns escape</td>
+									<td align="center">High</td>
+								</tr>
+								<tr>
+									<td align="center">Container (root)</td>
+									<td align="center">Kernel exploit</td>
+									<td align="center">Medium</td>
+								</tr>
+								<tr>
+									<td align="center">VM (KVM)</td>
+									<td align="center">VM escape + kernel exploit</td>
+									<td align="center">Very high</td>
+								</tr>
+								<tr>
+									<td align="center">Air-gapped host</td>
+									<td align="center">Physical access or supply chain</td>
+									<td align="center">Extreme</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="practical-analysis-walkthrough">11. Practical Analysis Walkthrough</h3>
+						<p>
+							Given a suspicious binary
+							<code>invoice.pdf.bin</code>
+							:
+						</p>
+						<pre class="bash">
+# Step 1: Static triage on host (never execute)
+file invoice.pdf.bin
+# ELF 64-bit LSB executable, x86-64, statically linked, stripped
+
+strings invoice.pdf.bin | head -30
+# Reveals: /tmp/.cache, /proc/self/exe, /etc/ld.so.preload
+# Suggests persistence mechanism.
+
+# Step 2: Launch sandbox
+podman run --rm --name analysis-1 \
+  --network bridge --dns 8.8.8.8 \
+  --read-only \
+  --tmpfs /tmp:rw,noexec,nosuid,size=64M \
+  --tmpfs /run:rw,noexec,nosuid,size=16M \
+  --cap-drop=ALL --security-opt=no-new-privileges \
+  --memory 256m --cpus 0.5 --pids-limit 20 \
+  -v &#34;$(pwd)/invoice.pdf.bin:/tmp/sample:ro&#34; \
+  -v &#34;$(pwd)/results:/tmp/results:rw&#34; \
+  malware-sandbox \
+  /opt/run-sample.sh /tmp/sample 60 invoice-001
+
+# Step 3: Examine results
+cat results/invoice-001/summary.txt
+# Exit code: 0
+# Syscall count: 847
+# Files accessed: /tmp/.cache/&lt;random&gt;, /tmp/.X11-unix/X0
+# Network: connect(3, {sa_family=AF_INET, sin_port=htons(443),
+#                      sin_addr=inet_addr(&#34;185.130.5.253&#34;)}, 16)
+
+# Step 4: Analyze strace
+grep -E &#39;^[0-9]+ &#39; results/invoice-001/strace.log | awk &#39;{print $2}&#39; | \
+  sort | uniq -c | sort -rn | head -10
+# Top syscalls: read(247), write(189), futex(98), connect(12), openat(8)
+
+# Step 5: Check network capture
+tshark -r results/invoice-001/network.pcap -Y &#39;tls.handshake.type==1&#39; \
+  -T fields -e tls.handshake.extensions_server_name
+# TLS SNI: api.stealer-c2.net
+
+# Step 6: Persistence check
+grep -i &#39;autostart\|.config\|systemd\|cron\|.bashrc&#39; \
+  results/invoice-001/strings.txt
+# Matches: ~/.config/autostart/ - malware drops .desktop file for persistence.
+
+# Step 7: IOCs extracted
+echo &#34;C2: 185.130.5.253:443 (TLS SNI: api.stealer-c2.net)&#34;
+echo &#34;Persistence: ~/.config/autostart/&#34;
+echo &#34;Malware family: Linux infostealer (XLF-stealer variant)&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="sandbox-limitations">12. Sandbox Limitations</h3>
+						<p>
+							What the sandbox cannot do: -
+							<b>Time-sensitive malware</b>
+							: If the binary checks for a specific
+							date or run duration, it might sleep/exit. -
+							<b>VM-aware malware</b>
+							: Some malware checks
+							<abbr title="Central Processing Unit">CPU</abbr>
+							ID,
+							<abbr title="Media Access Control">MAC</abbr>
+							addresses, DMI tables for
+							<abbr title="Virtual Machine">VM</abbr>
+							indicators.
+							Detected
+							<abbr title="Virtual Machine">VM</abbr>
+							s trigger exit or benign behavior. -
+							<b>Multi-stage droppers</b>
+							: If stage-1 fetches stage-2 from
+							<abbr title="Command and Control">C2</abbr>
+							, and
+							<abbr title="Command and Control">C2</abbr>
+							is down, analysis is incomplete. -
+							<b>Targeted attacks</b>
+							: Malware keyed to specific hostnames,
+							<abbr title="Media Access Control">MAC</abbr>
+							s,
+							<abbr title="Internet Protocol">IP</abbr>
+							s won't trigger in a generic sandbox.
+							<ul>
+								<li><b>Hardware-dependent</b> : Malware requiring <abbr title="Graphical Processing Unit">GPU</abbr> , specific <abbr title="Universal Serial Bus">USB</abbr> devices, <abbr title="Trusted Platform Module">TPM</abbr> chips won't execute fully.</li>
+								<li><b>Kernel-level rootkits</b> : LKMs require <code>init_module</code> which is blocked by seccomp. But if it exploits the kernel directly...</li>
+							</ul>
+						</p>
+						<p>
+							Mitigations: -
+							<b>Multi-sandbox approach</b>
+							: Run sample in multiple configurations (air-gapped,
+							internet, fake internet). -
+							<b>Nested execution</b>
+							: If stage-2 dropped, run stage-2 in a new
+							sandbox. -
+							<b>Time acceleration</b>
+							: Some hypervisors support TSC offsetting. Fake the clock.
+							<ul>
+								<li><b>Stimulus injection</b> : Provide fake responses for protocols the malware expects.</li>
+							</ul>
+						</p>
+					</section>
+					<section>
+						<h3 id="syscall-categories">Syscall Categories</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Category</th>
+									<th align="center">Syscalls</th>
+									<th align="center">Malware Relevance</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">File I/O</td>
+									<td align="center">open, openat, read, write, close, stat, mkdir, unlink, rename</td>
+									<td align="center">File drops, config reads, data exfil</td>
+								</tr>
+								<tr>
+									<td align="center">Process</td>
+									<td align="center">clone, fork, vfork, execve, exit, wait4, kill, tkill</td>
+									<td align="center">Child spawning, self-destruction</td>
+								</tr>
+								<tr>
+									<td align="center">Memory</td>
+									<td align="center">mmap, mprotect, munmap, brk, mremap</td>
+									<td align="center">Code injection, heap spray, RWX pages</td>
+								</tr>
+								<tr>
+									<td align="center">Network</td>
+									<td align="center">socket, connect, bind, listen, accept, sendto, recvfrom</td>
+									<td align="center">C2 communication, reverse shell</td>
+								</tr>
+								<tr>
+									<td align="center">Signal</td>
+									<td align="center">rt_sigaction, rt_sigprocmask, sigaltstack, kill</td>
+									<td align="center">Signal handlers, anti-debug traps</td>
+								</tr>
+								<tr>
+									<td align="center">Identity</td>
+									<td align="center">getuid, geteuid, getgid, getegid, getpid, gettid</td>
+									<td align="center">User detection, sandbox detection</td>
+								</tr>
+								<tr>
+									<td align="center">Time</td>
+									<td align="center">clock_gettime, gettimeofday, nanosleep, time</td>
+									<td align="center">Timing checks, sleep-delay evasion</td>
+								</tr>
+								<tr>
+									<td align="center">IPC</td>
+									<td align="center">pipe, pipe2, socketpair, shmget, shmat, shmdt</td>
+									<td align="center">Inter-process communication</td>
+								</tr>
+								<tr>
+									<td align="center">Syslog</td>
+									<td align="center">syslog</td>
+									<td align="center">Log manipulation</td>
+								</tr>
+								<tr>
+									<td align="center">Scheduling</td>
+									<td align="center">sched_yield, sched_getaffinity, sched_setaffinity</td>
+									<td align="center">CPU affinity detection, core count</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="podman-sandbox-flags">Podman Sandbox Flags</h3>
+						<pre class="bash">
+# Minimal viable sandbox:
+podman run --rm --network none --read-only \
+  --tmpfs /tmp:rw,noexec,nosuid,size=64M \
+  --cap-drop=ALL --security-opt=no-new-privileges \
+  --memory 256m --pids-limit 20 \
+  sandbox-image /sample
+
+# With network capture:
+podman run --rm --network bridge \
+  --cap-drop=ALL --cap-add=CAP_NET_RAW \
+  --security-opt=no-new-privileges \
+  -v $(pwd)/pcap:/tmp/pcap:rw \
+  sandbox-image bash -c &#34;tcpdump -i eth0 -w /tmp/pcap/out.pcap &amp; timeout 60 /sample; kill %1&#34;
+
+# Tracing with strace:
+podman run --rm --network none --read-only \
+  --cap-drop=ALL --cap-add=CAP_SYS_PTRACE \
+  --security-opt=no-new-privileges \
+  sandbox-image strace -f -tt -e trace=file,network -o /tmp/results/trace.log /sample
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Build the sandbox image from the sidecar Containerfile and analyze the built-in simulated sample.
+							The container is intentionally permissive enough to observe malicious behavior, so never expose
+							it to a real network.
+						</p>
+						<p><a href="/wiki/articles/reverse-engineering/sandbox-analysis.Containerfile">sandbox-analysis.Containerfile</a></p>
+						<pre class="bash">
+podman build -t malware-sandbox -f sandbox-analysis.Containerfile .
+podman run --rm \
+  --network none \
+  --read-only \
+  --tmpfs /tmp:rw,noexec,nosuid,size=128M \
+  --tmpfs /run:rw,noexec,nosuid,size=16M \
+  --cap-drop=ALL \
+  --security-opt=no-new-privileges \
+  --memory 512m --pids-limit 50 \
+  -v &#34;$(pwd)/results:/tmp/results:rw&#34; \
+  malware-sandbox /opt/run-sample.sh /opt/sample-malware.py 60 sample-001
+						</pre>
+						<p>
+							Then read
+							<code>results/sample-001/report.txt</code>
+							and match every recorded file write, network attempt,
+							and child process against the behavior you predicted during static triage.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://docs.podman.io/" target="_blank">Podman documentation</a> - rootless containers, namespaces, and <code>run</code> options</li>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man2/seccomp.2.html" target="_blank">seccomp(2)</a> - the system call filter interface</li>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man7/namespaces.7.html" target="_blank">namespaces(7)</a> - the isolation primitives podman composes</li>
+							<li><a class="icon-github" href="https://github.com/opencontainers/runtime-spec/blob/main/config-linux.md#seccomp" target="_blank">OCI Runtime Specification - seccomp</a> - the profile format used above</li>
+							<li><a class="icon-website" href="https://www.inetsim.org/" target="_blank">INetSim</a> - fake internet services for behavioral analysis</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

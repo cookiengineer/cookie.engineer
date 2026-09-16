@@ -51,6 +51,11 @@
 					</ul>
 				</li>
 				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
 					<b><a href="#tcp-segment">TCP Segment</a></b>
 					<ul>
 						<li><a href="#tcp-segment-fields">TCP Segment Fields</a></li>
@@ -91,6 +96,11 @@
 				</li>
 				<li>
 					<b><a href="#tcp-debugging">TCP Debugging</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
 					<ul>
 					</ul>
 				</li>
@@ -146,6 +156,13 @@
 							achieves this through sequence numbers, acknowledgments,
 							timers, retransmission, flow control, and a formal connection lifecycle.
 						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/udp.html">UDP</a> - the connectionless transport protocol, contrast with <abbr title="Transmission Control Protocol">TCP</abbr></li>
+							<li><a href="/wiki/articles/fundamentals/icmp.html">ICMP</a> - error reporting that <abbr title="Transmission Control Protocol">TCP</abbr> path MTU discovery relies on</li>
+						</ul>
 					</section>
 					<section>
 						<h3 id="tcp-segment">TCP Segment</h3>
@@ -1394,6 +1411,112 @@ sysctl net.ipv4.tcp_retries2;         # 15: data retransmission attempts
 
 # Monitor connection state transitions via netlink
 conntrack -E;
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that decodes the Linux socket table. Read
+							<code>/proc/net/tcp</code>
+							, translate the hex
+							<code>st</code>
+							field into its state name, and print every socket as
+							<code>STATE local -&gt; remote</code>
+							. Run it while
+							a connection is established and closed, and watch the state move through
+							<code>SYN_SENT</code>
+							,
+							<code>ESTABLISHED</code>
+							,
+							<code>FIN_WAIT1</code>
+							, and
+							<code>TIME_WAIT</code>
+							.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;bufio&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;strconv&#34;
+	&#34;strings&#34;
+)
+
+var states = map[string]string{
+	&#34;01&#34;: &#34;ESTABLISHED&#34;,
+	&#34;02&#34;: &#34;SYN_SENT&#34;,
+	&#34;03&#34;: &#34;SYN_RECV&#34;,
+	&#34;04&#34;: &#34;FIN_WAIT1&#34;,
+	&#34;05&#34;: &#34;FIN_WAIT2&#34;,
+	&#34;06&#34;: &#34;TIME_WAIT&#34;,
+	&#34;07&#34;: &#34;CLOSE&#34;,
+	&#34;08&#34;: &#34;CLOSE_WAIT&#34;,
+	&#34;09&#34;: &#34;LAST_ACK&#34;,
+	&#34;0A&#34;: &#34;LISTEN&#34;,
+	&#34;0B&#34;: &#34;CLOSING&#34;,
+}
+
+func decodeIPv4(hex string) string {
+	b := make([]byte, 4)
+	for i := 0; i &lt; 4; i++ {
+		v, _ := strconv.ParseUint(hex[6-2*i:8-2*i], 16, 8)
+		b[i] = byte(v)
+	}
+	return fmt.Sprintf(&#34;%d.%d.%d.%d&#34;, b[0], b[1], b[2], b[3])
+}
+
+func decodePort(hex string) uint16 {
+	v, _ := strconv.ParseUint(hex, 16, 16)
+	return uint16(v)
+}
+
+func main() {
+	file, err := os.Open(&#34;/proc/net/tcp&#34;)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	scanner.Scan()
+
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) &lt; 4 {
+			continue
+		}
+		local := strings.Split(fields[1], &#34;:&#34;)
+		remote := strings.Split(fields[2], &#34;:&#34;)
+		state := states[fields[3]]
+		if state == &#34;&#34; {
+			state = &#34;UNKNOWN&#34;
+		}
+		fmt.Printf(&#34;%-12s %s:%d -&gt; %s:%d\n&#34;,
+			state, decodeIPv4(local[0]), decodePort(local[1]),
+			decodeIPv4(remote[0]), decodePort(remote[1]))
+	}
+}
+						</pre>
+						<p>
+							Build and run it, then generate traffic and compare the output with
+							<code>ss</code>
+							:
+						</p>
+						<pre class="bash">
+go build -o tcpstate tcpstate.go
+./tcpstate
+
+# Terminal 2: listen on 1337
+nc -l 1337
+
+# Terminal 3: connect, then close immediately
+nc -q1 localhost 1337
+
+# Terminal 1: watch the 1337 sockets move through the close states
+watch -n 0.5 &#39;./tcpstate | grep 1337&#39;
 						</pre>
 					</section>
 					<section>

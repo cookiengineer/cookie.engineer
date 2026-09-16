@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Dynamic Instrumentation | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Dynamic Instrumentation">
+		<meta name="keywords" content="detours, dynamorio, frida, hooking, instrumentation, ld_preload, pin, ptrace, sysinternals, uprobes">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Dynamic Instrumentation">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Runtime code modification techniques including function hooking, trampolines, detours, dynamic binary instrumentation, LD_PRELOAD, PLT/GOT overwriting, and ptrace-based syscall hooking.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/sysinternals/dynamic-instrumentation.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Dynamic Instrumentation">
+		<meta name="twitter:description" itemprop="description" content="Runtime code modification techniques including function hooking, trampolines, detours, dynamic binary instrumentation, LD_PRELOAD, PLT/GOT overwriting, and ptrace-based syscall hooking.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#dynamic-vs-static-instrumentation">1. Dynamic vs Static Instrumentation</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#function-interception">2. Function Interception</a></b>
+					<ul>
+						<li><a href="#instruction-boundary-problem">2.1 Instruction Boundary Problem</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#binary-instrumentation-frameworks">3. Binary Instrumentation Frameworks</a></b>
+					<ul>
+						<li><a href="#pin-intel">3.1 Pin (Intel)</a></li>
+						<li><a href="#dynamorio">3.2 DynamoRIO</a></li>
+						<li><a href="#valgrind-memcheckcallgrind">3.3 Valgrind (MemCheck/Callgrind)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#user-space-probes-uprobes">4. User-Space Probes (uprobes)</a></b>
+					<ul>
+						<li><a href="#uprobe-with-ebpf">4.1 Uprobe with eBPF</a></li>
+						<li><a href="#uprobes-with-perf">4.2 Uprobes with perf</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#frida-toolkit">5. Frida Toolkit</a></b>
+					<ul>
+						<li><a href="#architecture">5.1 Architecture</a></li>
+						<li><a href="#frida-javascript-api">5.2 Frida JavaScript API</a></li>
+						<li><a href="#frida-commands">5.3 Frida Commands</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ld-preload-based-hooking">6. LD_PRELOAD Based Hooking</a></b>
+					<ul>
+						<li><a href="#example-hook-malloc-and-free">6.1 Example: Hook malloc and free</a></li>
+						<li><a href="#ld-preload-limitations">6.2 LD_PRELOAD Limitations</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#hot-patching-concepts">7. Hot Patching Concepts</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#syscall-hooking">8. Syscall Hooking</a></b>
+					<ul>
+						<li><a href="#ptrace">8.1 ptrace</a></li>
+						<li><a href="#seccomp-notify">8.2 seccomp Notify</a></li>
+						<li><a href="#krsi-bpf-lsm-for-syscall-hooking">8.3 KRSI (BPF LSM) for syscall hooking</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#pltgot-hooking">9. PLT/GOT Hooking</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#return-oriented-hooking">10. Return-Oriented Hooking</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#anti-instrumentation">11. Anti-Instrumentation</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification">Verification</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/sysinternals/index.html">Sysinternals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/sysinternals/dynamic-instrumentation.html">Dynamic Instrumentation</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="dynamic-instrumentation">Dynamic Instrumentation</h2>
+					<p>
+						Runtime code modification techniques including function hooking, trampolines, detours, dynamic
+						binary instrumentation, LD_PRELOAD, PLT/GOT overwriting, and ptrace-based syscall hooking.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Dynamic instrumentation is the art of modifying running code. Instead of compiling instrumentation
+							into a binary (static instrumentation), dynamic techniques intercept, rewrite, or redirect execution
+							at runtime without requiring source code or recompilation. This covers function hooking, binary
+							translation frameworks, user-space probes, LD_PRELOAD shims, and advanced techniques like return-oriented
+							hooking and GOT table overwriting.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/sysinternals/tracing-frameworks.html">Tracing Frameworks</a> - comparison of tracing frameworks</li>
+							<li><a href="/wiki/articles/sysinternals/ebpf.html">eBPF</a> - <abbr title="Extended Berkeley Packet Filter">eBPF</abbr> architecture, verifier, program types</li>
+							<li><a href="/wiki/articles/fundamentals/elf.html">ELF</a> - ELF format, sections, symbols, PLT/GOT</li>
+							<li><a href="/wiki/articles/fundamentals/dynamic-linking.html">Dynamic Linking</a> - dynamic linker internals, LD_PRELOAD</li>
+							<li><a href="/wiki/articles/fundamentals/calling-conventions.html">Calling Conventions</a> - ABI, register usage, stack frames</li>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - process memory, ptrace, /proc/PID/mem</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="dynamic-vs-static-instrumentation">1. Dynamic vs Static Instrumentation</h3>
+						<pre class="plaintext">
+Static Instrumentation:
+  Source code → add probes → recompile → new binary
+  Examples: -finstrument-functions, DTrace USDT, LTTng-UST tracepoints
+
+Dynamic Instrumentation:
+  Running binary → attach probe → intercept at runtime
+  Examples: kprobes, uprobes, Frida, LD_PRELOAD, ptrace
+
+┌─────────────────────────────────────────────────────────────┐
+│                     Instrumentation Spectrum                  │
+│                                                               │
+│  Static ◄──────────────────────────────────────────► Dynamic │
+│                                                               │
+│  Source  Recompiled  USDT    uprobe    Frida    ptrace       │
+│  compile with -g   probes  (kernel)  (userspace) (syscall)  │
+│  -finstrument-functions     eBPF       hooking    hooking   │
+│                                                               │
+│  Low overhead ◄─────────────────────────────────► High overhead│
+│  Requires source ◄──────────────────────────► No source needed │
+│  Production safe ◄──────────────────────────► Risky/detectable │
+└─────────────────────────────────────────────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="function-interception">2. Function Interception</h3>
+						<p>
+							At the assembly level, intercepting a function means redirecting its execution flow before (or
+							instead of) its original body.
+						</p>
+						<pre class="plaintext">
+Original function:
+  target_func:
+    55             push   rbp
+    48 89 e5       mov    rbp, rsp
+    ...
+    c3             ret
+
+After prologue overwrite (trampoline):
+  target_func:
+    e9 XX XX XX XX jmp    hook_func    ← 5-byte relative jmp
+    ...                                ← original code relocated
+    e9 XX XX XX XX jmp    target_func+5
+    ...
+    c3             ret
+
+  hook_func:
+    ... log/pre-process ...
+    call trampoline  → relocated original code
+    ... post-process ...
+    ret
+						</pre>
+						<p>
+							The trampoline technique requires: 1. Save the first 5+ bytes of the target function 1. Overwrite
+							them with a
+							<code>jmp</code>
+							to the hook function 1. The hook function calls a trampoline that executes
+							the saved bytes, then jumps back 1. This preserves the original function semantics while intercepting
+							every call
+						</p>
+						<h4 id="instruction-boundary-problem">2.1 Instruction Boundary Problem</h4>
+						<p>x86 instructions are variable-length (1-15 bytes). You cannot overwrite the middle of an instruction:</p>
+						<pre class="plaintext">
+BAD: overwrite 5 bytes starting mid-instruction
+  target_func:
+    48 89 e5       mov    rbp, rsp    ← 3 bytes
+    48 83 ec 10    sub    rsp, 0x10   ← 4 bytes
+    5-byte overwrite would split this instruction → CRASH
+
+GOOD: use a disassembler to find instruction boundaries
+  Overwrite the first 5 bytes (full instructions):
+    48 89 e5       mov    rbp, rsp    ← 3 bytes
+    48 83 ec 10    sub    rsp, 0x10   ← 4 bytes ... need 7 bytes total
+  Solution: relocate first N bytes where N &gt;= 5 and N ends on instruction boundary
+						</pre>
+						<p>
+							This is why hooking libraries (Detours, MinHook, mhook) use length disassemblers like HDE (Hacker
+							Disassembler Engine) or Zydis.
+						</p>
+					</section>
+					<section>
+						<h3 id="binary-instrumentation-frameworks">3. Binary Instrumentation Frameworks</h3>
+						<p>
+							These frameworks operate at the instruction level, inserting instrumentation between any arbitrary
+							instructions.
+						</p>
+						<h4 id="pin-intel">3.1 Pin (Intel)</h4>
+						<pre class="plaintext">
+Pin Architecture:
+  Application binary
+       │
+       ▼
+  ┌─────────────┐
+  │ Pin (loader) │   loads app into Pin VM
+  └──────+──────┘
+         │
+         ▼
+  ┌─────────────┐
+  │ JIT Compiler │   translates app code basic block by basic block
+  │ (Code Cache) │   inserting instrumentation calls
+  └──────+──────┘
+         │
+         ▼
+  ┌─────────────┐
+  │ Pin Tool     │   user-written .so plugin (C++)
+  │ (Pintool)    │   defines instrumentation and analysis routines
+  └─────────────┘
+						</pre>
+						<pre class="cpp">
+// Example Pin tool: count instructions
+#include &#34;pin.H&#34;
+#include &lt;iostream&gt;
+
+UINT64 icount = 0;
+
+VOID docount() { icount++; }
+
+VOID Instruction(INS ins, VOID *v) {
+    INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)docount, IARG_END);
+}
+
+VOID Fini(INT32 code, VOID *v) {
+    std::cout &lt;&lt; &#34;Executed &#34; &lt;&lt; icount &lt;&lt; &#34; instructions&#34; &lt;&lt; std::endl;
+}
+
+int main(int argc, char *argv[]) {
+    PIN_Init(argc, argv);
+    INS_AddInstrumentFunction(Instruction, 0);
+    PIN_AddFiniFunction(Fini, 0);
+    PIN_StartProgram();
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+# Build and run
+pin -t obj-ia32/inscount.so -- /bin/ls
+						</pre>
+						<h4 id="dynamorio">3.2 DynamoRIO</h4>
+						<p>
+							DynamoRIO is the open-source alternative to Pin. It uses a similar code cache / basic block
+							translation approach:
+						</p>
+						<pre class="plaintext">
+DynamoRIO Architecture:
+  Application → DynamoRIO Code Cache → Executed basic blocks
+                     │
+                     ▼
+              Client (plugin .so)
+              - dr_insert_clean_call() for instrumentation
+              - drwrap_wrap() for function wrapping
+						</pre>
+						<pre class="c">
+// DynamoRIO client: count basic blocks
+#include &#34;dr_api.h&#34;
+#include &#34;drmgr.h&#34;
+
+static void event_bb(void *drcontext, void *tag, instrlist_t *bb,
+                     bool for_trace, bool translating) {
+    dr_insert_clean_call(drcontext, bb, instrlist_first(bb),
+        (void *)inc_counter, false, 0);
+}
+
+DR_EXPORT void dr_client_main(client_id_t id, int argc, const char *argv[]) {
+    drmgr_init();
+    drmgr_register_bb_instrumentation_event(NULL, event_bb, NULL);
+}
+						</pre>
+						<pre class="bash">
+drrun -c libbbcount.so -- /bin/ls
+						</pre>
+						<h4 id="valgrind-memcheckcallgrind">3.3 Valgrind (MemCheck/Callgrind)</h4>
+						<p>
+							Valgrind uses a different approach - it translates the binary to an
+							<abbr title="Incident Response">IR</abbr>
+							(VEX
+							<abbr title="Incident Response">IR</abbr>
+							), then runs the
+							<abbr title="Incident Response">IR</abbr>
+							through analysis tools:
+						</p>
+						<pre class="plaintext">
+Valgrind Architecture:
+  Application binary
+       │
+       ▼
+  ┌─────────────┐
+  │ VEX frontend │   x86/AMD64/ARM → VEX IR (RISC-like intermediate)
+  └──────+──────┘
+         │
+         ▼
+  ┌─────────────┐
+  │ Tool plugin  │   Memcheck: add shadow memory checks
+  │ (e.g.        │   Callgrind: add call graph + instruction counting
+  │  memcheck)   │   Helgrind: add happens-before tracking
+  └──────+──────┘
+         │
+         ▼
+  ┌─────────────┐
+  │ VEX backend  │   VEX IR → native code (recompiled)
+  └─────────────┘
+						</pre>
+						<pre class="bash">
+valgrind --tool=callgrind ./myapp
+callgrind_annotate callgrind.out.PID
+kcachegrind callgrind.out.PID
+						</pre>
+					</section>
+					<section>
+						<h3 id="user-space-probes-uprobes">4. User-Space Probes (uprobes)</h3>
+						<p>
+							uprobes are the kernel's built-in mechanism for dynamic instrumenting user-space functions.
+							They work by the same int3 replacement as kprobes.
+						</p>
+						<pre class="plaintext">
+uprobe mechanism:
+  1. User specifies: /path/to/binary:symbol or binary:offset
+  2. Kernel finds the inode and offset
+  3. Kernel writes int3 at that offset in the process&#39;s text mapping
+  4. When process hits int3:
+     → trap to kernel
+     → uprobe handler fires
+     → original instruction single-stepped
+     → process resumes
+
+Key detail: uprobes work at the VMA (page) level.
+All processes sharing the same inode+offset share the same uprobe.
+						</pre>
+						<h4 id="uprobe-with-ebpf">4.1 Uprobe with eBPF</h4>
+						<pre class="c">
+// trace_readline.bpf.c — trace bash readline calls
+#include &lt;linux/bpf.h&gt;
+#include &lt;bpf/bpf_helpers.h&gt;
+#include &lt;bpf/bpf_tracing.h&gt;
+
+struct {
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(max_entries, 256 * 1024);
+} events SEC(&#34;.maps&#34;);
+
+SEC(&#34;uretprobe//bin/bash:readline&#34;)
+int trace_readline(struct pt_regs *ctx) {
+    char *line = (char *)PT_REGS_RC(ctx);  // Return value = read line
+    if (!line) return 0;
+
+    char buf[256];
+    long len = bpf_probe_read_user_str(buf, sizeof(buf), line);
+    if (len &gt; 0) {
+        char *evt = bpf_ringbuf_reserve(&amp;events, sizeof(buf), 0);
+        if (evt) {
+            __builtin_memcpy(evt, buf, len);
+            bpf_ringbuf_submit(evt, 0);
+        }
+    }
+    return 0;
+}
+
+char LICENSE[] SEC(&#34;license&#34;) = &#34;GPL&#34;;
+						</pre>
+						<h4 id="uprobes-with-perf">4.2 Uprobes with perf</h4>
+						<pre class="bash">
+# Add a uprobe
+perf probe -x /bin/bash readline
+perf probe -x /bin/bash readline%return   # uretprobe
+
+# Record
+perf record -e probe_bash:readline -e probe_bash:readline_ret -a -- sleep 10
+perf script
+
+# Remove
+perf probe --del &#39;probe_bash:readline*&#39;
+
+# List all uprobes
+sudo cat /sys/kernel/debug/tracing/uprobe_events
+						</pre>
+					</section>
+					<section>
+						<h3 id="frida-toolkit">5. Frida Toolkit</h3>
+						<p>
+							Frida injects a JavaScript engine (Quick
+							<abbr title="JavaScript">JS</abbr>
+							/Duktape) into target processes, enabling
+							JavaScript-based hooking and introspection.
+						</p>
+						<h4 id="architecture">5.1 Architecture</h4>
+						<pre class="plaintext">
+Frida Architecture:
+  ┌──────────────┐
+  │  frida CLI    │  Python/Node.js binding
+  │  Python API   │
+  └──────+───────┘
+         │
+         ▼
+  ┌──────────────┐
+  │  frida-core   │  Process injection, RPC, script management
+  └──────+───────┘
+         │
+    ┌────+────┐
+    ▼         ▼
+  frida-    frida-
+  server    gadget
+  (daemon)  (embedded library)
+    │         │
+    ▼         ▼
+  ┌────────────────┐
+  │  frida-gum      │  Code tracing, stalking, instruction rewriting
+  └────────────────┘
+						</pre>
+						<h4 id="frida-javascript-api">5.2 Frida JavaScript API</h4>
+						<pre class="javascript">
+// hook.js — hook open() to log file accesses
+const openPtr = Module.findExportByName(null, &#39;open&#39;);
+const open = new NativeFunction(openPtr, &#39;int&#39;, [&#39;pointer&#39;, &#39;int&#39;]);
+
+Interceptor.attach(openPtr, {
+    onEnter(args) {
+        this.filename = Memory.readCString(args[0]);
+        this.flags = args[1].toInt32();
+        console.log(`open(${this.filename}, 0x${this.flags.toString(16)})`);
+    },
+    onLeave(retval) {
+        console.log(`  → returned fd=${retval.toInt32()}`);
+    }
+});
+
+// Hook a function by parsing its address
+const funcAddr = DebugSymbol.fromName(&#39;target_function&#39;);
+Interceptor.attach(funcAddr, {
+    onEnter(args) {
+        console.log(`target_function(${args[0]}, ${args[1]}) called from:\n` +
+            Thread.backtrace(this.context, Backtracer.ACCURATE)
+                .map(DebugSymbol.fromAddress).join(&#39;\n&#39;));
+    }
+});
+
+// Modify function arguments
+Interceptor.attach(Module.findExportByName(null, &#39;connect&#39;), {
+    onEnter(args) {
+        // Block connections to 127.0.0.1:8080
+        const sa = args[1];
+        const family = sa.readU16();
+        if (family === 2) {               // AF_INET
+            const ip = sa.add(4).readByteArray(4);
+            const port = sa.add(2).readU16();
+            console.log(`connect: ${Array.from(new Uint8Array(ip)).join(&#39;.&#39;)}:${port}`);
+            // Could overwrite sa to redirect
+        }
+    }
+});
+
+// Replace function entirely
+Interceptor.replace(Module.findExportByName(null, &#39;getuid&#39;),
+    new NativeCallback(() =&gt; 0, &#39;int&#39;, []));
+						</pre>
+						<h4 id="frida-commands">5.3 Frida Commands</h4>
+						<pre class="bash">
+# Install Frida
+sudo pacman -S frida frida-tools
+
+# List running processes
+frida-ps
+
+# Attach to a process by name
+frida -n firefox
+
+# Attach by PID
+frida -p 1234
+
+# Run a script file
+frida -n target -l hook.js
+
+# Spawn and instrument
+frida -f /usr/bin/target --no-pause
+
+# Trace: hook all functions in a module
+frida-trace -i &#39;open*&#39; -i &#39;read*&#39; -i &#39;write*&#39; /usr/bin/cat
+
+# Frida server (for remote/embedded targets)
+# On target:
+./frida-server -l 0.0.0.0:27042
+# On host:
+frida-ps -H 192.168.1.100
+frida -H 192.168.1.100 -n target -l hook.js
+						</pre>
+					</section>
+					<section>
+						<h3 id="ld-preload-based-hooking">6. LD_PRELOAD Based Hooking</h3>
+						<p>
+							The simplest form of user-space hooking: override library functions by preloading a shared library
+							that exports the same symbols.
+						</p>
+						<pre class="plaintext">
+LD_PRELOAD mechanism:
+  Normal linking order:
+    libc.so → malloc, free, open, read, write
+
+  With LD_PRELOAD:
+    hook.so → malloc, free, open, read, write (override versions)
+    libc.so → (used as fallback)
+
+  At link time: the dynamic linker resolves symbols from LD_PRELOAD first.
+  Any function in LD_PRELOAD shadows the same symbol in libc.
+						</pre>
+						<h4 id="example-hook-malloc-and-free">6.1 Example: Hook malloc and free</h4>
+						<pre class="c">
+// malloc_hook.c
+#define _GNU_SOURCE
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;dlfcn.h&gt;
+#include &lt;unistd.h&gt;
+
+void *malloc(size_t size) {
+    static void *(*real_malloc)(size_t) = NULL;
+    if (!real_malloc)
+        real_malloc = dlsym(RTLD_NEXT, &#34;malloc&#34;);
+
+    void *ptr = real_malloc(size);
+    fprintf(stderr, &#34;malloc(%zu) = %p\n&#34;, size, ptr);
+    return ptr;
+}
+
+void free(void *ptr) {
+    static void (*real_free)(void *) = NULL;
+    if (!real_free)
+        real_free = dlsym(RTLD_NEXT, &#34;free&#34;);
+
+    fprintf(stderr, &#34;free(%p)\n&#34;, ptr);
+    real_free(ptr);
+}
+						</pre>
+						<pre class="bash">
+# Compile as shared library
+gcc -shared -fPIC malloc_hook.c -o hook.so -ldl
+
+# Use it
+LD_PRELOAD=./hook.so ls
+LD_PRELOAD=./hook.so ./myapp
+
+# Check that the hook is loaded
+LD_PRELOAD=./hook.so env | grep LD_PRELOAD
+						</pre>
+						<h4 id="ld-preload-limitations">6.2 LD_PRELOAD Limitations</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Limitation</th>
+									<th align="center">Explanation</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Static binaries</td>
+									<td align="center">No dynamic linker - LD_PRELOAD has no effect</td>
+								</tr>
+								<tr>
+									<td align="center">Setuid binaries</td>
+									<td align="center">Dynamic linker ignores LD_PRELOAD for security</td>
+								</tr>
+								<tr>
+									<td align="center">Internal calls</td>
+									<td align="center">libc internally calls<code>__libc_malloc</code>directly - bypasses hook</td>
+								</tr>
+								<tr>
+									<td align="center">Syscall bypass</td>
+									<td align="center">Process doing raw syscall (no libc) - LD_PRELOAD useless</td>
+								</tr>
+								<tr>
+									<td align="center">Stripping protection</td>
+									<td align="center">RTLD_NEXT requires libdl to find the real symbol</td>
+								</tr>
+								<tr>
+									<td align="center">Security checks</td>
+									<td align="center"><code>/etc/ld.so.preload</code>for system-wide, apparmor/SELinux can block</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="hot-patching-concepts">7. Hot Patching Concepts</h3>
+						<p>
+							Linux kernel modules use a technique called "hot patching" where running kernel functions are
+							replaced at runtime.
+						</p>
+						<pre class="plaintext">
+Kernel hot patching (ftrace-based):
+  1. Build kernel with -fpatchable-function-entry=5
+  2. Each function starts with 5-byte NOP
+  3. At patch time: NOP → call ftrace_regs_caller
+  4. ftrace_regs_caller:
+       Save all registers in pt_regs
+       Call registered callbacks
+       Call the replacement function (if any)
+       Restore registers
+       Return (if replacement handled it) or continue original
+
+The __mcount_loc section:
+  - Contains a table of all function entry addresses
+  - Used by ftrace to find and patch NOPs
+  - Readable via: objdump -j __mcount_loc vmlinux
+						</pre>
+						<pre class="plaintext">
+__mcount_loc layout in vmlinux:
+  ┌──────────────────────┐
+  │ .text                 │  ... functions ...
+  ├──────────────────────┤
+  │ __mcount_loc          │
+  │ [0] = .text + 0x100  │  address of function_1 entry
+  │ [1] = .text + 0x240  │  address of function_2 entry
+  │ [2] = .text + 0x398  │  address of function_3 entry
+  │ ...                   │
+  └──────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="syscall-hooking">8. Syscall Hooking</h3>
+						<p>Hooking at the syscall level catches everything that crosses the kernel boundary.</p>
+						<h4 id="ptrace">8.1 ptrace</h4>
+						<pre class="c">
+// ptrace_based_syscall_hook.c — intercept syscalls
+#include &lt;sys/ptrace.h&gt;
+#include &lt;sys/wait.h&gt;
+#include &lt;sys/user.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;stdio.h&gt;
+
+int main() {
+    pid_t child = fork();
+
+    if (child == 0) {
+        ptrace(PTRACE_TRACEME, 0, NULL, NULL);
+        kill(getpid(), SIGSTOP);
+        execl(&#34;/bin/ls&#34;, &#34;ls&#34;, NULL);
+        return 0;
+    }
+
+    int status;
+    waitpid(child, &amp;status, 0);
+
+    ptrace(PTRACE_SETOPTIONS, child, 0,
+           PTRACE_O_TRACESYSGOOD);
+
+    while (1) {
+        // Wait for syscall entry
+        ptrace(PTRACE_SYSCALL, child, NULL, NULL);
+        waitpid(child, &amp;status, 0);
+        if (WIFEXITED(status)) break;
+
+        // Read syscall number (x86-64: orig_rax)
+        struct user_regs_struct regs;
+        ptrace(PTRACE_GETREGS, child, NULL, &amp;regs);
+        printf(&#34;Syscall enter: %llu\n&#34;, regs.orig_rax);
+
+        // Continue to syscall exit
+        ptrace(PTRACE_SYSCALL, child, NULL, NULL);
+        waitpid(child, &amp;status, 0);
+
+        // Read return value
+        ptrace(PTRACE_GETREGS, child, NULL, &amp;regs);
+        printf(&#34;Syscall exit: %llu → %lld\n&#34;, regs.orig_rax, regs.rax);
+    }
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+gcc -o ptrace_hook ptrace_syscall_hook.c
+./ptrace_hook
+						</pre>
+						<h4 id="seccomp-notify">8.2 seccomp Notify</h4>
+						<p>
+							Linux 5.0+ provides
+							<code>SECCOMP_RET_USER_NOTIF</code>
+							- the kernel pauses a syscall and notifies a supervisor
+							process, which can inspect arguments and decide on the outcome.
+						</p>
+						<pre class="c">
+// seccomp_notify.c — supervisor intercepts syscalls
+#include &lt;linux/seccomp.h&gt;
+#include &lt;linux/filter.h&gt;
+#include &lt;sys/ioctl.h&gt;
+#include &lt;sys/prctl.h&gt;
+#include &lt;sys/mman.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;stdio.h&gt;
+
+int main() {
+    // Setup seccomp filter to notify on openat
+    struct sock_filter filter[] = {
+        BPF_STMT(BPF_LD | BPF_W | BPF_ABS,
+                 offsetof(struct seccomp_data, nr)),
+        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_openat, 0, 1),
+        BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_USER_NOTIF),
+        BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW),
+    };
+
+    struct sock_fprog prog = {
+        .len = sizeof(filter) / sizeof(filter[0]),
+        .filter = filter,
+    };
+
+    int listener_fd = -1;
+
+    // Fork: child runs filtered, parent is supervisor
+    pid_t child = fork();
+    if (child == 0) {
+        prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0);
+        prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &amp;prog);
+
+        // Create a notification fd pair
+        int fds[2];
+        pipe(fds);
+        listener_fd = fds[0];
+
+        prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &amp;prog);
+        // ... execute target ...
+    }
+
+    // Parent: receive seccomp notifications and decide
+    // (requires ioctl(SECCOMP_IOCTL_NOTIF_RECV) on listener_fd)
+    // ...
+}
+						</pre>
+						<h4 id="krsi-bpf-lsm-for-syscall-hooking">8.3 KRSI (BPF LSM) for syscall hooking</h4>
+						<p>
+							<abbr title="Extended Berkeley Packet Filter">eBPF</abbr>
+							LSM programs can hook security-sensitive operations
+							including the
+							<code>bpf()</code>
+							syscall itself:
+						</p>
+						<pre class="c">
+SEC(&#34;lsm/bpf&#34;)
+int BPF_PROG(restrict_bpf, int cmd, union bpf_attr *attr, unsigned int size, int ret) {
+    // Block BPF map creation for unauthorized processes
+    if (cmd == BPF_MAP_CREATE) {
+        u32 uid = bpf_get_current_uid_gid();
+        if (uid != 0) return -EPERM;
+    }
+    return 0;
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="pltgot-hooking">9. PLT/GOT Hooking</h3>
+						<p>
+							The PLT (Procedure Linkage Table) and GOT (Global Offset Table) are the dynamic linker's mechanism
+							for lazy symbol resolution.
+						</p>
+						<pre class="plaintext">
+Normal PLT flow:
+  Call puts@plt:
+    → PLT[puts]:
+        jmp *GOT[puts]            ← initially points to next instruction
+        push $puts_got_index     ← push resolver args
+        jmp PLT[0]               ← call dynamic linker resolver
+    → Resolver: _dl_runtime_resolve()
+    → GOT[puts] updated with actual libc puts address
+    → jmp *GOT[puts] now goes directly to libc puts
+
+GOT hooking:
+  Overwrite GOT[puts] with hook_puts address:
+    → All future calls to puts → hook_puts
+    → hook_puts can call real puts via saved original address
+						</pre>
+						<pre class="c">
+// got_hook.c — overwrite GOT entries
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+#include &lt;elf.h&gt;
+#include &lt;link.h&gt;
+#include &lt;sys/mman.h&gt;
+
+void hook_puts(const char *s) {
+    // Real puts is stored globally
+    static int (*real_puts)(const char *) = NULL;
+    if (!real_puts) return;
+
+    real_puts(&#34;[HOOKED]&#34;);
+    real_puts(s);
+}
+
+void install_hook() {
+    // Parse /proc/self/maps to find libc mapping
+    // Parse ELF to find GOT entries
+    // mprotect to make GOT writable
+    // Save original function pointer
+    // Overwrite GOT entry with hook address
+
+    // Pseudo-code:
+    // real_puts = (void *)((void **)got_plt)[INDEX_PUTS];
+    // ((void **)got_plt)[INDEX_PUTS] = hook_puts;
+}
+						</pre>
+						<p>
+							Limitations: - Only catches calls that go through the PLT (external dynamic calls) - Full RELRO
+							(
+							<code>-Wl,-z,relro,-z,now</code>
+							) makes GOT read-only after startup - IFUNC resolved functions may bypass
+						</p>
+					</section>
+					<section>
+						<h3 id="return-oriented-hooking">10. Return-Oriented Hooking</h3>
+						<p>
+							When writable code regions are unavailable (NX enforced, no W+X pages), attackers and red-teamers
+							find "unused" code bytes to construct trampolines.
+						</p>
+						<pre class="plaintext">
+Finding gadgets:
+  Look for sequences of bytes in executable pages that decode to
+  useful instructions when execution starts at a different offset.
+
+  Example:
+  Original:  89 d8          mov eax, ebx
+              ff e0          jmp eax
+
+  Gadget:    d8 ff           ... (could decode as something useful)
+             e0 ...          when instruction pointer starts at d8
+
+  ROPgadget and Ropper tools find these:
+  $ ROPgadget --binary /bin/bash | head -20
+						</pre>
+						<p>This technique relies on code reuse rather than code injection.</p>
+					</section>
+					<section>
+						<h3 id="anti-instrumentation">11. Anti-Instrumentation</h3>
+						<p>Every instrumentation technique leaves traces. Adversaries check for them.</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Technique</th>
+									<th align="center">Detection Method</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">ptrace</td>
+									<td align="center"><code>ptrace(PTRACE_TRACEME)</code>fails if already traced;<code>/proc/PID/status</code>TracerPid != 0</td>
+								</tr>
+								<tr>
+									<td align="center">LD_PRELOAD</td>
+									<td align="center">Check<code>LD_PRELOAD</code>in<code>/proc/PID/environ</code>; inspect<code>/proc/PID/maps</code>for unexpected libraries</td>
+								</tr>
+								<tr>
+									<td align="center">Frida</td>
+									<td align="center">Check for frida-server process; look for<code>linjector</code>or<code>frida-agent</code>in<code>/proc/PID/maps</code></td>
+								</tr>
+								<tr>
+									<td align="center">GOT hooking</td>
+									<td align="center">Compare GOT entries against known libc addresses; checksum .got.plt section</td>
+								</tr>
+								<tr>
+									<td align="center">Inline hook</td>
+									<td align="center">Compare function prologue bytes against known-good;<code>memcmp(original_bytes, 5)</code></td>
+								</tr>
+								<tr>
+									<td align="center">uprobe</td>
+									<td align="center">Check<code>/sys/kernel/debug/tracing/uprobe_events</code></td>
+								</tr>
+								<tr>
+									<td align="center">seccomp</td>
+									<td align="center">Check<code>/proc/PID/status</code>for Seccomp mode;<code>prctl(PR_GET_SECCOMP)</code></td>
+								</tr>
+								<tr>
+									<td align="center">eBPF</td>
+									<td align="center">Check loaded programs:<code>bpftool prog list</code></td>
+								</tr>
+								<tr>
+									<td align="center">DynamoRIO/Pin</td>
+									<td align="center">Check<code>/proc/PID/maps</code>for framework library</td>
+								</tr>
+								<tr>
+									<td align="center">Breakpoints</td>
+									<td align="center"><code>int3</code>(0xCC) in prologue; software breakpoint scan</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Check if process is being ptraced
+cat /proc/PID/status | grep TracerPid
+
+# Check for LD_PRELOAD
+cat /proc/PID/environ | tr &#39;\0&#39; &#39;\n&#39; | grep LD_PRELOAD
+xargs -0 -L1 -a /proc/PID/environ | grep LD_PRELOAD
+
+# Check loaded libraries for known instrumentation
+cat /proc/PID/maps | grep -E &#39;frida|linjector|dynamorio|pin|valgrind&#39;
+
+# Check for uprobes
+sudo cat /sys/kernel/debug/tracing/uprobe_events
+
+# Check for seccomp
+cat /proc/PID/status | grep Seccomp  # 0=disabled, 1=strict, 2=filter
+
+# Scan for breakpoints (int3 = 0xCC)
+objdump -d /usr/bin/target | grep &#39;int3&#39;  # static analysis
+
+# Runtime scan: check function prologues
+# read /proc/PID/mem at function addresses, compare to binary on disk
+						</pre>
+					</section>
+					<section>
+						<h3 id="verification">Verification</h3>
+						<pre class="bash">
+# 1. LD_PRELOAD hook — verify it works
+cat &gt; /tmp/hook_open.c &lt;&lt; &#39;CEOF&#39;
+#define _GNU_SOURCE
+#include &lt;stdio.h&gt;
+#include &lt;dlfcn.h&gt;
+int open(const char *path, int flags, ...) {
+    static int (*real_open)(const char *, int, ...) = NULL;
+    if (!real_open) real_open = dlsym(RTLD_NEXT, &#34;open&#34;);
+    fprintf(stderr, &#34;[HOOK] open(%s, 0x%x)\n&#34;, path, flags);
+    return real_open(path, flags);
+}
+CEOF
+gcc -shared -fPIC /tmp/hook_open.c -o /tmp/hook_open.so -ldl
+LD_PRELOAD=/tmp/hook_open.so cat /etc/hostname
+
+# 2. ptrace syscall trace
+gcc -o /tmp/ptrace_hook ptrace_hook.c
+/tmp/ptrace_hook
+
+# 3. Frida: trace file opens
+frida-trace -i &#39;open*&#39; /bin/ls 2&gt;/dev/null || echo &#34;Install frida first&#34;
+
+# 4. Frida: trace a running process (if installed)
+frida-ps 2&gt;/dev/null | head -5
+
+# 5. uprobe: attach to bash readline
+sudo perf probe -x /bin/bash readline 2&gt;/dev/null || echo &#34;Need debuginfo&#34;
+sudo perf probe --list 2&gt;/dev/null
+
+# 6. Check uprobe events
+sudo cat /sys/kernel/debug/tracing/uprobe_events 2&gt;/dev/null
+
+# 7. ltrace: library call tracer
+ltrace -e &#39;open+openat+read+write&#39; ls / 2&gt;&amp;1 | head -20
+
+# 8. strace: syscall tracer
+strace -e trace=openat,read,write ls / 2&gt;&amp;1 | head -20
+
+# 9. Check for instrumentation in a process
+cat /proc/self/status | grep -E &#39;TracerPid|Seccomp&#39;
+cat /proc/self/maps | grep -E &#39;frida|ltrace|strace|valgrind&#39;
+
+# 10. Check PLT/GOT of a binary
+objdump -d /bin/ls | grep &#39;@plt&gt;&#39; | head -10
+readelf -r /bin/ls | grep JUMP_SLOT | head -10
+
+# 11. Find ROP gadgets in a binary
+ROPgadget --binary /bin/ls 2&gt;/dev/null | head -15 || echo &#34;Install ROPgadget&#34;
+
+# 12. Verify no existing probes
+sudo perf probe --list 2&gt;/dev/null
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>Build the container and use the LD_PRELOAD hook and Frida scripts to intercept library calls.</p>
+						<p><a href="/wiki/articles/sysinternals/dynamic-instrumentation.Containerfile">dynamic-instrumentation.Containerfile</a></p>
+						<pre class="bash">
+podman build -t dynamic-instrumentation-lab -f sysinternals/dynamic-instrumentation.Containerfile .
+podman run -it --rm --cap-add=SYS_PTRACE dynamic-instrumentation-lab
+						</pre>
+						<p>
+							The container ships an LD_PRELOAD hook library (
+							<code>hook.c</code>
+							), a Frida JavaScript hook script,
+							and a Makefile.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a href="/wiki/articles/sysinternals/tracing-frameworks.html">/wiki/articles/sysinternals/tracing-frameworks.html</a> - comparison of tracing frameworks</li>
+							<li><a href="/wiki/articles/sysinternals/ebpf.html">/wiki/articles/sysinternals/ebpf.html</a> - <abbr title="Extended Berkeley Packet Filter">eBPF</abbr> architecture</li>
+							<li><a href="/wiki/articles/fundamentals/dynamic-linking.html">/wiki/articles/fundamentals/dynamic-linking.html</a> - PLT/GOT internals</li>
+							<li><a class="icon-website" href="https://frida.re/docs/" target="_blank">Frida documentation</a></li>
+							<li><a class="icon-website" href="https://www.intel.com/content/www/us/en/developer/articles/tool/pin-a-dynamic-binary-instrumentation-tool.html" target="_blank">Pin - Intel Dynamic Binary Instrumentation</a></li>
+							<li><a class="icon-website" href="https://dynamorio.org/" target="_blank">DynamoRIO</a></li>
+							<li><a class="icon-website" href="https://valgrind.org/" target="_blank">Valgrind</a></li>
+							<li><a class="icon-github" href="https://github.com/microsoft/Detours" target="_blank">Detours - Microsoft</a></li>
+							<li><a class="icon-github" href="https://github.com/TsudaKageyu/minhook" target="_blank">MinHook - minimal x86/x64 hooking</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/ptrace.2" target="_blank">linux/ptrace(2) manual</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/seccomp.2" target="_blank">seccomp(2) manual</a></li>
+							<li><a class="icon-website" href="https://www.kernel.org/doc/html/latest/livepatch/livepatch.html" target="_blank">Hot Patching a Linux Kernel</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

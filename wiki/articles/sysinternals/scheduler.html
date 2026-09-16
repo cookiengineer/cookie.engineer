@@ -1,0 +1,1276 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Scheduler | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Scheduler">
+		<meta name="keywords" content="cfs, cgroups, eevdf, load-balancing, perf-sched, preemption, real-time, scheduler, sysinternals, vruntime">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Scheduler">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Linux CFS and EEVDF scheduling, vruntime, red-black trees, scheduling classes, load balancing, preemption, and cgroup CPU control.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/sysinternals/scheduler.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Scheduler">
+		<meta name="twitter:description" itemprop="description" content="Linux CFS and EEVDF scheduling, vruntime, red-black trees, scheduling classes, load balancing, preemption, and cgroup CPU control.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-schedulers-job">The Scheduler's Job</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#scheduling-classes">Scheduling Classes</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#per-cpu-runqueues">Per-CPU Runqueues</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#cfs-completely-fair-scheduler">CFS - Completely Fair Scheduler</a></b>
+					<ul>
+						<li><a href="#the-cfs-red-black-tree">The CFS Red-Black Tree</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#eevdf-scheduler">EEVDF Scheduler</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#scheduling-policies">Scheduling Policies</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#load-balancing">Load Balancing</a></b>
+					<ul>
+						<li><a href="#load-balancing-metrics">Load balancing metrics</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#preemption">Preemption</a></b>
+					<ul>
+						<li><a href="#the-tif-need-resched-flag">The 'TIF_NEED_RESCHED' flag</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#context-switching">Context Switching</a></b>
+					<ul>
+						<li><a href="#voluntary-vs-involuntary">Voluntary vs Involuntary</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#cgroups-v2-cpu-controller">Cgroups v2 CPU Controller</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#rt-throttling-and-inversion">RT Throttling and Inversion</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#scheduler-tracing">Scheduler Tracing</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#cpu-affinity-and-isolation">CPU Affinity and Isolation</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#power-aware-scheduling">Power-Aware Scheduling</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#scheduler-debug-interface">Scheduler Debug Interface</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#practical-scheduling-orchestration">Practical Scheduling Orchestration</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+						<li><a href="#host-checks">Host Checks</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/sysinternals/index.html">Sysinternals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/sysinternals/scheduler.html">Scheduler</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="scheduler">Scheduler</h2>
+					<p>
+						Linux CFS and EEVDF scheduling, vruntime, red-black trees, scheduling classes, load balancing,
+						preemption, and cgroup
+						<abbr title="Central Processing Unit">CPU</abbr>
+						control.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							The scheduler decides which task runs on which
+							<abbr title="Central Processing Unit">CPU</abbr>
+							at every moment,
+							trading fairness, throughput, and latency against each other. This article walks through the
+							scheduling classes, CFS and EEVDF, per-
+							<abbr title="Central Processing Unit">CPU</abbr>
+							runqueues, load balancing,
+							preemption, cgroup
+							<abbr title="Central Processing Unit">CPU</abbr>
+							limits, and the tracepoints that reveal what
+							the scheduler does. After reading it you can pick a policy and measure the result.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - process fundamentals, task_struct, process states, lifecycle</li>
+							<li><a href="/wiki/articles/fundamentals/threads.html">Threads</a> - threads vs processes, clone(), pthreads, TID vs PID</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-schedulers-job">The Scheduler's Job</h3>
+						<p>
+							The scheduler decides which thread runs on which
+							<abbr title="Central Processing Unit">CPU</abbr>
+							at every moment.
+							It must balance three contradictory goals:
+						</p>
+						<ol>
+							<li><b>Fairness</b> : Every runnable thread gets a proportional share of <abbr title="Central Processing Unit">CPU</abbr> time.</li>
+							<li><b>Throughput</b> : Maximize total work completed per unit time.</li>
+							<li><b>Latency</b> : Interactive tasks ( <abbr title="Graphical User Interface">GUI</abbr> , typing, gaming) respond within human-perceptible deadlines.</li>
+						</ol>
+						<p>
+							These goals are fundamentally in tension. Frequent context switches improve latency but reduce
+							throughput (cache/TLB thrashing). Prioritizing one long-running job maximizes throughput but
+							starves interactive tasks. The scheduler is a compromise: a carefully tuned heuristic that is
+							perpetually being patched.
+						</p>
+						<pre class="plaintext">
+Scheduler life cycle of a thread:
+
+ ┌──────────┐
+ │  CREATED  │ ← fork()/clone() → task_struct created
+ └────+─────┘    sched_fork() → init vruntime, enqueue
+      │
+      ▼
+ ┌──────────┐     ┌──────────────┐
+ │ READY     │────►│  RUNNING     │ ← __schedule() picks this task
+ │(runnable) │◄────│  (on CPU)    │    preemption → back to READY
+ └────+─────┘     └──────+───────┘
+      │                   │
+      │ sleep/interrupt   │ block (I/O, lock, wait)
+      ▼                   ▼
+ ┌──────────┐     ┌──────────────┐
+ │ SLEEPING │     │  BLOCKED     │
+ │(interrup)│     │(uninterrupt) │
+ └────+─────┘     └──────+───────┘
+      │                   │
+      │ signal/wake       │ resource available → wake_up()
+      ▼                   ▼
+    back to READY      back to READY
+      │
+      ▼
+ ┌──────────┐
+ │ EXITED   │ ← do_exit() → scheduler removes task
+ └──────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="scheduling-classes">Scheduling Classes</h3>
+						<p>
+							Linux defines a hierarchy of scheduling classes, each with its own runqueue, pick_next_task()
+							logic, and priority rules. Higher-priority classes run before lower-priority ones: a RT task
+							will always preempt a CFS task.
+						</p>
+						<pre class="plaintext">
+Priority Order (highest to lowest):
+
+┌────────────────────────────────────────────────────────────────┐
+│ stop_sched_class (SCHED_STOP)                                   │
+│  For CPU hotplug and migration threads. Cannot be preempted.    │
+│  Used for: migration/N, cpuhp/N threads.                        │
+├────────────────────────────────────────────────────────────────┤
+│ dl_sched_class (SCHED_DEADLINE)                                 │
+│  Earliest Deadline First (EDF). Each task has runtime,         │
+│  deadline, and period. Guaranteed (if admission control        │
+│  allows). Uses Constant Bandwidth Server (CBS).                │
+├────────────────────────────────────────────────────────────────┤
+│ rt_sched_class (SCHED_FIFO, SCHED_RR)                           │
+│  Real-time. 100 static priority levels (0-99). Higher number   │
+│  = higher priority. FIFO: runs until it yields. RR: timeslice  │
+│  rotation within same priority. Can starve CFS tasks.          │
+├────────────────────────────────────────────────────────────────┤
+│ fair_sched_class (SCHED_OTHER, SCHED_BATCH, SCHED_IDLE)         │
+│  CFS (Completely Fair Scheduler) — the default Linux scheduler. │
+│  Proportional share based on vruntime. Uses red-black tree.    │
+│  SCHED_OTHER: normal interactive/batch tasks                    │
+│  SCHED_BATCH: throughput-optimized, less preemption             │
+│  SCHED_IDLE:  only runs when nothing else wants the CPU         │
+├────────────────────────────────────────────────────────────────┤
+│ idle_sched_class (SCHED_IDLE)                                   │
+│  Per-CPU idle task. Runs when no other task is runnable.        │
+│  Enters CPU sleep states (C-states). Lowest overhead path.      │
+└────────────────────────────────────────────────────────────────┘
+						</pre>
+						<pre class="bash">
+# See scheduling classes in kernel config
+grep -E &#34;CONFIG_(SCHED_CLASS|SCHED_DEBUG|SCHED_INFO|SCHEDSTAT)&#34; /boot/config-$(uname -r)
+
+# Kernel threads and their scheduling classes
+ps -eo pid,cls,rtprio,comm | head -20
+# CLS: TS = SCHED_OTHER, FF = SCHED_FIFO, RR = SCHED_RR, DLN = SCHED_DEADLINE, IDL = SCHED_IDLE
+						</pre>
+					</section>
+					<section>
+						<h3 id="per-cpu-runqueues">Per-CPU Runqueues</h3>
+						<p>
+							Each
+							<abbr title="Central Processing Unit">CPU</abbr>
+							has its own runqueue (
+							<code>struct rq</code>
+							) containing per-scheduling-class
+							sub-queues. This per-
+							<abbr title="Central Processing Unit">CPU</abbr>
+							design avoids contention on a global runqueue
+							lock, but it requires load balancing to keep all
+							<abbr title="Central Processing Unit">CPU</abbr>
+							s busy.
+						</p>
+						<pre class="plaintext">
+Per-CPU runqueue (struct rq):
+┌──────────────────────────────────────────────────────┐
+│  CPU 0 runqueue                                       │
+│                                                       │
+│  ├─ nr_running        : 3  (total runnable tasks)    │
+│  ├─ nr_switches       : 1234567  (context switches)  │
+│  ├─ nr_load_updates   : 3456789                      │
+│  ├─ nr_uninterruptible: 0  (tasks in D state)        │
+│  │                                                    │
+│  ├─ cfs_rq ──► red-black tree of sched_entity        │
+│  │   ├─ nr_running: 3                                │
+│  │   ├──► task A (vruntime=1234.5 ms)               │
+│  │   ├──► task B (vruntime=1235.1 ms)               │
+│  │   └──► task C (vruntime=1238.9 ms)               │
+│  │                                                    │
+│  ├─ rt_rq ──► priority bitmap + 100 lists           │
+│  │   ├─ nr_running: 1                                │
+│  │   └──► RT task (prio=50)                          │
+│  │                                                    │
+│  ├─ dl_rq ──► red-black tree of sched_dl_entity      │
+│  │   └─ nr_running: 0                                │
+│  │                                                    │
+│  ├─ clock          : 1234567890123  (ns)             │
+│  ├─ clock_task     : 1234567890000  (ns, minus steal)│
+│  ├─ curr           : ─► task B (currently running)   │
+│  ├─ idle           : ─► idle task (swapper/0)        │
+│  └─ stop           : ─► migration/0                  │
+└──────────────────────────────────────────────────────┘
+						</pre>
+						<pre class="bash">
+# Runqueue statistics (requires CONFIG_SCHEDSTATS=y)
+cat /proc/schedstat | head -5
+# Format: cpu0 yld_count sched_count sched_goidle ...
+#         cpu1 yld_count sched_count sched_goidle ...
+
+# Per-CPU runqueue debug (requires debugfs)
+sudo cat /sys/kernel/debug/sched/debug 2&gt;/dev/null | head -60
+
+# Show per-CPU load
+cat /proc/loadavg
+# 1.23 0.89 0.67 3/456 12345
+# load1 load5 load15 running/total last_pid
+						</pre>
+					</section>
+					<section>
+						<h3 id="cfs-completely-fair-scheduler">CFS - Completely Fair Scheduler</h3>
+						<p>
+							CFS (Linux 2.6.23 through 6.5) is based on the idea that every task should receive a fair share
+							of
+							<abbr title="Central Processing Unit">CPU</abbr>
+							time. It tracks
+							<b>vruntime</b>
+							, the amount of time a task has
+							spent on the
+							<abbr title="Central Processing Unit">CPU</abbr>
+							, weighted by its priority (nice value). Tasks with
+							lower vruntime are "more deserving" and are scheduled first.
+						</p>
+						<pre class="plaintext">
+CFS vruntime calculation:
+
+vruntime += delta_exec * (NICE_0_LOAD / task_weight)
+
+Where:
+  delta_exec  = actual time spent running (in ns)
+  NICE_0_LOAD = 1024 (nice 0 weight, SCHED_OTHER default)
+  task_weight = weight derived from nice value
+
+Nice → Weight mapping (partial):
+  nice -20  → weight 88761  (highest priority, huge share)
+  nice  -5  → weight  3121
+  nice   0  → weight  1024  (default)
+  nice   5  → weight   335
+  nice  19  → weight    15  (lowest priority, tiny share)
+
+Example: nice 0 task running for 10ms:
+  vruntime += 10ms * (1024/1024) = 10ms
+
+Example: nice 5 task running for 10ms:
+  vruntime += 10ms * (1024/335) = 30.6ms
+  → vruntime increases 3x faster → gets scheduled 3x less often
+
+The scheduler picks the task with the SMALLEST vruntime from the
+red-black tree. This gives each task CPU time proportional to its weight.
+						</pre>
+						<h4 id="the-cfs-red-black-tree">The CFS Red-Black Tree</h4>
+						<pre class="plaintext">
+rbtree (sorted by vruntime, smallest = leftmost):
+
+            ┌─────┐
+            │ B   │  vruntime = 1235.1
+            └──+──┘
+       ┌───────+───────┐
+    ┌──+──┐         ┌──+──┐
+    │ A   │         │ C   │
+    │1234.5│         │1238.9│  ← pick_next_task() returns A (leftmost)
+    └─────┘         └─────┘
+
+When A runs, its vruntime advances. If A&#39;s vruntime exceeds B&#39;s,
+A is re-inserted to the right of B. B becomes the new leftmost.
+
+Enqueue: O(log n) — insert into red-black tree
+Dequeue: O(log n) — remove from red-black tree
+Pick next: O(1) — cache the leftmost node
+						</pre>
+						<pre class="bash">
+# Inspect CFS statistics for a process
+cat /proc/$$/sched
+# Shows: se.exec_start, se.vruntime, se.sum_exec_runtime, policy, prio
+
+# See scheduling statistics
+cat /proc/sched_debug 2&gt;/dev/null | head -60 || \
+sudo cat /sys/kernel/debug/sched/debug 2&gt;/dev/null | head -60
+
+# Wait for a SCHED_OTHER (CFS) task&#39;s vruntime
+awk &#39;/se.vruntime/ {print &#34;vruntime:&#34;, $2, &#34;ns =&#34;, $2/1000000, &#34;ms&#34;}&#39; /proc/$$/sched
+						</pre>
+					</section>
+					<section>
+						<h3 id="eevdf-scheduler">EEVDF Scheduler</h3>
+						<p>
+							Starting with Linux 6.6 (October 2023), EEVDF replaced CFS as the default fair scheduler. EEVDF
+							solves a fundamental issue with CFS: CFS was a work-conserving proportional-share scheduler,
+							but it had bad tail latency: a newly woken task could "game" the system by having a tiny vruntime
+							(it hadn't run yet) and immediately preempt long-running tasks.
+						</p>
+						<pre class="plaintext">
+EEVDF Concepts:
+
+Each sched_entity now has:
+  → deadline = vruntime + (slice / weight)
+  → eligible if: vruntime &gt;= cfs_rq-&gt;min_vruntime - latency_ns
+
+EEVDF picks the task with the EARLIEST DEADLINE among ELIGIBLE tasks.
+
+Timeline:
+  Task A wakes, eligible, deadline = 100ms
+  Task B wakes, eligible, deadline =  50ms  ← earlier deadline
+  → B runs first despite arriving later
+
+  CFS would have just picked the lowest vruntime, which could be
+  a task that just arrived and hasn&#39;t run yet (vruntime ≈ min_vruntime).
+  EEVDF adds the deadline dimension to prevent latency abuse.
+
+EEVDF tick:
+  1. Update current task&#39;s vruntime
+  2. If current is still the earliest deadline among eligible → keep running
+  3. If another eligible task has an earlier deadline → request reschedule
+  4. period: 6ms (default), slice = period * (weight / total_weight)
+						</pre>
+						<pre class="bash">
+# Check if running EEVDF (Linux 6.6+)
+uname -r | awk -F. &#39;{if ($1&gt;=6 &amp;&amp; $2&gt;=6) print &#34;Likely EEVDF&#34;; else print &#34;CFS&#34;}&#39;
+grep CONFIG_EEVDF /boot/config-$(uname -r) 2&gt;/dev/null || echo &#34;EEVDF not separately configurable&#34;
+
+# sched_feat shows scheduler tuning knobs
+cat /sys/kernel/debug/sched/features 2&gt;/dev/null | grep -i eevdf || echo &#34;Check if debugfs is mounted&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="scheduling-policies">Scheduling Policies</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Policy</th>
+									<th align="center">Class</th>
+									<th align="center">Description</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>SCHED_OTHER</code></td>
+									<td align="center">CFS/EEVDF</td>
+									<td align="center">Default time-sharing, uses nice values</td>
+								</tr>
+								<tr>
+									<td align="center"><code>SCHED_BATCH</code></td>
+									<td align="center">CFS/EEVDF</td>
+									<td align="center">Like OTHER but assumes CPU-bound, less preemption</td>
+								</tr>
+								<tr>
+									<td align="center"><code>SCHED_IDLE</code></td>
+									<td align="center">CFS/EEVDF</td>
+									<td align="center">Ultra-low priority, runs only when idle</td>
+								</tr>
+								<tr>
+									<td align="center"><code>SCHED_FIFO</code></td>
+									<td align="center">RT</td>
+									<td align="center">Static priority 1-99, runs until blocks or yields</td>
+								</tr>
+								<tr>
+									<td align="center"><code>SCHED_RR</code></td>
+									<td align="center">RT</td>
+									<td align="center">Static priority 1-99, round-robin within same prio</td>
+								</tr>
+								<tr>
+									<td align="center"><code>SCHED_DEADLINE</code></td>
+									<td align="center">DL</td>
+									<td align="center">EDF with admission control, runtime/deadline/period</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="c">
+// Setting scheduling policy programmatically (C):
+#include &lt;sched.h&gt;
+#include &lt;stdio.h&gt;
+
+int main(void) {
+    struct sched_param param;
+
+    // Set SCHED_FIFO with priority 50
+    param.sched_priority = 50;
+    if (sched_setscheduler(0, SCHED_FIFO, &amp;param) == -1) {
+        perror(&#34;sched_setscheduler&#34;);
+        printf(&#34;Need CAP_SYS_NICE or run as root with limits bumped\n&#34;);
+        return 1;
+    }
+
+    printf(&#34;Now running as SCHED_FIFO, priority %d\n&#34;, param.sched_priority);
+
+    // Busy-loop to hold the CPU (CAUTION: can hang system without RT throttling)
+    while (1) {
+        // CPU-bound work
+    }
+
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+# Set scheduling policy from the command line
+# Run a command with SCHED_FIFO priority 50
+sudo chrt -f 50 stress-ng --cpu 1 --timeout 5s
+
+# Run with SCHED_RR
+sudo chrt -r 30 dd if=/dev/zero of=/dev/null bs=1M count=1000
+
+# Run with SCHED_IDLE (lowest priority)
+chrt -i 0 sha256sum /dev/zero &amp;
+CHRT_PID=$!
+ps -o pid,cls,rtprio,comm -p $CHRT_PID
+kill $CHRT_PID 2&gt;/dev/null
+
+# Change priority of a running process
+sudo renice -n -10 -p $$    # Higher priority (lower nice value = more CPU)
+sudo renice -n 19 -p $$     # Lower priority (higher nice value = less CPU)
+
+# Set CPU affinity
+taskset -c 0,2 stress-ng --cpu 2 --timeout 5s &amp;
+taskset -p $!
+						</pre>
+					</section>
+					<section>
+						<h3 id="load-balancing">Load Balancing</h3>
+						<p>
+							When one
+							<abbr title="Central Processing Unit">CPU</abbr>
+							's runqueue is long and another's is short, the kernel
+							migrates tasks to keep the load balanced. Load balancing runs on an active
+							<abbr title="Central Processing Unit">CPU</abbr>
+							when it becomes idle (pull), or periodically via the scheduler tick on busy
+							<abbr title="Central Processing Unit">CPU</abbr>
+							s (push).
+						</p>
+						<pre class="plaintext">
+Load Balancing Domains (topology-aware):
+
+System (NUMA nodes)
+  │
+  ├── NUMA Node 0
+  │     │
+  │     ├── Socket 0
+  │     │     │
+  │     │     ├── Core 0 (SMT siblings: CPU 0, CPU 4)
+  │     │     ├── Core 1 (SMT siblings: CPU 1, CPU 5)
+  │     │     └── Core 2 (SMT siblings: CPU 2, CPU 6)
+  │     │
+  └── NUMA Node 1 (if present)
+        │
+        └── Socket 1
+              ├── Core 3 ...
+
+Scheduling domains (hierarchical):
+  Level 0: SMT (hyperthread) — share L1/L2 cache
+  Level 1: MC  (multi-core) — share LLC (L3 cache)
+  Level 2: DIE (package)    — share nothing (or memory via local interconnect)
+  Level 3: NUMA (node)      — share local memory controller
+
+load_balance() runs at each domain level, moving tasks from the busiest
+group to the current CPU&#39;s group. Higher levels are balanced less frequently
+(higher cost of migration = more cache/TLB misses).
+						</pre>
+						<pre class="bash">
+# Inspect scheduling domains
+cat /proc/schedstat | head -5
+# cpu0: yields, sched_switch, sched_wakeup, etc.
+
+# View scheduling domain topology
+cat /sys/kernel/debug/sched/domains/cpu0/domain*/name 2&gt;/dev/null
+cat /sys/kernel/debug/sched/domains/cpu0/domain*/flags 2&gt;/dev/null
+
+# Per-CPU load tracking
+cat /proc/loadavg
+sar -u 1 5 2&gt;/dev/null || echo &#34;Install sysstat for sar&#34;
+
+# NUMA-aware load balancing
+cat /proc/schedstat | head -1 | awk &#39;{printf &#34;CPU0: sched_yield=%s sched_switch=%s sched_wake=%s\n&#34;, $2, $3, $4}&#39;
+						</pre>
+						<h4 id="load-balancing-metrics">Load balancing metrics</h4>
+						<pre class="bash">
+# Full scheduler debug info
+sudo cat /sys/kernel/debug/sched/debug 2&gt;/dev/null | head -80
+
+# Load balancing traces with ftrace
+echo 1 | sudo tee /sys/kernel/debug/tracing/events/sched/sched_load_balance/enable 2&gt;/dev/null
+sleep 0.1
+sudo cat /sys/kernel/debug/tracing/trace | head -20
+echo 0 | sudo tee /sys/kernel/debug/tracing/events/sched/sched_load_balance/enable 2&gt;/dev/null
+						</pre>
+					</section>
+					<section>
+						<h3 id="preemption">Preemption</h3>
+						<p>
+							Preemption is the mechanism by which a running task is forcibly removed from the
+							<abbr title="Central Processing Unit">CPU</abbr>
+							to make way for a higher-priority task. Linux supports several preemption models:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Model</th>
+									<th align="center">Description</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">PREEMPT_NONE (CONFIG_PREEMPT_NONE)</td>
+									<td align="center">No forced preemption in kernel mode. Tasks yield voluntarily. Lowest overhead, worst latency. Used on servers.</td>
+								</tr>
+								<tr>
+									<td align="center">PREEMPT_VOLUNTARY (CONFIG_PREEMPT_VOLUNTARY)</td>
+									<td align="center">Kernel code can voluntarily call schedule() via might_sleep(). Lower overhead than full preemption. Desktop default.</td>
+								</tr>
+								<tr>
+									<td align="center">PREEMPT (full) (CONFIG_PREEMPT)</td>
+									<td align="center">Kernel is fully preemptible except for spinlock-held and IRQ-disabled regions. Lowest latency, higher overhead. Required for real-time applications.</td>
+								</tr>
+								<tr>
+									<td align="center">PREEMPT_RT (CONFIG_PREEMPT_RT)</td>
+									<td align="center">Nearly all spinlocks become preemptible mutexes. IRQ handlers run as kernel threads. Hard real-time capable. Merged in 6.12.</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Check preemption model
+grep PREEMPT /boot/config-$(uname -r) | grep -v &#34;^#&#34;
+# Look for: CONFIG_PREEMPT=y or CONFIG_PREEMPT_VOLUNTARY=y or CONFIG_PREEMPT_NONE=y
+
+# For -rt kernels:
+uname -r | grep rt &amp;&amp; echo &#34;Real-time kernel&#34; || echo &#34;Standard kernel&#34;
+						</pre>
+						<h4 id="the-tif-need-resched-flag">The 'TIF_NEED_RESCHED' flag</h4>
+						<p>
+							When the scheduler decides a task should be preempted, it sets
+							<code>TIF_NEED_RESCHED</code>
+							in the task's
+							<code>thread_info</code>
+							flags. The actual preemption happens at the next safe point: on return from interrupt,
+							system call, or explicit preemption check:
+						</p>
+						<pre class="c">
+// /usr/src/linux/include/linux/sched.h
+static __always_inline bool need_resched(void)
+{
+    return unlikely(tif_need_resched());
+}
+
+// /usr/src/linux/kernel/sched/core.c — __schedule()
+// Called when need_resched() returns true and preemption is safe:
+static void __sched notrace __schedule(unsigned int sched_mode)
+{
+    struct task_struct *prev, *next;
+    struct rq *rq = cpu_rq(cpu);
+
+    prev = rq-&gt;curr;
+
+    // Pick the next task from the runqueue
+    next = pick_next_task(rq, prev, &amp;rf);
+
+    if (likely(prev != next)) {
+        rq-&gt;nr_switches++;
+        rq-&gt;curr = next;
+
+        // Context switch: save prev, restore next
+        context_switch(rq, prev, next, &amp;rf);
+    }
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="context-switching">Context Switching</h3>
+						<p>
+							A context switch saves the
+							<abbr title="Central Processing Unit">CPU</abbr>
+							state of the outgoing task and restores
+							the state of the incoming task. It is expensive, typically 1-5 microseconds on modern hardware.
+						</p>
+						<pre class="plaintext">
+Context Switch Cost Breakdown:
+  ┌─────────────────────────────────────────────────┐
+  │ 1. Save registers (GPRs, FPU/SSE/AVX)           │  ~100 cycles
+  │ 2. Switch address space (CR3 reload)            │  ~100-1000 cycles
+  │    → TLB flush (partial with PCID)              │
+  │ 3. Save/restore CPU context (stack, IP, flags) │  ~200 cycles
+  │ 4. Cache effects (cold caches after switch)     │  ~1000-10000 cycles
+  │ 5. Indirect branch predictor reset              │  varies
+  └─────────────────────────────────────────────────┘
+  Total: ~1000-1500 cycles (best case, cache-warm)
+         ~5000-15000 cycles (worst case, cache-cold)
+
+At 3 GHz: 1 μs = 3000 cycles → ctx switch ≈ 0.3-5 μs
+						</pre>
+						<pre class="bash">
+# Measure context switch rate
+sudo perf stat -e context-switches -a sleep 2 2&gt;&amp;1 | grep context-switches
+
+# Context switch latency
+# (Requires CONFIG_SCHEDSTATS or cyclictest)
+cyclictest -t 1 -p 80 -i 1000 -l 10000 -q 2&gt;/dev/null || echo &#34;Install rt-tests for cyclictest&#34;
+
+# Count context switches per second
+sar -w 1 5 2&gt;/dev/null || echo &#34;Install sysstat&#34;
+						</pre>
+						<h4 id="voluntary-vs-involuntary">Voluntary vs Involuntary</h4>
+						<ul>
+							<li>Voluntary: Task calls <code>schedule()</code> explicitly (yields, blocks on I/O, sleep)</li>
+							<li>Involuntary: Task is preempted (time slice expired, higher priority task woken)</li>
+						</ul>
+						<pre class="bash">
+# Check context switch counts for current shell
+cat /proc/$$/status | grep ctxt
+# voluntary_ctxt_switches: 12345
+# nonvoluntary_ctxt_switches: 678
+
+# Per-process with ps
+ps -eo pid,comm,nvcsw,nivcsw | sort -k3 -rn | head -10
+						</pre>
+					</section>
+					<section>
+						<h3 id="cgroups-v2-cpu-controller">Cgroups v2 CPU Controller</h3>
+						<p>
+							The cgroup
+							<abbr title="Central Processing Unit">CPU</abbr>
+							controller limits and weights
+							<abbr title="Central Processing Unit">CPU</abbr>
+							usage for groups of processes. This is how containers (podman, Docker) implement
+							<code>--cpus</code>
+							and
+							<code>--cpu-shares</code>
+							.
+						</p>
+						<pre class="plaintext">
+Cgroup v2 CPU controller interface:
+  cpu.stat         — usage_usec, user_usec, system_usec, nr_periods, nr_throttled
+  cpu.weight       — proportional weight (1-10000, default 100)
+  cpu.max          — bandwidth cap: &#34;$MAX $PERIOD&#34; (e.g., &#34;200000 1000000&#34;
+                     = 200ms CPU per 1s = 0.2 CPU)
+
+Bandwidth Control:
+  Period (default 100ms): accounting period
+  Quota: max CPU time within the period
+  If quota is 0.2 CPUs and period is 100ms:
+    → 20ms CPU time per 100ms window
+    → Throttled to 20% of one CPU
+
+Weight (proportional share):
+  If group A has weight 200 and group B has weight 100:
+    When both are CPU-bound, A gets 2x the CPU time of B
+    (200/100 = 2x)
+						</pre>
+						<pre class="bash">
+# Inspect CPU controller for current cgroup
+CGROUP_PATH=$(cat /proc/$$/cgroup | grep &#39;:memory:&#39; | cut -d: -f3)
+CPU_PATH=&#34;/sys/fs/cgroup${CGROUP_PATH}&#34;
+
+# Check CPU weight and max
+cat $CPU_PATH/cpu.weight 2&gt;/dev/null
+cat $CPU_PATH/cpu.max 2&gt;/dev/null  # Format: $MAX $PERIOD
+
+# Check CPU statistics
+cat $CPU_PATH/cpu.stat 2&gt;/dev/null
+
+# Create a test cgroup with CPU limit
+sudo mkdir /sys/fs/cgroup/testcpu
+echo &#34;20000 100000&#34; | sudo tee /sys/fs/cgroup/testcpu/cpu.max  # 20% of one CPU
+echo &#34;$$&#34; | sudo tee /sys/fs/cgroup/testcpu/cgroup.procs
+# Now this shell is limited to 20% CPU!
+
+# Return to original cgroup
+echo &#34;$$&#34; | sudo tee /sys/fs/cgroup/cgroup.procs
+sudo rmdir /sys/fs/cgroup/testcpu
+						</pre>
+					</section>
+					<section>
+						<h3 id="rt-throttling-and-inversion">RT Throttling and Inversion</h3>
+						<p>
+							<b>Real-time throttling</b>
+							prevents rogue SCHED_FIFO tasks from starving the system. By default,
+							RT tasks are limited to 0.95s of
+							<abbr title="Central Processing Unit">CPU</abbr>
+							time per 1s period. If they
+							exceed this, they are throttled (forced to SCHED_OTHER) for the remainder of the period.
+						</p>
+						<pre class="bash">
+# RT throttling parameters
+cat /proc/sys/kernel/sched_rt_runtime_us   # Default: 950000 (0.95s)
+cat /proc/sys/kernel/sched_rt_period_us     # Default: 1000000 (1s)
+
+# Disable RT throttling (dangerous — RT task can hang system)
+# echo -1 &gt; /proc/sys/kernel/sched_rt_runtime_us
+						</pre>
+						<p>
+							<b>Priority inversion</b>
+							occurs when a high-priority task is blocked waiting for a resource held
+							by a low-priority task, which itself is preempted by a medium-priority task. Linux mitigates
+							this via
+							<b>priority inheritance</b>
+							(for rt_mutex) and
+							<b>priority ceiling</b>
+							(for certain kernel
+							paths).
+						</p>
+						<pre class="plaintext">
+Priority Inversion Example:
+  Task A: priority 80 (high) — needs mutex
+  Task B: priority 50 (medium) — CPU-bound
+  Task C: priority 20 (low) — holds mutex
+
+  1. C acquires mutex
+  2. B preempts C (B has higher priority)
+  3. A tries to acquire mutex → blocks (C holds it)
+  4. B keeps running (no conflict with mutex)
+  5. A is starved (waiting on C, but C can&#39;t run because B is running)
+
+  Solution: Priority inheritance — C inherits A&#39;s priority (80)
+  while holding the mutex. C runs to completion, releases mutex,
+  then returns to priority 20. A gets the mutex.
+						</pre>
+					</section>
+					<section>
+						<h3 id="scheduler-tracing">Scheduler Tracing</h3>
+						<p>
+							Linux has extensive tracepoints in the scheduler. Every context switch, wakeup, migration, and
+							load balance event is instrumented.
+						</p>
+						<pre class="plaintext">
+Key sched tracepoints:
+  sched:sched_switch       — prev_comm, prev_pid, next_comm, next_pid
+  sched:sched_wakeup       — comm, pid, prio, target_cpu
+  sched:sched_wakeup_new   — comm, pid (newly created task)
+  sched:sched_migrate_task — comm, pid, orig_cpu, dest_cpu
+  sched:sched_process_exec — filename, pid (exec event)
+  sched:sched_process_fork — parent_comm, parent_pid, child_comm, child_pid
+  sched:sched_process_exit — comm, pid (task exit)
+  sched:sched_process_free — comm, pid (task_struct freed)
+  sched:sched_wait_task    — comm, pid (waiting for task)
+  sched:sched_wake_idle_without_ipi — CPU woken without IPI
+						</pre>
+						<pre class="bash">
+# Record scheduler events with perf
+sudo perf record -e &#39;sched:sched_switch,sched:sched_wakeup&#39; -a sleep 3 2&gt;/dev/null
+sudo perf script 2&gt;/dev/null | head -30
+
+# Trace context switches in real time
+sudo perf trace -e &#39;sched:sched_switch&#39; -- sleep 1 2&gt;&amp;1 | head -20
+
+# Latency analysis with perf sched
+sudo perf sched record -- sleep 2 2&gt;/dev/null
+sudo perf sched latency 2&gt;/dev/null | head -20
+
+# Show scheduling timeline
+sudo perf sched timehist 2&gt;/dev/null | head -20
+
+# Use ftrace for scheduler events
+echo sched:sched_switch &gt; /sys/kernel/debug/tracing/set_event 2&gt;/dev/null
+echo 1 &gt; /sys/kernel/debug/tracing/tracing_on 2&gt;/dev/null
+sleep 0.5
+cat /sys/kernel/debug/tracing/trace | head -20
+echo 0 &gt; /sys/kernel/debug/tracing/tracing_on 2&gt;/dev/null
+						</pre>
+					</section>
+					<section>
+						<h3 id="cpu-affinity-and-isolation">CPU Affinity and Isolation</h3>
+						<p>
+							Pinning tasks to specific
+							<abbr title="Central Processing Unit">CPU</abbr>
+							s via
+							<code>taskset</code>
+							or
+							<code>sched_setaffinity()</code>
+							is essential for performance-critical workloads, but also for covert operations (a rootkit might
+							isolate itself on a
+							<abbr title="Central Processing Unit">CPU</abbr>
+							the sysadmin never monitors).
+						</p>
+						<pre class="bash">
+# Set CPU affinity
+taskset -c 0,2,4 stress-ng --cpu 3 --timeout 5s &amp;
+
+# Check affinity
+taskset -p $$
+# pid 12345&#39;s current affinity mask: ffff  (all 16 CPUs)
+
+# Isolate CPUs at boot (add to kernel cmdline):
+#   isolcpus=2,3  — scheduler will never place tasks on CPUs 2,3
+#   nohz_full=2,3 — disable timer tick on those CPUs (tickless)
+#   rcu_nocbs=2,3 — offload RCU callbacks from those CPUs
+
+# Check isolated CPUs
+cat /sys/devices/system/cpu/isolated 2&gt;/dev/null
+cat /proc/cmdline | grep -o &#39;isolcpus=[^ ]*&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="power-aware-scheduling">Power-Aware Scheduling</h3>
+						<p>
+							On asymmetric
+							<abbr title="Central Processing Unit">CPU</abbr>
+							designs (ARM
+							<code>big.LITTLE</code>
+							, Intel hybrid: P-cores
+							<ul>
+								<li>E-cores), the scheduler must decide not only which task gets the <abbr title="Central Processing Unit">CPU</abbr></li>
+							</ul>
+						</p>
+						<p>
+							, but which type of
+							<abbr title="Central Processing Unit">CPU</abbr>
+							it gets. Bursty, low-utilization tasks go
+							to E-cores; sustained high-utilization tasks go to P-cores.
+						</p>
+						<pre class="plaintext">
+Intel hybrid scheduling (Alder Lake+):
+  P-core (Performance): high IPC, SMT, high power
+  E-core (Efficiency):   lower IPC, no SMT, low power
+
+  ITMT (Intel Turbo Boost Max Technology 3.0):
+    Some P-cores boost higher than others → scheduler prefers them.
+  
+  EAS (Energy-Aware Scheduling, primarily ARM):
+    Computes energy cost for each CPU → picks most efficient.
+						</pre>
+						<pre class="bash">
+# Check CPU topology with core types
+lscpu | grep -E &#34;Model name|Thread|Core|Socket&#34;
+lscpu -e=CPU,CORE,SOCKET,NODE,ONLINE
+
+# Check for hybrid CPUs (Intel)
+grep -E &#34;vendor_id|model name&#34; /proc/cpuinfo | head -4
+cat /sys/devices/system/cpu/cpu*/acpi_cppc/ 2&gt;/dev/null || echo &#34;No CPPC (CPU Performance Control) info&#34;
+
+# CPU frequency scaling governor
+cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2&gt;/dev/null
+						</pre>
+					</section>
+					<section>
+						<h3 id="scheduler-debug-interface">Scheduler Debug Interface</h3>
+						<pre class="bash">
+# Full scheduler state dump
+sudo cat /sys/kernel/debug/sched/debug 2&gt;/dev/null | head -100
+
+# Per-task scheduler info
+cat /proc/$$/sched
+# Key fields:
+#   se.exec_start          — last time this task was scheduled
+#   se.vruntime            — current virtual runtime (CFS/EEVDF)
+#   se.sum_exec_runtime    — total CPU time consumed
+#   se.nr_migrations       — number of CPU migrations
+#   se.statistics.wait_sum — total time spent waiting on runqueue
+#   se.statistics.wait_max — longest single wait
+#   se.statistics.iowait_sum — total time blocked on I/O
+#   policy                 — scheduling policy (0=SCHED_OTHER, 1=SCHED_FIFO, 2=SCHED_RR)
+#   prio                   — dynamic priority
+
+# Show wait times (requires schedstats)
+awk &#39;/wait_sum|wait_max|iowait/ {print}&#39; /proc/$$/sched
+
+# Check if schedstats is enabled
+grep SCHEDSTAT /boot/config-$(uname -r)
+# If disabled, enable with kernel cmdline: schedstats=enable
+						</pre>
+					</section>
+					<section>
+						<h3 id="practical-scheduling-orchestration">Practical Scheduling Orchestration</h3>
+						<pre class="bash">
+# Pin a CPU-bound process to specific cores
+sudo taskset -c 0,1 stress-ng --cpu 2 --timeout 10s &amp;
+PID=$!
+
+# Change its scheduling to SCHED_FIFO
+sudo chrt -f -p 50 $PID
+
+# Monitor it
+ps -o pid,cls,rtprio,psr,comm -p $PID
+
+# Check which CPU it&#39;s running on
+cat /proc/$PID/stat | awk &#39;{print &#34;CPU:&#34;, $(NF-5)}&#39;
+
+# Clean up
+kill $PID 2&gt;/dev/null
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Build and run the scheduler lab, which competes
+							<abbr title="Central Processing Unit">CPU</abbr>
+							-bound and I/O-bound
+							workloads and caps them with cgroup v2
+							<abbr title="Central Processing Unit">CPU</abbr>
+							bandwidth control.
+						</p>
+						<p><a href="/wiki/articles/sysinternals/scheduler.Containerfile">scheduler.Containerfile</a></p>
+						<pre class="bash">
+podman build -t scheduler-lab -f scheduler.Containerfile .
+podman run -it --rm --privileged scheduler-lab
+						</pre>
+						<p>
+							The lab runs
+							<code>/lab/sched_lab.py</code>
+							on startup. Use
+							<code>perf sched latency</code>
+							and
+							<code>/sys/fs/cgroup</code>
+							to
+							observe the effects. The embedded lab definition is:
+						</p>
+						<pre class="dockerfile">
+FROM docker.io/archlinux:latest
+
+RUN pacman -Sy --noconfirm base-devel python3 stress-ng procps-ng util-linux &amp;&amp; \
+    pacman -Sy --noconfirm htop perf bcc-tools rt-tests &amp;&amp; \
+    pacman -Scc --noconfirm
+
+COPY &lt;&lt;&#39;HEREDOC&#39; /lab/sched_lab.py
+#!/usr/bin/env python3
+&#34;&#34;&#34;
+Scheduler demonstration: CPU-bound vs I/O-bound workloads,
+cgroup CPU limits, and scheduling behavior.
+&#34;&#34;&#34;
+import os, time, multiprocessing, subprocess, sys
+
+def cpu_bound_worker(name, seconds):
+    &#34;&#34;&#34;Pure CPU-bound loop — always ready to run.&#34;&#34;&#34;
+    start = time.monotonic()
+    pid = os.getpid()
+    print(f&#34;[{name}] PID={pid} started (CPU-bound, {seconds}s)&#34;)
+    end = start + seconds
+    while time.monotonic() &lt; end:
+        _ = sum(range(100000))  # Burn CPU
+    elapsed = time.monotonic() - start
+    print(f&#34;[{name}] PID={pid} finished in {elapsed:.2f}s&#34;)
+
+def io_bound_worker(name, seconds, duty=0.1):
+    &#34;&#34;&#34;I/O-bound — sleeps most of the time, wakes briefly.&#34;&#34;&#34;
+    pid = os.getpid()
+    print(f&#34;[{name}] PID={pid} started (I/O-bound, {seconds}s, duty={duty})&#34;)
+    start = time.monotonic()
+    bursts = 0
+    while time.monotonic() &lt; start + seconds:
+        time.sleep(duty)
+        _ = sum(range(50000))  # Short CPU burst
+        bursts += 1
+    elapsed = time.monotonic() - start
+    print(f&#34;[{name}] PID={pid} finished in {elapsed:.2f}s ({bursts} bursts)&#34;)
+
+if __name__ == &#34;__main__&#34;:
+    print(&#34;=== Scheduler Lab ===&#34;)
+    print(f&#34;Main PID: {os.getpid()}&#34;)
+    print(f&#34;CPU count: {multiprocessing.cpu_count()}&#34;)
+    print(f&#34;Scheduling policy: &#34;, end=&#34;&#34;)
+    try:
+        policy = os.sched_getparam(0)
+        print(f&#34;param={policy}&#34;)
+    except:
+        print(&#34;SCHED_OTHER (default)&#34;)
+
+    print()
+    print(&#34;--- Test 1: Two CPU-bound workers (competing for CPU) ---&#34;)
+    procs = []
+    for i in range(2):
+        p = multiprocessing.Process(target=cpu_bound_worker, args=(f&#34;CPU-Worker-{i}&#34;, 3))
+        p.start()
+        procs.append(p)
+    for p in procs:
+        p.join()
+
+    print()
+    print(&#34;--- Test 2: Two I/O-bound workers (little CPU contention) ---&#34;)
+    procs = []
+    for i in range(4):
+        p = multiprocessing.Process(
+            target=io_bound_worker,
+            args=(f&#34;IO-Worker-{i}&#34;, 3)
+        )
+        p.start()
+        procs.append(p)
+    for p in procs:
+        p.join()
+
+    print()
+    print(&#34;Done. Use &#39;perf sched record -- sleep 2 &amp;&amp; perf sched latency&#39; to analyze.&#34;)
+HEREDOC
+
+RUN chmod +x /lab/sched_lab.py
+
+COPY &lt;&lt;&#39;HEREDOC&#39; /lab/cgroup_demo.sh
+#!/bin/bash
+# Demonstrate cgroup v2 CPU bandwidth control
+echo &#34;=== Cgroup CPU Controller Demo ===&#34;
+
+CGROUP=&#34;/sys/fs/cgroup/cpulab&#34;
+sudo mkdir -p $CGROUP
+
+echo &#34;Setting cpu.max = 20000 100000 (20% of one CPU)&#34;
+echo &#34;20000 100000&#34; | sudo tee $CGROUP/cpu.max
+
+echo &#34;&#34;
+echo &#34;Running stress-ng in the capped cgroup...&#34;
+# Add current PID to the cgroup
+echo $$ | sudo tee $CGROUP/cgroup.procs
+
+# Start a CPU stressor (will be capped to 20%)
+stress-ng --cpu 4 --timeout 10s &amp;
+STRESS_PID=$!
+
+sleep 2
+echo &#34;&#34;
+echo &#34;CPU stat for the cgroup:&#34;
+cat $CGROUP/cpu.stat
+
+# Monitor with top if available
+timeout 3 top -b -n 1 -p $STRESS_PID 2&gt;/dev/null | tail -5
+
+wait $STRESS_PID 2&gt;/dev/null
+
+# Move back to root cgroup
+echo $$ | sudo tee /sys/fs/cgroup/cgroup.procs
+sudo rmdir $CGROUP
+
+echo &#34;&#34;
+echo &#34;=== Demo Complete ===&#34;
+HEREDOC
+
+RUN chmod +x /lab/cgroup_demo.sh
+
+ENTRYPOINT [&#34;/lab/sched_lab.py&#34;]
+						</pre>
+						<h4 id="host-checks">Host Checks</h4>
+						<pre class="bash">
+# 1. Check scheduling policy and priority
+chrt -p $$ 2&gt;/dev/null || echo &#34;SCHED_OTHER&#34;
+ps -eo pid,cls,rtprio,psr,comm | head -10
+
+# 2. Inspect CFS/EEVDF vruntime and stats
+cat /proc/$$/sched | head -20
+awk &#39;/se.vruntime/{printf &#34;vruntime: %.1f ms\n&#34;, $2/1000000}&#39; /proc/$$/sched
+awk &#39;/se.sum_exec_runtime/{printf &#34;total exec: %.1f ms\n&#34;, $2/1000000}&#39; /proc/$$/sched
+awk &#39;/nr_migrations/{print &#34;CPU migrations:&#34;, $2}&#39; /proc/$$/sched
+
+# 3. Per-CPU scheduler statistics
+cat /proc/schedstat | awk &#39;NR&lt;=4 {printf &#34;CPU%d: yields=%s switches=%s wakeups=%s\n&#34;, NR-1, $2, $3, $4}&#39;
+
+# 4. Load average and runnable tasks
+cat /proc/loadavg
+
+# 5. Context switch rates
+sudo perf stat -e context-switches -a sleep 2 2&gt;&amp;1 | grep context-switches
+sar -w 1 3 2&gt;/dev/null | tail -10
+
+# 6. Trace scheduler events with perf sched
+sudo perf sched record -- sleep 2 2&gt;/dev/null
+sudo perf sched latency 2&gt;/dev/null | head -20
+
+# 7. Cgroup CPU limits test (safe, only affects current shell)
+sudo mkdir -p /sys/fs/cgroup/testcpu
+echo &#34;20000 100000&#34; | sudo tee /sys/fs/cgroup/testcpu/cpu.max
+echo $$ | sudo tee /sys/fs/cgroup/testcpu/cgroup.procs
+echo &#34;Now capped at 20% CPU. Run a benchmark to verify...&#34;
+stress-ng --cpu 1 --timeout 2s --metrics-brief 2&gt;&amp;1
+echo $$ | sudo tee /sys/fs/cgroup/cgroup.procs
+sudo rmdir /sys/fs/cgroup/testcpu
+
+# 8. RT throttling parameters
+cat /proc/sys/kernel/sched_rt_runtime_us
+cat /proc/sys/kernel/sched_rt_period_us
+
+# 9. CPU affinity and NUMA binding
+taskset -p $$
+numactl --show 2&gt;/dev/null || echo &#34;Single NUMA node&#34;
+
+# 10. Run CPU-bound vs I/O-bound demo
+python3 &lt;&lt; &#39;EOF&#39;
+import multiprocessing, time, os
+
+def cpu_work(n):
+    start = time.monotonic()
+    while time.monotonic() - start &lt; 3:
+        sum(range(100000))
+    print(f&#34;CPU worker {n} done ({os.getpid()})&#34;)
+
+def io_work(n):
+    start = time.monotonic()
+    while time.monotonic() - start &lt; 3:
+        time.sleep(0.1)
+        sum(range(50000))
+    print(f&#34;I/O worker {n} done ({os.getpid()})&#34;)
+
+print(f&#34;Running on {multiprocessing.cpu_count()} CPUs&#34;)
+procs = [multiprocessing.Process(target=cpu_work, args=(i,)) for i in range(2)]
+[p.start() for p in procs]; [p.join() for p in procs]
+procs = [multiprocessing.Process(target=io_work, args=(i,)) for i in range(4)]
+[p.start() for p in procs]; [p.join() for p in procs]
+print(&#34;Done — check /proc/PID/sched for vruntime changes&#34;)
+EOF
+
+# 11. Per-process context switch tracking
+cat /proc/$$/status | grep ctxt
+
+# 12. Check preemption model
+grep PREEMPT /boot/config-$(uname -r) | grep -v &#34;^#&#34;
+
+# 13. Scheduler debug state (needs debugfs)
+sudo cat /sys/kernel/debug/sched/debug 2&gt;/dev/null | head -80
+
+# 14. Performance monitoring of scheduler events
+sudo perf stat -e &#39;sched:sched_switch,sched:sched_wakeup,sched:sched_migrate_task&#39; \
+    -a sleep 2 2&gt;&amp;1
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/processes.html">/wiki/articles/fundamentals/processes.html</a> - process fundamentals, task_struct, states</li>
+							<li><a href="/wiki/articles/fundamentals/threads.html">/wiki/articles/fundamentals/threads.html</a> - threads, clone(), TID vs TGID</li>
+							<li><a href="/wiki/articles/sysinternals/kernel-architecture.html">/wiki/articles/sysinternals/kernel-architecture.html</a> - kernel subsystems, task_struct deep dive</li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/kernel/sched" target="_blank">Linux kernel: kernel/sched/</a> - CFS, EEVDF, RT, deadline source</li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/kernel/sched/fair.c" target="_blank">Linux kernel: kernel/sched/fair.c</a> - CFS and EEVDF</li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/kernel/sched/rt.c" target="_blank">Linux kernel: kernel/sched/rt.c</a> - Real-time scheduler</li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/kernel/sched/deadline.c" target="_blank">Linux kernel: kernel/sched/deadline.c</a> - Deadline scheduler</li>
+							<li><a class="icon-website" href="https://lwn.net/Articles/925371/" target="_blank">LWN.net - EEVDF scheduler merged for Linux 6.6</a></li>
+							<li><a class="icon-website" href="https://lwn.net/Articles/428230/" target="_blank">LWN.net - CFS bandwidth control</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/chrt.1" target="_blank">chrt(1) - manipulate real-time attributes of a process</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/taskset.1" target="_blank">taskset(1) - set or retrieve a process's CPU affinity</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/perf-sched.1" target="_blank">perf-sched(1) - scheduler tracing and latency analysis</a></li>
+							<li><a class="icon-website" href="https://www.kernel.org/doc/html/latest/scheduler/sched-design-CFS.html" target="_blank">kernel.org doc - CFS Scheduler</a></li>
+							<li><a class="icon-website" href="https://www.kernel.org/doc/html/latest/scheduler/sched-deadline.html" target="_blank">kernel.org doc - Deadline task scheduling</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

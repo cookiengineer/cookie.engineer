@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>YARA | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="YARA">
+		<meta name="keywords" content="blueteam, detection, dfir, malware, rules, yara">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="YARA">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Creating detection rules for malware classification and file-based IOC matching.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/blueteam/yara.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="YARA">
+		<meta name="twitter:description" itemprop="description" content="Creating detection rules for malware classification and file-based IOC matching.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#rule-anatomy">Rule Anatomy</a></b>
+					<ul>
+						<li><a href="#meta-section">Meta Section</a></li>
+						<li><a href="#strings-section">Strings Section</a></li>
+						<li><a href="#condition-section">Condition Section</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#string-types">String Types</a></b>
+					<ul>
+						<li><a href="#text-strings">Text Strings</a></li>
+						<li><a href="#hex-strings">Hex Strings</a></li>
+						<li><a href="#regex-strings">Regex Strings</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#condition-operators">Condition Operators</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#pe-module">PE Module</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#elf-module">ELF Module</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#scanning-with-yara">Scanning with YARA</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#yargen-rule-generation">yarGen Rule Generation</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#rules-for-malware-families">Rules for Malware Families</a></b>
+					<ul>
+						<li><a href="#web-shell-php">Web Shell - PHP</a></li>
+						<li><a href="#ransomware-common-patterns">Ransomware Common Patterns</a></li>
+						<li><a href="#c2-beacon-detection">C2 Beacon Detection</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#performance-optimization">Performance Optimization</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#yara-integration">YARA Integration</a></b>
+					<ul>
+						<li><a href="#osquery">osquery</a></li>
+						<li><a href="#clamav">ClamAV</a></li>
+						<li><a href="#loki">Loki</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#rule-repository-layout">Rule Repository Layout</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#testing-yara-rules">Testing YARA Rules</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/blueteam/index.html">Blueteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/blueteam/yara.html">Yara</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="yara">YARA</h2>
+					<p>
+						Creating detection rules for malware classification and file-based
+						<abbr title="Indicator of Compromise">IOC</abbr>
+						matching.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							<abbr title="Yet Another Recursive Acronym">YARA</abbr>
+							is a pattern-matching engine for identifying and classifying
+							files based on textual or binary patterns. It is one of the most widely used tools for malware
+							classification, and almost every incident response toolkit ships
+							<abbr title="Yet Another Recursive Acronym">YARA</abbr>
+							rules.
+						</p>
+						<p>
+							A
+							<abbr title="Yet Another Recursive Acronym">YARA</abbr>
+							rule describes what a file looks like: strings it contains,
+							binary patterns at specific offsets, characteristics of its executable headers, and logical
+							relationships between these elements. When a rule matches, you know the file belongs to a specific
+							malware family or shares an indicator with known malicious software.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/elf.html">ELF</a> - executable header structure, sections, segments, dynamic linking</li>
+							<li><a href="/wiki/articles/fundamentals/pe.html">PE</a> - PE32/PE32+ headers, imports, exports, resources, relocation</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="rule-anatomy">Rule Anatomy</h3>
+						<pre class="yara">
+rule CobaltStrike_Beacon_Shellcode
+{
+    meta:
+        description = &#34;Detects Cobalt Strike beacon shellcode in memory or PE&#34;
+        author = &#34;You&#34;
+        date = &#34;2026-06-26&#34;
+        reference = &#34;https://attack.mitre.org/software/S0154/&#34;
+        hash = &#34;d41d8cd98f00b204e9800998ecf8427e&#34;
+        severity = &#34;HIGH&#34;
+
+    strings:
+        $cmd_a = &#34;sleep&#34; ascii wide nocase
+        $cmd_b = &#34;spawn&#34; ascii wide nocase
+        $cmd_c = &#34;inject&#34; ascii wide nocase
+
+        $enc_a = { 6A 00 68 [4] FF 15 [4] 85 C0 }
+        $enc_b = { 55 8B EC 51 8B 45 [1-2] 83 C0 }
+
+        $url_re = /https?:\/\/([a-z0-9-]+\.)+[a-z]{2,}\/[a-zA-Z0-9\/]{4,12}/ nocase
+
+    condition:
+        3 of ($cmd_*) and any of ($enc_*) and $url_re and filesize &lt; 5MB
+}
+						</pre>
+						<h4 id="meta-section">Meta Section</h4>
+						<p>
+							Arbitrary key-value metadata. It is not used in matching logic but is critical for documentation,
+							sharing, and
+							<abbr title="Indicator of Compromise">IOC</abbr>
+							management. Common fields:
+							<code>description</code>
+							,
+							<code>author</code>
+							,
+							<code>date</code>
+							,
+							<code>reference</code>
+							,
+							<code>hash</code>
+							,
+							<code>severity</code>
+							,
+							<code>malware_family</code>
+							,
+							<code>TLP</code>
+							.
+						</p>
+						<h4 id="strings-section">Strings Section</h4>
+						<p>
+							Defines named patterns to search for. Each string identifier starts with
+							<code>$</code>
+							. Text strings
+							match substrings, hex strings match byte sequences, and regex strings match regular expressions.
+						</p>
+						<h4 id="condition-section">Condition Section</h4>
+						<p>
+							A boolean expression determining when the rule matches. It can reference strings,
+							<code>filesize</code>
+							,
+							<code>entrypoint</code>
+							, PE or ELF headers, imported and exported functions, and results from loaded
+							modules.
+						</p>
+					</section>
+					<section>
+						<h3 id="string-types">String Types</h3>
+						<h4 id="text-strings">Text Strings</h4>
+						<pre class="yara">
+$text_ascii = &#34;malware.exe&#34;
+$text_wide  = &#34;malware.exe&#34; wide        // UTF-16LE (Windows wide strings)
+$text_both  = &#34;malware.exe&#34; wide ascii  // match both encodings
+$text_case  = &#34;MALWARE&#34; nocase          // case insensitive
+$text_full  = &#34;MALWARE&#34; fullword        // bounded by non-alphanumeric chars
+$text_xor   = &#34;malware&#34; xor(0x01-0xff)  // XOR-encoded with any single-byte key
+						</pre>
+						<h4 id="hex-strings">Hex Strings</h4>
+						<pre class="yara">
+$hex_basic = { 6A 00 68 ?? ?? ?? ?? FF 15 }       // ?? = wildcard byte
+$hex_nib   = { 55 8B EC 5? 8B 45 }                 // 5? = wildcard nibble (0x50-0x5F)
+$hex_range = { 55 8B EC 51 8B 45 [1-4] 83 C0 }    // [1-4] = jump of 1 to 4 bytes
+$hex_jump  = { 6A 00 68 [4-] FF 15 }               // [4-] = jump of 4 or more bytes
+$hex_alt   = { 6A ( 00 | 01 ) 68 }                  // alternatives: 00 or 01
+$hex_opt   = { 55 8B EC [0-1] 51 8B 45 }            // [0-1] = optional byte
+$hex_cnt   = { 55 [3] 51 }                          // exactly 3 bytes wildcard
+$hex_alt2  = { 55 8B EC ( 51 | 52 | 53 ) }          // alternative byte values
+						</pre>
+						<h4 id="regex-strings">Regex Strings</h4>
+						<pre class="yara">
+$re_domain = /[a-z0-9-]{4,63}\.(xyz|top|tk|ml|ga|cf)/ nocase
+$re_ip     = /\b[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\b/
+$re_b64    = /[A-Za-z0-9+\/=]{40,}/
+$re_c2_url = /https?:\/\/([a-z0-9-]+\.)+[a-z]{2,}\/[a-zA-Z0-9\/]{8,64}/
+						</pre>
+					</section>
+					<section>
+						<h3 id="condition-operators">Condition Operators</h3>
+						<pre class="yara">
+condition:
+    // String presence
+    $str1 and $str2
+    $str1 or $str2
+    not $str1
+
+    // Count matches
+    #str1 &gt; 5                  // string appears more than 5 times
+    @str1 &lt; 0x1000             // first occurrence at offset &lt; 0x1000
+    !str1 at 0x400             // string at exact offset 0x400
+    $str1 in (0x400..0x800)    // string within offset range
+
+    // Match N of M strings
+    3 of ($a, $b, $c, $d)      // at least 3 of these 4
+    2 of ($cmd_*)               // at least 2 of strings starting with &#34;$cmd_&#34;
+    all of them                 // all strings in the rule
+    any of them                 // any string in the rule
+
+    // File properties
+    filesize &gt; 100KB and filesize &lt; 5MB
+    uint16(0) == 0x5A4D        // MZ header (PE/DOS)
+    uint32(0) == 0x464C457F    // ELF magic (0x7F &#39;E&#39; &#39;L&#39; &#39;F&#39;)
+    uint16be(0) == 0x4D5A      // MZ header (big-endian check)
+
+    // Iteration (loop over occurrences of a string)
+    for all i in (1..#a) : (@a[i] &gt;= 0x1000)
+    for any of ($a, $b) : ($ at 0x400..0x800)
+
+    // Combination
+    ($str1 and $str2) or ($str3 and filesize &lt; 1MB)
+						</pre>
+					</section>
+					<section>
+						<h3 id="pe-module">PE Module</h3>
+						<p>
+							The
+							<code>pe</code>
+							module exposes parsed PE header fields without needing raw offset seeks.
+						</p>
+						<pre class="yara">
+import &#34;pe&#34;
+import &#34;math&#34;
+
+rule Suspicious_PE_Characteristics
+{
+    condition:
+        // No digital signature - common in malware
+        pe.number_of_signatures == 0
+
+        // Unusual section names - packed or custom loader
+        and for any i in (0..pe.number_of_sections - 1) : (
+            pe.sections[i].name == &#34;.upx0&#34; or
+            pe.sections[i].name == &#34;.vmp0&#34; or
+            pe.sections[i].name == &#34;.petite&#34;
+        )
+
+        // High entropy in first section (packed code)
+        and math.entropy(pe.sections[0].raw_data_offset, pe.sections[0].raw_data_size) &gt; 7.0
+
+        // Suspicious imports
+        and pe.imports(&#34;kernel32.dll&#34;, &#34;VirtualAlloc&#34;)
+        and pe.imports(&#34;kernel32.dll&#34;, &#34;WriteProcessMemory&#34;)
+        and pe.imports(&#34;kernel32.dll&#34;, &#34;CreateRemoteThread&#34;)
+}
+						</pre>
+						<p>Common PE module fields:</p>
+						<pre class="yara">
+pe.is_32bit()           // true if PE32
+pe.is_64bit()           // true if PE64
+pe.is_dll()             // true if DLL
+pe.number_of_sections   // section count
+pe.entry_point          // raw (file) entry point offset
+pe.machine              // IMAGE_FILE_MACHINE_*
+pe.subsystem            // IMAGE_SUBSYSTEM_*
+pe.timestamp            // PE compilation timestamp (epoch)
+
+pe.sections[i].name
+pe.sections[i].raw_data_offset
+pe.sections[i].raw_data_size
+pe.sections[i].virtual_size
+pe.sections[i].characteristics  // section flags
+
+math.entropy(offset, size)      // Shannon entropy, bits per byte
+
+pe.imports(dll, function)       // count of imports from dll-&gt;function
+pe.exports(function)            // count of exports by function name
+
+pe.imphash()                    // import hash (ignoring ordinal order)
+pe.rich_signature               // raw rich signature data
+
+pe.data_directories             // array of IMAGE_DATA_DIRECTORY
+						</pre>
+					</section>
+					<section>
+						<h3 id="elf-module">ELF Module</h3>
+						<pre class="yara">
+import &#34;elf&#34;
+
+rule Suspicious_ELF_Binary
+{
+    condition:
+        // Statically linked - common in malware to avoid dependency issues
+        elf.type == elf.ET_EXEC
+
+        // No dynamic symbol table - stripped binary
+        and not elf.dynamic_section_entries
+
+        // Write+Execute segment - shellcode, JIT, or unpacking stub
+        and for any i in (0..elf.number_of_segments - 1) : (
+            elf.segments[i].flags &amp; elf.PF_W and
+            elf.segments[i].flags &amp; elf.PF_X
+        )
+
+        // Suspicious segment offset (packed binary)
+        and elf.entry_point &gt; elf.segments[elf.number_of_segments - 1].offset
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="scanning-with-yara">Scanning with YARA</h3>
+						<pre class="bash">
+# Install on ArchLinux
+sudo pacman -S yara
+
+# Scan a single file
+yara my_rule.yar suspicious.exe
+
+# Scan a directory recursively
+yara -r my_rule.yar /mnt/forensic_image/
+
+# Scan with multiple rule files
+yara rules/malware/*.yar /path/to/scan/
+
+# Compile rules for faster scanning (large scans)
+yarac my_rule.yar my_rule.compiled
+yara -C my_rule.compiled /path/to/scan/
+
+# Print matching strings and their offsets
+yara -s my_rule.yar sample.exe
+
+# Output in JSON for automation
+yara -j my_rule.yar sample.exe
+
+# Timeout after N seconds per file (avoid hanging on large files)
+yara -a 30 my_rule.yar /path/to/scan/
+
+# Scan process memory (Linux)
+yara my_rule.yar /proc/1234/mem
+
+# Recursive scan, skip files larger than 100MB
+yara -r --max-filesize=100MB my_rule.yar /path/
+						</pre>
+					</section>
+					<section>
+						<h3 id="yargen-rule-generation">yarGen Rule Generation</h3>
+						<p>
+							yarGen generates
+							<abbr title="Yet Another Recursive Acronym">YARA</abbr>
+							rules from malware samples by extracting
+							unique strings and selecting those with low false positive probability against a "goodware"
+							database.
+						</p>
+						<pre class="bash">
+# Install
+git clone https://github.com/Neo23x0/yarGen.git
+cd yarGen
+pip install -r requirements.txt
+
+# Download a goodware string database
+python yarGen.py --update
+
+# Generate a rule from a malware sample
+python yarGen.py -m /path/to/malware_sample.exe -o output.yar
+
+# Generate rules from a directory of samples (one rule per family)
+python yarGen.py -m /path/to/malware_samples/ -o output_rules/
+
+# Exclude known strings to reduce false positives
+python yarGen.py -m sample.exe --excludegood -o output.yar
+						</pre>
+						<p>
+							Treat yarGen-generated rules as a starting point. Always review and refine them by hand, because
+							the tool may select strings shared with benign software.
+						</p>
+					</section>
+					<section>
+						<h3 id="rules-for-malware-families">Rules for Malware Families</h3>
+						<h4 id="web-shell-php">Web Shell - PHP</h4>
+						<pre class="yara">
+rule Webshell_PHP_Generic
+{
+    meta:
+        description = &#34;Detects common PHP webshell patterns&#34;
+        severity = &#34;HIGH&#34;
+
+    strings:
+        $func_eval    = &#34;eval(&#34; ascii nocase
+        $func_assert  = &#34;assert(&#34; ascii nocase
+        $func_system  = &#34;system(&#34; ascii nocase
+        $func_exec    = &#34;exec(&#34; ascii nocase
+        $func_passthru = &#34;passthru(&#34; ascii nocase
+        $func_shell   = &#34;shell_exec(&#34; ascii nocase
+        $func_popen   = &#34;popen(&#34; ascii nocase
+
+        $var_request  = &#34;$_REQUEST&#34; ascii nocase
+        $var_post     = &#34;$_POST&#34; ascii nocase
+        $var_get      = &#34;$_GET&#34; ascii nocase
+
+        $b64_decode   = &#34;base64_decode&#34; ascii nocase
+        $gz_inflate   = &#34;gz&#34; ascii nocase
+
+    condition:
+        (any of ($func_*) and any of ($var_*))
+        or ($b64_decode and $gz_inflate)
+        or (filesize &lt; 5KB and #func_eval &gt; 0 and #var_request &gt; 0)
+}
+						</pre>
+						<h4 id="ransomware-common-patterns">Ransomware Common Patterns</h4>
+						<pre class="yara">
+rule Ransomware_Generic_File_Operations
+{
+    meta:
+        description = &#34;Detects generic ransomware file operation patterns&#34;
+
+    strings:
+        $crypto_api_a = &#34;CryptAcquireContext&#34; ascii wide
+        $crypto_api_b = &#34;CryptEncrypt&#34; ascii wide
+        $crypto_api_c = &#34;CryptGenRandom&#34; ascii wide
+
+        $file_enum_a  = &#34;FindFirstFile&#34; ascii wide
+        $file_enum_b  = &#34;FindNextFile&#34; ascii wide
+
+        $shadow_a     = &#34;vssadmin&#34; ascii wide nocase
+
+        $ext_rgx = /\.(encrypted|locked|crypto|enc|locky|wncry|crypt|zzz)\x00/i
+
+    condition:
+        (2 of ($crypto_api_*) and 2 of ($file_enum_*))
+        or (any of ($crypto_api_*) and $shadow_a)
+        or (any of ($crypto_api_*) and $ext_rgx)
+}
+						</pre>
+						<h4 id="c2-beacon-detection">C2 Beacon Detection</h4>
+						<pre class="yara">
+rule C2_Beacon_HTTP_Pattern
+{
+    meta:
+        description = &#34;Detects HTTP-based C2 beacon patterns in binaries&#34;
+
+    strings:
+        $useragent_a = &#34;Mozilla/5.0&#34; ascii wide
+
+        $sleep_pattern = { B8 [4] 50 E8 [4] 83 C4 04 }  // mov eax, ms; push; call sleep
+
+        $b64_re = /[A-Za-z0-9+\/=]{100,}/  // long base64 strings
+
+        $uri_template = &#34;/api/v1/%s/%s/%s&#34; ascii wide
+
+    condition:
+        $useragent_a
+        and (2 of ($sleep_pattern, $b64_re, $uri_template))
+        and filesize &lt; 2MB
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="performance-optimization">Performance Optimization</h3>
+						<ol>
+							<li><b>Anchor strings</b> : Prefer strings at fixed, known offsets (like PE entry point code) over generic strings that may match anywhere.</li>
+						</ol>
+						<ol>
+							<li><b>Avoid broad regex</b> : <code>/.*/</code> and unanchored regex are pathologically slow. Always include specific characters or length bounds.</li>
+						</ol>
+						<ol>
+							<li><b>Use 'filesize' as first condition</b> : <abbr title="Yet Another Recursive Acronym">YARA</abbr> evaluates conditions left-to-right with short-circuit. <code>filesize &lt; 5MB and &lt;expensive check&gt;</code> avoids running expensive checks on large files.</li>
+						</ol>
+						<ol>
+							<li><b>Order strings by rarity</b> : Place the least common string first in the condition. <abbr title="Yet Another Recursive Acronym">YARA</abbr> stops scanning a file as soon as a condition resolves.</li>
+						</ol>
+						<ol>
+							<li><b>Limit hex jumps</b> : <code>[4-]</code> with no upper bound forces the scanner to search the entire remainder of the file. Prefer bounded jumps: <code>[4-256]</code> .</li>
+						</ol>
+						<ol>
+							<li><b>Combine conditions with all of/any of</b> : <abbr title="Yet Another Recursive Acronym">YARA</abbr> can optimize these better than explicit <code>and</code> / <code>or</code> chains.</li>
+						</ol>
+						<ol>
+							<li><b>Pre-compile rules</b> : <code>yarac</code> pre-processes strings into an optimized Aho-Corasick automaton. Always compile rules for production scanning.</li>
+						</ol>
+						<pre class="bash">
+# Compile ruleset for production
+yarac rules/production/*.yar production_rules.compiled
+
+# Fast production scan
+yara -C production_rules.compiled -r --fail-on-warnings /scan/target/
+						</pre>
+					</section>
+					<section>
+						<h3 id="yara-integration">YARA Integration</h3>
+						<h4 id="osquery">osquery</h4>
+						<p>
+							Endpoint visibility with
+							<abbr title="Yet Another Recursive Acronym">YARA</abbr>
+							support:
+						</p>
+						<pre class="sql">
+-- Scan every running process memory with a YARA rule
+SELECT pid, name, path
+FROM processes
+WHERE pid IN (
+    SELECT pid FROM yara
+    WHERE path = &#39;/etc/osquery/yara/cobalt_strike.yar&#39;
+      AND count &gt; 0
+);
+
+-- Scan specific directory for malware
+SELECT path, matches
+FROM yara
+WHERE path LIKE &#39;/var/www/html/%%&#39;
+  AND sigfile = &#39;/etc/osquery/yara/webshells.yar&#39;
+  AND count &gt; 0;
+						</pre>
+						<h4 id="clamav">ClamAV</h4>
+						<p>
+							ClamAV can load
+							<abbr title="Yet Another Recursive Acronym">YARA</abbr>
+							rules natively when it is built with
+							<abbr title="Yet Another Recursive Acronym">YARA</abbr>
+							support. Place the
+							<code>.yar</code>
+							files in the ClamAV database directory and restart the daemon:
+						</p>
+						<pre class="bash">
+# Copy YARA rules into the ClamAV database directory
+sudo cp rule.yar /var/lib/clamav/
+
+# Restart so ClamAV compiles the new signatures
+sudo systemctl restart clamav-daemon
+						</pre>
+						<h4 id="loki">Loki</h4>
+						<p>
+							Loki is an
+							<abbr title="Indicator of Compromise">IOC</abbr>
+							scanner with
+							<abbr title="Yet Another Recursive Acronym">YARA</abbr>
+							integration:
+						</p>
+						<pre class="bash">
+# Scan with Loki (includes built-in YARA rules + custom rules)
+git clone https://github.com/Neo23x0/Loki.git
+cd Loki
+python loki.py --yara /path/to/custom/rules/
+						</pre>
+					</section>
+					<section>
+						<h3 id="rule-repository-layout">Rule Repository Layout</h3>
+						<pre class="bash">
+rules/
+├── ransomware/
+│   ├── conti.yar
+│   ├── lockbit.yar
+│   └── generic_file_encryption.yar
+├── rat/
+│   ├── cobalt_strike.yar
+│   ├── njrat.yar
+│   └── asyncrat.yar
+├── webshell/
+│   ├── php_generic.yar
+│   ├── asp_net.yar
+│   └── jsp_malicious.yar
+├── linux_malware/
+│   ├── mirai_variants.yar
+│   └── rootkit_generic.yar
+├── exploits/
+│   └── cve_2021_*.yar
+├── generic/
+│   ├── packer_detection.yar
+│   ├── crypto_usage.yar
+│   └── anti_analysis.yar
+└── compiled/
+    └── production_set.compiled
+						</pre>
+					</section>
+					<section>
+						<h3 id="testing-yara-rules">Testing YARA Rules</h3>
+						<pre class="bash">
+# Create positive test (malicious sample)
+echo &#39;&lt;?php eval($_POST[&#34;cmd&#34;]); ?&gt;&#39; &gt; /tmp/test_webshell.php
+
+# Create negative test (benign file)
+echo &#39;&lt;?php echo &#34;Hello World&#34;; ?&gt;&#39; &gt; /tmp/test_benign.php
+
+# Test: positive should match, negative should not
+yara rules/webshell/php_generic.yar /tmp/test_webshell.php
+# Expected output: Webshell_PHP_Generic /tmp/test_webshell.php
+
+yara rules/webshell/php_generic.yar /tmp/test_benign.php
+# Expected output: (nothing - no match)
+
+# Automated test script
+#!/bin/bash
+echo &#34;=== Running YARA rule tests ===&#34;
+PASS=0; FAIL=0
+for rule in rules/**/*.yar; do
+    baserule=$(basename &#34;$rule&#34;)
+    testdir=&#34;tests/${baserule%.yar}&#34;
+
+    if [ -d &#34;$testdir/positive&#34; ]; then
+        for sample in &#34;$testdir/positive/&#34;*; do
+            if yara &#34;$rule&#34; &#34;$sample&#34; &gt; /dev/null; then
+                ((PASS++)); echo &#34;PASS: $baserule matches $sample&#34;
+            else
+                ((FAIL++)); echo &#34;FAIL: $baserule does NOT match $sample (positive test)&#34;
+            fi
+        done
+    fi
+
+    if [ -d &#34;$testdir/negative&#34; ]; then
+        for sample in &#34;$testdir/negative/&#34;*; do
+            if yara &#34;$rule&#34; &#34;$sample&#34; &gt; /dev/null; then
+                ((FAIL++)); echo &#34;FAIL: $baserule MATCHES $sample (false positive)&#34;
+            else
+                ((PASS++)); echo &#34;PASS: $baserule correctly ignores $sample&#34;
+            fi
+        done
+    fi
+done
+echo &#34;Results: $PASS passed, $FAIL failed&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Build the container and work through the bundled exercises. It ships with template rules, a
+							malicious
+							<code>PHP</code>
+							webshell, a benign contact form, and a generated ransomware sample so you can
+							write a rule, scan it, and validate that it does not fire on clean files.
+						</p>
+						<p><a href="/wiki/articles/blueteam/yara.Containerfile">yara.Containerfile</a></p>
+						<pre class="bash">
+podman build -t yara-lab -f yara.Containerfile .
+podman run -it --rm yara-lab
+						</pre>
+						<p>Inside the container:</p>
+						<ul>
+							<li><code>/opt/exercise/samples/</code> - malicious and benign test files</li>
+							<li><code>/opt/exercise/rules/</code> - template and pre-built rules</li>
+							<li><code>/opt/exercise/run_exercises.sh</code> - automated validation script</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://yara.readthedocs.io/" target="_blank">YARA Documentation</a></li>
+							<li><a class="icon-github" href="https://github.com/Yara-Rules/rules" target="_blank">YARA Rules Repository</a></li>
+							<li><a class="icon-github" href="https://github.com/Neo23x0/yarGen" target="_blank">yarGen</a></li>
+							<li><a class="icon-github" href="https://github.com/Neo23x0/Loki" target="_blank">Loki Scanner</a></li>
+							<li><a class="icon-website" href="https://osquery.io/schema/current/#yara" target="_blank">osquery YARA Integration</a></li>
+							<li><a href="/wiki/articles/blueteam/yara.Containerfile">yara.Containerfile - YARA Detection Lab</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

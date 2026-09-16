@@ -1,0 +1,1491 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>TCP Fingerprinting | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="TCP Fingerprinting">
+		<meta name="keywords" content="ja3, ja4, nmap, os-detection, p0f, passive-recon, tcp-fingerprinting, tcp-options, techniques">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="TCP Fingerprinting">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Passive and active OS detection through TCP/IP stack analysis - TTL, window size, option ordering, ISN generation, and cross-protocol fingerprinting techniques.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/fundamentals/tcp-fingerprinting.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="TCP Fingerprinting">
+		<meta name="twitter:description" itemprop="description" content="Passive and active OS detection through TCP/IP stack analysis - TTL, window size, option ordering, ISN generation, and cross-protocol fingerprinting techniques.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#what-tcp-fingerprinting-is">What TCP Fingerprinting Is</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#why-fingerprinting-works">Why Fingerprinting Works</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#osi-layers-used-for-fingerprinting">OSI Layers Used for Fingerprinting</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#passive-fingerprinting">Passive Fingerprinting</a></b>
+					<ul>
+						<li><a href="#initial-ttl-analysis">Initial TTL Analysis</a></li>
+						<li><a href="#how-ttl-fingerprinting-works-in-practice">How TTL fingerprinting works in practice</a></li>
+						<li><a href="#tcp-window-size">TCP Window Size</a></li>
+						<li><a href="#tcp-option-ordering">TCP Option Ordering</a></li>
+						<li><a href="#dont-fragment-df-bit">Don't Fragment (DF) Bit</a></li>
+						<li><a href="#timestamp-behavior">Timestamp Behavior</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#p0f-passive-os-fingerprinting-tool">p0f - Passive OS Fingerprinting Tool</a></b>
+					<ul>
+						<li><a href="#reading-p0f-signatures">Reading p0f signatures</a></li>
+						<li><a href="#example-breakdown">Example Breakdown</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#active-fingerprinting">Active Fingerprinting</a></b>
+					<ul>
+						<li><a href="#nmap-os-detection-o">nmap OS Detection ( -O )</a></li>
+						<li><a href="#nmap-os-detection-output">nmap OS detection output</a></li>
+						<li><a href="#the-probes-nmap-sends-for-os-detection">The probes nmap sends for OS detection</a></li>
+						<li><a href="#syn-probe">SYN Probe</a></li>
+						<li><a href="#null-probe">NULL Probe</a></li>
+						<li><a href="#fin-probe">FIN Probe</a></li>
+						<li><a href="#tcp-options-probe">TCP Options Probe</a></li>
+						<li><a href="#isn-initial-sequence-number-analysis">ISN (Initial Sequence Number) Analysis</a></li>
+						<li><a href="#ip-id-analysis">IP ID Analysis</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#common-os-fingerprint-table">Common OS Fingerprint Table</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#fingerprint-evasion">Fingerprint Evasion</a></b>
+					<ul>
+						<li><a href="#changing-ttl">Changing TTL</a></li>
+						<li><a href="#modifying-tcp-window-and-options">Modifying TCP Window and Options</a></li>
+						<li><a href="#vpn-based-fingerprint-concealment">VPN-Based Fingerprint Concealment</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#nac-bypass-via-fingerprint-manipulation">NAC Bypass via Fingerprint Manipulation</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ja3-and-ja4-tls-fingerprinting">JA3 and JA4 TLS Fingerprinting</a></b>
+					<ul>
+						<li><a href="#common-ja3-fingerprints">Common JA3 fingerprints</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tcp-fingerprint-analyzer-in-python">TCP Fingerprint Analyzer in Python</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/fundamentals/index.html">Fundamentals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/fundamentals/tcp-fingerprinting.html">Tcp Fingerprinting</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="tcp-fingerprinting">TCP Fingerprinting</h2>
+					<p>
+						Passive and active OS detection through
+						<abbr title="Transmission Control Protocol">TCP</abbr>
+						/
+						<abbr title="Internet Protocol">IP</abbr>
+						stack analysis -
+						<abbr title="Time To Live">TTL</abbr>
+						, window size, option ordering, ISN generation, and cross-protocol
+						fingerprinting techniques.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Every operating system implements its
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							/
+							<abbr title="Internet Protocol">IP</abbr>
+							stack a little differently: a different default
+							<abbr title="Time To Live">TTL</abbr>
+							, initial window size, option
+							order, and reset policy. Those differences leak the remote OS without any application banner.
+							This article covers passive fingerprinting from captured
+							<abbr title="Synchronize">SYN</abbr>
+							packets, active
+							probing with nmap and crafted packets, the p0f signature format, and
+							<abbr title="Transport Layer Security">TLS</abbr>
+							ClientHello fingerprinting with JA3 and JA4. By the end you can identify a stack from a packet
+							capture and explain which fields give it away.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/tcp.html">TCP</a> - <abbr title="Transmission Control Protocol">TCP</abbr> flags, handshake, state machine, options, window scaling</li>
+							<li><a href="/wiki/articles/fundamentals/network-scanning.html">Network Scanning</a> - active probing with nmap</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="what-tcp-fingerprinting-is">What TCP Fingerprinting Is</h3>
+						<p>
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							fingerprinting identifies an operating system by analyzing
+							subtle differences in how its
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							/
+							<abbr title="Internet Protocol">IP</abbr>
+							stack implements the protocol. RFC 793 defines
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							behavior,
+							but it leaves implementation details to each vendor: what
+							<abbr title="Time To Live">TTL</abbr>
+							value to use,
+							what window size to set, what order to arrange
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							options,
+							how to generate sequence numbers, and how to respond to ambiguous or invalid packets.
+						</p>
+						<p>
+							Each OS makes different choices. These choices form a unique signature - a fingerprint - that
+							persists regardless of what application is running or what user is logged in.
+						</p>
+					</section>
+					<section>
+						<h3 id="why-fingerprinting-works">Why Fingerprinting Works</h3>
+						<p>
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							/
+							<abbr title="Internet Protocol">IP</abbr>
+							is a specification, not a reference
+							implementation. The RFC describes a protocol, but every vendor writes their own implementation.
+							The RFC says:
+						</p>
+						<ul>
+							<li>"The window size should be set based on available buffer space." Each OS picks a different default.</li>
+							<li>"A <abbr title="Transmission Control Protocol">TCP</abbr> MAY implement timestamps." Some do, some don't.</li>
+							<li>"If the port is closed, respond with RST." But what about a packet with no flags set? The RFC is ambiguous. Windows sends RST; Linux drops it silently.</li>
+							<li>"The initial <abbr title="Time To Live">TTL</abbr> MUST be configurable." Each OS ships with a different default.</li>
+						</ul>
+						<p>
+							These implementation decisions are not bugs - they are engineering trade-offs that happen to
+							create an identifiable signature.
+						</p>
+					</section>
+					<section>
+						<h3 id="osi-layers-used-for-fingerprinting">OSI Layers Used for Fingerprinting</h3>
+						<pre class="plaintext">
+Layer 2 (Link):  MAC address OUI -&gt; hardware vendor (not OS-specific, easily spoofed)
+Layer 3 (IP):    Initial TTL, IP ID generation, DF bit, fragment handling
+Layer 4 (TCP):   Window size, option ordering, ISN generation, RST/FIN behavior,
+                 timestamp behavior, ECN support
+Layer 7 (TLS):   JA3/JA4 - ClientHello cipher suites, extensions, elliptic curves
+						</pre>
+					</section>
+					<section>
+						<h3 id="passive-fingerprinting">Passive Fingerprinting</h3>
+						<p>
+							Passive fingerprinting works by monitoring traffic that the target naturally generates. A
+							<abbr title="Synchronize">SYN</abbr>
+							packet sent by a web browser to a web server reveals the client OS. A
+							<abbr title="Synchronize">SYN</abbr>
+							-ACK
+							returned by a server reveals the server OS. No additional packets are sent - the fingerprint
+							is extracted from normal traffic.
+						</p>
+						<h4 id="initial-ttl-analysis">Initial TTL Analysis</h4>
+						<p>
+							The
+							<abbr title="Time To Live">TTL</abbr>
+							(Time To Live) field in the
+							<abbr title="Internet Protocol">IP</abbr>
+							header is decremented
+							by each router that forwards the packet. The initial
+							<abbr title="Time To Live">TTL</abbr>
+							is the value set by
+							the sending OS before the packet enters the network.
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">OS</th>
+									<th align="center">IPv4 Initial TTL</th>
+									<th align="center">IPv6 Hop Limit</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Linux (kernel 2.4+)</td>
+									<td align="center">64</td>
+									<td align="center">64</td>
+								</tr>
+								<tr>
+									<td align="center">FreeBSD</td>
+									<td align="center">64</td>
+									<td align="center">64</td>
+								</tr>
+								<tr>
+									<td align="center">OpenBSD</td>
+									<td align="center">64</td>
+									<td align="center">64</td>
+								</tr>
+								<tr>
+									<td align="center">macOS</td>
+									<td align="center">64</td>
+									<td align="center">64</td>
+								</tr>
+								<tr>
+									<td align="center">Solaris</td>
+									<td align="center">255</td>
+									<td align="center">255</td>
+								</tr>
+								<tr>
+									<td align="center">Cisco IOS</td>
+									<td align="center">255</td>
+									<td align="center">64</td>
+								</tr>
+								<tr>
+									<td align="center">Windows 95/98/ME</td>
+									<td align="center">32</td>
+									<td align="center">-</td>
+								</tr>
+								<tr>
+									<td align="center">Windows NT/2000/XP</td>
+									<td align="center">128</td>
+									<td align="center">128</td>
+								</tr>
+								<tr>
+									<td align="center">Windows Vista/7/8/10/11</td>
+									<td align="center">128</td>
+									<td align="center">128</td>
+								</tr>
+								<tr>
+									<td align="center">Android</td>
+									<td align="center">64</td>
+									<td align="center">64</td>
+								</tr>
+								<tr>
+									<td align="center">iOS</td>
+									<td align="center">64</td>
+									<td align="center">64</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="how-ttl-fingerprinting-works-in-practice">How TTL fingerprinting works in practice</h4>
+						<p>
+							When you receive a packet, the
+							<abbr title="Time To Live">TTL</abbr>
+							you see is the
+							<em>remaining</em>
+							
+							<abbr title="Time To Live">TTL</abbr>
+							<ul>
+								<li>the initial value minus the number of hops traversed. To identify the OS, you guess the</li>
+							</ul>
+							initial
+							<abbr title="Time To Live">TTL</abbr>
+							by rounding up:
+						</p>
+						<pre class="bash">
+# Received TTL: 51
+# Possible initial TTLs: 64 (13 hops), 128 (77 hops), 255 (204 hops)
+# 13 hops is plausible -&gt; Linux/BSD/macOS
+# 77 hops is unlikely -&gt; probably not Windows
+# 204 hops is impossible -&gt; definitely not Solaris
+
+# Check hops with traceroute
+traceroute -n 192.168.1.42
+# Count the hops -&gt; if 1 hop: received TTL 63 -&gt; initial TTL 64 -&gt; Linux/BSD
+# Count the hops -&gt; if 15 hops: received TTL 113 -&gt; initial TTL 128 -&gt; Windows
+						</pre>
+						<pre class="bash">
+# Extract TTL from a captured SYN packet
+sudo tcpdump -i eth0 -nn -v &#39;tcp[tcpflags] &amp; tcp-syn == tcp-syn&#39; 2&gt;&amp;1 | head -5
+# Look for: IP (tos 0x0, ttl 64, id 12345, ...)
+
+# Use tshark for TTL extraction
+sudo tshark -i eth0 -T fields -e ip.src -e ip.ttl -e tcp.window_size \
+    &#39;tcp.flags.syn == 1 and tcp.flags.ack == 0&#39;
+						</pre>
+						<h4 id="tcp-window-size">TCP Window Size</h4>
+						<p>
+							The initial window size in the
+							<abbr title="Synchronize">SYN</abbr>
+							packet is not negotiated - it is set by the
+							OS based on available buffer space. Each OS has a characteristic default.
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">OS</th>
+									<th align="center">Window Size</th>
+									<th align="center">Notes</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Linux 2.4-2.6</td>
+									<td align="center">5840</td>
+									<td align="center">Classic Linux</td>
+								</tr>
+								<tr>
+									<td align="center">Linux 3.x-5.x</td>
+									<td align="center">29200</td>
+									<td align="center">Default<code>tcp_rmem[1]</code>= 87380 (scaled) -> base window</td>
+								</tr>
+								<tr>
+									<td align="center">Linux 6.x</td>
+									<td align="center">65535</td>
+									<td align="center">Full 16-bit window, scaled by wscale</td>
+								</tr>
+								<tr>
+									<td align="center">Windows XP</td>
+									<td align="center">65535</td>
+									<td align="center">Always max 16-bit window</td>
+								</tr>
+								<tr>
+									<td align="center">Windows 7</td>
+									<td align="center">8192</td>
+									<td align="center">Smaller initial window</td>
+								</tr>
+								<tr>
+									<td align="center">Windows 10/11</td>
+									<td align="center">65535</td>
+									<td align="center">With wscale 8 -> effective 16 MB</td>
+								</tr>
+								<tr>
+									<td align="center">macOS</td>
+									<td align="center">65535</td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center">iOS</td>
+									<td align="center">65535</td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center">FreeBSD</td>
+									<td align="center">65535</td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center">OpenBSD</td>
+									<td align="center">16384</td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center">Android</td>
+									<td align="center">65535</td>
+									<td align="center">Different option ordering from iOS</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Extract window size from captured SYN
+sudo tcpdump -i eth0 -nn -v &#39;tcp[tcpflags] &amp; tcp-syn == tcp-syn&#39; 2&gt;&amp;1 | \
+    grep -oP &#39;wscale \d+&#39; | head -20
+
+# Using tshark for window + wscale
+sudo tshark -i eth0 -T fields \
+    -e ip.src -e ip.ttl -e tcp.window_size -e tcp.window_size_scalefactor \
+    -e tcp.options \
+    &#39;tcp.flags.syn == 1 and tcp.flags.ack == 0&#39;
+						</pre>
+						<h4 id="tcp-option-ordering">TCP Option Ordering</h4>
+						<p>
+							The order of
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							options in the
+							<abbr title="Synchronize">SYN</abbr>
+							packet is
+							an OS fingerprint.
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							options appear in the
+							<abbr title="Synchronize">SYN</abbr>
+							packet after the 20-byte fixed header. The order of
+							<abbr title="Maximum Segment Size">MSS</abbr>
+							, Window Scale,
+							SACK-Permitted, Timestamps, and NOP (padding) varies by OS.
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">OS</th>
+									<th align="center">Option Order</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Linux 2.4</td>
+									<td align="center">MSS, SACK, Timestamp, NOP, Window Scale</td>
+								</tr>
+								<tr>
+									<td align="center">Linux 2.6-6.x</td>
+									<td align="center">MSS, SACK, Timestamp, NOP, Window Scale</td>
+								</tr>
+								<tr>
+									<td align="center">Windows XP</td>
+									<td align="center">MSS, NOP, Window Scale, NOP, NOP, SACK</td>
+								</tr>
+								<tr>
+									<td align="center">Windows 7</td>
+									<td align="center">MSS, NOP, Window Scale, NOP, NOP, Timestamp, SACK</td>
+								</tr>
+								<tr>
+									<td align="center">Windows 10/11</td>
+									<td align="center">MSS, NOP, Window Scale, SACK, NOP, Timestamp</td>
+								</tr>
+								<tr>
+									<td align="center">macOS 10.x</td>
+									<td align="center">MSS, NOP, Window Scale, NOP, NOP, Timestamp, SACK</td>
+								</tr>
+								<tr>
+									<td align="center">FreeBSD</td>
+									<td align="center">MSS, NOP, Window Scale, SACK, Timestamp</td>
+								</tr>
+								<tr>
+									<td align="center">OpenBSD</td>
+									<td align="center">MSS, Window Scale, SACK, Timestamp</td>
+								</tr>
+								<tr>
+									<td align="center">Android 8+</td>
+									<td align="center">MSS, SACK, Timestamp, NOP, Window Scale</td>
+								</tr>
+								<tr>
+									<td align="center">iOS</td>
+									<td align="center">MSS, NOP, Window Scale, NOP, NOP, Timestamp, SACK</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							<b>Why option ordering differs:</b>
+							
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							options are TLVs - they
+							carry their own length. An implementation that parses options sequentially in a loop will handle
+							any order. But the order an OS sends them reveals the order in which the kernel code initializes
+							the
+							<abbr title="Synchronize">SYN</abbr>
+							packet's option array. This is a pure implementation artifact.
+						</p>
+						<h4 id="dont-fragment-df-bit">Don't Fragment (DF) Bit</h4>
+						<p>
+							The DF bit in the
+							<abbr title="Internet Protocol">IP</abbr>
+							header tells routers not to fragment the packet. Some
+							OSes set DF by default on
+							<abbr title="Synchronize">SYN</abbr>
+							packets (used for Path MTU Discovery), others don't.
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">OS</th>
+									<th align="center">DF on SYN</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Linux</td>
+									<td align="center">Yes</td>
+								</tr>
+								<tr>
+									<td align="center">Windows Vista+</td>
+									<td align="center">Yes</td>
+								</tr>
+								<tr>
+									<td align="center">macOS</td>
+									<td align="center">Yes</td>
+								</tr>
+								<tr>
+									<td align="center">FreeBSD</td>
+									<td align="center">Yes</td>
+								</tr>
+								<tr>
+									<td align="center">OpenBSD</td>
+									<td align="center">No</td>
+								</tr>
+								<tr>
+									<td align="center">Windows XP</td>
+									<td align="center">No</td>
+								</tr>
+								<tr>
+									<td align="center">Solaris</td>
+									<td align="center">No</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="timestamp-behavior">Timestamp Behavior</h4>
+						<p>
+							Every OS that supports
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							timestamps increments the timestamp
+							value differently:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">OS</th>
+									<th align="center">Timestamp Increment</th>
+									<th align="center">Pattern</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Linux</td>
+									<td align="center">Clock frequency (varies)</td>
+									<td align="center">Increases by Hz value (100-1000/sec)</td>
+								</tr>
+								<tr>
+									<td align="center">Windows</td>
+									<td align="center">~10 ms</td>
+									<td align="center">Increases by~100/sec</td>
+								</tr>
+								<tr>
+									<td align="center">macOS</td>
+									<td align="center">Variable</td>
+									<td align="center">Tied to mach_absolute_time()</td>
+								</tr>
+								<tr>
+									<td align="center">FreeBSD</td>
+									<td align="center">Variable</td>
+									<td align="center">Tied to TCP tick (typically 500 Hz)</td>
+								</tr>
+								<tr>
+									<td align="center">OpenBSD</td>
+									<td align="center">0</td>
+									<td align="center">Timestamps present but always zero (older versions)</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Extract timestamp values from captured traffic
+sudo tcpdump -i eth0 -nn -v &#39;tcp[tcpflags] &amp; tcp-syn == 0&#39; 2&gt;&amp;1 | \
+    grep -oP &#39;TS val \d+&#39; | head -10
+
+# Calculate increment between consecutive packets
+sudo tshark -i eth0 -T fields -e tcp.options.timestamp.tsval \
+    &#39;tcp.flags.syn == 0&#39; | \
+    awk &#39;NR&gt;1 {print $1 - prev} {prev=$1}&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="p0f-passive-os-fingerprinting-tool">p0f - Passive OS Fingerprinting Tool</h3>
+						<p>
+							<code>p0f</code>
+							analyzes
+							<abbr title="Synchronize">SYN</abbr>
+							packets (v2 used
+							<abbr title="Synchronize">SYN</abbr>
+							-ACK; v3 uses
+							<abbr title="Synchronize">SYN</abbr>
+							) and matches them against a signature database.
+						</p>
+						<pre class="bash">
+# Install p0f on ArchLinux
+sudo pacman -S p0f
+
+# Run p0f on an interface (passive mode - no packets sent)
+sudo p0f -i eth0
+
+# Read from a pcap file
+sudo p0f -r capture.pcap
+
+# Output format and signature database
+cat /usr/share/p0f/p0f.fp | head -50
+
+# p0f output example:
+# .-[ 192.168.1.42/49210 -&gt; 10.0.0.1/443 (syn) ]-
+# |
+# | client   = 192.168.1.42/49210
+# | os       = Linux 3.11 and newer
+# | dist     = 0
+# | params   = generic fuzzy
+# | raw_sig  = 4:64+0:0:1460:mss*20,7:mss,sok,ts,nop,ws:df,id+:0
+						</pre>
+						<h4 id="reading-p0f-signatures">Reading p0f signatures</h4>
+						<pre class="plaintext">
+raw_sig = ver:ittl:olen:mss:wsize,scale:olayout:quirks:pclass
+
+  ver         - IP version (4 or 6)
+  ittl        - initial TTL (observed TTL + distance, for example 64+0)
+  olen        - IP options or IPv6 extension header length
+  mss         - maximum segment size
+  wsize,scale - window size and window scale factor
+  olayout     - option layout (for example mss,sok,ts,nop,ws)
+  quirks      - flags such as df or id+
+  pclass      - payload class
+						</pre>
+						<h4 id="example-breakdown">Example Breakdown</h4>
+						<p>
+							The signature
+							<code>4:64+0:0:1460:mss*20,7:mss,sok,ts,nop,ws:df,id+:0</code>
+							decodes as:
+						</p>
+						<ul>
+							<li><abbr title="Internet Protocol">IP</abbr> version 4</li>
+							<li>Initial <abbr title="Time To Live">TTL</abbr> 64 (distance 0)</li>
+							<li>0 bytes of <abbr title="Internet Protocol">IP</abbr> options</li>
+							<li><abbr title="Maximum Segment Size">MSS</abbr> 1460</li>
+							<li>Window 20 x <abbr title="Maximum Segment Size">MSS</abbr> = 29200 bytes, window scale factor 7</li>
+							<li>Option order: mss, sackOK, timestamp, NOP, window scale</li>
+							<li>Quirks: DF bit set, <abbr title="Internet Protocol">IP</abbr> ID non-zero</li>
+							<li>Payload class 0 (no payload)</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="active-fingerprinting">Active Fingerprinting</h3>
+						<p>
+							Active fingerprinting sends deliberately unusual or ambiguous packets and analyzes the target's
+							response. Each probe exploits a different area of RFC ambiguity.
+						</p>
+						<h4 id="nmap-os-detection-o">nmap OS Detection ( <code>-O</code> )</h4>
+						<p>
+							nmap's
+							<code>-O</code>
+							sends up to 16
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							/
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							/
+							<abbr title="Internet Control Message Protocol">ICMP</abbr>
+							probes and matches responses against a database
+							of over 2,600 OS signatures.
+						</p>
+						<pre class="bash">
+# OS detection (requires root for raw sockets)
+sudo nmap -O 192.168.1.42
+
+# Aggressive OS detection (guess even with low confidence)
+sudo nmap -O --osscan-guess 192.168.1.42
+
+# Limit OS detection to likely matches only
+sudo nmap -O --osscan-limit 192.168.1.42
+
+# Combined with service detection for higher accuracy
+sudo nmap -O -sV 192.168.1.42
+
+# Full verbose OS fingerprint output
+sudo nmap -O -v 192.168.1.42
+						</pre>
+						<h4 id="nmap-os-detection-output">nmap OS detection output</h4>
+						<pre class="plaintext">
+OS details: Linux 5.4 - 5.11
+OS CPE: cpe:/o:linux:linux_kernel:5.4
+OS CPE: cpe:/o:linux:linux_kernel:5.10
+OS CPE: cpe:/o:linux:linux_kernel:5.11
+						</pre>
+						<p>
+							nmap shows the kernel version range when it can't pinpoint the exact version - many Linux kernel
+							versions produce identical
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							fingerprints because the
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							stack hasn't changed between them.
+						</p>
+						<h4 id="the-probes-nmap-sends-for-os-detection">The probes nmap sends for OS detection</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">#</th>
+									<th align="center">Probe</th>
+									<th align="center">Purpose</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">1</td>
+									<td align="center">TCP SYN to open port</td>
+									<td align="center">Baseline: TTL, window, options, MSS</td>
+								</tr>
+								<tr>
+									<td align="center">2</td>
+									<td align="center">TCP NULL</td>
+									<td align="center">No flags set. Closed port RST analysis</td>
+								</tr>
+								<tr>
+									<td align="center">3</td>
+									<td align="center">TCP FIN+PSH+URG to open port</td>
+									<td align="center">Xmas tree. Open port behavior</td>
+								</tr>
+								<tr>
+									<td align="center">4</td>
+									<td align="center">TCP ACK to closed port</td>
+									<td align="center">Window value in RST</td>
+								</tr>
+								<tr>
+									<td align="center">5</td>
+									<td align="center">TCP SYN to closed port</td>
+									<td align="center">RST behavior</td>
+								</tr>
+								<tr>
+									<td align="center">6</td>
+									<td align="center">TCP ACK to open port</td>
+									<td align="center">Unfiltered ACK response</td>
+								</tr>
+								<tr>
+									<td align="center">7</td>
+									<td align="center">TCP window probe</td>
+									<td align="center">Window size in SYN-ACK</td>
+								</tr>
+								<tr>
+									<td align="center">8</td>
+									<td align="center">TCP ECN probe (CWR)</td>
+									<td align="center">ECN support</td>
+								</tr>
+								<tr>
+									<td align="center">9</td>
+									<td align="center">UDP to closed port</td>
+									<td align="center">ICMP Port Unreachable quoting</td>
+								</tr>
+								<tr>
+									<td align="center">10</td>
+									<td align="center">ICMP Echo</td>
+									<td align="center">Standard ping</td>
+								</tr>
+								<tr>
+									<td align="center">11</td>
+									<td align="center">ICMP Timestamp</td>
+									<td align="center">Timestamp reply</td>
+								</tr>
+								<tr>
+									<td align="center">12</td>
+									<td align="center">ICMP Address Mask</td>
+									<td align="center">Address mask reply</td>
+								</tr>
+								<tr>
+									<td align="center">13</td>
+									<td align="center">TCP options probe</td>
+									<td align="center">Specific option combinations, echo behavior</td>
+								</tr>
+								<tr>
+									<td align="center">14</td>
+									<td align="center">TCP sequence probe</td>
+									<td align="center">ISN generation analysis</td>
+								</tr>
+								<tr>
+									<td align="center">15</td>
+									<td align="center">TCP IP ID probe</td>
+									<td align="center">IP ID increment pattern</td>
+								</tr>
+								<tr>
+									<td align="center">16</td>
+									<td align="center">TCP explicit congestion notification</td>
+									<td align="center">ECN+CWR+ECE flags</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="syn-probe">SYN Probe</h4>
+						<p>
+							The most important probe. Send a
+							<abbr title="Synchronize">SYN</abbr>
+							to an open port, analyze the
+							<abbr title="Synchronize">SYN</abbr>
+							-ACK response:
+						</p>
+						<pre class="bash">
+# Manual SYN probe with nping
+sudo nping --tcp -p 80 --flags syn 192.168.1.42 -c 1
+
+# Capture and analyze the response
+sudo tcpdump -i eth0 -nn -v -c 1 &#39;src 192.168.1.42 and tcp[tcpflags] &amp; tcp-syn != 0 and tcp[tcpflags] &amp; tcp-ack != 0&#39;
+						</pre>
+						<h4 id="null-probe">NULL Probe</h4>
+						<p>
+							Send a packet with no
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							flags set. RFC 793 says: discard
+							silently (open) or RST (closed). Windows: always RST regardless of port state.
+						</p>
+						<pre class="bash">
+# Send NULL probe (no flags set)
+sudo hping3 -c 3 -s 12345 -p 80 192.168.1.42
+
+# Analysis: RST received -&gt; Windows, or closed port on any OS
+# Analysis: No response -&gt; Open port on Linux/BSD
+						</pre>
+						<h4 id="fin-probe">FIN Probe</h4>
+						<p>Send FIN to an open port. RFC 793 says: drop silently. Windows sends RST-ACK.</p>
+						<pre class="bash">
+# Send FIN probe
+sudo hping3 -c 3 -s 12345 -p 80 -F 192.168.1.42
+
+# RST-ACK response -&gt; Windows
+# No response -&gt; Linux, BSD, macOS
+						</pre>
+						<h4 id="tcp-options-probe">TCP Options Probe</h4>
+						<p>
+							Send a
+							<abbr title="Synchronize">SYN</abbr>
+							with unusual or unexpected
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							option
+							combinations to see which are echoed in the
+							<abbr title="Synchronize">SYN</abbr>
+							-ACK.
+						</p>
+						<pre class="bash">
+# Using scapy to craft a SYN with custom options
+sudo python3 &lt;&lt; &#39;EOF&#39;
+from scapy.all import IP, TCP, sr1
+
+# SYN with an unusual option (Kind 77, length 3, value 0xAAAA - nonexistent)
+pkt = IP(dst=&#34;192.168.1.42&#34;) / TCP(
+    dport=80, flags=&#34;S&#34;,
+    options=[(&#39;MSS&#39;, 1460), (77, b&#39;\xAA\xAA&#39;)]
+)
+response = sr1(pkt, timeout=2, verbose=False)
+if response and response.haslayer(TCP):
+    print(f&#34;Flags: {response[TCP].flags}&#34;)
+    print(f&#34;Options: {response[TCP].options}&#34;)
+    # Some OSes echo unknown options, others strip them, others ignore them
+EOF
+						</pre>
+						<h4 id="isn-initial-sequence-number-analysis">ISN (Initial Sequence Number) Analysis</h4>
+						<p>How the OS chooses the ISN reveals the PRNG algorithm:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">OS</th>
+									<th align="center">ISN Generation</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Linux 2.6+</td>
+									<td align="center">Random (MD5 hash of connection tuple + secret key)</td>
+								</tr>
+								<tr>
+									<td align="center">Windows XP</td>
+									<td align="center">Time-based increment (~250/ms)</td>
+								</tr>
+								<tr>
+									<td align="center">Windows 7+</td>
+									<td align="center">Random (RFC 6528 algorithm)</td>
+								</tr>
+								<tr>
+									<td align="center">FreeBSD 4-7</td>
+									<td align="center">Time-based increment</td>
+								</tr>
+								<tr>
+									<td align="center">FreeBSD 9+</td>
+									<td align="center">Random</td>
+								</tr>
+								<tr>
+									<td align="center">OpenBSD</td>
+									<td align="center">Random (arc4random)</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Sample ISNs over multiple connections
+for i in {1..10}; do
+    timeout 1 nc -z 192.168.1.42 80 2&gt;&amp;1 &amp;
+done
+# Capture with tcpdump and compare sequence numbers
+sudo tcpdump -i eth0 -nn -c 10 &#39;tcp[tcpflags] &amp; tcp-syn != 0 and tcp[tcpflags] &amp; tcp-ack != 0&#39;
+						</pre>
+						<h4 id="ip-id-analysis">IP ID Analysis</h4>
+						<p>
+							The
+							<abbr title="Internet Protocol">IP</abbr>
+							Identification field helps reassemble fragmented datagrams. Each
+							OS increments it differently:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">OS</th>
+									<th align="center">IP ID Behavior</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Windows</td>
+									<td align="center">Sequential (global counter, increments by 1 per packet)</td>
+								</tr>
+								<tr>
+									<td align="center">Linux 2.4-4.x</td>
+									<td align="center">Per-destination counter (increments per host)</td>
+								</tr>
+								<tr>
+									<td align="center">Linux 5.x+</td>
+									<td align="center">Per-destination counter (hashed bucket, not global)</td>
+								</tr>
+								<tr>
+									<td align="center">FreeBSD</td>
+									<td align="center">Random</td>
+								</tr>
+								<tr>
+									<td align="center">OpenBSD</td>
+									<td align="center">Random</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Sample IP IDs from target responses
+sudo tcpdump -i eth0 -nn -v -c 10 &#39;src 192.168.1.42&#39; 2&gt;&amp;1 | grep &#39;id &#39;
+# Sequential pattern (1,2,3,4...) -&gt; Windows
+# Random pattern -&gt; Linux/BSD
+						</pre>
+					</section>
+					<section>
+						<h3 id="common-os-fingerprint-table">Common OS Fingerprint Table</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Property</th>
+									<th align="center">Linux 5.x</th>
+									<th align="center">Linux 6.x</th>
+									<th align="center">Windows 10</th>
+									<th align="center">Windows 11</th>
+									<th align="center">macOS 13+</th>
+									<th align="center">FreeBSD 14</th>
+									<th align="center">iOS 17+</th>
+									<th align="center">Android 14</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">IPv4 TTL</td>
+									<td align="center">64</td>
+									<td align="center">64</td>
+									<td align="center">128</td>
+									<td align="center">128</td>
+									<td align="center">64</td>
+									<td align="center">64</td>
+									<td align="center">64</td>
+									<td align="center">64</td>
+								</tr>
+								<tr>
+									<td align="center">Window</td>
+									<td align="center">29200</td>
+									<td align="center">65535</td>
+									<td align="center">65535</td>
+									<td align="center">65535</td>
+									<td align="center">65535</td>
+									<td align="center">65535</td>
+									<td align="center">65535</td>
+									<td align="center">65535</td>
+								</tr>
+								<tr>
+									<td align="center">WScale</td>
+									<td align="center">7</td>
+									<td align="center">7</td>
+									<td align="center">8</td>
+									<td align="center">8</td>
+									<td align="center">3</td>
+									<td align="center">7</td>
+									<td align="center">3</td>
+									<td align="center">7</td>
+								</tr>
+								<tr>
+									<td align="center">MSS</td>
+									<td align="center">1460</td>
+									<td align="center">1460</td>
+									<td align="center">1460</td>
+									<td align="center">1460</td>
+									<td align="center">1460</td>
+									<td align="center">1460</td>
+									<td align="center">1460</td>
+									<td align="center">1460</td>
+								</tr>
+								<tr>
+									<td align="center">Option order</td>
+									<td align="center">M,S,T,N,W</td>
+									<td align="center">M,S,T,N,W</td>
+									<td align="center">M,N,W,S,N,T</td>
+									<td align="center">M,N,W,S,N,T</td>
+									<td align="center">M,N,W,N,N,T,S</td>
+									<td align="center">M,N,W,S,T</td>
+									<td align="center">M,N,W,N,N,T,S</td>
+									<td align="center">M,S,T,N,W</td>
+								</tr>
+								<tr>
+									<td align="center">DF bit</td>
+									<td align="center">Yes</td>
+									<td align="center">Yes</td>
+									<td align="center">Yes</td>
+									<td align="center">Yes</td>
+									<td align="center">Yes</td>
+									<td align="center">Yes</td>
+									<td align="center">Yes</td>
+									<td align="center">Yes</td>
+								</tr>
+								<tr>
+									<td align="center">TS incr</td>
+									<td align="center">~1000/sec</td>
+									<td align="center">~1000/sec</td>
+									<td align="center">~100/sec</td>
+									<td align="center">~100/sec</td>
+									<td align="center">Variable</td>
+									<td align="center">Variable</td>
+									<td align="center">Variable</td>
+									<td align="center">~100-1000/sec</td>
+								</tr>
+								<tr>
+									<td align="center">ECN</td>
+									<td align="center">Yes</td>
+									<td align="center">Yes</td>
+									<td align="center">Yes</td>
+									<td align="center">Yes</td>
+									<td align="center">Yes</td>
+									<td align="center">Yes</td>
+									<td align="center">Yes</td>
+									<td align="center">Yes</td>
+								</tr>
+								<tr>
+									<td align="center">FIN to open</td>
+									<td align="center">Drop</td>
+									<td align="center">Drop</td>
+									<td align="center">RST/ACK</td>
+									<td align="center">RST/ACK</td>
+									<td align="center">Drop</td>
+									<td align="center">Drop</td>
+									<td align="center">Drop</td>
+									<td align="center">Drop</td>
+								</tr>
+								<tr>
+									<td align="center">NULL to open</td>
+									<td align="center">Drop</td>
+									<td align="center">Drop</td>
+									<td align="center">RST/ACK</td>
+									<td align="center">RST/ACK</td>
+									<td align="center">Drop</td>
+									<td align="center">Drop</td>
+									<td align="center">Drop</td>
+									<td align="center">Drop</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							Legend: M=
+							<abbr title="Maximum Segment Size">MSS</abbr>
+							, S=SACK, T=Timestamp, N=NOP, W=Window Scale
+						</p>
+					</section>
+					<section>
+						<h3 id="fingerprint-evasion">Fingerprint Evasion</h3>
+						<h4 id="changing-ttl">Changing TTL</h4>
+						<pre class="bash">
+# Set default TTL to 128 (mimic Windows)
+sudo sysctl -w net.ipv4.ip_default_ttl=128
+
+# Persistent
+echo &#34;net.ipv4.ip_default_ttl=128&#34; | sudo tee /etc/sysctl.d/99-fingerprint.conf
+sudo sysctl -p /etc/sysctl.d/99-fingerprint.conf
+
+# Using iptables mangle (per-packet TTL modification)
+sudo iptables -t mangle -A POSTROUTING -j TTL --ttl-set 128
+
+# Using nftables
+sudo nft add table inet mangle
+sudo nft add chain inet mangle output { type filter hook output priority mangle\; policy accept\; }
+sudo nft add rule inet mangle output ip ttl set 128
+						</pre>
+						<h4 id="modifying-tcp-window-and-options">Modifying TCP Window and Options</h4>
+						<pre class="bash">
+# Change TCP initial window via sysctl (affects all connections)
+sudo sysctl -w net.ipv4.tcp_rmem=&#34;4096 65535 16777216&#34;
+# Default receive buffer: min default max
+# Default (middle) value affects initial window
+
+# Force specific MSS on all outbound connections
+sudo iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN \
+    -j TCPMSS --set-mss 1460
+
+# Clear TCP options on outbound SYN (aggressive - may break connections)
+sudo iptables -t mangle -A OUTPUT -p tcp --tcp-flags SYN,RST SYN \
+    -j TCPMSS --clamp-mss-to-pmtu
+						</pre>
+						<h4 id="vpn-based-fingerprint-concealment">VPN-Based Fingerprint Concealment</h4>
+						<p>
+							All
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							fingerprinting relies on analyzing packets that your
+							machine generates. A
+							<abbr title="Virtual Private Network">VPN</abbr>
+							encapsulates your
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							packets inside another
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							or
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							tunnel. The
+							<abbr title="Virtual Private Network">VPN</abbr>
+							server's
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							stack
+							generates the outer packets - the fingerprint the target sees is the
+							<abbr title="Virtual Private Network">VPN</abbr>
+							server's OS, not yours.
+						</p>
+						<pre class="bash">
+# WireGuard tunnel - your packets are encrypted and encapsulated
+# Target sees the VPN server&#39;s TTL, window size, and option ordering
+sudo wg-quick up wg0
+curl ifconfig.me  # IP is now the VPN server&#39;s IP
+						</pre>
+					</section>
+					<section>
+						<h3 id="nac-bypass-via-fingerprint-manipulation">NAC Bypass via Fingerprint Manipulation</h3>
+						<p>
+							Network Access Control (NAC) systems often fingerprint devices before granting network access.
+							They check
+							<abbr title="Time To Live">TTL</abbr>
+							,
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							User-Agent,
+							<abbr title="Dynamic Host Configuration Protocol">DHCP</abbr>
+							options, and sometimes
+							<abbr title="Media Access Control">MAC</abbr>
+							
+							<abbr title="Organizationally Unique Identifiers">OUI</abbr>
+							. Manipulating your fingerprint to match an authorized device class can bypass these checks:
+						</p>
+						<pre class="bash">
+# 1. MAC address spoofing (match authorized vendor OUI)
+sudo ip link set dev eth0 down
+sudo ip link set dev eth0 address 00:1b:21:aa:bb:cc  # Intel OUI
+sudo ip link set dev eth0 up
+
+# 2. TTL matching (Windows = 128, Linux = 64)
+sudo sysctl -w net.ipv4.ip_default_ttl=128
+
+# 3. HTTP User-Agent spoofing (tools like curl, wget, browsers)
+curl -A &#34;Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36&#34; https://portal.example.com
+
+# 4. DHCP option fingerprinting - dhcpcd sends different options than NetworkManager
+# Modify /etc/dhcpcd.conf to match a Windows DHCP client&#39;s option set
+						</pre>
+					</section>
+					<section>
+						<h3 id="ja3-and-ja4-tls-fingerprinting">JA3 and JA4 TLS Fingerprinting</h3>
+						<p>
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							fingerprinting identifies the OS.
+							<abbr title="Transport Layer Security">TLS</abbr>
+							fingerprinting identifies the
+							<em>application</em>
+							making the connection. JA3 hashes the
+							<abbr title="Transport Layer Security">TLS</abbr>
+							ClientHello fields (supported cipher suites, extensions, elliptic curves, EC point formats)
+							into an MD5 fingerprint. JA4 extends this with protocol identification and QUIC support.
+						</p>
+						<pre class="bash">
+# Capture TLS ClientHello and extract JA3 hash
+sudo tcpdump -i eth0 -nn -w clienthello.pcap &#39;tcp port 443&#39; &amp;
+sleep 1
+curl -s -o /dev/null https://example.com
+sleep 1
+sudo kill %1
+
+# Extract JA3 fingerprint with tshark or custom script
+sudo tshark -r clienthello.pcap -T fields \
+    -e tls.handshake.ciphersuites \
+    -e tls.handshake.extensions.supported_groups \
+    -e tls.handshake.extensions.ec_point_formats \
+    -e tls.handshake.extensions_length \
+    &#39;tls.handshake.type == 1&#39;
+						</pre>
+						<h4 id="common-ja3-fingerprints">Common JA3 fingerprints</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Application</th>
+									<th align="center">JA3 Hash</th>
+									<th align="center">Notes</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Chrome 120 Linux</td>
+									<td align="center"><code>cd08e314...</code></td>
+									<td align="center">Distinct from Windows Chrome</td>
+								</tr>
+								<tr>
+									<td align="center">Chrome 120 Windows</td>
+									<td align="center"><code>b32309a2...</code></td>
+									<td align="center">Different elliptic curves prioritized</td>
+								</tr>
+								<tr>
+									<td align="center">Firefox 120</td>
+									<td align="center"><code>e6573e90...</code></td>
+									<td align="center">Different cipher suite order</td>
+								</tr>
+								<tr>
+									<td align="center">Python requests</td>
+									<td align="center"><code>d308d096...</code></td>
+									<td align="center">Default urllib3/OpenSSL TLS stack</td>
+								</tr>
+								<tr>
+									<td align="center">Go net/http</td>
+									<td align="center"><code>3e71b23d...</code></td>
+									<td align="center">Go's crypto/tls has its own fingerprint</td>
+								</tr>
+								<tr>
+									<td align="center">curl (libcurl)</td>
+									<td align="center"><code>bc6c386f...</code></td>
+									<td align="center">OpenSSL-based</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							JA3/JA4 fingerprinting is widely used by CDNs,
+							<abbr title="Web Application Firewall">WAF</abbr>
+							s, and bot detection
+							systems to block automated traffic even when User-Agent headers are spoofed.
+						</p>
+					</section>
+					<section>
+						<h3 id="tcp-fingerprint-analyzer-in-python">TCP Fingerprint Analyzer in Python</h3>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;tcp-fingerprint.py - Passive TCP OS fingerprint analyzer using scapy.&#34;&#34;&#34;
+import sys
+from collections import OrderedDict
+from scapy.all import sniff, IP, TCP
+
+# Known OS fingerprints: (TTL, Window, WScale, OptionOrder)
+# Option order: M=MSS, S=SACK, T=Timestamp, N=NOP, W=WindowScale
+FINGERPRINT_DB = {
+    # (ttl, wscale, option_order)
+    (64, 7, (&#34;MSS&#34;, &#34;SAckOK&#34;, &#34;Timestamp&#34;, &#34;NOP&#34;, &#34;WScale&#34;)): &#34;Linux 2.6 - 6.x&#34;,
+    (64, 7, (&#34;MSS&#34;, &#34;NOP&#34;, &#34;WScale&#34;, &#34;SAckOK&#34;, &#34;Timestamp&#34;)): &#34;FreeBSD 12+&#34;,
+    (64, 3, (&#34;MSS&#34;, &#34;NOP&#34;, &#34;WScale&#34;, &#34;NOP&#34;, &#34;NOP&#34;, &#34;Timestamp&#34;)): &#34;macOS 10.x/11.x&#34;,
+    (64, 8, (&#34;MSS&#34;, &#34;SAckOK&#34;, &#34;Timestamp&#34;, &#34;NOP&#34;, &#34;WScale&#34;)): &#34;Linux 5.15+ with custom tcp_rmem&#34;,
+    (128, 8, (&#34;MSS&#34;, &#34;NOP&#34;, &#34;WScale&#34;, &#34;SAckOK&#34;, &#34;NOP&#34;, &#34;Timestamp&#34;)): &#34;Windows 10/11&#34;,
+    (128, 0, (&#34;MSS&#34;, &#34;NOP&#34;, &#34;WScale&#34;, &#34;NOP&#34;, &#34;NOP&#34;, &#34;Timestamp&#34;)): &#34;Windows 7/8&#34;,
+    (128, 0, (&#34;MSS&#34;, &#34;NOP&#34;, &#34;WScale&#34;, &#34;NOP&#34;, &#34;NOP&#34;, &#34;SAckOK&#34;)): &#34;Windows XP&#34;,
+    (255, 0, (&#34;MSS&#34;,)): &#34;Solaris / Cisco IOS&#34;,
+}
+
+def parse_option_order(tcp_layer):
+    &#34;&#34;&#34;Extract TCP option names in order from a TCP layer.&#34;&#34;&#34;
+    order = []
+    for opt_name, opt_value in tcp_layer.options:
+        name_map = {
+            &#34;MSS&#34;: &#34;MSS&#34;,
+            &#34;SAckOK&#34;: &#34;SAckOK&#34;,
+            &#34;Timestamp&#34;: &#34;Timestamp&#34;,
+            &#34;NOP&#34;: &#34;NOP&#34;,
+            &#34;WScale&#34;: &#34;WScale&#34;,
+            &#34;EOL&#34;: &#34;EOL&#34;,
+        }
+        name = name_map.get(opt_name, str(opt_name))
+        order.append(name)
+    return tuple(order)
+
+def get_wscale(tcp_layer):
+    &#34;&#34;&#34;Extract window scale value from TCP options.&#34;&#34;&#34;
+    for opt_name, opt_value in tcp_layer.options:
+        if opt_name == &#34;WScale&#34;:
+            return opt_value
+    return 0
+
+def identify_os(ip_ttl, tcp_window, wscale, option_order):
+    &#34;&#34;&#34;Match observed fingerprint against database.&#34;&#34;&#34;
+    # Direct match
+    key = (ip_ttl, wscale, option_order)
+    if key in FINGERPRINT_DB:
+        return FINGERPRINT_DB[key]
+
+    # Partial match: TTL + option order (ignore wscale)
+    for (db_ttl, db_wscale, db_order), os_name in FINGERPRINT_DB.items():
+        if db_ttl == ip_ttl and db_order == option_order:
+            return f&#34;{os_name} (window mismatch: expected {db_wscale}, got {wscale})&#34;
+
+    # TTL-only match
+    ttl_os = {
+        64: &#34;Linux/BSD/macOS (64 TTL)&#34;,
+        128: &#34;Windows (128 TTL)&#34;,
+        255: &#34;Solaris/Cisco (255 TTL)&#34;,
+        32: &#34;Legacy Windows 9x (32 TTL)&#34;,
+    }
+    return ttl_os.get(ip_ttl, f&#34;Unknown (TTL {ip_ttl})&#34;)
+
+def packet_handler(packet):
+    &#34;&#34;&#34;Process captured SYN packets and identify OS.&#34;&#34;&#34;
+    if not (packet.haslayer(IP) and packet.haslayer(TCP)):
+        return
+
+    tcp_layer = packet[TCP]
+    ip_layer = packet[IP]
+
+    # Only process SYN packets (connection initiation)
+    if not (tcp_layer.flags &amp; 0x02):  # SYN flag
+        return
+    if tcp_layer.flags &amp; 0x10:  # Ignore SYN-ACK (we want SYN only)
+        return
+
+    ttl = ip_layer.ttl
+    window = tcp_layer.window
+    wscale = get_wscale(tcp_layer)
+    option_order = parse_option_order(tcp_layer)
+    dport = tcp_layer.dport
+
+    os_guess = identify_os(ttl, window, wscale, option_order)
+    effective_window = window * (2 ** wscale) if wscale else window
+
+    print(f&#34;\n[+] New SYN from {ip_layer.src}:{tcp_layer.sport} -&gt; {ip_layer.dst}:{dport}&#34;)
+    print(f&#34;    TTL: {ttl}   Window: {window} (scale: {wscale}, effective: {effective_window})&#34;)
+    print(f&#34;    Options: {&#39; &gt; &#39;.join(option_order)}&#34;)
+    print(f&#34;    OS: {os_guess}&#34;)
+
+if __name__ == &#34;__main__&#34;:
+    if len(sys.argv) &lt; 2:
+        print(f&#34;Usage: sudo python3 {sys.argv[0]} &lt;interface&gt; [count]&#34;)
+        print(f&#34;Example: sudo python3 {sys.argv[0]} eth0 10&#34;)
+        sys.exit(1)
+
+    iface = sys.argv[1]
+    count = int(sys.argv[2]) if len(sys.argv) &gt; 2 else 0
+
+    print(f&#34;[*] Listening on {iface} for TCP SYN packets...&#34;)
+    try:
+        sniff(iface=iface, prn=packet_handler, filter=&#34;tcp[tcpflags] &amp; tcp-syn != 0 and tcp[tcpflags] &amp; tcp-ack == 0&#34;, count=count, store=0)
+    except PermissionError:
+        print(&#34;Root required. Run with sudo.&#34;)
+        sys.exit(1)
+						</pre>
+						<pre class="bash">
+# Run the fingerprint analyzer
+sudo python3 tcp-fingerprint.py eth0 10
+
+# Generate test traffic from another terminal
+curl -s -o /dev/null https://example.com
+nc -z google.com 80
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Fingerprint the lab container. It runs several
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							listeners
+							and uses nftables to set a different outbound
+							<abbr title="Time To Live">TTL</abbr>
+							per port, so you can practice
+							passive and active detection against known stacks. Window size and option ordering come from
+							the container kernel, not from the rules, which is itself a lesson in how far packet mangling
+							can go.
+						</p>
+						<p><a href="/wiki/articles/fundamentals/tcp-fingerprinting.Containerfile">tcp-fingerprinting.Containerfile</a></p>
+						<pre class="bash">
+podman build -t tcp-fingerprinting -f tcp-fingerprinting.Containerfile .
+podman run -it --rm \
+    -p 8080:8080 -p 9090:9090 -p 7070:7070 -p 6060:6060 \
+    -p 5353:5353 -p 3128:3128 \
+    tcp-fingerprinting
+
+# The container sets a different outbound TTL per listener:
+#   Port 8080 - TTL 64,  Linux-like echo
+#   Port 9090 - TTL 128, Windows-like echo
+#   Port 7070 - TTL 64,  macOS-like echo
+#   Port 6060 - TTL 64,  FreeBSD-like echo
+#   Port 5353 - TTL 255, Solaris-like echo
+#   Port 3128 - HTTP server that reports your own connection
+
+# From your host, connect to each listener:
+nc localhost 8080
+nc localhost 9090
+nc localhost 7070
+nc localhost 6060
+
+# Capture and compare the TTL values:
+sudo tcpdump -i lo -nn -v &#39;tcp port 8080 or tcp port 9090 or tcp port 7070 or tcp port 6060&#39;
+
+# Run p0f against the container:
+sudo p0f -i lo
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://nmap.org/book/man-os-detection.html" target="_blank">Nmap OS Detection</a></li>
+							<li><a class="icon-website" href="https://lcamtuf.coredump.cx/p0f3/" target="_blank">p0f v3 - Passive OS Fingerprinting</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc793" target="_blank">RFC 793 - TCP Specification (implementation ambiguities)</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc6528" target="_blank">RFC 6528 - Defending Against Sequence Number Attacks (ISN generation)</a></li>
+							<li><a class="icon-github" href="https://github.com/salesforce/ja3" target="_blank">JA3 - TLS ClientHello Fingerprinting</a></li>
+							<li><a class="icon-github" href="https://github.com/FoxIO-LLC/ja4" target="_blank">JA4+ - Network Fingerprinting Suite</a></li>
+							<li><a class="icon-download" href="https://www.blackhat.com/presentations/bh-usa-04/bh-us-04-wright/bh-us-04-wright-up.pdf" target="_blank">Defeating NAC via Fingerprint Spoofing</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

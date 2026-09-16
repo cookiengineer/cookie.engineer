@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Filesystems | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Filesystems">
+		<meta name="keywords" content="ext4, fhs, filesystems, inodes, journaling, mount, symlink, techniques, vfs">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Filesystems">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Linux VFS layer, inodes, ext4 internals, hard/symbolic links, journaling, file timestamps, stat(), mount namespaces, and the FHS.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/fundamentals/filesystems.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Filesystems">
+		<meta name="twitter:description" itemprop="description" content="Linux VFS layer, inodes, ext4 internals, hard/symbolic links, journaling, file timestamps, stat(), mount namespaces, and the FHS.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-vfs-linux-virtual-file-system">The VFS - Linux Virtual File System</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#inodes-the-core-filesystem-object">Inodes - The Core Filesystem Object</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#directories-are-special-files">Directories Are Special Files</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#superblock">Superblock</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ext4-block-groups-and-journal">ext4 - Block Groups and Journal</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#journaling">Journaling</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#hard-links">Hard Links</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#symbolic-links-symlinks">Symbolic Links (Symlinks)</a></b>
+					<ul>
+						<li><a href="#symlink-internals">Symlink internals</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#file-timestamps">File Timestamps</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#stat-system-call">stat() System Call</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#extended-file-attributes">Extended File Attributes</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#procfilesystems-and-mounts">/proc/filesystems and Mounts</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#loop-devices">Loop Devices</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#filesystem-hierarchy-standard-fhs">Filesystem Hierarchy Standard (FHS)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification-checklist">Verification Checklist</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/fundamentals/index.html">Fundamentals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/fundamentals/filesystems.html">Filesystems</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="filesystems">Filesystems</h2>
+					<p>
+						Linux VFS layer, inodes, ext4 internals, hard/symbolic links, journaling, file timestamps, stat(),
+						mount namespaces, and the FHS.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							A filesystem is the kernel's mapping from names to stored bytes. Linux hides every concrete
+							format behind the Virtual File System, so the same
+							<code>open()</code>
+							,
+							<code>read()</code>
+							, and
+							<code>stat()</code>
+							calls
+							work on ext4, btrfs, tmpfs, and network filesystems alike. Understanding inodes, directory entries,
+							links, and journaling matters for forensics, privilege escalation, and container escapes: the
+							difference between a hard link and a symlink, or a timestamp that did not change, is often the
+							pivot point of an investigation. After reading this article you can inspect inodes and superblocks,
+							tell the link types apart, and mount a filesystem image through a loop device.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/system-calls.html">System Calls</a> - open, read, write, stat syscalls</li>
+							<li><a href="/wiki/articles/fundamentals/unix-permissions.html">Unix Permissions</a> - file permissions, setuid, and <abbr title="Access Control List">ACL</abbr> s</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-vfs-linux-virtual-file-system">The VFS - Linux Virtual File System</h3>
+						<p>
+							The Linux kernel does not operate on one filesystem type. It provides a unified interface -
+							the Virtual File System (VFS) - that abstracts ext4, btrfs, NFS, procfs, tmpfs, and dozens of
+							other filesystem types behind a common set of objects.
+						</p>
+						<pre class="plaintext">
+                    ┌─────────────────┐
+                    │   User Process   │
+                    └─────────────────┘
+                             │ read(), write(), open(), stat(), ...
+                             ▼
+              ┌──────────────────────────┐
+              │       VFS Layer          │
+              │  (fs/namei.c,            │
+              │   fs/read_write.c,       │
+              │   fs/open.c)             │
+              └──────────────────────────┘
+                             │
+           ┌───────────────────────────────────┐
+           ▼                 ▼                  ▼
+     ┌──────────┐     ┌──────────┐       ┌──────────┐
+     │   ext4   │     │  btrfs   │       │   NFS    │
+     │  driver  │     │  driver  │       │  driver  │
+     └──────────┘     └──────────┘       └──────────┘
+          ▼                ▼                  ▼
+     ┌──────────────────────────────────────────┐
+     │         Block I/O Layer                  │
+     │         Block Device Drivers             │
+     └──────────────────────────────────────────┘
+						</pre>
+						<p>The VFS defines four key object types:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Object</th>
+									<th align="center">Kernel Struct</th>
+									<th align="center">What It Represents</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><b>superblock</b></td>
+									<td align="center"><code>struct super_block</code></td>
+									<td align="center">A mounted filesystem (one per mount)</td>
+								</tr>
+								<tr>
+									<td align="center"><b>inode</b></td>
+									<td align="center"><code>struct inode</code></td>
+									<td align="center">A file, directory, symlink, device, pipe (one per object)</td>
+								</tr>
+								<tr>
+									<td align="center"><b>dentry</b></td>
+									<td align="center"><code>struct dentry</code></td>
+									<td align="center">A directory entry - maps name -> inode (cached)</td>
+								</tr>
+								<tr>
+									<td align="center"><b>file</b></td>
+									<td align="center"><code>struct file</code></td>
+									<td align="center">An open file from a process's perspective (fd, offset)</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="inodes-the-core-filesystem-object">Inodes - The Core Filesystem Object</h3>
+						<p>
+							An inode (index node) is a filesystem object that represents exactly one file, directory, symlink,
+							FIFO, socket, block device, or character device. Every inode has a unique
+							<b>inode number</b>
+							within
+							its filesystem.
+						</p>
+						<pre class="plaintext">
+Inode Contents:
+┌─────────────────────────────────────┐
+│  Inode number (unique in this fs)   │
+│  File type (regular, dir, symlink)  │
+│  Permissions (rwx + setuid/setgid)  │
+│  Owner (UID)                        │
+│  Group (GID)                        │
+│  Size (in bytes)                    │
+│  Number of hard links               │
+│  Timestamps:                        │
+│    - atime (last access)            │
+│    - mtime (last modification)      │
+│    - ctime (last metadata change)   │
+│  Block pointers:                    │
+│    - Direct blocks (12)             │
+│    - Single indirect                │
+│    - Double indirect                │
+│    - Triple indirect                │
+│  Extended attributes (file ACLs)    │
+│  Flags (immutable, append-only...)  │
+└─────────────────────────────────────┘
+						</pre>
+						<pre class="bash">
+# View inode details with stat
+stat /etc/hostname
+
+# View inode number
+ls -i /etc/hostname
+# Output: 12345678 /etc/hostname
+
+# Find files by inode number
+find /home -inum 12345678
+
+# Check filesystem inode usage
+df -i
+# Filesystem      Inodes  IUsed   IFree IUse%
+# /dev/sda1       6553600 234567 6319033    4%
+
+# Detailed inode info via debugfs (read-only)
+sudo debugfs -R &#34;stat &lt;12345678&gt;&#34; /dev/sda1
+						</pre>
+					</section>
+					<section>
+						<h3 id="directories-are-special-files">Directories Are Special Files</h3>
+						<p>
+							A directory is a file whose data consists of an array of
+							<code>{inode_number, name}</code>
+							pairs. The kernel
+							(and
+							<code>ls</code>
+							) reads directory entries via
+							<code>getdents()</code>
+							:
+						</p>
+						<p>Directory Data Layout</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Inode #</th>
+									<th align="center">Rec Len</th>
+									<th align="center">Name Len</th>
+									<th align="center">Type</th>
+									<th align="center">Name</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">(4/8 B)</td>
+									<td align="center">(2 B)</td>
+									<td align="center">(2 B)</td>
+									<td align="center">(1 B)</td>
+									<td align="center">(variable)</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Read raw directory entries
+# getdents64 syscall = number 217 on x86-64
+python3 &lt;&lt; &#39;EOF&#39;
+import os, struct
+
+fd = os.open(&#39;/etc&#39;, os.O_RDONLY | os.O_DIRECTORY)
+while True:
+    data = os.getdents(fd, 4096)
+    if not data:
+        break
+    offset = 0
+    while offset &lt; len(data):
+        d_ino, d_off, d_reclen, d_type, name = \
+            struct.unpack_from(&#39;=QqHQb&#39;, data, offset)
+        name = data[offset+19:offset+19+struct.unpack_from(&#39;B&#39;, data, offset+18)[0]]
+        type_char = {4:&#39;d&#39;, 8:&#39;f&#39;, 10:&#39;l&#39;, 12:&#39;s&#39;}.get(d_type, &#39;?&#39;)
+        print(f&#39;{d_ino:10d} {type_char} {name.decode()}&#39;)
+        offset += d_reclen
+os.close(fd)
+EOF
+						</pre>
+					</section>
+					<section>
+						<h3 id="superblock">Superblock</h3>
+						<p>The superblock contains metadata about the entire filesystem:</p>
+						<pre class="bash">
+# View ext4 superblock
+sudo dumpe2fs -h /dev/sda1 | head -40
+
+# Key superblock fields:
+# Filesystem UUID
+# Block count
+# Block size (4096 typical)
+# Inode count
+# Inodes per group
+# Blocks per group
+# Mount count / max mount count
+# Last mount time / last write time
+# Filesystem state (clean/dirty)
+# Journal UUID / inode
+
+# View superblock via tune2fs
+sudo tune2fs -l /dev/sda1
+						</pre>
+					</section>
+					<section>
+						<h3 id="ext4-block-groups-and-journal">ext4 - Block Groups and Journal</h3>
+						<p>
+							ext4 divides the filesystem into
+							<b>block groups</b>
+							to improve locality. Each block group contains:
+						</p>
+						<pre class="plaintext">
+Block Group Layout:
+┌──────────────────────────────────────────┐
+│  Superblock (copy)        │ 1 block       │
+│  Group Descriptors        │ N blocks      │
+│  Block Bitmap             │ 1 block       │
+│  Inode Bitmap             │ 1 block       │
+│  Inode Table              │ N blocks      │
+│  Data Blocks              │ remaining     │
+└──────────────────────────────────────────┘
+						</pre>
+						<p>
+							<b>Block allocation</b>
+							attempts to keep a file's data blocks in the same block group as its inode,
+							minimizing seek time. New directories are placed in least-loaded block groups (Orlov allocator).
+						</p>
+						<p>
+							<b>Extents</b>
+							replace the traditional indirect block scheme in ext4. An extent is a contiguous
+							range of blocks described by
+							<code>{logical_block, start_physical_block, length}</code>
+							. A single extent
+							can describe 128 MiB of contiguous data.
+						</p>
+						<pre class="plaintext">
+Indirect blocks (ext2/ext3):     Extents (ext4):
+inode                            inode
+  ├── direct [0] -&gt; block          ├── extent [0]: start=1000, len=500
+  ├── direct [1] -&gt; block          ├── extent [1]: start=2000, len=300
+  ├── single indirect             ├── extent [2]: start=3000, len=128
+  │    └── block[]                └── extent [3]: start=4000, len=50
+  ├── double indirect
+  └── triple indirect
+						</pre>
+						<pre class="bash">
+# Check if a file uses extents
+sudo filefrag -v /path/to/large/file
+# Output includes extent flags and contiguous ranges
+						</pre>
+					</section>
+					<section>
+						<h3 id="journaling">Journaling</h3>
+						<p>
+							The journal (or write-ahead log) ensures filesystem consistency after a crash. Before modifying
+							metadata, ext4 writes a record to the journal. If the system crashes mid-operation, the journal
+							replay recovers.
+						</p>
+						<p>ext4 Journal Modes</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Mode</th>
+									<th align="center">Behavior</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">data=journal</td>
+									<td align="center">Everything (metadata + data) goes to journal. Slowest, safest.</td>
+								</tr>
+								<tr>
+									<td align="center">data=ordered</td>
+									<td align="center">(Default) Metadata journaled. Data written to disk before metadata committed. If metadata says the file is there, the data blocks are there too. Never exposes stale data blocks.</td>
+								</tr>
+								<tr>
+									<td align="center">data=writeback</td>
+									<td align="center">Metadata journaled. Data may be written before or after metadata. Crash can expose old data in newly created files. Fastest.</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Check journal mode
+sudo dumpe2fs -h /dev/sda1 | grep -i &#39;journal features\|default mount&#39;
+# Or look at mount options:
+mount | grep &#39; / &#39;
+# Look for data=ordered, data=journal, data=writeback
+
+# Journal size and location
+sudo dumpe2fs -h /dev/sda1 | grep -i journal
+						</pre>
+						<p>
+							<b>Journaling vs. Copy-on-Write (btrfs, ZFS):</b>
+							Journaling writes changes twice (journal then
+							final location). Copy-on-write never overwrites in place - it writes new data elsewhere and
+							atomically updates the metadata pointer.
+							<abbr title="Copy-on-Write">CoW</abbr>
+							avoids the journal entirely.
+						</p>
+					</section>
+					<section>
+						<h3 id="hard-links">Hard Links</h3>
+						<p>
+							A hard link is a directory entry that points to an existing inode. All hard links to the same
+							inode are equal - there's no "original."
+						</p>
+						<pre class="bash">
+touch original
+ln original hardlink
+
+ls -li original hardlink
+# 12345678 -rw-r--r-- 2 user user 0 ... hardlink
+# 12345678 -rw-r--r-- 2 user user 0 ... original
+# Same inode! Link count = 2.
+
+# The link count must reach 0 (and no process holding the file open)
+# before the inode and data blocks are freed.
+						</pre>
+						<p>
+							<b>Hard link constraints:</b>
+							- Cannot span filesystems (different fs = different inode namespace)
+							<ul>
+								<li>Cannot link to directories (prevents infinite loops; <code>.</code> and <code>..</code> are kernel-managed exceptions)</li>
+								<li>All links share the same permissions, owner, timestamps (they're the same inode)</li>
+							</ul>
+						</p>
+					</section>
+					<section>
+						<h3 id="symbolic-links-symlinks">Symbolic Links (Symlinks)</h3>
+						<p>
+							A symlink is a separate inode (type = symbolic link) whose data is a path string. The kernel
+							follows symlinks during path resolution.
+						</p>
+						<pre class="bash">
+ln -s /etc/hostname mylink
+ls -li mylink
+# 12345679 lrwxrwxrwx 1 user user 14 ... mylink -&gt; /etc/hostname
+
+# Symlink inode has:
+#  - Own inode number (different from target)
+#  - Own permissions (lrwxrwxrwx, typically 0777 - but not used in access checks)
+#  - Own timestamps
+#  - Data: the path string &#34;/etc/hostname&#34;
+						</pre>
+						<h4 id="symlink-internals">Symlink internals</h4>
+						<pre class="plaintext">
+Accessing /a/b/c where c -&gt; /x/y:
+┌───────────────────────┐
+│ Kernel path resolver  │
+│                       │
+│ 1. Read &#34;/&#34; inode     │
+│ 2. Find &#34;a&#34; in &#34;/&#34;    │-&gt; inode A
+│ 3. Find &#34;b&#34; in d_ent  │-&gt; inode B
+│ 4. Find &#34;c&#34; in d_ent  │-&gt; SYMLINK detected!
+│ 5. Read symlink data  │-&gt; &#34;/x/y&#34;
+│ 6. Restart from step 1│
+│    (or append to      │
+│     current path if   │
+│     relative)         │
+│ 7. Return final inode │-&gt; resolved
+└───────────────────────┘
+						</pre>
+						<pre class="bash">
+# Follow symlinks step by step
+namei -l /usr/bin/java  # Resolves every path component
+
+# Read symlink target without resolving
+readlink /etc/localtime
+
+# Follow all symlinks to get the real path
+realpath /etc/localtime
+readlink -f /etc/localtime  # Same
+						</pre>
+					</section>
+					<section>
+						<h3 id="file-timestamps">File Timestamps</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Timestamp</th>
+									<th align="center">Meaning</th>
+									<th align="center">Updated When</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><b>atime</b></td>
+									<td align="center">Last access time</td>
+									<td align="center">Read, execve (but may be lazy - see relatime)</td>
+								</tr>
+								<tr>
+									<td align="center"><b>mtime</b></td>
+									<td align="center">Last modification time</td>
+									<td align="center">File data is modified (write, truncate)</td>
+								</tr>
+								<tr>
+									<td align="center"><b>ctime</b></td>
+									<td align="center">Last metadata change time</td>
+									<td align="center">Permissions, owner, link count, xattrs change; also updated when mtime changes</td>
+								</tr>
+								<tr>
+									<td align="center"><b>btime</b>(birth)</td>
+									<td align="center">Creation time</td>
+									<td align="center">File created; ext4 records it (statx or debugfs)</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Full timestamp display
+stat /etc/hostname
+
+# atime optimization: relatime (default on ArchLinux)
+# atime is only updated if previous atime &lt; mtime or previous atime &lt; ctime
+# or if previous atime is older than 24 hours.
+# This drastically reduces write I/O.
+cat /proc/mounts | grep &#39; / &#39; | grep -o &#39;relatime\|noatime\|strictatime&#39;
+
+# Check btime (birth time) - ext4 only, needs debugfs
+sudo debugfs -R &#34;stat /etc/hostname&#34; /dev/sda1 2&gt;/dev/null | grep crtime
+# crtime: 0x676e1b2e:12345678 - creation time in epoch
+
+# Alternative: statx syscall
+python3 &lt;&lt; &#39;EOF&#39;
+import os, struct, ctypes
+libc = ctypes.CDLL(&#39;libc.so.6&#39;)
+
+class StatxTimestamp(ctypes.Structure):
+    _fields_ = [(&#34;tv_sec&#34;, ctypes.c_int64),
+                (&#34;tv_nsec&#34;, ctypes.c_uint32),
+                (&#34;__reserved&#34;, ctypes.c_int32)]
+
+class Statx(ctypes.Structure):
+    _fields_ = [(&#34;stx_mask&#34;, ctypes.c_uint32),
+                (&#34;stx_blksize&#34;, ctypes.c_uint32),
+                (&#34;stx_attributes&#34;, ctypes.c_uint64),
+                (&#34;stx_nlink&#34;, ctypes.c_uint32),
+                (&#34;stx_uid&#34;, ctypes.c_uint32),
+                (&#34;stx_gid&#34;, ctypes.c_uint32),
+                (&#34;stx_mode&#34;, ctypes.c_uint16),
+                (&#34;__spare0&#34;, ctypes.c_uint16),
+                (&#34;stx_ino&#34;, ctypes.c_uint64),
+                (&#34;stx_size&#34;, ctypes.c_uint64),
+                (&#34;stx_blocks&#34;, ctypes.c_uint64),
+                (&#34;stx_attributes_mask&#34;, ctypes.c_uint64),
+                (&#34;stx_atime&#34;, StatxTimestamp),
+                (&#34;stx_btime&#34;, StatxTimestamp),
+                (&#34;stx_ctime&#34;, StatxTimestamp),
+                (&#34;stx_mtime&#34;, StatxTimestamp),
+                (&#34;stx_rdev_major&#34;, ctypes.c_uint32),
+                (&#34;stx_rdev_minor&#34;, ctypes.c_uint32),
+                (&#34;stx_dev_major&#34;, ctypes.c_uint32),
+                (&#34;stx_dev_minor&#34;, ctypes.c_uint32),
+                (&#34;stx_mnt_id&#34;, ctypes.c_uint64)]
+
+buf = Statx()
+STX_BTIME = 0x800
+ret = libc.statx(0, b&#34;/etc/hostname&#34;, 0, STX_BTIME, ctypes.byref(buf))
+import time
+if ret == 0 and (buf.stx_mask &amp; STX_BTIME):
+    print(&#34;Creation time:&#34;, time.ctime(buf.stx_btime.tv_sec))
+EOF
+						</pre>
+					</section>
+					<section>
+						<h3 id="stat-system-call">stat() System Call</h3>
+						<pre class="c">
+#include &lt;stdio.h&gt;
+#include &lt;sys/stat.h&gt;
+#include &lt;time.h&gt;
+
+int main() {
+    struct stat sb;
+    if (stat(&#34;/etc/hostname&#34;, &amp;sb) == -1) {
+        perror(&#34;stat&#34;);
+        return 1;
+    }
+
+    printf(&#34;Inode:         %lu\n&#34;, sb.st_ino);
+    printf(&#34;Mode:          %#o\n&#34;, sb.st_mode);
+    printf(&#34;Links:         %lu\n&#34;, sb.st_nlink);
+    printf(&#34;UID:           %u\n&#34;, sb.st_uid);
+    printf(&#34;GID:           %u\n&#34;, sb.st_gid);
+    printf(&#34;Size:          %ld bytes\n&#34;, sb.st_size);
+    printf(&#34;Blocks:        %ld\n&#34;, sb.st_blocks);
+    printf(&#34;Block size:    %ld\n&#34;, sb.st_blksize);
+    printf(&#34;Device:        %d,%d\n&#34;, major(sb.st_dev), minor(sb.st_dev));
+    printf(&#34;File type:     &#34;);
+    if (S_ISREG(sb.st_mode))  printf(&#34;regular\n&#34;);
+    if (S_ISDIR(sb.st_mode))  printf(&#34;directory\n&#34;);
+    if (S_ISLNK(sb.st_mode))  printf(&#34;symlink\n&#34;);
+    if (S_ISCHR(sb.st_mode))  printf(&#34;character device\n&#34;);
+    if (S_ISBLK(sb.st_mode))  printf(&#34;block device\n&#34;);
+    if (S_ISFIFO(sb.st_mode)) printf(&#34;FIFO\n&#34;);
+    if (S_ISSOCK(sb.st_mode)) printf(&#34;socket\n&#34;);
+
+    printf(&#34;Access time:   %s&#34;, ctime(&amp;sb.st_atime));
+    printf(&#34;Modify time:   %s&#34;, ctime(&amp;sb.st_mtime));
+    printf(&#34;Change time:   %s&#34;, ctime(&amp;sb.st_ctime));
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+gcc -o stat-demo stat-demo.c &amp;&amp; ./stat-demo
+						</pre>
+					</section>
+					<section>
+						<h3 id="extended-file-attributes">Extended File Attributes</h3>
+						<p>ext4 supports special flags that modify filesystem behavior:</p>
+						<pre class="bash">
+# List extended attributes
+lsattr somefile
+
+# Common flags:
+# a - append only (only write in append mode, root only)
+# i - immutable (cannot modify, delete, rename, or link to; root only)
+# A - no atime updates
+# c - compressed (on filesystems that support it)
+# d - no dump (exclude from dump backup)
+# e - extent format (auto-set by ext4)
+# j - data journaling (write all data to journal first)
+# s - secure deletion (zero blocks on delete)
+# S - synchronous updates (immediate write to disk)
+# u - undeletable (save contents for undeletion)
+
+# Set immutable flag
+sudo chattr +i important.file
+# Now even root cannot modify it without removing the flag:
+# sudo chattr -i important.file
+						</pre>
+					</section>
+					<section>
+						<h3 id="procfilesystems-and-mounts">/proc/filesystems and Mounts</h3>
+						<pre class="bash">
+# List all filesystem types the kernel supports
+cat /proc/filesystems
+# nodev = no block device needed (virtual: proc, sysfs, tmpfs)
+# Otherwise = requires a block device (ext4, btrfs, xfs)
+
+# List all mounted filesystems
+mount
+findmnt  # Nicer tree view
+
+# Mount namespace - unshare a mount namespace
+sudo unshare -m /bin/bash
+mount -t tmpfs none /mnt
+ls /mnt           # Only visible in this namespace
+exit              # Returns to parent namespace; /mnt not visible
+
+# Inspect mount info for a process
+cat /proc/$$/mountinfo
+cat /proc/$$/mounts
+						</pre>
+					</section>
+					<section>
+						<h3 id="loop-devices">Loop Devices</h3>
+						<p>A loop device maps a regular file to a block device, allowing you to mount filesystem images:</p>
+						<pre class="bash">
+# Create a 100 MB filesystem image
+dd if=/dev/zero of=/tmp/disk.img bs=1M count=100
+mkfs.ext4 /tmp/disk.img
+
+# Mount via loop device
+sudo mount -o loop /tmp/disk.img /mnt
+
+# Or explicitly:
+sudo losetup -f /tmp/disk.img         # Find free loop device
+losetup -a                            # List all loop devices
+sudo mount /dev/loop0 /mnt
+
+# Clean up
+sudo umount /mnt
+sudo losetup -d /dev/loop0
+						</pre>
+					</section>
+					<section>
+						<h3 id="filesystem-hierarchy-standard-fhs">Filesystem Hierarchy Standard (FHS)</h3>
+						<p>The FHS defines the purpose of each directory on a Linux system:</p>
+						<pre class="plaintext">
+/                   Root - everything lives under here
+├── /bin/           Essential user command binaries (may be symlink to /usr/bin)
+├── /boot/          Boot loader files (kernel, initramfs)
+├── /dev/           Device files (created by udev)
+├── /etc/           Host-specific system configuration
+│   ├── /etc/systemd/      systemd unit files
+│   ├── /etc/passwd        User account database
+│   └── /etc/ssh/          SSH server configuration
+├── /home/          User home directories
+├── /lib/           Essential shared libraries (may be symlink to /usr/lib)
+├── /media/         Mount point for removable media
+├── /mnt/           Temporary mount point
+├── /opt/           Add-on application software packages
+├── /proc/          Virtual filesystem for process/kernel info
+├── /root/          Root user&#39;s home directory
+├── /run/           Runtime variable data (tmpfs since boot)
+├── /sbin/          System binaries (may be symlink to /usr/bin)
+├── /srv/           Data for services provided by this system
+├── /sys/           Kernel and device tree info (sysfs)
+├── /tmp/           Temporary files (may be cleaned on reboot / via tmpfiles.d)
+├── /usr/           Shareable, read-only data
+│   ├── /usr/bin/   Most user commands
+│   ├── /usr/lib/   Libraries for /usr/bin and /usr/sbin
+│   ├── /usr/local/ Local sysadmin-installed software (mirrors /usr structure)
+│   ├── /usr/share/ Architecture-independent data
+│   └── /usr/src/   Source code (e.g., kernel headers)
+└── /var/           Variable data
+    ├── /var/log/   Log files
+    ├── /var/cache/ Application cache data
+    ├── /var/lib/   State information (databases, package manager data)
+    └── /var/tmp/   Temporary files preserved between reboots
+						</pre>
+					</section>
+					<section>
+						<h3 id="verification-checklist">Verification Checklist</h3>
+						<pre class="bash">
+# 1. Inspect inode details of a file
+stat /etc/hostname
+ls -li /etc/hostname
+
+# 2. Check filesystem type and features
+df -Th /
+sudo dumpe2fs -h $(findmnt -n -o SOURCE /) 2&gt;/dev/null | head -30
+
+# 3. List all open files on a filesystem
+lsof / 2&gt;/dev/null | head -20
+
+# 4. Verify journal mode
+mount | grep &#39; / &#39;
+
+# 5. Find all symlinks in a directory
+find /etc -maxdepth 1 -type l -ls
+
+# 6. Check filesystem mount flags
+cat /proc/mounts | grep &#39;/ &#39;
+
+# 7. List filesystem types available in kernel
+cat /proc/filesystems
+
+# 8. Inspect a directory&#39;s raw entries
+ls -laU /etc | head -10  # -U = unsorted, raw directory order
+
+# 9. Check for hardlinked files (link count &gt; 1)
+find /etc -type f -links +1
+
+# 10. Trace file operations on a program
+strace -e trace=file cat /etc/hostname 2&gt;&amp;1
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Read an ext4 superblock from userspace without mounting it. Create a small image, then write
+							a Go program that opens the file, seeks to byte 1024, checks the
+							<code>0xEF53</code>
+							magic, and prints
+							the block size, inode count, and block count.
+						</p>
+						<pre class="bash">
+dd if=/dev/zero of=disk.img bs=1M count=8
+mkfs.ext4 disk.img
+						</pre>
+						<pre class="go">
+package main
+
+import (
+	&#34;encoding/binary&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+)
+
+func main() {
+	data := make([]byte, 2048)
+	f, err := os.Open(os.Args[1])
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+	f.ReadAt(data, 0)
+
+	sb := data[1024:2048]
+	if magic := binary.LittleEndian.Uint16(sb[0x38:0x3a]); magic != 0xEF53 {
+		panic(&#34;not an ext4 superblock&#34;)
+	}
+	logBlockSize := binary.LittleEndian.Uint32(sb[0x18:0x1c])
+	blockSize := uint32(1024) &lt;&lt; logBlockSize
+	fmt.Printf(&#34;block_size=%d inodes=%d blocks=%d\n&#34;, blockSize,
+		binary.LittleEndian.Uint32(sb[0x00:0x04]),
+		binary.LittleEndian.Uint32(sb[0x04:0x08]))
+}
+						</pre>
+						<p>
+							Compare the numbers with
+							<code>dumpe2fs -h disk.img</code>
+							, then extend the parser to decode the inode
+							table position and walk the root directory.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/stat.2" target="_blank">stat(2) - get file status</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/statx.2" target="_blank">statx(2) - get file status (extended)</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/inode.7" target="_blank">inode(7) - file inode information</a></li>
+							<li><a class="icon-website" href="https://ext4.wiki.kernel.org/index.php/Ext4_Disk_Layout" target="_blank">ext4 Wiki - Kernel.org</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/filesystems.5" target="_blank">filesystems(5) - Linux filesystem types</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/mount.8" target="_blank">mount(8) - mount a filesystem</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/file-hierarchy.7" target="_blank">file-hierarchy(7) - File system hierarchy overview</a></li>
+							<li><a class="icon-website" href="https://docs.kernel.org/filesystems/vfs.html" target="_blank">VFS - Linux Kernel documentation</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

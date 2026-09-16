@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Calling Conventions | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Calling Conventions">
+		<meta name="keywords" content="abi, assembly, calling-conventions, objdump, system-v, techniques, varargs, x86-64">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Calling Conventions">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="The ABI contract between caller and callee - System V AMD64, x86-32 comparisons, ARM64 AAPCS, varargs, and writing assembly callable from C.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/fundamentals/calling-conventions.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Calling Conventions">
+		<meta name="twitter:description" itemprop="description" content="The ABI contract between caller and callee - System V AMD64, x86-32 comparisons, ARM64 AAPCS, varargs, and writing assembly callable from C.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#what-a-calling-convention-defines">What a Calling Convention Defines</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#system-v-amd64-abi">System V AMD64 ABI</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#argument-passing">Argument Passing</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#integer-and-float-arguments">Integer and Float Arguments</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#return-values">Return Values</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#caller-saved-vs-callee-saved">Caller-Saved vs Callee-Saved</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#stack-frame-alignment">Stack Frame Alignment</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-red-zone">The Red Zone</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#x86-32-conventions">x86-32 Conventions</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#microsoft-x64-abi">Microsoft x64 ABI</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#arm64-aapcs">ARM64 AAPCS</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#c-functions-to-assembly">C Functions to Assembly</a></b>
+					<ul>
+						<li><a href="#without-optimization">Without optimization</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#varargs">Varargs</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#setjmp-and-longjmp">setjmp and longjmp</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#calling-assembly-from-c">Calling Assembly from C</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#objdump-and-the-abi">objdump and the ABI</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification-checklist">Verification Checklist</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/fundamentals/index.html">Fundamentals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/fundamentals/calling-conventions.html">Calling Conventions</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="calling-conventions">Calling Conventions</h2>
+					<p>
+						The ABI contract between caller and callee - System V AMD64, x86-32 comparisons, ARM64
+						<abbr title="Procedure Call Standard for the ARM 64-bit Architecture">AAPCS</abbr>
+						, varargs, and writing assembly callable from C.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							A calling convention is the contract that lets code compiled by different compilers call each
+							other. It decides where arguments go, which registers survive a call, how the stack is aligned,
+							and where the return value lands. This article documents the System V AMD64 ABI used on Linux,
+							compares it with the 32-bit and Windows x64 conventions, and shows how C functions translate
+							to assembly. By the end you can read a disassembly and know exactly which register holds which
+							argument, and you can write assembly that a C caller can invoke.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/stack.html">The Stack</a> - stack frame structure, push/pop, prologue/epilogue</li>
+							<li><a href="/wiki/articles/fundamentals/system-calls.html">System Calls</a> - argument passing in syscalls (different register set!)</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="what-a-calling-convention-defines">What a Calling Convention Defines</h3>
+						<p>A calling convention is a contract between caller and callee that answers:</p>
+						<ol>
+							<li><b>Where are arguments placed?</b> (registers or stack)</li>
+							<li><b>In what order are arguments pushed?</b> (left-to-right or right-to-left)</li>
+							<li><b>Who cleans up the stack?</b> (caller or callee)</li>
+							<li><b>Where is the return value?</b> (which register)</li>
+							<li><b>Which registers must the callee preserve?</b> (callee-saved vs caller-saved)</li>
+							<li><b>How is the stack aligned?</b> (boundary requirement)</li>
+						</ol>
+						<p>
+							Without conventions, a function compiled by GCC couldn't call a function compiled by Clang.
+							The ABI (Application Binary Interface) standardizes these contracts per platform.
+						</p>
+					</section>
+					<section>
+						<h3 id="system-v-amd64-abi">System V AMD64 ABI</h3>
+						<p>
+							This is the convention used on all x86-64 Linux systems (including ArchLinux), and by macOS
+							and the BSDs. Microsoft Windows uses a different convention for x86-64.
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">System V AMD64 ABI Summary</th>
+									<th align="center"></th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Parameter slots</td>
+									<td align="center">rdi, rsi, rdx, rcx, r8, r9 (integer/pointer)</td>
+								</tr>
+								<tr>
+									<td align="center">Float params</td>
+									<td align="center">xmm0 - xmm7</td>
+								</tr>
+								<tr>
+									<td align="center">Return (int)</td>
+									<td align="center">rax (rdx:rax for 128-bit)</td>
+								</tr>
+								<tr>
+									<td align="center">Return (float)</td>
+									<td align="center">xmm0 (xmm1:xmm0 for complex)</td>
+								</tr>
+								<tr>
+									<td align="center">Stack align</td>
+									<td align="center">16 bytes before call instruction</td>
+								</tr>
+								<tr>
+									<td align="center">Red zone</td>
+									<td align="center">128 bytes below rsp</td>
+								</tr>
+								<tr>
+									<td align="center">Caller-saved</td>
+									<td align="center">rax, rcx, rdx, rsi, rdi, r8-r11</td>
+								</tr>
+								<tr>
+									<td align="center">Callee-saved</td>
+									<td align="center">rbx, rbp, r12-r15, rsp</td>
+								</tr>
+								<tr>
+									<td align="center">Varargs</td>
+									<td align="center">al = # of vector register args</td>
+								</tr>
+								<tr>
+									<td align="center">Static chain</td>
+									<td align="center">r10 (for nested functions)</td>
+								</tr>
+								<tr>
+									<td align="center">Frame pointer</td>
+									<td align="center">rbp (optional; may be omitted)</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="argument-passing">Argument Passing</h3>
+						<pre class="c">
+// Function with 10 integer arguments
+long func(long a, long b, long c, long d,
+          long e, long f, long g, long h,
+          long i, long j);
+						</pre>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Argument</th>
+									<th align="center">Location</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">a</td>
+									<td align="center">rdi</td>
+								</tr>
+								<tr>
+									<td align="center">b</td>
+									<td align="center">rsi</td>
+								</tr>
+								<tr>
+									<td align="center">c</td>
+									<td align="center">rdx</td>
+								</tr>
+								<tr>
+									<td align="center">d</td>
+									<td align="center">rcx</td>
+								</tr>
+								<tr>
+									<td align="center">e</td>
+									<td align="center">r8</td>
+								</tr>
+								<tr>
+									<td align="center">f</td>
+									<td align="center">r9</td>
+								</tr>
+								<tr>
+									<td align="center">g</td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center">h</td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center">i</td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center">j</td>
+									<td align="center"></td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							Arguments 7+ are pushed
+							<b>right-to-left</b>
+							on the stack. The first stack argument is closest
+							to the return address (lowest offset from
+							<code>rsp</code>
+							).
+						</p>
+					</section>
+					<section>
+						<h3 id="integer-and-float-arguments">Integer and Float Arguments</h3>
+						<p>
+							When a function takes both integer and float arguments, the integer regs and xmm regs are consumed
+							independently:
+						</p>
+						<pre class="c">
+// void g(int a, double b, int c, double d);
+						</pre>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Arg</th>
+									<th align="center">Location</th>
+									<th align="center">Notes</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">a (int)</td>
+									<td align="center">rdi</td>
+									<td align="center">Uses first integer reg</td>
+								</tr>
+								<tr>
+									<td align="center">b (dbl)</td>
+									<td align="center">xmm0</td>
+									<td align="center">Uses first float reg</td>
+								</tr>
+								<tr>
+									<td align="center">c (int)</td>
+									<td align="center">rsi</td>
+									<td align="center">Uses second integer reg</td>
+								</tr>
+								<tr>
+									<td align="center">d (dbl)</td>
+									<td align="center">xmm1</td>
+									<td align="center">Uses second float reg</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							If float regs run out but integer regs are available, the float argument goes on the stack -
+							the integer register is NOT used. The classification of each argument is independent.
+						</p>
+					</section>
+					<section>
+						<h3 id="return-values">Return Values</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Return Type</th>
+									<th align="center">Where</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Integer <= 64 bits</td>
+									<td align="center">rax</td>
+								</tr>
+								<tr>
+									<td align="center">Integer 65-128 bits</td>
+									<td align="center">rax (low) + rdx (high)</td>
+								</tr>
+								<tr>
+									<td align="center">Float / Double</td>
+									<td align="center">xmm0</td>
+								</tr>
+								<tr>
+									<td align="center">Float complex</td>
+									<td align="center">xmm0 (real) + xmm1 (imaginary)</td>
+								</tr>
+								<tr>
+									<td align="center">struct <= 16 bytes</td>
+									<td align="center">rax + rdx (field-by-field, based on integer/float classification)</td>
+								</tr>
+								<tr>
+									<td align="center">struct > 16 bytes</td>
+									<td align="center">Caller allocates space, passes pointer in rdi (hidden first argument)</td>
+								</tr>
+								<tr>
+									<td align="center">__int128</td>
+									<td align="center">rax + rdx</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="c">
+#include &lt;stdio.h&gt;
+#include &lt;stdint.h&gt;
+
+// Returns 128-bit value in rax:rdx
+__int128 make128(uint64_t hi, uint64_t lo) {
+    return ((__int128)hi &lt;&lt; 64) | lo;
+}
+
+int main() {
+    __int128 val = make128(0xDEADBEEF, 0xCAFEBABE);
+    printf(&#34;High: %016lx  Low: %016lx\n&#34;,
+           (uint64_t)(val &gt;&gt; 64), (uint64_t)val);
+    return 0;
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="caller-saved-vs-callee-saved">Caller-Saved vs Callee-Saved</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Item</th>
+									<th align="center">Rule</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Caller-Saved (Volatile)</td>
+									<td align="center">rax, rcx, rdx, rsi, rdi, r8, r9, r10, r11</td>
+								</tr>
+								<tr>
+									<td align="center">Callee-Saved (Nonvolatile)</td>
+									<td align="center">rbx, rbp, r12, r13, r14, r15, rsp</td>
+								</tr>
+								<tr>
+									<td align="center">Direction flag</td>
+									<td align="center">Must be cleared (DF=0) before call and on return from any function</td>
+								</tr>
+								<tr>
+									<td align="center">x87 FPU stack</td>
+									<td align="center">Must be empty on call (except for returning float80 values)</td>
+								</tr>
+								<tr>
+									<td align="center">mxcsr</td>
+									<td align="center">Callee-saved portion: bits</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							<b>Caller-saved (volatile)</b>
+							means: if the caller needs a register's value after a function call,
+							it must save it before the call. The callee is free to clobber these.
+						</p>
+						<p>
+							<b>Callee-saved (nonvolatile)</b>
+							means: the callee must preserve these registers. If the callee
+							uses them, it must save them in the prologue and restore them in the epilogue.
+						</p>
+						<pre class="x86asm">
+; Caller perspective - needs rax value after call
+mov [rsp-8], rax       ; Save rax (in red zone - valid on Linux)
+call some_function
+mov rax, [rsp-8]       ; Restore rax
+
+; Callee perspective - uses rbx
+my_function:
+    push rbx              ; Save callee-saved register
+    sub rsp, 16           ; Allocate locals
+    ; ... use rbx freely ...
+    add rsp, 16           ; Deallocate locals
+    pop rbx               ; Restore rbx
+    ret
+						</pre>
+					</section>
+					<section>
+						<h3 id="stack-frame-alignment">Stack Frame Alignment</h3>
+						<p>
+							The ABI mandates
+							<b>16-byte stack alignment</b>
+							at the point of the
+							<code>call</code>
+							instruction (equivalently:
+							<code>rsp % 16 == 0</code>
+							before
+							<code>call</code>
+							).
+						</p>
+						<pre class="plaintext">
+At function entry:
+  rsp % 16 == 8          (because `call` pushed 8-byte return address)
+  -&gt; Prologue must adjust rsp by 8n + 8 to realign before any calls.
+  -&gt; sub rsp, 24 makes rsp % 16 == 0 (24 = 8*3, +8 from ret addr = 32 total)
+						</pre>
+						<pre class="x86asm">
+; Function that calls printf - needs 16-byte alignment
+; At entry: rsp % 16 == 8
+; push rbp makes it 0; sub rsp, 16 keeps it 0.
+
+extern printf
+
+section .data
+    fmt db &#34;x = %d, y = %d&#34;, 10, 0
+
+section .text
+global my_func
+my_func:
+    push rbp
+    mov rbp, rsp
+    sub rsp, 16           ; Allocate locals, keep rsp 16-byte aligned
+    mov rdi, 1
+    mov rsi, 2
+    call printf           ; Aligned: rsp % 16 == 0 before call
+
+    add rsp, 16
+    pop rbp
+    ret
+						</pre>
+						<p>
+							When in doubt, the prologue
+							<code>push rbp; mov rbp, rsp; sub rsp, N</code>
+							aligns if
+							<code>N % 16 == 0</code>
+							, because
+							<code>push rbp</code>
+							already turns
+							<code>rsp % 16 == 8</code>
+							(at entry) into
+							<code>rsp % 16 == 0</code>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="the-red-zone">The Red Zone</h3>
+						<p>
+							The 128 bytes immediately below
+							<code>rsp</code>
+							are the
+							<b>red zone</b>
+							. A leaf function (one that doesn't
+							call other functions) can use this memory without adjusting
+							<code>rsp</code>
+							:
+						</p>
+						<pre class="x86asm">
+; Leaf function - no calls to other functions
+; Can use [rsp-8] through [rsp-128] freely
+leaf_func:
+    mov [rsp-8], rdi      ; Store argument temporarily in red zone
+    mov rax, [rsp-8]      ; Read it back
+    add rax, 1
+    ret                   ; No stack adjustment needed - leaf function
+						</pre>
+						<p>
+							This optimization is only valid on System V AMD64 (Linux, macOS, BSD).
+							<b>Windows x64 has no red zone</b>
+							<ul>
+								<li>the space below <code>rsp</code> can be overwritten by interrupts or exception handling at any time.</li>
+							</ul>
+						</p>
+					</section>
+					<section>
+						<h3 id="x86-32-conventions">x86-32 Conventions</h3>
+						<p>
+							Before x86-64, there were multiple competing conventions on 32-bit x86. All pass arguments on
+							the stack (no register args), differ in who cleans up:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Convention</th>
+									<th align="center">Parameter order</th>
+									<th align="center">Stack cleanup by</th>
+									<th align="center">Used by</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">cdecl</td>
+									<td align="center">Right-to-left</td>
+									<td align="center">Caller</td>
+									<td align="center">Linux, GCC</td>
+								</tr>
+								<tr>
+									<td align="center">stdcall</td>
+									<td align="center">Right-to-left</td>
+									<td align="center">Callee</td>
+									<td align="center">Win32 API</td>
+								</tr>
+								<tr>
+									<td align="center">fastcall</td>
+									<td align="center">ecx,edx, stack</td>
+									<td align="center">Callee</td>
+									<td align="center">Various</td>
+								</tr>
+								<tr>
+									<td align="center">thiscall</td>
+									<td align="center">ecx + stack</td>
+									<td align="center">Callee (MS)</td>
+									<td align="center">C++ on Win</td>
+								</tr>
+								<tr>
+									<td align="center">pascal</td>
+									<td align="center">Left-to-right</td>
+									<td align="center">Callee</td>
+									<td align="center">Borland</td>
+								</tr>
+								<tr>
+									<td align="center">register</td>
+									<td align="center">eax,edx,ecx</td>
+									<td align="center">Caller (Borland)</td>
+									<td align="center">Deprecated</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							<b>cdecl</b>
+							is the default on Linux x86-32:
+						</p>
+						<pre class="x86asm">
+; cdecl: caller pushes right-to-left, cleans after call
+push argv
+push argc
+call main
+add esp, 8              ; Caller cleans 8 bytes from stack
+
+; stdcall: callee cleans with &#39;ret N&#39;
+; In callee: ret 8      ; Pop return address AND clean 8 bytes of args
+						</pre>
+					</section>
+					<section>
+						<h3 id="microsoft-x64-abi">Microsoft x64 ABI</h3>
+						<p>Windows x64 uses a different convention than Linux x86-64. Key differences:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Feature</th>
+									<th align="center">System V AMD64</th>
+									<th align="center">Microsoft x64</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">First 4 int args</td>
+									<td align="center">rdi, rsi, rdx, rcx</td>
+									<td align="center">rcx, rdx, r8, r9</td>
+								</tr>
+								<tr>
+									<td align="center">Float args</td>
+									<td align="center">xmm0-xmm7</td>
+									<td align="center">xmm0-xmm3</td>
+								</tr>
+								<tr>
+									<td align="center">Shadow space</td>
+									<td align="center">None</td>
+									<td align="center">32 bytes (home for first 4 args)</td>
+								</tr>
+								<tr>
+									<td align="center">Red zone</td>
+									<td align="center">128 bytes</td>
+									<td align="center">None</td>
+								</tr>
+								<tr>
+									<td align="center">Caller-saved</td>
+									<td align="center">rax,rcx,rdx,rsi,rdi,r8-r11</td>
+									<td align="center">rax,rcx,rdx,r8-r11,xmm0-xmm5</td>
+								</tr>
+								<tr>
+									<td align="center">Callee-saved</td>
+									<td align="center">rbx,rbp,r12-r15</td>
+									<td align="center">rbx,rbp,rdi,rsi,r12-r15, xmm6-xmm15</td>
+								</tr>
+								<tr>
+									<td align="center">Stack alignment</td>
+									<td align="center">16 bytes</td>
+									<td align="center">16 bytes</td>
+								</tr>
+								<tr>
+									<td align="center">Varargs</td>
+									<td align="center">al = count of xmm args</td>
+									<td align="center">Shadow space + stack, same as regular args</td>
+								</tr>
+								<tr>
+									<td align="center">Non-leaf func</td>
+									<td align="center">sub rsp, N</td>
+									<td align="center">sub rsp, 32+N (always has shadow space)</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							<b>Shadow space (home space):</b>
+							On Windows x64, the caller must allocate 32 bytes of stack space
+							before calling, even if the first 4 arguments are passed in registers. The callee may use this
+							space to spill register args for debugging. On Linux, this doesn't exist - the callee manages
+							its own locals.
+						</p>
+					</section>
+					<section>
+						<h3 id="arm64-aapcs">ARM64 AAPCS</h3>
+						<p>On AArch64 (64-bit ARM), the procedure call standard:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Item</th>
+									<th align="center">Value</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Parameter 1-8</td>
+									<td align="center">x0 - x7</td>
+								</tr>
+								<tr>
+									<td align="center">Float 1-8</td>
+									<td align="center">v0 - v7 (SIMD regs)</td>
+								</tr>
+								<tr>
+									<td align="center">Return value</td>
+									<td align="center">x0 (x1 for 128-bit)</td>
+								</tr>
+								<tr>
+									<td align="center">Stack align</td>
+									<td align="center">16 bytes</td>
+								</tr>
+								<tr>
+									<td align="center">Caller-saved</td>
+									<td align="center">x0-x18, v0-v7, v16-v31</td>
+								</tr>
+								<tr>
+									<td align="center">Callee-saved</td>
+									<td align="center">x19-x29 (x29 = fp), v8-v15</td>
+								</tr>
+								<tr>
+									<td align="center">Frame pointer</td>
+									<td align="center">x29</td>
+								</tr>
+								<tr>
+									<td align="center">Link register</td>
+									<td align="center">x30 (lr)</td>
+								</tr>
+								<tr>
+									<td align="center">Stack pointer</td>
+									<td align="center">x31 (sp)</td>
+								</tr>
+								<tr>
+									<td align="center">Zero register</td>
+									<td align="center">xzr</td>
+								</tr>
+								<tr>
+									<td align="center">Red zone</td>
+									<td align="center">None</td>
+								</tr>
+								<tr>
+									<td align="center">Indirect calls</td>
+									<td align="center">x16 (IP0), x17 (IP1) for PLT stubs</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="x86asm">
+// ARM64 function call
+mov x0, #1          // First argument
+mov x1, #2          // Second argument
+bl my_function      // Branch with link - sets lr (x30) to return addr
+// ...
+my_function:
+    stp x29, x30, [sp, #-16]!  // Save frame and link register
+    mov x29, sp                // Set frame pointer
+    // ... function body ...
+    ldp x29, x30, [sp], #16    // Restore
+    ret                        // Return via lr
+						</pre>
+					</section>
+					<section>
+						<h3 id="c-functions-to-assembly">C Functions to Assembly</h3>
+						<pre class="c">
+// Source
+int multiply_add(int x, int y, int z) {
+    int result = x * y;
+    result = result + z;
+    return result;
+}
+						</pre>
+						<pre class="bash">
+# Compile to assembly and inspect
+gcc -O2 -S -o /tmp/multiply_add.s -xc - &lt;&lt;&lt;&#39;int multiply_add(int x,int y,int z){return x*y+z;}&#39;
+cat /tmp/multiply_add.s
+						</pre>
+						<pre class="x86asm">
+multiply_add:
+    imul   esi, edi      ; esi = x * y  (imul can do reg *= reg)
+    lea    eax, [rsi + rdx]  ; eax = x*y + z
+    ret
+						</pre>
+						<p>
+							With optimizations, the function body collapses into 3 instructions. The compiler eliminated
+							the
+							<code>result</code>
+							variable and put everything in registers. No stack frame, no spills.
+						</p>
+						<h4 id="without-optimization">Without optimization</h4>
+						<pre class="x86asm">
+multiply_add:
+    push   rbp
+    mov    rbp, rsp
+    mov    DWORD PTR [rbp-4], edi    ; x -&gt; stack
+    mov    DWORD PTR [rbp-8], esi    ; y -&gt; stack
+    mov    DWORD PTR [rbp-12], edx   ; z -&gt; stack
+    mov    eax, DWORD PTR [rbp-4]    ; load x
+    imul   eax, DWORD PTR [rbp-8]    ; x * y
+    mov    DWORD PTR [rbp-16], eax   ; store result
+    mov    eax, DWORD PTR [rbp-16]   ; reload result
+    add    eax, DWORD PTR [rbp-12]   ; + z
+    pop    rbp
+    ret
+						</pre>
+					</section>
+					<section>
+						<h3 id="varargs">Varargs</h3>
+						<p>
+							Variadic functions (those taking
+							<code>...</code>
+							) use a different protocol. The key insight: the caller
+							sets
+							<code>al</code>
+							(the low byte of
+							<code>rax</code>
+							) to the
+							<b>number of vector (xmm) registers used</b>
+							for floating-point
+							arguments.
+						</p>
+						<pre class="c">
+// printf(&#34;Hello %s, value %d, pi is %f\n&#34;, name, val, 3.14);
+// Arguments:
+//   rdi = format string  (int arg)
+//   rsi = &#34;name&#34;         (int arg)
+//   rdx = val            (int arg)
+//   xmm0 = 3.14          (float arg)
+//   al = 1               (one vector register used)
+						</pre>
+						<p>
+							The callee uses
+							<code>al</code>
+							to determine whether it needs to save
+							<code>xmm0-xmm7</code>
+							to the register save
+							area. If
+							<code>al</code>
+							= 0, no vector regs were used; if
+							<code>al</code>
+							> 0, the callee saves that many to the
+							stack.
+						</p>
+						<pre class="x86asm">
+; Calling printf with mixed args via assembly
+section .data
+    fmt db &#34;Name: %s, Age: %d, Score: %f&#34;, 10, 0
+    name db &#34;Alice&#34;, 0
+    score dq 95.5
+
+section .text
+extern printf
+global _start
+_start:
+    ; Set up args
+    mov rdi, fmt        ; Format string
+    mov rsi, name       ; %s
+    mov rdx, 30         ; %d
+    movsd xmm0, [score] ; %f
+    mov al, 1           ; We used 1 vector register
+    call printf
+
+    ; Exit
+    mov rdi, 0
+    mov rax, 60         ; SYS_exit
+    syscall
+						</pre>
+						<pre class="bash">
+nasm -f elf64 -o /tmp/varargs.o varargs.asm
+gcc -no-pie -o /tmp/varargs /tmp/varargs.o
+/tmp/varargs
+# Output: Name: Alice, Age: 30, Score: 95.500000
+						</pre>
+					</section>
+					<section>
+						<h3 id="setjmp-and-longjmp">setjmp and longjmp</h3>
+						<p>
+							<code>setjmp</code>
+							saves the calling environment (registers, stack pointer, instruction pointer).
+							<code>longjmp</code>
+							restores that environment, effectively jumping back to the
+							<code>setjmp</code>
+							call. This bypasses normal
+							function return.
+						</p>
+						<pre class="c">
+#include &lt;stdio.h&gt;
+#include &lt;setjmp.h&gt;
+
+jmp_buf env;
+
+void second() {
+    printf(&#34;[second] About to longjmp\n&#34;);
+    longjmp(env, 42);  // Jump back to setjmp; returns 42
+}
+
+void first() {
+    second();
+    printf(&#34;[first] Never reached\n&#34;);
+}
+
+int main() {
+    int val = setjmp(env);
+    if (val == 0) {
+        printf(&#34;[main] setjmp returned 0; calling first()\n&#34;);
+        first();
+    } else {
+        printf(&#34;[main] setjmp restored; longjmp returned %d\n&#34;, val);
+        // val = 42
+    }
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+gcc -o setjmp-demo setjmp-demo.c &amp;&amp; ./setjmp-demo
+						</pre>
+						<p>
+							<code>setjmp</code>
+							/
+							<code>longjmp</code>
+							save and restore:
+						</p>
+						<ul>
+							<li>General-purpose registers (including rsp, rbp, rip)</li>
+							<li>Signal mask (if using <code>sigsetjmp</code> / <code>siglongjmp</code> )</li>
+						</ul>
+						<p>They do NOT restore:</p>
+						<ul>
+							<li>Heap allocations (leaked if not freed before longjmp)</li>
+							<li>File descriptor state</li>
+							<li>Floating-point register state (implementation-defined)</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="calling-assembly-from-c">Calling Assembly from C</h3>
+						<pre class="x86asm">
+; file: add_two.s
+; Function: long add_two(long a, long b)
+; Takes a in rdi, b in rsi, returns a + b in rax
+
+section .text
+global add_two:function (add_two.end - add_two)
+
+add_two:
+    ; Prologue (minimal - callee-saved registers unchanged)
+    ; No need to push anything if we don&#39;t touch callee-saved regs
+
+    lea rax, [rdi + rsi]   ; rax = a + b
+    ret                     ; Return in rax
+
+add_two.end:
+						</pre>
+						<pre class="c">
+// file: main.c
+#include &lt;stdio.h&gt;
+
+extern long add_two(long a, long b);
+
+int main() {
+    printf(&#34;add_two(40, 2) = %ld\n&#34;, add_two(40, 2));
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+nasm -f elf64 add_two.s -o add_two.o
+gcc -o asm-call main.c add_two.o
+./asm-call
+# Output: add_two(40, 2) = 42
+						</pre>
+					</section>
+					<section>
+						<h3 id="objdump-and-the-abi">objdump and the ABI</h3>
+						<pre class="bash">
+# Create a binary with a mix of argument types
+cat &gt; /tmp/abi-test.c &lt;&lt; &#39;EOF&#39;
+#include &lt;stdio.h&gt;
+long func(long a, long b, double c, long d, double e, long f) {
+    return a + b + (long)c + d + (long)e + f;
+}
+int main() {
+    printf(&#34;%ld\n&#34;, func(1,2,3.0,4,5.0,6));
+    return 0;
+}
+EOF
+
+gcc -O0 -o /tmp/abi-test /tmp/abi-test.c
+
+# Disassemble to see argument handling
+objdump -d -M intel /tmp/abi-test | grep -A30 &#39;&lt;func&gt;:&#39;
+
+# You&#39;ll see:
+# func:
+#   push rbp              ; prologue
+#   mov rbp, rsp
+#   mov [rbp-8], rdi      ; a (1st int) from rdi -&gt; stack
+#   mov [rbp-16], rsi     ; b (2nd int) from rsi -&gt; stack
+#   movsd [rbp-24], xmm0  ; c (1st float) from xmm0 -&gt; stack
+#   mov [rbp-32], rdx     ; d (3rd int) from rdx -&gt; stack
+#   movsd [rbp-40], xmm1  ; e (2nd float) from xmm1 -&gt; stack
+#   mov [rbp-48], rcx     ; f (4th int) from rcx -&gt; stack
+#   ...
+
+# Compare with optimized version
+gcc -O2 -o /tmp/abi-test-opt /tmp/abi-test.c
+objdump -d -M intel /tmp/abi-test-opt | grep -A10 &#39;&lt;func&gt;:&#39;
+# No stack spills; registers stay in regs; likely folds to constant
+						</pre>
+					</section>
+					<section>
+						<h3 id="verification-checklist">Verification Checklist</h3>
+						<pre class="bash">
+# 1. Check ABI documentation on your system
+ls /usr/include/x86_64-linux-gnu/ 2&gt;/dev/null || true
+dpkg -L gcc 2&gt;/dev/null | grep abi || pacman -Ql gcc 2&gt;/dev/null | grep abi
+
+# 2. Disassemble and annotate a simple function
+gcc -O0 -g -o /tmp/demo -xc - &lt;&lt;&lt;&#39;long f(long x){return x*2;}&#39;
+objdump -d -M intel /tmp/demo | grep -A10 &#39;&lt;f&gt;:&#39;
+
+# 3. See the effect of different optimization levels
+gcc -S -O0 -o /tmp/f-O0.s -xc - &lt;&lt;&lt;&#39;int f(int x){return x*2;}&#39;
+gcc -S -O2 -o /tmp/f-O2.s -xc - &lt;&lt;&lt;&#39;int f(int x){return x*2;}&#39;
+diff -u /tmp/f-O0.s /tmp/f-O2.s
+
+# 4. Inspect callee-saved register usage
+objdump -d /usr/bin/bash | grep -E &#39;push.*(rbx|rbp|r12|r13|r14|r15)&#39; | head -10
+
+# 5. Verify function symbols have proper type info
+readelf -s /usr/lib/libc.so.6 | grep &#39; FUNC &#39; | head -10
+
+# 6. Test varargs alignment
+cat &gt; /tmp/va-test.c &lt;&lt; &#39;EOF&#39;
+#include &lt;stdio.h&gt;
+#include &lt;stdarg.h&gt;
+void vatest(const char* fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    printf(&#34;First: %d\n&#34;, va_arg(ap, int));
+    printf(&#34;Second: %f\n&#34;, va_arg(ap, double));
+    printf(&#34;Third: %ld\n&#34;, va_arg(ap, long));
+    va_end(ap);
+}
+int main() { vatest(&#34;test&#34;, 1, 2.5, 3L); return 0; }
+EOF
+gcc -o /tmp/va-test /tmp/va-test.c &amp;&amp; /tmp/va-test
+
+# 7. Check stack alignment enforcement (ABI test)
+cat &gt; /tmp/align-test.c &lt;&lt; &#39;EOF&#39;
+#include &lt;stdio.h&gt;
+void check_alignment() {
+    unsigned long rsp_val;
+    asm volatile(&#34;mov %%rsp, %0&#34; : &#34;=r&#34;(rsp_val));
+    printf(&#34;Stack pointer: 0x%lx (mod 16 = %lu)\n&#34;, rsp_val, rsp_val % 16);
+}
+int main() { check_alignment(); return 0; }
+EOF
+gcc -o /tmp/align-test /tmp/align-test.c &amp;&amp; /tmp/align-test
+# At function entry, rsp % 16 should be 8 (8-byte return address pushed)
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that maps a function signature to its System V AMD64 argument locations. This
+							is the reasoning you do in reverse when you read disassembly, and it makes the "first six integer
+							args live in registers" rule concrete:
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;fmt&#34;
+	&#34;reflect&#34;
+)
+
+var intRegs = []string{&#34;rdi&#34;, &#34;rsi&#34;, &#34;rdx&#34;, &#34;rcx&#34;, &#34;r8&#34;, &#34;r9&#34;}
+
+func mapArgs(params []reflect.Kind) []string {
+	locations := make([]string, len(params))
+	intIdx, floatIdx, stack := 0, 0, 0
+
+	for i, kind := range params {
+		switch kind {
+		case reflect.Float32, reflect.Float64:
+			if floatIdx &lt; 8 {
+				locations[i] = fmt.Sprintf(&#34;xmm%d&#34;, floatIdx)
+				floatIdx++
+			} else {
+				locations[i] = fmt.Sprintf(&#34;[rsp+%d]&#34;, 8+stack*8)
+				stack++
+			}
+		default:
+			if intIdx &lt; len(intRegs) {
+				locations[i] = intRegs[intIdx]
+				intIdx++
+			} else {
+				locations[i] = fmt.Sprintf(&#34;[rsp+%d]&#34;, 8+stack*8)
+				stack++
+			}
+		}
+	}
+
+	return locations
+}
+
+func main() {
+	// long f(long, double, long, double, long, long, long)
+	params := []reflect.Kind{
+		reflect.Int, reflect.Float64, reflect.Int, reflect.Float64,
+		reflect.Int, reflect.Int, reflect.Int,
+	}
+	for i, loc := range mapArgs(params) {
+		fmt.Printf(&#34;arg %d -&gt; %s\n&#34;, i, loc)
+	}
+}
+						</pre>
+						<p>
+							Expected output:
+							<code>arg 0 -&gt; rdi</code>
+							,
+							<code>arg 1 -&gt; xmm0</code>
+							,
+							<code>arg 2 -&gt; rsi</code>
+							,
+							<code>arg 3 -&gt; xmm1</code>
+							,
+							<code>arg 4 -&gt; rdx</code>
+							,
+							<code>arg 5 -&gt; rcx</code>
+							,
+							<code>arg 6 -&gt; r8</code>
+							. Extend the tool so that arguments past the register limit
+							are placed at increasing
+							<code>[rsp+N]</code>
+							offsets, then verify the mapping against
+							<code>objdump</code>
+							output
+							for a real function.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-gitlab" href="https://gitlab.com/x86-psABIs/x86-64-ABI" target="_blank">System V AMD64 ABI Processor Supplement</a></li>
+							<li><a class="icon-github" href="https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst" target="_blank">ARM64 AAPCS - Procedure Call Standard for the Arm 64-bit Architecture</a></li>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention" target="_blank">Microsoft x64 Calling Convention</a></li>
+							<li><a class="icon-website" href="https://en.wikipedia.org/wiki/X86_calling_conventions" target="_blank">x86-32 cdecl/stdcall/fastcall - Wikipedia</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/setjmp.3" target="_blank">setjmp(3) - save stack context for non-local goto</a></li>
+							<li><a class="icon-download" href="https://www.agner.org/optimize/calling_conventions.pdf" target="_blank">Agner Fog - Calling Conventions (comprehensive reference)</a></li>
+							<li><a href="/wiki/articles/fundamentals/system-calls.html">System Calls</a> - syscall argument passing (note: r10 not rcx for 4th arg)</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Memory Manager | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Memory Manager">
+		<meta name="keywords" content="cow, huge-pages, memcg, memory-manager, numa, page-fault, page-tables, reclaim, rmap, swap, sysinternals, tlb">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Memory Manager">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Page table walk, TLB shootdown, page fault handling, copy-on-write, swap, huge pages, NUMA, page reclaim, reverse mapping, and kernel memory accounting.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/sysinternals/memory-manager.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Memory Manager">
+		<meta name="twitter:description" itemprop="description" content="Page table walk, TLB shootdown, page fault handling, copy-on-write, swap, huge pages, NUMA, page reclaim, reverse mapping, and kernel memory accounting.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-memory-managers-job">The Memory Manager's Job</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#page-table-walk-deep-dive">Page Table Walk - Deep Dive</a></b>
+					<ul>
+						<li><a href="#x86-64-4-level-paging">x86-64 4-Level Paging</a></li>
+						<li><a href="#arm64-pte-entries-4-level-48-bit-va">ARM64 PTE entries (4-level, 48-bit VA)</a></li>
+						<li><a href="#level-paging">5-Level Paging</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tlb-translation-lookaside-buffer">TLB - Translation Lookaside Buffer</a></b>
+					<ul>
+						<li><a href="#tlb-shootdown">TLB Shootdown</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#page-fault-handling">Page Fault Handling</a></b>
+					<ul>
+						<li><a href="#page-fault-error-code-bits-x86-64">Page fault error code bits (x86-64)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#copy-on-write-cow">Copy-on-Write (CoW)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#working-set-and-page-replacement">Working Set and Page Replacement</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#swap-subsystem">Swap Subsystem</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#huge-pages">Huge Pages</a></b>
+					<ul>
+						<li><a href="#x86-64-huge-page-sizes">x86-64 huge page sizes</a></li>
+						<li><a href="#transparent-huge-pages-thp">Transparent Huge Pages (THP)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#numa-non-uniform-memory-access">NUMA - Non-Uniform Memory Access</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#memory-reclaim-and-kswapd">Memory Reclaim and kswapd</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#reverse-mapping-rmap">Reverse Mapping (rmap)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#page-cache-interaction">Page Cache Interaction</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#memory-control-groups-memcg">Memory Control Groups (memcg)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#procmeminfo-for-exploit-development">/proc/meminfo for Exploit Development</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kernel-same-page-merging-ksm">Kernel Same-page Merging (KSM)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#proc-and-sys-interface">/proc and /sys Interface</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification">Verification</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/sysinternals/index.html">Sysinternals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/sysinternals/memory-manager.html">Memory Manager</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="memory-manager">Memory Manager</h2>
+					<p>
+						Page table walk, TLB shootdown, page fault handling, copy-on-write, swap, huge pages, NUMA,
+						page reclaim, reverse mapping, and kernel memory accounting.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							The memory manager owns every virtual-to-physical translation in the system. This article follows
+							a page from a fault on a user address through the four- and five-level page tables, the TLB,
+							the page allocator, and the reclaim path, and shows how to inspect the result with
+							<code>/proc</code>
+							,
+							<code>/sys</code>
+							, and
+							<code>perf</code>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/virtual-memory.html">Virtual Memory</a> - page tables, TLB, mmap() internals, demand paging, ASLR, OOM killer</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-memory-managers-job">The Memory Manager's Job</h3>
+						<p>
+							The memory manager is the kernel subsystem responsible for translating virtual addresses to
+							physical addresses, handling page faults, managing the page cache, reclaiming memory under pressure,
+							and enforcing process isolation. It is not a single function or file - it spans
+							<code>/usr/src/linux/mm/</code>
+							, consuming roughly 150,000 lines of C across 80+ source files. Every memory access in the system
+							passes through code that originates here.
+						</p>
+						<pre class="plaintext">
+User process requests a page (via mmap, brk, or implicit demand paging):
+    │
+    ▼
+  ┌──────────────────┐
+  │  Page Fault       │ ← CPU raises #PF exception
+  │  Handler          │    (arch/x86/mm/fault.c: do_page_fault)
+  └────────+─────────┘
+           │
+           ▼
+  ┌──────────────────┐
+  │  Address in       │──── No ──► SIGSEGV sent to process
+  │  VMA range?       │            (do_user_addr_fault)
+  └────────+─────────┘
+           │ Yes
+           ▼
+  ┌──────────────────┐
+  │  Permission       │──── No ──► SIGSEGV (write to read-only mapping)
+  │  check            │
+  └────────+─────────┘
+           │ Yes
+           ▼
+  ┌──────────────────┐
+  │  Page cache       │──── Hit ──► Minor fault: map existing page
+  │  lookup           │            (low cost, no disk I/O)
+  └────────+─────────┘
+           │ Miss
+           ▼
+  ┌──────────────────┐
+  │  Allocate new     │
+  │  physical page    │ ← alloc_pages() via buddy allocator
+  │  (or reclaim)     │
+  └────────+─────────┘
+           │
+           ▼
+  ┌──────────────────┐
+  │  Read from disk   │ ← Major fault: submit I/O, block process
+  │  (if file-backed) │    (high cost, disk latency)
+  └────────+─────────┘
+           │
+           ▼
+  ┌──────────────────┐
+  │  Update page      │ ← Set PTE → physical frame + permissions
+  │  table entry      │
+  └────────+─────────┘
+           │
+           ▼
+  ┌──────────────────┐
+  │  Return to user   │ ← CPU retries the faulting instruction
+  │                    │
+  └──────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="page-table-walk-deep-dive">Page Table Walk - Deep Dive</h3>
+						<p>
+							Virtual-to-physical translation is a multi-level lookup. Each level narrows the search by indexing
+							into a 512-entry table. The final
+							<abbr title="Penetration Test">PT</abbr>
+							E (Page Table Entry) contains the physical
+							frame number and permission bits.
+						</p>
+						<h4 id="x86-64-4-level-paging">x86-64 4-Level Paging</h4>
+						<pre class="plaintext">
+Virtual Address (48 bits):
+┌──────+──────+──────+──────+────────────┐
+│ PML4 │ PDPT │  PD  │  PT  │   Offset   │
+│ 9bit │ 9bit │ 9bit │ 9bit │   12 bit   │
+│47:39 │38:30 │29:21 │20:12 │   11:0     │
+└──────+──────+──────+──────+────────────┘
+
+Page Table Entry bits (x86-64 PTE, 8 bytes):
+  Bits 0-11:        Flags
+    Bit 0  (P):      Present (1 = page in memory)
+    Bit 1  (R/W):    Read/Write (0 = read-only, 1 = writeable)
+    Bit 2  (U/S):    User/Supervisor (0 = kernel only, 1 = user accessible)
+    Bit 3  (PWT):    Page Write-Through
+    Bit 4  (PCD):    Page Cache Disable
+    Bit 5  (A):      Accessed (set by CPU on read/write)
+    Bit 6  (D):      Dirty (set by CPU on write)
+    Bit 7  (PAT):    Page Attribute Table (or PS at PDPT/PD level)
+    Bit 8  (G):      Global (not flushed on CR3 reload)
+    Bit 9-11:        Available to OS (ignored by hardware)
+  Bits 12-51:       Physical Frame Number (PFN)
+    Bits 52-58:      Available to OS
+  Bits 59-62:        Protection Keys (PKU)
+  Bit 63  (XD/NX):   Execute Disable (1 = cannot execute)
+						</pre>
+						<h4 id="arm64-pte-entries-4-level-48-bit-va">ARM64 PTE entries (4-level, 48-bit VA)</h4>
+						<pre class="plaintext">
+ARM64 uses a different bit layout:
+  Bits 0-1:    Type (0b11 = valid descriptor)
+  Bit 2:       Table vs Block/Page (1 = table, 0 = block/page)
+  Bits 5-4:    Memory attributes index (MAIR)
+  Bit 6:       Access flag (AF) — no hardware update on some CPUs
+  Bit 7:       Dirty bit modifier (DBM) — hardware dirty bit
+  Bit 10:      Access Permission (AP[1], AP[2] in upper attribute)
+  Bits 11-12:  Shareability
+  Bit 53:      Privileged execute-never (PXN)
+  Bit 54:      Unprivileged execute-never (UXN)
+  Bits 47-12:  Output physical address [47:12]
+						</pre>
+						<pre class="bash">
+# Examine page table entries in a running process
+# Dump PTEs for a specific memory range (needs /proc/PID/pagemap)
+PID=$$
+VADDR=0x555555554000  # Typical text segment start
+PAGESIZE=$(getconf PAGE_SIZE)
+
+sudo python3 -c &#34;
+import os, struct
+
+pid = $PID
+vaddr = $VADDR
+pagesize = $PAGESIZE
+
+pagemap_path = f&#39;/proc/{pid}/pagemap&#39;
+with open(pagemap_path, &#39;rb&#39;) as f:
+    offset = (vaddr // pagesize) * 8
+    f.seek(offset)
+    entry = struct.unpack(&#39;Q&#39;, f.read(8))[0]
+
+present = bool(entry &amp; (1 &lt;&lt; 63))
+swapped = bool(entry &amp; (1 &lt;&lt; 62))
+pfn = entry &amp; ((1 &lt;&lt; 55) - 1)
+r_soft = bool(entry &amp; (1 &lt;&lt; 61))
+flags = entry &gt;&gt; 63  # Just present/swap bits for quick check
+
+if present:
+    print(f&#39;VA: 0x{vaddr:x}  PTE: 0x{entry:016x}&#39;)
+    print(f&#39;  Present: yes, PFN: 0x{pfn:x}&#39;)
+    print(f&#39;  Physical: 0x{(pfn * pagesize) + (vaddr % pagesize):x}&#39;)
+    print(f&#39;  Flags: W={bool(entry &amp; (1&lt;&lt;1))} U={bool(entry &amp; (1&lt;&lt;2))} &#39;
+          f&#39;D={bool(entry &amp; (1&lt;&lt;6))} NX={bool(entry &amp; (1&lt;&lt;63))}&#39;)
+elif swapped:
+    print(f&#39;VA: 0x{vaddr:x}  Swapped (swap offset in bits 54-0)&#39;)
+else:
+    print(f&#39;VA: 0x{vaddr:x}  Not mapped&#39;)
+&#34;
+						</pre>
+						<h4 id="level-paging">5-Level Paging</h4>
+						<p>
+							With 5-level paging, the virtual address expands to 57 bits (128 PiB address space). An additional
+							P5GD/PGD level sits above PML4:
+						</p>
+						<pre class="plaintext">
+57-bit VA:  [PGD:9][P4D:9][PDPT:9][PD:9][PT:9][Offset:12]
+Levels:     CR3 → PGD → P4D → PDPT → PD → PT → Page
+						</pre>
+						<pre class="bash">
+# Check if running with 5-level paging
+grep &#34;5-level&#34; /proc/cpuinfo &amp;&amp; echo &#34;5-level paging supported&#34; || echo &#34;4-level paging only&#34;
+grep &#34;CONFIG_X86_5LEVEL=&#34; /boot/config-$(uname -r)
+						</pre>
+					</section>
+					<section>
+						<h3 id="tlb-translation-lookaside-buffer">TLB - Translation Lookaside Buffer</h3>
+						<p>
+							The TLB is a small,
+							<abbr title="Central Processing Unit">CPU</abbr>
+							-internal cache that maps virtual pages to
+							physical frames. It is multi-level (L1 ITLB/DTLB, L2 STLB), virtually-tagged on some designs,
+							and per-
+							<abbr title="Central Processing Unit">CPU</abbr>
+							-core.
+						</p>
+						<pre class="plaintext">
+Intel Ice Lake TLB hierarchy (example):
+
+L1 ITLB:  128 entries (4 KiB) + 8 entries (2 MiB/4 MiB)   ← instructions
+L1 DTLB:  96 entries (4 KiB) + 32 entries (2 MiB/4 MiB)    ← data
+L2 STLB:  2048 entries (4 KiB/2 MiB)                        ← shared, unified
+						</pre>
+						<pre class="plaintext">
+TLB Lookup Flow:
+  Virtual address
+       │
+       ▼
+  ┌─────────┐
+  │ L1 TLB  │ → Hit: physical address (fast, 1-2 cycles)
+  │ Lookup  │ → Miss:
+  └────+────┘     │
+       │          ▼
+       │    ┌─────────┐
+       │    │ L2 STLB │ → Hit: physical address (slower, ~10 cycles)
+       │    │ Lookup  │ → Miss:
+       │    └────+────┘     │
+       │         │          ▼
+       │         │     Page table walk (4-5 memory accesses, ~100 cycles)
+       │         │          │
+       │         │          ▼
+       │         │     Physical address inserted into TLB (evicts LRU entry)
+       │         │          │
+       ▼         ▼          ▼
+    Physical address delivered to cache subsystem
+						</pre>
+						<h4 id="tlb-shootdown">TLB Shootdown</h4>
+						<p>
+							When a page table entry is modified (unmapped, permissions changed), every
+							<abbr title="Central Processing Unit">CPU</abbr>
+							core that might have that translation cached in its TLB must be notified. This is called a TLB
+							shootdown, implemented via Inter-Processor Interrupts (
+							<abbr title="Internet Protocol">IP</abbr>
+							Is).
+						</p>
+						<pre class="plaintext">
+TLB shootdown sequence:
+  1. CPU A modifies PTE (e.g., unmaps a page)
+  2. CPU A sends IPI to all CPUs that might have cached the PTE
+  3. Each target CPU:
+     a. Receives IPI
+     b. Executes TLB flush handler
+     c. Executes invlpg for the specific address (or reloads CR3)
+     d. Acknowledges completion
+  4. CPU A waits for all acknowledgments
+  5. Operation completes (CPU A can now free the physical page)
+
+Cost: TLB shootdown is expensive.
+  - IPI latency: ~1000 cycles
+  - Context switch: TLB flush via CR3 reload → hundreds of TLB misses on resume
+  - PCID reduces the cost by tagging TLB entries with address-space IDs
+						</pre>
+						<pre class="bash">
+# Count TLB-related performance events
+sudo perf stat -e dtlb_load_misses.miss_causes_a_walk,dtlb_store_misses.miss_causes_a_walk \
+    -e itlb_misses.miss_causes_a_walk \
+    -e page-faults \
+    sleep 2 2&gt;&amp;1 | grep -E &#34;miss|fault&#34;
+
+# Check PCID support
+grep -q pcid /proc/cpuinfo &amp;&amp; echo &#34;PCID supported&#34; || echo &#34;No PCID&#34;
+
+# ASID on ARM64 (equivalent to PCID)
+grep -q asid /proc/cpuinfo 2&gt;/dev/null &amp;&amp; echo &#34;ASID in flags&#34; || true
+						</pre>
+					</section>
+					<section>
+						<h3 id="page-fault-handling">Page Fault Handling</h3>
+						<p>Page faults are divided into major and minor:</p>
+						<ul>
+							<li><b>Minor fault</b> : Page is in memory (page cache, swap cache, zero page), just needs <abbr title="Penetration Test">PT</abbr> E update. Cheap.</li>
+							<li><b>Major fault</b> : Page must be read from disk. Requires I/O, the process blocks, and latency spikes.</li>
+						</ul>
+						<pre class="c">
+// /usr/src/linux/arch/x86/mm/fault.c — do_user_addr_fault()
+// Simplified flow for a page fault at address addr:
+
+void do_user_addr_fault(struct pt_regs *regs, unsigned long error_code,
+                         unsigned long address)
+{
+    struct vm_area_struct *vma;
+    struct mm_struct *mm = current-&gt;mm;
+
+    // 1. Find the VMA that covers this address
+    vma = find_vma(mm, address);
+    if (!vma || vma-&gt;vm_start &gt; address) {
+        // No VMA → SIGSEGV
+        goto bad_area;
+    }
+
+    // 2. Permission check
+    if (error_code &amp; X86_PF_WRITE) {
+        if (!(vma-&gt;vm_flags &amp; VM_WRITE))
+            goto bad_area;  // Write to read-only mapping
+        // For write to a shared cow page:
+        if (vma-&gt;vm_flags &amp; VM_SHARED) {
+            if (!(vma-&gt;vm_flags &amp; VM_MAYWRITE))
+                goto bad_area;
+        }
+    }
+    if (error_code &amp; X86_PF_INSTR) {
+        if (!(vma-&gt;vm_flags &amp; VM_EXEC))
+            goto bad_area;  // Execute on NX mapping
+    }
+
+    // 3. Handle the fault (mm/memory.c: handle_mm_fault())
+    fault = handle_mm_fault(vma, address, flags, regs);
+    if (fault &amp; VM_FAULT_ERROR) {
+        if (fault &amp; VM_FAULT_OOM)
+            goto out_of_memory;
+        if (fault &amp; VM_FAULT_SIGBUS)
+            goto do_sigbus;
+    }
+    return;
+
+bad_area:
+    force_sig_fault(SIGSEGV, SEGV_MAPERR, (void __user *)address);
+    return;
+}
+						</pre>
+						<h4 id="page-fault-error-code-bits-x86-64">Page fault error code bits (x86-64)</h4>
+						<pre class="plaintext">
+bit 0: P   — 0 = non-present page, 1 = protection violation
+bit 1: W/R — 0 = read access, 1 = write access
+bit 2: U/S — 0 = kernel-mode access, 1 = user-mode access
+bit 3: RSVD— 0 = not reserved, 1 = reserved bit violation
+bit 4: I/D — 0 = data access, 1 = instruction fetch
+bit 5: PK  — protection key violation
+bit 6: SS  — shadow stack access
+bit 15: SGX — SGX-related
+bit 31: RMP — SEV-SNP RMP violation
+						</pre>
+						<pre class="bash">
+# Count page faults for a process
+cat /proc/$$/stat | awk &#39;{print &#34;Minor faults:&#34;, $10, &#34;  Major faults:&#34;, $12}&#39;
+
+# Total faults in your shell&#39;s lifetime
+echo &#34;Min: $(awk &#39;{print $10}&#39; /proc/$$/stat)  Maj: $(awk &#39;{print $12}&#39; /proc/$$/stat)&#34;
+
+# Trace page faults in real time (perf)
+sudo perf stat -e page-faults find /usr -name &#34;*.h&#34; 2&gt;&amp;1 | grep page-faults
+
+# Detailed fault statistics
+cat /proc/vmstat | grep -E &#34;^(pgfault|pgmajfault|pgpgin|pgpgout|pswpin|pswpout)&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="copy-on-write-cow">Copy-on-Write (CoW)</h3>
+						<p>
+							Copy-on-write is the optimization that makes
+							<code>fork()</code>
+							fast. Instead of copying every page of
+							the parent's address space, the child shares the parent's pages as read-only. When either tries
+							to write, a page fault occurs, a new physical page is allocated, the data is copied, and the
+							page table is updated.
+						</p>
+						<pre class="plaintext">
+fork() CoW Sequence:
+  Parent process                    Child process
+  ──────────────                    ─────────────
+  
+  fork() called:
+    ├─ task_struct copied
+    ├─ mm_struct shared (reference count increased)
+    ├─ All PTEs marked read-only
+    │  (even if they were writable before)
+    └─ CR3 not changed
+  
+  Both parent and child now share all writable pages as read-only.
+  
+  Parent writes to page X:
+    ├─ #PF (write to read-only page)
+    ├─ do_wp_page() detects CoW
+    ├─ alloc_pages() → new physical page
+    ├─ Copy 4 KiB from original to new page
+    ├─ Update parent&#39;s PTE → writable, new PFN
+    ├─ Decrement original page&#39;s _refcount
+    ├─ If _refcount == 1 (only child uses it):
+    │   Mark child&#39;s PTE writable again
+    └─ Return → write succeeds
+						</pre>
+						<pre class="c">
+// /usr/src/linux/mm/memory.c — do_wp_page() (simplified)
+static vm_fault_t do_wp_page(struct vm_fault *vmf)
+{
+    struct vm_area_struct *vma = vmf-&gt;vma;
+
+    // If this is the only reference, just mark it writable
+    if (page_mapcount(vmf-&gt;page) == 1 &amp;&amp;
+        page_count(vmf-&gt;page) == 1) {
+        // Reuse the page, mark PTE writable
+        return wp_page_reuse(vmf);
+    }
+
+    // Multiple references → must copy
+    return wp_page_copy(vmf);
+}
+						</pre>
+						<pre class="bash">
+# Observe CoW behavior:
+# Write a program that forks, then monitor /proc/PID/smaps_rollup
+
+python3 &lt;&lt; &#39;EOF&#39;
+import os, time, sys
+
+print(f&#34;Parent PID: {os.getpid()}&#34;)
+
+# Allocate some memory and write to it
+data = bytearray(10 * 1024 * 1024)  # 10 MiB
+for i in range(0, len(data), 4096):
+    data[i] = 0x41
+
+pid = os.fork()
+if pid == 0:
+    # Child: write to the data
+    time.sleep(0.5)
+    for i in range(0, len(data), 4096):
+        data[i] = 0x42
+    print(f&#34;Child {os.getpid()} wrote to CoW pages&#34;)
+    os._exit(0)
+else:
+    time.sleep(1)
+    os.waitpid(pid, 0)
+    print(&#34;Fork CoW test completed&#34;)
+EOF
+						</pre>
+					</section>
+					<section>
+						<h3 id="working-set-and-page-replacement">Working Set and Page Replacement</h3>
+						<p>
+							The kernel must decide which pages to evict when memory is scarce. Linux uses a two-list LRU
+							strategy (active + inactive lists) for each reclaimable page type.
+						</p>
+						<pre class="plaintext">
+Two-List LRU Strategy:
+
+New Page Allocated
+       │
+       ▼
+┌──────────────┐
+│  Inactive     │ ← Pages not recently accessed
+│  LRU list    │    When memory pressure rises, eviction
+│              │    starts from the tail of this list.
+└──────+───────┘
+       │ Page accessed (PG_referenced set)
+       │
+       ▼
+┌──────────────┐
+│  Active       │ ← Pages recently accessed
+│  LRU list    │    Pages that survive here are &#34;working set&#34;
+│              │    When inactive list is low, demote from
+└──────+───────┘    active to inactive.
+       │ Non-accessed for a while
+       │
+       ▼
+Back to Inactive LRU (or evicted)
+
+For anonymous pages:  anon_active → anon_inactive → swap
+For file pages:       file_active → file_inactive → free (or writeback)
+For unevictable:      mlocked, ramfs → never evicted
+						</pre>
+						<pre class="bash">
+# Inspect LRU lists
+cat /proc/meminfo | grep -E &#34;Active|Inactive|Unevictable|Mlocked&#34;
+# Active:      1234567 kB  ← pages on active list
+# Inactive:     765432 kB  ← pages on inactive list
+# Active(anon):  500000 kB
+# Inactive(anon):200000 kB
+# Active(file):  734567 kB
+# Inactive(file):565432 kB
+
+# Watch reclaim activity
+cat /proc/vmstat | grep -E &#34;pgscan|pgsteal|kswapd&#34;
+# pgscan_kswapd    — pages scanned by kswapd
+# pgsteal_kswapd   — pages reclaimed by kswapd
+# pgscan_direct    — pages scanned by direct reclaim
+# pgsteal_direct   — pages reclaimed by direct reclaim
+						</pre>
+					</section>
+					<section>
+						<h3 id="swap-subsystem">Swap Subsystem</h3>
+						<p>
+							When anonymous memory must be evicted, it is written to swap space. Linux supports multiple
+							swap areas (partitions, files) with priorities. The swap subsystem uses a swap cache to avoid
+							duplicate writes and to handle race conditions between page-out and subsequent page-in.
+						</p>
+						<pre class="plaintext">
+Swap Lifecycle:
+  Page on anonymous LRU
+       │
+       ▼ (memory pressure, page at tail of inactive list)
+  ┌───────────────────┐
+  │ add_to_swap()     │ ← Allocates a swap entry (slot on disk)
+  │                   │    Maps page → swap entry
+  └────────+──────────┘
+           ▼
+  ┌───────────────────┐
+  │ Pageout I/O       │ ← Submits write to swap device
+  │ (swap_writepage)  │
+  └────────+──────────┘
+           ▼
+  ┌───────────────────┐
+  │ Page freed         │ ← Physical frame returned to allocator
+  │ PTE updated        │    PTE → swap entry (not zero)
+  └───────────────────┘
+       
+  ... Later, process accesses the swapped-out page ...
+       
+  ┌───────────────────┐
+  │ Page fault         │ ← #PF, PTE points to swap entry
+  │ do_swap_page()     │
+  └────────+──────────┘
+           ▼
+  ┌───────────────────┐
+  │ Swap cache lookup  │── Hit ──► Page already being read, wait
+  │                    │── Miss ─► Alloc new page, submit read I/O
+  └────────+──────────┘
+           ▼
+  ┌───────────────────┐
+  │ Page returned to    │
+  │ process (minor      │ ← Not a major fault (swap is faster than disk fs)
+  │  fault)             │
+  └───────────────────┘
+						</pre>
+						<p>
+							<b>zswap:</b>
+							Compresses pages before writing them to swap, storing them in a compressed RAM pool.
+							This avoids slow disk I/O for compressible pages.
+						</p>
+						<p>
+							<b>frontswap:</b>
+							A hook that allows a backend (like Xen tmem or
+							<abbr title="Virtual Machine">VM</abbr>
+							ware balloon
+							driver) to intercept swap-out before it reaches disk.
+						</p>
+						<pre class="bash">
+# Swap configuration
+swapon --show
+cat /proc/swaps
+
+# Swap usage
+cat /proc/meminfo | grep -E &#34;SwapTotal|SwapFree|SwapCached&#34;
+
+# Check if zswap is active
+cat /sys/module/zswap/parameters/enabled 2&gt;/dev/null
+cat /sys/module/zswap/parameters/compressor 2&gt;/dev/null
+cat /sys/module/zswap/parameters/max_pool_percent 2&gt;/dev/null
+
+# zswap pool stats
+cat /sys/kernel/debug/zswap/pool_total_size 2&gt;/dev/null || echo &#34;zswap debug not mounted&#34;
+
+# Swapin/swapout counters
+cat /proc/vmstat | grep -E &#34;pswpin|pswpout&#34;
+
+# Enable zswap at boot: add &#34;zswap.enabled=1 zswap.compressor=lz4&#34; to kernel cmdline
+						</pre>
+					</section>
+					<section>
+						<h3 id="huge-pages">Huge Pages</h3>
+						<p>
+							Standard 4 KiB pages create enormous page tables (4 GiB of RAM = 1 million pages = 8 MiB of
+							page tables). Huge pages reduce TLB pressure and page table overhead at the cost of internal
+							fragmentation and allocation latency.
+						</p>
+						<h4 id="x86-64-huge-page-sizes">x86-64 huge page sizes</h4>
+						<pre class="plaintext">
+2 MiB huge pages (PMD-level):
+  - One PMD entry covers 2 MiB (512 × 4 KiB pages)
+  - PTE level is skipped → 1 less memory access per TLB miss
+  - Page table walk: CR3 → PML4 → PDPT → PD → 2 MiB page
+  - Used by: THP (Transparent Huge Pages), hugetlbfs
+
+1 GiB huge pages (PUD-level):
+  - One PUD entry covers 1 GiB (512 × 2 MiB pages)
+  - PT and PD levels are skipped → 2 less memory accesses
+  - Page table walk: CR3 → PML4 → PDPT → 1 GiB page
+  - Used by: hugetlbfs, static huge page pools (not THP)
+  - Requires `hugetlb.1G=yes` on kernel cmdline
+						</pre>
+						<pre class="plaintext">
+4 KiB page walk:          2 MiB huge page walk:
+  CR3                       CR3
+   │                         │
+   ▼                         ▼
+  PML4                      PML4
+   │                         │
+   ▼                         ▼
+  PDPT                      PDPT
+   │                         │
+   ▼                         ▼
+  PD                        PD  → 2 MiB page (PS=1 in PDE)
+   │                         (No PT level!)
+   ▼
+  PT
+   │
+   ▼
+  4 KiB page
+						</pre>
+						<h4 id="transparent-huge-pages-thp">Transparent Huge Pages (THP)</h4>
+						<p>
+							THP automatically promotes contiguous 4 KiB pages to 2 MiB huge pages when possible. The kernel
+							daemon
+							<code>khugepaged</code>
+							scans memory for merge opportunities. When a THP must be split (e.g.,
+							<code>mprotect</code>
+							with smaller granularity), it's demoted back to 4 KiB pages.
+						</p>
+						<pre class="bash">
+# THP status
+cat /sys/kernel/mm/transparent_hugepage/enabled
+# [always] madvise never
+
+cat /sys/kernel/mm/transparent_hugepage/defrag
+# [always] defer defer+madvise madvise never
+
+# Huge page statistics
+cat /proc/meminfo | grep -i huge
+# AnonHugePages:   1234567 kB  ← THP pages in use
+# ShmemHugePages:          0 kB
+# FileHugePages:           0 kB
+# HugePages_Total:       128   ← hugetlbfs pages reserved
+# HugePages_Free:        128
+# Hugepagesize:         2048 kB
+
+# Per-process huge page usage
+cat /proc/$$/smaps | grep -A1 &#34;AnonHugePages&#34; | head -10
+
+# khugepaged stats
+cat /sys/kernel/mm/transparent_hugepage/khugepaged/pages_collapsed 2&gt;/dev/null
+cat /sys/kernel/mm/transparent_hugepage/khugepaged/full_scans 2&gt;/dev/null
+
+# Disable THP at runtime (not recommended for production)
+echo never | sudo tee /sys/kernel/mm/transparent_hugepage/enabled
+						</pre>
+					</section>
+					<section>
+						<h3 id="numa-non-uniform-memory-access">NUMA - Non-Uniform Memory Access</h3>
+						<p>
+							On multi-socket systems, each
+							<abbr title="Central Processing Unit">CPU</abbr>
+							has local memory (fast) and remote
+							memory (2-3x slower). The kernel's page allocator and scheduler are NUMA-aware, preferring to
+							allocate memory from the local node and schedule threads on the
+							<abbr title="Central Processing Unit">CPU</abbr>
+							closest to their memory.
+						</p>
+						<pre class="plaintext">
+NUMA Topology (2-socket system):
+
+┌───────────────────────┐   ┌───────────────────────┐
+│     NUMA Node 0       │   │     NUMA Node 1       │
+│  ┌──────┐ ┌────────┐ │   │  ┌──────┐ ┌────────┐ │
+│  │CPU 0 │ │CPU 1   │ │   │  │CPU 2 │ │CPU 3   │ │
+│  └──+───┘ └───+────┘ │   │  └──+───┘ └───+────┘ │
+│     │         │       │   │     │         │       │
+│  ┌──+─────────+──┐   │   │  ┌──+─────────+──┐   │
+│  │ Memory Ctrl  │   │   │  │ Memory Ctrl  │   │
+│  │ (local DIMMs)│   │   │  │ (local DIMMs)│   │
+│  └──────────────┘   │   │  └──────────────┘   │
+│                      │   │                      │
+│  16 GiB DDR5         │   │  16 GiB DDR5         │
+└───────────────────────┘   └───────────────────────┘
+         │                            │
+         └──────── QPI/UPI ───────────┘
+                (interconnect)
+
+Access costs:
+  Local:  ~80-100 ns
+  Remote: ~140-180 ns (1.5-2x)
+
+Page allocation with NUMA:
+  GFP_KERNEL  → try local node, fallback to remote nodes
+  GFP_THISNODE → only local node, return NULL if OOM
+  mbind()/set_mempolicy() → explicit per-process node preferences
+						</pre>
+						<pre class="bash">
+# NUMA topology
+numactl --hardware
+lscpu | grep -i numa
+
+# Memory per node
+numastat
+
+# Per-process NUMA statistics
+cat /proc/$$/numa_maps | head -10
+# Format: address policy:N0 mapmax=4 mapmin=4 ...
+# N0 = node 0, N1 = node 1
+
+# Bind a process to a specific node
+numactl --cpunodebind=0 --membind=0 stress-ng --vm 1 --vm-bytes 1G --timeout 5s
+
+# Show distance matrix
+cat /sys/devices/system/node/node*/distance
+# Example: 10 21 (node 0→0 = 10, node 0→1 = 21)
+#          21 10 (node 1→0 = 21, node 1→1 = 10)
+# 10 = local (100% bandwidth), 21 = remote (70% bandwidth)
+						</pre>
+					</section>
+					<section>
+						<h3 id="memory-reclaim-and-kswapd">Memory Reclaim and kswapd</h3>
+						<p>When memory runs low, pages must be reclaimed. Reclamation happens on two paths:</p>
+						<ol>
+							<li><b>Background (kswapd):</b> Woken when free memory drops below the "low" watermark. Runs asynchronously, reclaiming pages until free memory exceeds the "high" watermark.</li>
+						</ol>
+						<ol>
+							<li><b>Direct reclaim:</b> When an allocation fails despite kswapd's efforts (or before kswapd has responded), the allocation path itself performs synchronous reclaim. This is expensive - the allocating process blocks until pages are freed.</li>
+						</ol>
+						<pre class="plaintext">
+Memory Watermarks:
+  High ───────────────────── kswapd stops reclaiming
+         ▲
+  Low  ───────────────────── kswapd wakes up (async reclaim starts)
+         ▲
+  Min  ───────────────────── Direct reclaim (synchronous, process blocks)
+         ▼
+  0    ───────────────────── OOM killer activates
+						</pre>
+						<pre class="bash">
+# Check memory watermarks
+cat /proc/zoneinfo | grep -E &#34;(Node|pages free|min|low|high)&#34; | head -20
+
+# Reclaim activity
+cat /proc/vmstat | grep -E &#34;(kswapd|direct|pgscan|pgsteal)&#34;
+
+# Pressure stall information
+cat /proc/pressure/memory
+
+# Manual reclaim trigger
+echo 3 | sudo tee /proc/sys/vm/drop_caches  # Drop pagecache, dentries, inodes
+
+# Check which pages are reclaimable
+cat /proc/meminfo | grep -E &#34;SReclaimable|SUnreclaim|Cached|Buffers&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="reverse-mapping-rmap">Reverse Mapping (rmap)</h3>
+						<p>
+							Reverse mapping solves the problem: "Given a physical page, which
+							<abbr title="Penetration Test">PT</abbr>
+							Es
+							point to it?" When the kernel needs to evict a page, it must find and invalidate every
+							<abbr title="Penetration Test">PT</abbr>
+							E that references it. The rmap subsystem tracks this information through
+							<code>anon_vma</code>
+							and
+							<code>address_space</code>
+							structures.
+						</p>
+						<pre class="plaintext">
+Page → PTE mappings:
+
+Anonymous page (swappable):
+  struct page → mapping → struct anon_vma
+    → anon_vma_chain (avc) → vma → mm → page table → PTE
+
+File-backed page:
+  struct page → mapping → struct address_space
+    → i_mmap (interval tree of VMAs)
+    → For each VMA: mm → page table → PTE
+						</pre>
+						<pre class="bash">
+# Rmap-related kernel statistics
+cat /proc/vmstat | grep -E &#34;rmap|pte|pmd|pud&#34;
+
+# Trace rmap operations
+# (requires debugfs mounted and root)
+echo 1 | sudo tee /sys/kernel/debug/tracing/events/rmap/try_to_unmap/enable 2&gt;/dev/null
+sleep 0.1
+sudo cat /sys/kernel/debug/tracing/trace | head -10
+echo 0 | sudo tee /sys/kernel/debug/tracing/events/rmap/try_to_unmap/enable 2&gt;/dev/null
+						</pre>
+					</section>
+					<section>
+						<h3 id="page-cache-interaction">Page Cache Interaction</h3>
+						<p>
+							The page cache stores file data in memory. It sits between the VFS and the block layer, absorbing
+							reads and delaying writes. The memory manager treats file-backed pages differently from anonymous
+							pages:
+						</p>
+						<ul>
+							<li><b>File-backed pages</b> can be evicted without swap (just write back dirty data)</li>
+							<li><b>Anonymous pages</b> require swap to evict</li>
+							<li><b>Shared file-backed pages</b> (libraries, executables) are reclaimed by dropping them from the page cache</li>
+						</ul>
+						<pre class="bash">
+# Page cache statistics
+cat /proc/meminfo | grep -E &#34;^Cached|^Buffers|^Dirty|^Writeback&#34;
+
+# Active vs inactive file pages
+cat /proc/meminfo | grep &#34;file&#34;
+
+# Page cache hit rate (approximate via pgpgin/pgpgout)
+awk &#39;{ printf &#34;Page cache reads: %d pages (%.1f MiB)\n&#34;, $1, $1*4096/1048576 }&#39; /proc/vmstat 2&gt;/dev/null | head -1
+cat /proc/vmstat | grep pgpgin
+						</pre>
+					</section>
+					<section>
+						<h3 id="memory-control-groups-memcg">Memory Control Groups (memcg)</h3>
+						<p>
+							Memory cgroups limit, account, and isolate memory usage for groups of processes. Each memcg
+							has its own LRU lists, page counters, and OOM settings - enabling container memory limits, per-service
+							charging, and accurate accounting.
+						</p>
+						<pre class="plaintext">
+Memory cgroup accounting:
+  mem_cgroup → memory.stat (counters)
+    ├─ anon      — anonymous memory
+    ├─ file      — file-backed memory (page cache)
+    ├─ kernel    — kernel structures (not reclaimable)
+    ├─ kernel_stack — per-thread kernel stacks
+    ├─ slab      — slab allocator charges
+    ├─ sock      — socket buffers
+    ├─ shmem     — shared memory
+    ├─ file_mapped — file-backed pages mapped into processes
+    ├─ file_dirty  — dirty file pages
+    ├─ file_writeback — file pages under writeback
+    ├─ swap      — swapped-out anonymous memory
+    └─ pgpgin/pgpgout — I/O counters
+						</pre>
+						<pre class="bash">
+# Inspect the memory cgroup for the current process
+cat /proc/$$/cgroup
+
+# If using cgroups v2, check memory controller
+cat /sys/fs/cgroup/$(cat /proc/$$/cgroup | cut -d: -f3)/memory.current 2&gt;/dev/null
+cat /sys/fs/cgroup/$(cat /proc/$$/cgroup | cut -d: -f3)/memory.stat 2&gt;/dev/null | head -20
+
+# System-wide memory info
+cat /proc/meminfo
+# Key fields:
+#   MemTotal        — total usable RAM
+#   MemFree          — completely unused RAM
+#   MemAvailable     — RAM available for new allocations (includes reclaimable)
+#   Cached           — page cache (can be reclaimed)
+#   Buffers          — block device buffer cache
+#   Active/Inactive  — LRU lists
+#   AnonPages        — anonymous (heap, stack) pages
+#   Mapped           — file-backed pages mapped into processes
+#   Shmem            — tmpfs, shared memory
+#   KReclaimable     — kernel reclaimable (SReclaimable)
+#   KernelStack      — kernel stack memory
+#   PageTables       — page table memory
+#   CommitLimit      — max allocatable with overcommit
+#   Committed_AS     — currently committed
+						</pre>
+					</section>
+					<section>
+						<h3 id="procmeminfo-for-exploit-development">/proc/meminfo for Exploit Development</h3>
+						<pre class="bash">
+# Critical fields for assessing the memory state before exploitation:
+
+# How much physical memory is free (completely untouched)?
+grep MemFree /proc/meminfo
+
+# How much is actually available (free + reclaimable)?
+grep MemAvailable /proc/meminfo
+
+# How much anonymous memory is allocated? (heap, stack, CoW)
+grep AnonPages /proc/meminfo
+
+# How many pages are in the page cache?
+grep ^Cached /proc/meminfo
+
+# How many slab objects exist? (target for slab-based exploits)
+grep ^Slab /proc/meminfo
+
+# How much swap is in use? (indicates memory pressure)
+grep SwapCached /proc/meminfo
+
+# How much is committed (virtual allocation) vs limit?
+grep -E &#34;CommitLimit|Committed_AS&#34; /proc/meminfo
+
+# Page table memory consumption (grows with VMA count)
+grep PageTables /proc/meminfo
+
+# Total kernel stacks (grows with thread count)
+grep KernelStack /proc/meminfo
+
+# Are huge pages in use? (affects page table walk)
+grep -i huge /proc/meminfo | grep -v &#34;HugePages_&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="kernel-same-page-merging-ksm">Kernel Same-page Merging (KSM)</h3>
+						<p>
+							KSM scans anonymous pages for identical content and merges them into a single copy-on-write
+							page. Originally designed for virtual machine memory deduplication, it can be used by any application
+							via
+							<code>madvise(MADV_MERGEABLE)</code>
+							.
+						</p>
+						<pre class="bash">
+# KSM status
+cat /sys/kernel/mm/ksm/run             # 1 = enabled
+cat /sys/kernel/mm/ksm/pages_shared    # Pages being shared
+cat /sys/kernel/mm/ksm/pages_sharing   # Pages saved (additional refs)
+cat /sys/kernel/mm/ksm/pages_unshared  # Pages checked but not merged
+cat /sys/kernel/mm/ksm/pages_volatile  # Pages changing too fast
+
+# KSM is a side channel: if two processes share a page via KSM,
+# one can detect the other&#39;s writes by measuring CoW fault timing.
+# This has been used in VM escape exploits.
+						</pre>
+					</section>
+					<section>
+						<h3 id="proc-and-sys-interface">/proc and /sys Interface</h3>
+						<p>Complete reference of filesystem interfaces for memory manager state:</p>
+						<pre class="bash">
+# ─── /proc interfaces ───
+/proc/meminfo                    # Comprehensive memory statistics
+/proc/vmstat                     # VM subsystem event counters
+/proc/zoneinfo                   # Per-zone memory watermarks and stats
+/proc/buddyinfo                  # Buddy allocator freelist sizes
+/proc/pagetypeinfo               # Pages grouped by mobility type
+/proc/slabinfo                   # Slab allocator cache statistics
+/proc/PID/maps                   # Process virtual memory map
+/proc/PID/smaps                  # Detailed memory map with RSS, PSS, swap
+/proc/PID/smaps_rollup           # Aggregated smaps (fast)
+/proc/PID/numa_maps              # Per-page NUMA node attribution
+/proc/PID/pagemap                # Binary virtual→physical translation
+/proc/PID/clear_refs             # Reset PG_referenced flags (for testing)
+/proc/sys/vm/                    # Tunable VM parameters
+
+# ─── /sys interfaces ───
+/sys/kernel/mm/transparent_hugepage/  # THP configuration
+/sys/kernel/mm/ksm/                    # KSM configuration
+/sys/kernel/mm/hugepages/              # hugetlbfs pools
+/sys/devices/system/node/              # NUMA node topology
+/sys/fs/cgroup/memory.*                # Memory cgroup (v1)
+/sys/fs/cgroup/&lt;group&gt;/memory.*        # Memory cgroup (v2)
+						</pre>
+					</section>
+					<section>
+						<h3 id="verification">Verification</h3>
+						<pre class="bash">
+# 1. Comprehensive memory state snapshot
+echo &#34;=== Meminfo ===&#34;
+cat /proc/meminfo | head -30
+
+echo &#34;&#34;
+echo &#34;=== Page Faults ===&#34;
+cat /proc/vmstat | grep -E &#34;pgfault|pgmajfault&#34;
+
+echo &#34;&#34;
+echo &#34;=== Swap ===&#34;
+swapon --show
+cat /proc/meminfo | grep -E &#34;SwapTotal|SwapFree|SwapCached&#34;
+
+echo &#34;&#34;
+echo &#34;=== Huge Pages ===&#34;
+cat /proc/meminfo | grep -i huge
+
+# 2. Trace page faults for a test process
+sudo perf stat -e page-faults,minor-faults,major-faults dd if=/dev/zero of=/dev/null bs=4096 count=10000 2&gt;&amp;1 | grep -i fault
+
+# 3. Inspect page tables for current shell
+sudo cat /proc/$$/pagemap | wc -c
+# Should be (memory_size / 4096) * 8 bytes
+
+# 4. Check NUMA topology and memory distribution
+numactl --hardware 2&gt;/dev/null || echo &#34;Single NUMA node (common for desktops/VMs)&#34;
+numastat 2&gt;/dev/null || echo &#34;numactl not installed&#34;
+
+# 5. Memory watermarks per zone
+cat /proc/zoneinfo | grep -A1 &#34;pages free&#34; | head -10
+
+# 6. Reclaim activity
+cat /proc/vmstat | grep -E &#34;kswapd_steal|direct_steal|compact_migrate_scanned&#34;
+
+# 7. TLB miss rate with perf
+sudo perf stat -e dtlb_load_misses.miss_causes_a_walk,dtlb_store_misses.miss_causes_a_walk \
+    -e itlb_misses.miss_causes_a_walk \
+    stress-ng --vm 2 --vm-bytes 64M --timeout 2s 2&gt;&amp;1 | grep -E &#34;miss|causes&#34;
+
+# 8. Observe CoW behavior
+python3 &lt;&lt; &#39;EOF&#39;
+import os
+data = bytearray(50 * 1024 * 1024)  # 50 MiB
+for i in range(0, len(data), 4096):
+    data[i] = 65
+
+print(f&#34;Minor faults before fork: &#34;, end=&#34;&#34;)
+with open(f&#34;/proc/{os.getpid()}/stat&#34;) as f:
+    print(f.read().split()[9])
+
+pid = os.fork()
+if pid == 0:
+    for i in range(0, len(data), 4096):
+        data[i] = 66
+    print(f&#34;Child minor faults: &#34;, end=&#34;&#34;)
+    with open(f&#34;/proc/{os.getpid()}/stat&#34;) as f:
+        print(f.read().split()[9])
+    os._exit(0)
+os.waitpid(pid, 0)
+print(&#34;CoW test done — check fault counters above&#34;)
+EOF
+
+# 9. Check THP status and khugepaged
+cat /sys/kernel/mm/transparent_hugepage/enabled
+cat /sys/kernel/mm/transparent_hugepage/khugepaged/pages_collapsed 2&gt;/dev/null
+
+# 10. Memory pressure stall info
+cat /proc/pressure/memory
+
+# 11. Per-process NUMA allocation
+cat /proc/$$/numa_maps | head -10 2&gt;/dev/null || echo &#34;Not a NUMA system or numactl not installed&#34;
+
+# 12. PID 1 (systemd) memory details
+sudo cat /proc/1/smaps_rollup 2&gt;/dev/null
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that translates a virtual address to a physical frame by reading
+							<code>/proc/self/pagemap</code>
+							. Allocate a 1 MiB slice, touch one byte per page, then print the present, swapped, and shared
+							bits plus the physical frame number for the first page.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;encoding/binary&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;unsafe&#34;
+)
+
+func pageEntry(addr uintptr) uint64 {
+	file, err := os.Open(&#34;/proc/self/pagemap&#34;)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer file.Close()
+
+	entry := make([]byte, 8)
+	if _, err := file.ReadAt(entry, int64(addr/4096*8)); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	return binary.LittleEndian.Uint64(entry)
+}
+
+func main() {
+	buf := make([]byte, 1&lt;&lt;20)
+	for i := 0; i &lt; len(buf); i += 4096 {
+		buf[i] = 0x41
+	}
+
+	addr := uintptr(unsafe.Pointer(&amp;buf[0]))
+	entry := pageEntry(addr)
+
+	present := entry&amp;(1&lt;&lt;63) != 0
+	swapped := entry&amp;(1&lt;&lt;62) != 0
+	shared := entry&amp;(1&lt;&lt;61) != 0
+	pfn := entry &amp; ((1 &lt;&lt; 55) - 1)
+
+	fmt.Printf(&#34;addr    = %#x\n&#34;, addr)
+	fmt.Printf(&#34;present = %v\n&#34;, present)
+	fmt.Printf(&#34;swapped = %v\n&#34;, swapped)
+	fmt.Printf(&#34;shared  = %v\n&#34;, shared)
+	if present &amp;&amp; pfn != 0 {
+		fmt.Printf(&#34;frame   = %#x\n&#34;, pfn&lt;&lt;12)
+	} else {
+		fmt.Println(&#34;frame   = unavailable (PFNs need CAP_SYS_ADMIN)&#34;)
+	}
+}
+						</pre>
+						<p>
+							Build it with
+							<code>go build -o pagemap pagemap.go</code>
+							. Run it as an unprivileged user, then with
+							<code>sudo</code>
+							: since Linux 4.0 the kernel zeroes the PFN field for callers without
+							<code>CAP_SYS_ADMIN</code>
+							. Finally,
+							have the process
+							<code>fork</code>
+							a child that writes to the same buffer and re-read the shared and present
+							bits to observe copy-on-write in action.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/virtual-memory.html">Virtual Memory</a> - page tables, TLB, demand paging</li>
+							<li><a href="/wiki/articles/sysinternals/kernel-memory.html">Kernel Memory</a> - kmalloc, vmalloc, slab, buddy allocator</li>
+							<li><a class="icon-website" href="https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html" target="_blank">Intel SDM Vol. 3A - Chapter 4: Paging</a></li>
+							<li><a class="icon-website" href="https://developer.arm.com/documentation/ddi0487/latest/" target="_blank">ARM Architecture Reference Manual - VMSA chapter</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/mm/memory.c" target="_blank">Linux kernel: mm/memory.c</a> - page fault handler, <abbr title="Copy-on-Write">CoW</abbr></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/mm/vmscan.c" target="_blank">Linux kernel: mm/swap.c, mm/vmscan.c</a> - reclaim</li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/mm/rmap.c" target="_blank">Linux kernel: mm/rmap.c</a> - reverse mapping</li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/mm/huge_memory.c" target="_blank">Linux kernel: mm/huge_memory.c</a> - THP</li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/mm/memcontrol.c" target="_blank">Linux kernel: mm/memcontrol.c</a> - memory cgroup</li>
+							<li><a class="icon-website" href="https://lwn.net/Articles/7468/" target="_blank">LWN.net - Page frame reclaiming</a> - kswapd and the LRU</li>
+							<li><a class="icon-website" href="https://lwn.net/Articles/568870/" target="_blank">LWN.net - NUMA scheduling and memory placement</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/proc.5" target="_blank">man 5 proc</a> - /proc/meminfo, /proc/vmstat, /proc/zoneinfo</li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/numa.7" target="_blank">man 7 numa</a> - NUMA policy overview</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

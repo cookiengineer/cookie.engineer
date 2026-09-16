@@ -1,5 +1,6 @@
 
 import hljs                from "./highlight.mjs";
+import language_awk        from "./languages/awk.mjs";
 import language_bash       from "./languages/bash.mjs";
 import language_c          from "./languages/c.mjs";
 import language_cpp        from "./languages/cpp.mjs";
@@ -7,26 +8,35 @@ import language_css        from "./languages/css.mjs";
 import language_diff       from "./languages/diff.mjs";
 import language_dns        from "./languages/dns.mjs";
 import language_dockerfile from "./languages/dockerfile.mjs";
+import language_gdb        from "./languages/gdb.mjs";
 import language_go         from "./languages/go.mjs";
 import language_http       from "./languages/http.mjs";
 import language_ini        from "./languages/ini.mjs";
+import language_java       from "./languages/java.mjs";
 import language_javascript from "./languages/javascript.mjs";
 import language_json       from "./languages/json.mjs";
+import language_lua        from "./languages/lua.mjs";
 import language_makefile   from "./languages/makefile.mjs";
 import language_markdown   from "./languages/markdown.mjs";
+import language_nft        from "./languages/nft.mjs";
+import language_nginx      from "./languages/nginx.mjs";
 import language_plaintext  from "./languages/plaintext.mjs";
 import language_powershell from "./languages/powershell.mjs";
 import language_python     from "./languages/python.mjs";
+import language_ruby       from "./languages/ruby.mjs";
 import language_rust       from "./languages/rust.mjs";
 import language_sql        from "./languages/sql.mjs";
 import language_wasm       from "./languages/wasm.mjs";
 import language_nasm       from "./languages/x86asm.mjs";
 import language_xml        from "./languages/xml.mjs";
 import language_yaml       from "./languages/yaml.mjs";
+import language_yara       from "./languages/yara.mjs";
+import language_zeek       from "./languages/zeek.mjs";
 
 
 
 hljs.registerLanguage("asm",        language_nasm);
+hljs.registerLanguage("awk",        language_awk);
 hljs.registerLanguage("bash",       language_bash);
 hljs.registerLanguage("c",          language_c);
 hljs.registerLanguage("cpp",        language_cpp);
@@ -34,22 +44,32 @@ hljs.registerLanguage("css",        language_css);
 hljs.registerLanguage("diff",       language_diff);
 hljs.registerLanguage("dns",        language_dns);
 hljs.registerLanguage("dockerfile", language_dockerfile);
+hljs.registerLanguage("gdb",        language_gdb);
 hljs.registerLanguage("go",         language_go);
+hljs.registerLanguage("html",       language_xml);
 hljs.registerLanguage("http",       language_http);
 hljs.registerLanguage("ini",        language_ini);
+hljs.registerLanguage("java",       language_java);
 hljs.registerLanguage("javascript", language_javascript);
 hljs.registerLanguage("json",       language_json);
+hljs.registerLanguage("lua",        language_lua);
 hljs.registerLanguage("makefile",   language_makefile);
 hljs.registerLanguage("markdown",   language_markdown);
+hljs.registerLanguage("nft",        language_nft);
+hljs.registerLanguage("nginx",      language_nginx);
 hljs.registerLanguage("plaintext",  language_plaintext);
 hljs.registerLanguage("powershell", language_powershell);
 hljs.registerLanguage("python",     language_python);
+hljs.registerLanguage("ruby",       language_ruby);
 hljs.registerLanguage("rust",       language_rust);
 hljs.registerLanguage("sql",        language_sql);
+hljs.registerLanguage("text",       language_plaintext);
 hljs.registerLanguage("wasm",       language_wasm);
 hljs.registerLanguage("nasm",       language_nasm);
 hljs.registerLanguage("xml",        language_xml);
 hljs.registerLanguage("yaml",       language_yaml);
+hljs.registerLanguage("yara",       language_yara);
+hljs.registerLanguage("zeek",       language_zeek);
 
 
 

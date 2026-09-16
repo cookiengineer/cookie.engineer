@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Firewalls | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Firewalls">
+		<meta name="keywords" content="blueteam, conntrack, firewall, firewalld, iptables, netfilter, nftables">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Firewalls">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Stateful packet filtering with iptables and nftables, rule evaluation, connection tracking, and default-deny policy deployment.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/blueteam/firewalls.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Firewalls">
+		<meta name="twitter:description" itemprop="description" content="Stateful packet filtering with iptables and nftables, rule evaluation, connection tracking, and default-deny policy deployment.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#concept">Concept</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#netfilter-architecture">Netfilter Architecture</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#iptables-tables-and-chains">iptables Tables and Chains</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#default-deny-firewall-example">Default-Deny Firewall Example</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#nftables-modern-replacement">nftables - Modern Replacement</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#connection-tracking-conntrack">Connection Tracking (conntrack)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#firewalld">firewalld</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#common-rule-patterns">Common Rule Patterns</a></b>
+					<ul>
+						<li><a href="#accept-established-drop-invalid">Accept established, drop invalid</a></li>
+						<li><a href="#rate-limiting-for-brute-force">Rate limiting for brute force</a></li>
+						<li><a href="#geo-blocking-with-geoip">Geo-blocking with geoip</a></li>
+						<li><a href="#port-knocking-conceal-ssh">Port knocking (conceal SSH)</a></li>
+						<li><a href="#blackhole-drop-without-response">Blackhole (drop without response)</a></li>
+						<li><a href="#reject-with-icmp">Reject with ICMP</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#rule-order-and-performance">Rule Order and Performance</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#testing-firewall-rules">Testing Firewall Rules</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#detection-rules">Detection Rules</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/blueteam/index.html">Blueteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/blueteam/firewalls.html">Firewalls</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="firewalls">Firewalls</h2>
+					<p>
+						Stateful packet filtering with iptables and nftables, rule evaluation, connection tracking,
+						and default-deny policy deployment.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							A firewall decides which packets may pass by evaluating stateful rules against every connection.
+							This article covers the netfilter hook points, iptables and nftables rule structure, connection
+							tracking, and the default-deny policy that should back every host. After reading, you can write
+							a stateful ruleset, test it with nmap, and detect attempts to disable it.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/tcp-handshake.html">TCP Handshake</a> - <abbr title="Transmission Control Protocol">TCP</abbr> flags, <abbr title="Synchronize">SYN</abbr> /ACK/FIN/RST, state transitions</li>
+							<li><a href="/wiki/articles/fundamentals/network-scanning.html">Network Scanning</a> - port scanning techniques, responses</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="concept">Concept</h3>
+						<p>
+							A firewall is a policy enforcement point that decides whether a packet is allowed, denied, or
+							modified based on a set of rules. Linux firewalls are built on the
+							<b>netfilter</b>
+							framework in
+							the kernel, managed through userspace tools: iptables (legacy), nftables (modern), or firewalld
+							(abstraction layer).
+						</p>
+						<p>
+							The fundamental principle of firewall engineering:
+							<b>default deny</b>
+							. Everything not explicitly
+							permitted is dropped. This is the opposite of the "allow everything, block known bad" approach
+							which is impossible to maintain.
+						</p>
+					</section>
+					<section>
+						<h3 id="netfilter-architecture">Netfilter Architecture</h3>
+						<p>Netfilter hooks into five points in the kernel network stack:</p>
+						<pre class="plaintext">
+                   ┌──────────────────────────────┐
+                   │         Local Process         │
+                   │              │                │
+                   │       [INPUT │ OUTPUT]        │
+                   │              │                │
+    ┌──────────────+──────────────+────────────────┤
+    │              ▼                             ▲ │
+    │  ┌──────┐  ┌──────┐  ┌──────┐  ┌──────┐  │ │
+    │  │ PRER │─▶│ ROUT │─▶│ FORW │─▶│ POST │  │ │
+    │  │ OUT  │  │ ING  │  │ ARD  │  │ ROUT │  │ │
+    │  └──────┘  └──────┘  └──────┘  └──────┘  │ │
+    │          ▲          │           │         │ │
+    └──────────+──────────+───────────+─────────┘
+               │          │           │
+          NIC ingress  (routing)  NIC egress
+						</pre>
+						<ul>
+							<li><b>PREROUTING</b> : First hook. Packet just arrived. Used for destination <abbr title="Network Address Translation">NAT</abbr> (D <abbr title="Network Address Translation">NAT</abbr> ).</li>
+							<li><b>INPUT</b> : Packet destined for local process.</li>
+							<li><b>FORWARD</b> : Packet is being routed through this machine.</li>
+							<li><b>OUTPUT</b> : Packet from local process about to exit.</li>
+							<li><b>POSTROUTING</b> : Last hook. Used for source <abbr title="Network Address Translation">NAT</abbr> (S <abbr title="Network Address Translation">NAT</abbr> ) and masquerading.</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="iptables-tables-and-chains">iptables Tables and Chains</h3>
+						<p>
+							iptables organizes rules into
+							<b>tables</b>
+							(functional groups) and chains (hook points):
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Table</th>
+									<th align="center">Purpose</th>
+									<th align="center">Chains</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>filter</code></td>
+									<td align="center">Packet filtering (default)</td>
+									<td align="center">INPUT, OUTPUT, FORWARD</td>
+								</tr>
+								<tr>
+									<td align="center"><code>nat</code></td>
+									<td align="center">Network Address Translation</td>
+									<td align="center">PREROUTING, INPUT, OUTPUT, POSTROUTING</td>
+								</tr>
+								<tr>
+									<td align="center"><code>mangle</code></td>
+									<td align="center">Packet modification (TOS, TTL, MARK)</td>
+									<td align="center">All 5 chains</td>
+								</tr>
+								<tr>
+									<td align="center"><code>raw</code></td>
+									<td align="center">Connection tracking bypass</td>
+									<td align="center">PREROUTING, OUTPUT</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# List rules in filter table with packet counters
+sudo iptables -L -v -n --line-numbers
+
+# List rules in nat table
+sudo iptables -t nat -L -v -n
+
+# Show rules in parsable format (for backups)
+sudo iptables-save &gt; /etc/iptables/rules.v4
+sudo ip6tables-save &gt; /etc/iptables/rules.v6
+						</pre>
+					</section>
+					<section>
+						<h3 id="default-deny-firewall-example">Default-Deny Firewall Example</h3>
+						<pre class="bash">
+#!/bin/bash
+# firewall.sh — Default-deny iptables firewall
+# Restore: iptables-restore &lt; /etc/iptables/rules.v4
+
+# Flush all existing rules and chains
+iptables -F        # Flush chains
+iptables -X        # Delete user-defined chains
+iptables -t nat -F
+iptables -t nat -X
+iptables -t mangle -F
+iptables -t mangle -X
+
+# Default policies: DROP everything
+iptables -P INPUT DROP
+iptables -P FORWARD DROP
+iptables -P OUTPUT DROP
+
+# --- Loopback (internal communication) ---
+iptables -A INPUT  -i lo -j ACCEPT
+iptables -A OUTPUT -o lo -j ACCEPT
+
+# --- Connection tracking ---
+# Allow responses to established outbound connections
+iptables -A INPUT  -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
+# Drop invalid packets (spoofed, mangled flags, no state)
+iptables -A INPUT  -m conntrack --ctstate INVALID -j DROP
+iptables -A FORWARD -m conntrack --ctstate INVALID -j DROP
+
+# --- Allowed outbound (for the server to function) ---
+iptables -A OUTPUT -p tcp --dport 53 -j ACCEPT  # DNS TCP
+iptables -A OUTPUT -p udp --dport 53 -j ACCEPT  # DNS UDP
+iptables -A OUTPUT -p tcp --dport 80  -j ACCEPT  # HTTP (apt updates)
+iptables -A OUTPUT -p tcp --dport 443 -j ACCEPT  # HTTPS
+iptables -A OUTPUT -p tcp --dport 22  -j ACCEPT  # Outbound SSH (admin)
+iptables -A OUTPUT -p udp --dport 123 -j ACCEPT  # NTP
+
+# --- Allowed inbound (services this machine provides) ---
+iptables -A INPUT -p tcp --dport 22  -m conntrack --ctstate NEW -j ACCEPT  # SSH
+iptables -A INPUT -p tcp --dport 80  -m conntrack --ctstate NEW -j ACCEPT  # HTTP
+iptables -A INPUT -p tcp --dport 443 -m conntrack --ctstate NEW -j ACCEPT  # HTTPS
+
+# --- Rate limiting for SSH (brute force prevention) ---
+iptables -A INPUT -p tcp --dport 22 -m conntrack --ctstate NEW \
+  -m recent --set --name SSH
+iptables -A INPUT -p tcp --dport 22 -m conntrack --ctstate NEW \
+  -m recent --update --seconds 60 --hitcount 4 --name SSH -j DROP
+
+# --- ICMP (controlled) ---
+iptables -A INPUT -p icmp --icmp-type echo-request \
+  -m limit --limit 1/second --limit-burst 2 -j ACCEPT
+iptables -A INPUT -p icmp --icmp-type echo-reply   -j ACCEPT
+iptables -A INPUT -p icmp --icmp-type destination-unreachable -j ACCEPT
+iptables -A INPUT -p icmp --icmp-type time-exceeded -j ACCEPT  # traceroute
+
+# --- Logging dropped packets (limit rate to avoid DoS) ---
+iptables -A INPUT   -m limit --limit 5/min --limit-burst 10 \
+  -j LOG --log-prefix &#34;IPTABLES_INPUT_DROP: &#34; --log-level 4
+iptables -A OUTPUT  -m limit --limit 5/min --limit-burst 10 \
+  -j LOG --log-prefix &#34;IPTABLES_OUTPUT_DROP: &#34; --log-level 4
+iptables -A FORWARD -m limit --limit 5/min --limit-burst 10 \
+  -j LOG --log-prefix &#34;IPTABLES_FORWARD_DROP: &#34; --log-level 4
+
+# Verify
+iptables -L -v -n
+						</pre>
+					</section>
+					<section>
+						<h3 id="nftables-modern-replacement">nftables - Modern Replacement</h3>
+						<p>
+							nftables replaces iptables/ip6tables/arptables/ebtables with a single unified framework. It
+							is the recommended tool on ArchLinux.
+						</p>
+						<pre class="bash">
+# /etc/nftables.conf — Default deny with stateful filtering
+
+#!/usr/sbin/nft -f
+
+flush ruleset
+
+table inet filter {
+
+    chain input {
+        type filter hook input priority 0; policy drop;
+
+        # Loopback
+        iif lo accept
+
+        # Established connections
+        ct state established,related accept
+
+        # Drop invalid packets early
+        ct state invalid drop
+
+        # SSH
+        tcp dport 22 ct state new accept
+
+        # HTTP/HTTPS
+        tcp dport { 80, 443 } ct state new accept
+
+        # ICMPv4
+        ip protocol icmp icmp type { echo-reply, destination-unreachable, time-exceeded } accept
+        ip protocol icmp icmp type echo-request limit rate 5/second accept
+        # ICMPv6 (required for IPv6 to function)
+        ip6 nexthdr icmpv6 icmpv6 type { nd-router-advert, nd-router-solicit, nd-neighbor-advert, nd-neighbor-solicit } accept
+        ip6 nexthdr icmpv6 icmpv6 type { echo-request, echo-reply, destination-unreachable, time-exceeded } limit rate 5/second accept
+
+        # Log and drop the rest
+        log prefix &#34;NF_INPUT_DROP: &#34; limit rate 5/minute
+        counter drop
+    }
+
+    chain output {
+        type filter hook output priority 0; policy drop;
+
+        # Loopback
+        oif lo accept
+
+        # Established connections (responses)
+        ct state established,related accept
+
+        # DNS
+        udp dport 53 accept
+        tcp dport 53 accept
+
+        # HTTP/HTTPS (updates, API calls)
+        tcp dport { 80, 443 } accept
+
+        # SSH (admin outbound)
+        tcp dport 22 accept
+
+        # NTP
+        udp dport 123 accept
+
+        # ICMP
+        ip protocol icmp accept
+        ip6 nexthdr icmpv6 accept
+
+        log prefix &#34;NF_OUTPUT_DROP: &#34; limit rate 5/minute
+        counter drop
+    }
+
+    chain forward {
+        type filter hook forward priority 0; policy drop;
+        # This host is not a router
+        log prefix &#34;NF_FORWARD_DROP: &#34; limit rate 5/minute
+        counter drop
+    }
+}
+						</pre>
+						<pre class="bash">
+# Load rules
+sudo nft -f /etc/nftables.conf
+
+# Enable the nftables service
+sudo systemctl enable --now nftables
+
+# List current rules with counters
+sudo nft list ruleset -a
+
+# Monitor new connections in real-time
+sudo nft monitor new
+						</pre>
+					</section>
+					<section>
+						<h3 id="connection-tracking-conntrack">Connection Tracking (conntrack)</h3>
+						<p>
+							conntrack maintains a table of all active connections. This is how stateful firewalls distinguish
+							between NEW, ESTABLISHED, RELATED, and INVALID packets.
+						</p>
+						<pre class="bash">
+# View connection tracking table
+sudo conntrack -L
+
+# Count active connections
+sudo conntrack -C
+
+# Watch new connections in real-time
+sudo conntrack -E
+
+# List connections by source IP (investigation)
+sudo conntrack -L -s 10.0.0.5
+
+# Connection tracking limits
+# /etc/sysctl.d/99-conntrack.conf
+net.netfilter.nf_conntrack_max = 262144
+net.netfilter.nf_conntrack_tcp_timeout_established = 86400
+net.netfilter.nf_conntrack_tcp_timeout_syn_sent = 60
+net.netfilter.nf_conntrack_tcp_timeout_syn_recv = 60
+net.netfilter.nf_conntrack_tcp_timeout_fin_wait = 120
+net.netfilter.nf_conntrack_tcp_timeout_close_wait = 60
+						</pre>
+					</section>
+					<section>
+						<h3 id="firewalld">firewalld</h3>
+						<p>
+							firewalld is a frontend to nftables (or iptables on older systems) that uses
+							<b>zones</b>
+							and
+							<b>services</b>
+							. It is the default on RHEL/Fedora but available on ArchLinux.
+						</p>
+						<pre class="bash">
+sudo pacman -S firewalld
+sudo systemctl enable --now firewalld
+
+# Default zone (public: reject everything not allowed)
+sudo firewall-cmd --get-default-zone
+
+# Add services to the public zone
+sudo firewall-cmd --permanent --add-service=ssh
+sudo firewall-cmd --permanent --add-service=http
+sudo firewall-cmd --permanent --add-service=https
+
+# Open a custom port
+sudo firewall-cmd --permanent --add-port=8443/tcp
+
+# Custom zone for internal services
+sudo firewall-cmd --permanent --new-zone=internal
+sudo firewall-cmd --permanent --zone=internal --add-source=10.0.0.0/8
+sudo firewall-cmd --permanent --zone=internal --add-service=postgresql
+
+# Check active configuration
+sudo firewall-cmd --list-all
+sudo firewall-cmd --list-all-zones
+
+# Reload to apply permanent changes
+sudo firewall-cmd --reload
+						</pre>
+					</section>
+					<section>
+						<h3 id="common-rule-patterns">Common Rule Patterns</h3>
+						<h4 id="accept-established-drop-invalid">Accept established, drop invalid</h4>
+						<pre class="nft">
+ct state established,related accept
+ct state invalid drop
+						</pre>
+						<h4 id="rate-limiting-for-brute-force">Rate limiting for brute force</h4>
+						<pre class="nft">
+tcp dport 22 ct state new limit rate 4/minute accept
+tcp dport 22 ct state new drop
+						</pre>
+						<h4 id="geo-blocking-with-geoip">Geo-blocking with geoip</h4>
+						<pre class="nft">
+# nftables with nft-geoip
+ip saddr @geoip_blocked drop
+						</pre>
+						<h4 id="port-knocking-conceal-ssh">Port knocking (conceal SSH)</h4>
+						<pre class="nft">
+# Require connection attempts to ports 7000, 8000, 9000 in sequence
+# to temporarily open port 22 for the knocker&#39;s IP
+						</pre>
+						<h4 id="blackhole-drop-without-response">Blackhole (drop without response)</h4>
+						<pre class="nft">
+# DROP sends no RST — connection times out (slows scanners)
+ip saddr 10.0.50.42 counter drop
+						</pre>
+						<h4 id="reject-with-icmp">Reject with ICMP</h4>
+						<pre class="nft">
+# REJECT sends ICMP unreachable — allows fast failure
+ip saddr 10.0.0.0/8 tcp dport 22 ct state new counter reject
+						</pre>
+					</section>
+					<section>
+						<h3 id="rule-order-and-performance">Rule Order and Performance</h3>
+						<p>Rules are evaluated top-to-bottom, first-match-wins. Place frequently matched rules early:</p>
+						<pre class="nft">
+chain input {
+    # 1. Most common case: established traffic (80%+ of packets)
+    ct state established,related accept
+
+    # 2. Fast reject: invalid packets
+    ct state invalid drop
+
+    # 3. Frequent services
+    tcp dport { 80, 443 } ct state new accept
+
+    # 4. Less frequent services
+    tcp dport 22 ct state new accept
+
+    # 5. Rarely matched
+    ip saddr 192.168.0.0/24 tcp dport 8080 ct state new accept
+
+    # 6. Catch-all
+    log prefix &#34;DROP: &#34; counter drop
+}
+						</pre>
+						<p>
+							Use
+							<b>named sets</b>
+							for
+							<abbr title="Internet Protocol">IP</abbr>
+							lists rather than individual rules:
+						</p>
+						<pre class="nft">
+# Define a set once, reference anywhere
+table inet filter {
+    set allowed-admin-ips {
+        type ipv4_addr
+        flags interval
+        elements = { 10.0.0.0/24, 192.168.1.0/24 }
+    }
+
+    chain input {
+        ip saddr @allowed-admin-ips tcp dport 22 accept
+    }
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="testing-firewall-rules">Testing Firewall Rules</h3>
+						<pre class="bash">
+# TCP connectivity to specific port
+nc -zv -w 2 192.168.1.100 22
+# Connection succeeded / Connection refused / Timeout
+
+# nmap scan to see what&#39;s visible
+nmap -sS -p- 192.168.1.100
+
+# Compare nmap results with firewall rules
+# If nmap shows &#34;filtered&#34;, nftables DROP is working
+# If nmap shows &#34;closed&#34;, nftables REJECT is working
+# If nmap shows &#34;open&#34;, something allowed it
+
+# Test UDP rules
+nmap -sU -p 53,123,161 192.168.1.100
+
+# Check if logging is working
+sudo journalctl -k -f | grep NF_INPUT_DROP
+
+# Generate test traffic
+curl http://192.168.1.100/
+# Expected: timeout (dropped) or connection refused (rejected)
+						</pre>
+					</section>
+					<section>
+						<h3 id="detection-rules">Detection Rules</h3>
+						<pre class="bash">
+# auditd rule for nftables/iptables changes
+-w /etc/nftables.conf -p wa -k firewall_config_change
+-w /etc/iptables/ -p wa -k firewall_config_change
+
+# Monitor for firewall flush (attacker disabling firewall)
+-a exit,always -F arch=b64 -S setsockopt -k firewall_flush
+						</pre>
+						<pre class="yaml">
+# Sigma rule — Firewall rules flushed on Linux
+title: Linux Firewall Rules Flushed
+status: experimental
+logsource:
+  product: linux
+  category: process_creation
+detection:
+  selection_iptables:
+    Image|endswith: &#39;/iptables&#39;
+    CommandLine|contains: &#39;-F&#39;
+  selection_iptables2:
+    Image|endswith: &#39;/iptables&#39;
+    CommandLine|contains: &#39;-P&#39;
+    CommandLine|contains: &#39;ACCEPT&#39;
+  selection_nft:
+    Image|endswith: &#39;/nft&#39;
+    CommandLine|contains: &#39;flush ruleset&#39;
+  condition: selection_iptables or selection_iptables2 or selection_nft
+falsepositives:
+  - Legitimate firewall maintenance windows
+level: high
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							A container running a vulnerable web service behind a misconfigured firewall. Your task is to
+							turn the default "allow all" policy into a default-deny posture without breaking the service.
+						</p>
+						<p><a href="/wiki/articles/blueteam/firewalls.Containerfile">firewalls.Containerfile</a></p>
+						<pre class="bash">
+podman build -t firewalls -f firewalls.Containerfile .
+podman run -it --rm -p 8080:8080 firewalls
+						</pre>
+						<p>
+							The container starts with nftables in "allow all" mode and a command-injection service listening
+							on port 8080. Inside the container:
+						</p>
+						<ol>
+							<li>Switch the input policy to default deny.</li>
+							<li>Allow only the ports the service needs.</li>
+							<li>Protect the service with rate limiting.</li>
+							<li>Verify with <code>nmap</code> and <code>nc</code> that external access is blocked but localhost access works.</li>
+						</ol>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://wiki.nftables.org/" target="_blank">nftables wiki</a></li>
+							<li><a class="icon-website" href="https://www.netfilter.org/documentation/" target="_blank">netfilter documentation</a></li>
+							<li><a class="icon-website" href="https://conntrack-tools.netfilter.org/" target="_blank">conntrack-tools</a></li>
+							<li><a class="icon-website" href="https://firewalld.org/documentation/" target="_blank">firewalld documentation</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

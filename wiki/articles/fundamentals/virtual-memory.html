@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Virtual Memory | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Virtual Memory">
+		<meta name="keywords" content="aslr, huge-pages, mmap, oom, page-tables, techniques, tlb, virtual-memory">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Virtual Memory">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Page tables, TLB, page faults, mmap() internals, malloc() backend, /proc/PID/maps dissection, huge pages, ASLR, overcommit, and the OOM killer.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/fundamentals/virtual-memory.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Virtual Memory">
+		<meta name="twitter:description" itemprop="description" content="Page tables, TLB, page faults, mmap() internals, malloc() backend, /proc/PID/maps dissection, huge pages, ASLR, overcommit, and the OOM killer.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#why-virtual-memory-exists">Why Virtual Memory Exists</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#virtual-physical-translation">Virtual -> Physical Translation</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tlb-translation-lookaside-buffer">TLB - Translation Lookaside Buffer</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#page-faults">Page Faults</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#mmap-the-memory-mapping-workhorse">mmap() - The Memory Mapping Workhorse</a></b>
+					<ul>
+						<li><a href="#mmap-flags">mmap Flags</a></li>
+						<li><a href="#protection-flags">Protection Flags</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#malloc-internals">malloc() Internals</a></b>
+					<ul>
+						<li><a href="#tracking-malloc-with-ltrace">Tracking malloc with ltrace</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#procpidmaps-reading-the-memory-map">/proc/PID/maps - Reading the Memory Map</a></b>
+					<ul>
+						<li><a href="#maps-output-format">maps Output Format</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#procpidsmaps">/proc/PID/smaps</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#huge-pages">Huge Pages</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#aslr">ASLR</a></b>
+					<ul>
+						<li><a href="#what-aslr-randomizes">What ASLR Randomizes</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#memory-overcommit-and-the-oom-killer">Memory Overcommit and the OOM Killer</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#inspecting-page-tables-with-pagemap">Inspecting Page Tables with pagemap</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification-checklist">Verification Checklist</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/fundamentals/index.html">Fundamentals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/fundamentals/virtual-memory.html">Virtual Memory</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="virtual-memory">Virtual Memory</h2>
+					<p>
+						Page tables, TLB, page faults, mmap() internals, malloc() backend, /proc/PID/maps dissection,
+						huge pages, ASLR, overcommit, and the OOM killer.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Every process on Linux runs on its own virtual address space, but the physical RAM underneath
+							is shared, fragmented, and limited. Virtual memory is the translation layer that turns virtual
+							addresses into physical frames, isolates processes from each other, and lets the kernel overcommit
+							memory safely. This article follows the path from a virtual address through the page tables
+							and the TLB, explains how
+							<code>mmap()</code>
+							and
+							<code>malloc()</code>
+							obtain memory, and shows how to read the kernel's
+							own accounting in
+							<code>/proc/PID/maps</code>
+							,
+							<code>smaps</code>
+							, and
+							<code>pagemap</code>
+							. After reading it you can inspect
+							any process's memory map and explain where its pages actually live.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - process memory layout, /proc</li>
+							<li><a href="/wiki/articles/fundamentals/elf.html">ELF</a> - segments, load addresses, and the program loader</li>
+							<li><a href="/wiki/articles/fundamentals/aslr.html">ASLR</a> - how the kernel randomizes the mapping bases</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="why-virtual-memory-exists">Why Virtual Memory Exists</h3>
+						<p>
+							Every process on Linux sees a private, contiguous address space - typically 128 TiB on x86-64
+							(47-bit virtual addresses). In reality, physical RAM is shared by all processes, fragmented
+							across DIMMs, and interspersed with memory-mapped I/O holes. Virtual memory solves four problems:
+						</p>
+						<ol>
+							<li><b>Isolation</b> : Process A cannot read/write Process B's memory. One crashing process cannot corrupt the kernel or other processes.</li>
+							<li><b>Abstraction</b> : Every program can assume its code starts at the same virtual address (0x400000 for traditional executables, 0x555555554000 for PIEs). The linker and loader don't need to know about physical memory layout.</li>
+							<li><b>Overcommit</b> : Processes can request more virtual memory than available physical RAM. Physical pages are allocated on first write (demand paging).</li>
+							<li><b>Shared memory</b> : The same physical page (e.g., libc code) can be mapped into multiple processes simultaneously.</li>
+						</ol>
+					</section>
+					<section>
+						<h3 id="virtual-physical-translation">Virtual -> Physical Translation</h3>
+						<p>
+							The
+							<abbr title="Central Processing Unit">CPU</abbr>
+							's Memory Management Unit (MMU) translates every virtual
+							address to a physical address on every memory access. If the translation fails (no page mapped,
+							insufficient permissions), the MMU raises a page fault.
+						</p>
+						<p>Virtual Address (48 bits on x86-64)</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">PML4</th>
+									<th align="center">PDPT</th>
+									<th align="center">PD</th>
+									<th align="center">PT</th>
+									<th align="center">Offset</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">(9 bit)</td>
+									<td align="center">(9 bit)</td>
+									<td align="center">(9 bit)</td>
+									<td align="center">(9 bit)</td>
+									<td align="center">(12 bit)</td>
+								</tr>
+								<tr>
+									<td align="center"></td>
+									<td align="center"></td>
+									<td align="center"></td>
+									<td align="center"></td>
+									<td align="center"></td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="plaintext">
+Page Table Walk:
+                                       
+CR3 ──► PML4 ──► PDPT ──► PD ──► PT ──► Physical Page
+        │        │       │      │
+        ▼        ▼       ▼      ▼
+    4KiB page of 512 x 8-byte entries per level
+    Each entry points to next level&#39;s page or final physical page
+
+   PML4E     PDPTE      PDE       PTE        Physical address
+   [47:39]   [38:30]    [29:21]   [20:12]    [frame 40 bits] + [offset 12 bits]
+						</pre>
+						<pre class="bash">
+# Examine page table entries via /proc/PID/pagemap
+# Each entry is 8 bytes:
+# bit 63 = page present
+# bit 62 = swapped
+# bits 54-0 = physical frame number (PFN)
+sudo python3 -c &#34;
+import os, struct
+
+def virt_to_phys(pid, vaddr):
+    pagemap_path = f&#39;/proc/{pid}/pagemap&#39;
+    pagesize = os.sysconf(&#39;SC_PAGE_SIZE&#39;)
+    offset = (vaddr // pagesize) * 8
+    
+    with open(pagemap_path, &#39;rb&#39;) as f:
+        f.seek(offset)
+        entry = struct.unpack(&#39;Q&#39;, f.read(8))[0]
+    
+    present = bool(entry &amp; (1 &lt;&lt; 63))
+    pfn = entry &amp; ((1 &lt;&lt; 55) - 1)  # bits 54:0
+
+    if present:
+        return (pfn * pagesize) + (vaddr % pagesize)
+    return None
+
+# id() of a live CPython object is its virtual address
+page = bytearray(4096)
+phys = virt_to_phys(os.getpid(), id(page))
+print(f&#39;virtual: {id(page):#x} physical: {phys}&#39;)
+&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="tlb-translation-lookaside-buffer">TLB - Translation Lookaside Buffer</h3>
+						<p>
+							A full 4-level page table walk requires 4 memory accesses - far too slow for every instruction
+							fetch and data access. The TLB is a small, fast,
+							<abbr title="Central Processing Unit">CPU</abbr>
+							-internal cache
+							of recently used virtual-to-physical translations.
+						</p>
+						<pre class="plaintext">
+Virtual Address
+      │
+      ▼
+  ┌──────┐
+  │ TLB  │  ← Checked first (parallel with L1 cache)
+  │ Look │
+  └──────┘
+     │
+  Hit│    Miss
+     │     │
+     ▼     ▼
+  Return  4-level page table walk (4+ memory accesses)
+  phys     │
+  addr     ▼
+         Load PTE into TLB
+           │
+           ▼
+         Retry TLB lookup (now hits)
+						</pre>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">TLB Level</th>
+									<th align="center">Typical Size</th>
+									<th align="center">Latency</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">L1 Data TLB</td>
+									<td align="center">64 entries</td>
+									<td align="center">1 cycle</td>
+								</tr>
+								<tr>
+									<td align="center">L1 Instruction TLB</td>
+									<td align="center">128 entries</td>
+									<td align="center">1 cycle</td>
+								</tr>
+								<tr>
+									<td align="center">L2 Unified TLB (STLB)</td>
+									<td align="center">1024-2048 entries</td>
+									<td align="center">5-10 cycles</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							A single 4 KiB page covers only 2 MiB of virtual space when the TLB has 512 entries. Huge pages
+							reduce TLB pressure significantly.
+						</p>
+					</section>
+					<section>
+						<h3 id="page-faults">Page Faults</h3>
+						<p>
+							A page fault occurs when the MMU cannot translate the virtual address. The kernel's page fault
+							handler (
+							<code>do_page_fault</code>
+							) determines the cause:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Fault Type</th>
+									<th align="center">Condition</th>
+									<th align="center">Kernel Action</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Minor (soft)</td>
+									<td align="center">Page exists in physical memory but PTE not set (e.g., copy-on-write, lazy allocation)</td>
+									<td align="center">Just update PTE; very fast</td>
+								</tr>
+								<tr>
+									<td align="center">Major (hard)</td>
+									<td align="center">Page on disk (swap, mmap'd file not cached)</td>
+									<td align="center">I/O read from disk; slow</td>
+								</tr>
+								<tr>
+									<td align="center">Invalid</td>
+									<td align="center">Address not in any VMA, or permission mismatch</td>
+									<td align="center">SIGSEGV - segmentation fault</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Time page faults for a process
+/usr/bin/time -v ls / &gt;/dev/null 2&gt;&amp;1
+# Output includes:
+#   Minor (reclaiming a frame) page faults: 142
+#   Major (requiring I/O) page faults: 0
+
+# Monitor page faults in real time with perf
+perf stat -e minor-faults,major-faults ls -R /usr/share &gt;/dev/null
+						</pre>
+						<p>
+							<b>Demand paging:</b>
+							When
+							<code>mmap()</code>
+							creates a mapping, the kernel reserves virtual address space
+							but does NOT allocate physical pages. Physical pages are assigned on first access (read or write),
+							triggering a minor page fault. This is why
+							<code>mmap()</code>
+							is fast even for large mappings.
+						</p>
+					</section>
+					<section>
+						<h3 id="mmap-the-memory-mapping-workhorse">mmap() - The Memory Mapping Workhorse</h3>
+						<p>
+							<code>mmap()</code>
+							creates a new mapping in the process's virtual address space. It's the foundation for
+							<code>malloc()</code>
+							(large allocations), shared memory, file I/O, and stack/guard page creation.
+						</p>
+						<pre class="c">
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;sys/mman.h&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;string.h&gt;
+
+int main() {
+    // 1. Anonymous mapping (backed by zero pages, not a file)
+    size_t size = 4096 * 10;  // 10 pages
+    void* anon = mmap(NULL, size, PROT_READ | PROT_WRITE,
+                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (anon == MAP_FAILED) { perror(&#34;mmap anon&#34;); return 1; }
+
+    strcpy(anon, &#34;Hello from anonymous mmap!&#34;);
+    printf(&#34;Anonymous: %s\n&#34;, (char*)anon);
+    munmap(anon, size);
+
+    // 2. File-backed mapping (maps file contents to memory)
+    int fd = open(&#34;/etc/hostname&#34;, O_RDONLY);
+    if (fd == -1) { perror(&#34;open&#34;); return 1; }
+
+    off_t file_size = lseek(fd, 0, SEEK_END);
+    void* file_map = mmap(NULL, file_size, PROT_READ,
+                           MAP_PRIVATE, fd, 0);
+    if (file_map == MAP_FAILED) { perror(&#34;mmap file&#34;); return 1; }
+
+    printf(&#34;File contents via memory: %.*s\n&#34;, (int)file_size, (char*)file_map);
+    munmap(file_map, file_size);
+    close(fd);
+
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+gcc -o mmap-demo mmap-demo.c &amp;&amp; ./mmap-demo
+						</pre>
+						<h4 id="mmap-flags">mmap Flags</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Flag</th>
+									<th align="center">Meaning</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">MAP_PRIVATE</td>
+									<td align="center">Copy-on-write: modifications are private; not visible to other processes or written to file</td>
+								</tr>
+								<tr>
+									<td align="center">MAP_SHARED</td>
+									<td align="center">Modifications are visible to other processes and written back to file</td>
+								</tr>
+								<tr>
+									<td align="center">MAP_ANONYMOUS</td>
+									<td align="center">Not backed by a file; fd must be -1; pages initialized to zero</td>
+								</tr>
+								<tr>
+									<td align="center">MAP_FIXED</td>
+									<td align="center">Place mapping at exactly<code>addr</code>; clobbers existing mappings (dangerous)</td>
+								</tr>
+								<tr>
+									<td align="center">MAP_FIXED_NOREPLACE</td>
+									<td align="center">Like MAP_FIXED but fails if anything exists at<code>addr</code>(safer)</td>
+								</tr>
+								<tr>
+									<td align="center">MAP_POPULATE</td>
+									<td align="center">Pre-fault pages (read them in now, not on-demand)</td>
+								</tr>
+								<tr>
+									<td align="center">MAP_LOCKED</td>
+									<td align="center">Lock pages in memory (like mlock)</td>
+								</tr>
+								<tr>
+									<td align="center">MAP_GROWSDOWN</td>
+									<td align="center">Used for stack - mapping grows downward on fault</td>
+								</tr>
+								<tr>
+									<td align="center">MAP_HUGETLB</td>
+									<td align="center">Use huge pages for this mapping</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="protection-flags">Protection Flags</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Flag</th>
+									<th align="center">Effect</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">PROT_NONE</td>
+									<td align="center">No access - page cannot be read, written, or executed</td>
+								</tr>
+								<tr>
+									<td align="center">PROT_READ</td>
+									<td align="center">Readable</td>
+								</tr>
+								<tr>
+									<td align="center">PROT_WRITE</td>
+									<td align="center">Writable</td>
+								</tr>
+								<tr>
+									<td align="center">PROT_EXEC</td>
+									<td align="center">Executable</td>
+								</tr>
+								<tr>
+									<td align="center">PROT_READ | PROT_WRITE</td>
+									<td align="center">Read + Write (typical for data)</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="malloc-internals">malloc() Internals</h3>
+						<p>
+							<code>malloc()</code>
+							is a user-space memory allocator, not a syscall. It manages a pool of memory obtained
+							from the kernel through two mechanisms:
+						</p>
+						<pre class="plaintext">
+malloc(size) called:
+    │
+    ▼
+┌──────────────────────────────────────┐
+│  size ≤ 128 KiB (adjustable)         │
+│  │                                   │
+│  ▼                                   │
+│  Use arena (via sbrk()):             │
+│  - Moves program break upward        │
+│  - Fast: no kernel syscall needed    │
+│  - Freed memory can&#39;t be returned    │
+│    to OS easily (fragmentation)      │
+└──────────────────────────────────────┘
+    │
+    ▼ size &gt; 128 KiB
+┌──────────────────────────────────────┐
+│  Use mmap(MAP_ANONYMOUS):            │
+│  - Separate mapping per allocation   │
+│  - munmap() returns memory to OS     │
+│  - Slightly more overhead            │
+└──────────────────────────────────────┘
+						</pre>
+						<pre class="c">
+/* malloc-demo.c */
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+int main() {
+    void *small = malloc(1000);        /* served from the main arena */
+    void *large = malloc(200 * 1024);  /* above the mmap threshold */
+    memset(small, 0, 1000);
+    memset(large, 0, 200 * 1024);
+    free(small);
+    free(large);
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+gcc -o malloc-demo malloc-demo.c
+strace -e trace=brk,mmap,munmap ./malloc-demo 2&gt;&amp;1 | head -20
+
+# brk(NULL)             = 0x555555559000
+# brk(0x55555557a000)   = 0x55555557a000   &lt;- arena grew for malloc(1000)
+# mmap(NULL, 204800, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x7f...
+#                                         &lt;- the 200 KiB request used mmap
+# munmap(0x7f..., 204800) = 0             &lt;- free() returned it to the kernel
+						</pre>
+						<h4 id="tracking-malloc-with-ltrace">Tracking malloc with ltrace</h4>
+						<pre class="bash">
+ltrace -e malloc+free+realloc+calloc ./your-program
+# Shows every malloc/free call with size and return value
+						</pre>
+					</section>
+					<section>
+						<h3 id="procpidmaps-reading-the-memory-map">/proc/PID/maps - Reading the Memory Map</h3>
+						<p>
+							Every process exposes its complete virtual memory layout via
+							<code>/proc/PID/maps</code>
+							. Each line represents
+							one virtual memory area (
+							<code>VMA</code>
+							).
+						</p>
+						<pre class="bash">
+cat /proc/self/maps
+						</pre>
+						<pre class="c">
+// C program that prints its own memory map
+#define _GNU_SOURCE
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;string.h&gt;
+
+int global_init = 42;
+int global_uninit;
+const char* const_str = &#34;I am in .rodata&#34;;
+
+int main() {
+    char stack_var = &#39;S&#39;;
+    char* heap_var = malloc(64);
+    strcpy(heap_var, &#34;heap data&#34;);
+
+    printf(&#34;PID: %d\n&#34;, getpid());
+    printf(&#34;Text (main):          %p\n&#34;, main);
+    printf(&#34;Read-only data:       %p\n&#34;, const_str);
+    printf(&#34;Data (initialized):   %p\n&#34;, &amp;global_init);
+    printf(&#34;BSS (uninitialized):  %p\n&#34;, &amp;global_uninit);
+    printf(&#34;Heap:                 %p\n&#34;, heap_var);
+    printf(&#34;Stack:                %p\n&#34;, &amp;stack_var);
+
+    printf(&#34;\n--- /proc/self/maps ---\n&#34;);
+    FILE* f = fopen(&#34;/proc/self/maps&#34;, &#34;r&#34;);
+    char line[256];
+    while (fgets(line, sizeof(line), f))
+        fputs(line, stdout);
+    fclose(f);
+
+    free(heap_var);
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+gcc -o memlayout memlayout.c &amp;&amp; ./memlayout
+						</pre>
+						<h4 id="maps-output-format">maps Output Format</h4>
+						<pre class="plaintext">
+address-start-address-end perms offset  dev   inode   pathname
+5560e9c2f000-5560e9c30000 r--p 00000000 08:03 123456  /usr/bin/cat
+│            │            │    │        │     │       └─ Backing file
+│            │            │    │        │     └─ Inode
+│            │            │    │        └─ Device (major:minor)
+│            │            │    └─ Offset in file (hex)
+│            │            └─ Permissions: r=read w=write x=exec p=private s=shared
+│            └─ End address (exclusive)
+└─ Start address
+						</pre>
+					</section>
+					<section>
+						<h3 id="procpidsmaps">/proc/PID/smaps</h3>
+						<p>
+							While
+							<code>/proc/PID/maps</code>
+							shows what is mapped,
+							<code>/proc/PID/smaps</code>
+							shows how much of each mapping
+							is actually used:
+						</p>
+						<pre class="bash">
+cat /proc/$$/smaps | head -50
+						</pre>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Field</th>
+									<th align="center">Meaning</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Size</td>
+									<td align="center">Total size of the mapping</td>
+								</tr>
+								<tr>
+									<td align="center">KernelPageSize</td>
+									<td align="center">Page size the kernel uses (4 KiB)</td>
+								</tr>
+								<tr>
+									<td align="center">MMUPageSize</td>
+									<td align="center">Page size the MMU uses (4 KiB)</td>
+								</tr>
+								<tr>
+									<td align="center">Rss</td>
+									<td align="center">Resident Set Size - pages actually in RAM</td>
+								</tr>
+								<tr>
+									<td align="center">Pss</td>
+									<td align="center">Proportional Set Size - RSS divided by number of processes sharing the page</td>
+								</tr>
+								<tr>
+									<td align="center">Shared_Clean</td>
+									<td align="center">Clean pages shared with other processes</td>
+								</tr>
+								<tr>
+									<td align="center">Shared_Dirty</td>
+									<td align="center">Dirty pages shared with other processes</td>
+								</tr>
+								<tr>
+									<td align="center">Private_Clean</td>
+									<td align="center">Private clean pages (code, read-only data)</td>
+								</tr>
+								<tr>
+									<td align="center">Private_Dirty</td>
+									<td align="center">Private dirty pages (modified heap, stack, data)</td>
+								</tr>
+								<tr>
+									<td align="center">Referenced</td>
+									<td align="center">Pages marked as accessed</td>
+								</tr>
+								<tr>
+									<td align="center">Anonymous</td>
+									<td align="center">Pages not backed by a file (heap, stack)</td>
+								</tr>
+								<tr>
+									<td align="center">LazyFree</td>
+									<td align="center">Pages marked for lazy freeing</td>
+								</tr>
+								<tr>
+									<td align="center">AnonHugePages</td>
+									<td align="center">Transparent huge pages used</td>
+								</tr>
+								<tr>
+									<td align="center">Swap</td>
+									<td align="center">Pages swapped to disk</td>
+								</tr>
+								<tr>
+									<td align="center">SwapPss</td>
+									<td align="center">Proportional swap size</td>
+								</tr>
+								<tr>
+									<td align="center">Locked</td>
+									<td align="center">Pages locked in RAM (mlock)</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Sum up RSS for a process
+awk &#39;/^Rss:/{sum+=$2} END{print sum &#34; kB&#34;}&#39; /proc/$$/smaps
+
+# Sum up PSS (precise memory accounting)
+awk &#39;/^Pss:/{sum+=$2} END{print sum &#34; kB&#34;}&#39; /proc/$$/smaps
+
+# Private dirty pages (writable memory unique to this process)
+awk &#39;/^Private_Dirty:/{sum+=$2} END{print sum &#34; kB&#34;}&#39; /proc/$$/smaps
+						</pre>
+					</section>
+					<section>
+						<h3 id="huge-pages">Huge Pages</h3>
+						<p>
+							Default page size on x86-64 is 4 KiB. With 128 TiB of virtual space, a process that touches
+							10 GiB of RAM needs~2.6 million page table entries. Huge pages reduce this by factors of 512
+							(2 MiB pages) or 262144 (1 GiB pages).
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Page Size</th>
+									<th align="center">PTE entries for 10 GiB</th>
+									<th align="center">TLB coverage</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">4 KiB</td>
+									<td align="center">~2,621,440 PTEs</td>
+									<td align="center">2 MiB (512 entries)</td>
+								</tr>
+								<tr>
+									<td align="center">2 MiB</td>
+									<td align="center">~5,120 PDEs</td>
+									<td align="center">1 GiB (512 entries)</td>
+								</tr>
+								<tr>
+									<td align="center">1 GiB</td>
+									<td align="center">~10 PDPTEs</td>
+									<td align="center">512 GiB (512 entries)</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Check huge page configuration
+cat /proc/meminfo | grep -i huge
+# HugePages_Total:       0     ← Pre-allocated (reserved) huge pages
+# HugePages_Free:        0
+# Hugepagesize:       2048 kB  ← 2 MiB huge pages
+
+# Allocate huge pages at boot (kernel cmdline):
+# hugepages=512 hugepagesz=2M
+
+# Or at runtime:
+echo 512 | sudo tee /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+
+# Transparent Huge Pages (THP) — kernel automatically promotes 4K pages to 2M
+cat /sys/kernel/mm/transparent_hugepage/enabled
+# [always] madvise never
+
+# Use huge pages explicitly in mmap():
+#include &lt;sys/mman.h&gt;
+void* ptr = mmap(NULL, 2*1024*1024, PROT_READ|PROT_WRITE,
+                 MAP_PRIVATE|MAP_ANONYMOUS|MAP_HUGETLB, -1, 0);
+						</pre>
+					</section>
+					<section>
+						<h3 id="aslr">ASLR</h3>
+						<p>
+							ASLR randomizes the base addresses of memory regions to make exploitation harder. Without ASLR,
+							every program's stack, heap, and libraries are at predictable addresses.
+						</p>
+						<pre class="bash">
+# Check ASLR status
+cat /proc/sys/kernel/randomize_va_space
+# 0 = No randomization
+# 1 = Randomize stack, mmap, VDSO (conservative)
+# 2 = Full randomization + brk() (default on ArchLinux)
+
+# Demonstrate ASLR — run twice, observe different addresses
+for i in 1 2 3; do
+    cat /proc/self/maps | grep -E &#39;heap|stack|libc&#39; | head -3
+    echo &#34;---&#34;
+done
+						</pre>
+						<h4 id="what-aslr-randomizes">What ASLR Randomizes</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Region</th>
+									<th align="center">Randomized?</th>
+									<th align="center">Entropy (bits)</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Executable (PIE)</td>
+									<td align="center">Yes (if PIE)</td>
+									<td align="center">28 bits</td>
+								</tr>
+								<tr>
+									<td align="center">Shared libraries</td>
+									<td align="center">Yes</td>
+									<td align="center">28 bits</td>
+								</tr>
+								<tr>
+									<td align="center">Stack</td>
+									<td align="center">Yes</td>
+									<td align="center">22 bits</td>
+								</tr>
+								<tr>
+									<td align="center">Heap (brk)</td>
+									<td align="center">Yes (mode 2)</td>
+									<td align="center">13 bits</td>
+								</tr>
+								<tr>
+									<td align="center">mmap() base</td>
+									<td align="center">Yes</td>
+									<td align="center">28 bits</td>
+								</tr>
+								<tr>
+									<td align="center">VDSO</td>
+									<td align="center">Yes</td>
+									<td align="center">28 bits</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="memory-overcommit-and-the-oom-killer">Memory Overcommit and the OOM Killer</h3>
+						<p>
+							Linux, by default, allows processes to request more memory than the system physically has (overcommit).
+							Memory is only assigned when pages are actually written to (demand paging + copy-on-write).
+						</p>
+						<pre class="bash">
+cat /proc/sys/vm/overcommit_memory
+# 0 = Heuristic overcommit (default) — kernel estimates if enough RAM+swap
+# 1 = Always overcommit — processes can allocate unlimited virtual memory
+# 2 = No overcommit — refuse allocations that exceed RAM + swap
+
+cat /proc/sys/vm/overcommit_ratio
+# Percentage of physical RAM allowed when overcommit_memory = 2
+# Default: 50 → total allocatable = RAM * (50/100) + swap
+
+# View overcommit state
+cat /proc/meminfo | grep -i commit
+# CommitLimit:     Total virtual memory that can be allocated
+# Committed_AS:    Total virtual memory currently requested by all processes
+						</pre>
+						<p>
+							<b>The OOM Killer:</b>
+							When the kernel runs out of physical memory and cannot reclaim pages, it
+							invokes the OOM (Out Of Memory) killer. It selects a process to kill based on a heuristic score:
+						</p>
+						<pre class="bash">
+# OOM score of a process (0 = never killed, 1000 = first to die)
+cat /proc/$$/oom_score
+
+# OOM adjustment value (-1000 to 1000; lower = less likely to be killed)
+cat /proc/$$/oom_score_adj
+
+# Protect a critical daemon from OOM:
+echo -1000 | sudo tee /proc/$(pidof sshd)/oom_score_adj
+
+# Make a process the OOM target:
+echo 1000 | sudo tee /proc/$(pidof misbehaving-app)/oom_score_adj
+
+# Check OOM killer logs
+dmesg | grep -i &#39;oom\|killed&#39;
+journalctl -k | grep -i oom
+						</pre>
+						<p>
+							The OOM score formula roughly:
+							<code>score = (total_RSS / total_RAM) * 1000 + oom_score_adj</code>
+							. The
+							kernel picks the process with the highest
+							<code>oom_score</code>
+							that it can kill (not PID 1, not kernel
+							threads, not with
+							<code>oom_score_adj = -1000</code>
+							).
+						</p>
+					</section>
+					<section>
+						<h3 id="inspecting-page-tables-with-pagemap">Inspecting Page Tables with pagemap</h3>
+						<pre class="bash">
+# Read pagemap entries for a running process
+# Each 8-byte entry contains PFN and flags:
+sudo python3 &lt;&lt; &#39;EOF&#39;
+import os, struct
+
+pid = os.getpid()
+page_size = os.sysconf(&#39;SC_PAGE_SIZE&#39;)
+
+with open(f&#39;/proc/{pid}/pagemap&#39;, &#39;rb&#39;) as f:
+    # Read first 10 entries
+    for i in range(10):
+        f.seek(i * 8)
+        entry = struct.unpack(&#39;Q&#39;, f.read(8))[0]
+        present = bool(entry &amp; (1 &lt;&lt; 63))
+        swapped = bool(entry &amp; (1 &lt;&lt; 62))
+        soft_dirty = bool(entry &amp; (1 &lt;&lt; 55))
+        exclusive = bool(entry &amp; (1 &lt;&lt; 56))
+        pfn = entry &amp; ((1 &lt;&lt; 55) - 1)
+
+        status = &#34;PRESENT&#34; if present else (&#34;SWAPPED&#34; if swapped else &#34;ABSENT&#34;)
+        extra = []
+        if soft_dirty: extra.append(&#34;SOFT_DIRTY&#34;)
+        if exclusive: extra.append(&#34;EXCLUSIVE&#34;)
+
+        print(f&#34;VPN {i:4d} → PFN {pfn:#010x} [{status}] {&#39;,&#39;.join(extra)}&#34;)
+EOF
+						</pre>
+					</section>
+					<section>
+						<h3 id="verification-checklist">Verification Checklist</h3>
+						<pre class="bash">
+# 1. Check page size
+getconf PAGE_SIZE
+
+# 2. Examine your process memory map
+cat /proc/self/maps | head -30
+cat /proc/self/smaps | head -60
+
+# 3. Count page faults since process start
+cat /proc/$$/stat | awk &#39;{print &#34;Minor faults:&#34;, $10, &#34;Major faults:&#34;, $12}&#39;
+
+# 4. Check ASLR status
+cat /proc/sys/kernel/randomize_va_space
+
+# 5. Check overcommit policy
+cat /proc/sys/vm/overcommit_memory
+cat /proc/meminfo | grep Commit
+
+# 6. Huge pages status
+cat /proc/meminfo | grep -i huge
+
+# 7. Find physical address of a virtual address (needs root)
+sudo cat /proc/$$/pagemap | xxd | head -4
+
+# 8. Trace mmap/munmap/brk calls of a program
+strace -e mmap,munmap,brk,mprotect ls 2&gt;&amp;1 | head -20
+
+# 9. Check Transparent Huge Pages status
+cat /sys/kernel/mm/transparent_hugepage/enabled
+
+# 10. Memory usage summary of current shell
+awk &#39;/^(Vm|Rss)/{printf &#34;%-20s %s kB\n&#34;, $1, $2}&#39; /proc/$$/status
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go program that reports how much resident memory your process uses by parsing
+							<code>/proc/self/smaps</code>
+							. The starter sums nothing yet; complete the
+							<code>Pss</code>
+							parsing and confirm that touching a freshly
+							allocated 8 MiB buffer increases the total:
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;bufio&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;strconv&#34;
+	&#34;strings&#34;
+)
+
+func totalPss(path string) (int, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+
+	total := 0
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		// TODO: for lines starting with &#34;Pss:&#34;, parse the kB value
+		//       (the second whitespace-separated field) and add it to total.
+		_ = line
+	}
+	return total, scanner.Err()
+}
+
+func main() {
+	before, err := totalPss(&#34;/proc/self/smaps&#34;)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	blob := make([]byte, 8&lt;&lt;20)
+	for i := range blob {
+		blob[i] = byte(i) // fault in every page
+	}
+
+	after, _ := totalPss(&#34;/proc/self/smaps&#34;)
+	fmt.Printf(&#34;Pss before: %d kB\nafter:     %d kB\ndelta:     %d kB\n&#34;,
+		before, after, after-before)
+}
+						</pre>
+						<p>
+							Run it with
+							<code>go run main.go</code>
+							and explain why
+							<code>delta</code>
+							is close to the buffer size. Then change
+							the loop so it writes only every 4096th byte and explain why the delta shrinks.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/mmap.2" target="_blank">mmap(2) - map or unmap files or devices into memory</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/proc.5" target="_blank">proc(5) - /proc/PID/{maps,smaps,pagemap}</a></li>
+							<li><a class="icon-website" href="https://www.kernel.org/doc/html/latest/admin-guide/mm/pagemap.html" target="_blank">pagemap - Linux kernel documentation</a></li>
+							<li><a class="icon-website" href="https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html" target="_blank">Intel SDM Vol. 3A - Paging</a></li>
+							<li><a class="icon-website" href="https://lwn.net/Articles/391222/" target="_blank">LWN.net - The OOM killer</a></li>
+							<li><a class="icon-website" href="https://lwn.net/Articles/423584/" target="_blank">LWN.net - Transparent huge pages in 2.6.38</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

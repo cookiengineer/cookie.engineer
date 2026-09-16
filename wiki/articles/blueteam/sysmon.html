@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Sysmon | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Sysmon">
+		<meta name="keywords" content="blueteam, detection, event-id, sysmon, windows, winlogbeat">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Sysmon">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Windows endpoint telemetry for detection with Sysinternals Sysmon event IDs, XML configuration, and SIEM integration.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/blueteam/sysmon.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Sysmon">
+		<meta name="twitter:description" itemprop="description" content="Windows endpoint telemetry for detection with Sysinternals Sysmon event IDs, XML configuration, and SIEM integration.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#why-sysmon">Why Sysmon</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#architecture">Architecture</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#installation">Installation</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#event-ids-reference">Event IDs Reference</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#xml-configuration">XML Configuration</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#configuration-strategies">Configuration Strategies</a></b>
+					<ul>
+						<li><a href="#onmatch-rules">onmatch Rules</a></li>
+						<li><a href="#community-configurations">Community Configurations</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#siem-integration">SIEM Integration</a></b>
+					<ul>
+						<li><a href="#winlogbeat">Winlogbeat</a></li>
+						<li><a href="#windows-event-forwarding-wef">Windows Event Forwarding (WEF)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#detection-examples">Detection Examples</a></b>
+					<ul>
+						<li><a href="#malicious-process-tree-detection">Malicious Process Tree Detection</a></li>
+						<li><a href="#lsass-access-detection">LSASS Access Detection</a></li>
+						<li><a href="#lateral-movement-detection">Lateral Movement Detection</a></li>
+						<li><a href="#c2-beaconing-detection">C2 Beaconing Detection</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#configuring-sysmon-updates">Configuring Sysmon Updates</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/blueteam/index.html">Blueteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/blueteam/sysmon.html">Sysmon</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="sysmon">Sysmon</h2>
+					<p>
+						Windows endpoint telemetry for detection with Sysinternals Sysmon event IDs,
+						<abbr title="Extensible Markup Language">XML</abbr>
+						configuration, and
+						<abbr title="Security Information and Event Management">SIEM</abbr>
+						integration.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Sysmon is a Windows kernel driver and service from Sysinternals that records process creation,
+							network connections, image loads, registry writes, and other endpoint events into the Windows
+							event log with far more detail than the built-in auditing. This article covers the event IDs,
+							the
+							<abbr title="Extensible Markup Language">XML</abbr>
+							configuration that decides what is collected, the community
+							configurations that balance signal against noise, and the forwarding path into a
+							<abbr title="Security Information and Event Management">SIEM</abbr>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - process creation, parent-child relationships, process injection</li>
+							<li><a href="/wiki/articles/fundamentals/pe.html">PE</a> - PE file structure, sections, imports, digital signatures</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="why-sysmon">Why Sysmon</h3>
+						<p>
+							Windows Event Log provides limited process telemetry. Event ID 4688 (Process Creation) tells
+							you a process was created, but not the full command line, the parent process, file hashes, or
+							<abbr title="Dynamic Link Library">DLL</abbr>
+							loads. Sysmon (System Monitor) fills this gap by installing as a
+							kernel driver and Windows service, capturing granular endpoint telemetry that the built-in event
+							log omits.
+						</p>
+						<p>
+							Sysmon runs only on Windows, so this article ships no container. The challenge is a Go tool
+							that parses an exported Sysmon event log on Linux, which keeps the exercise reproducible without
+							a Windows host.
+						</p>
+					</section>
+					<section>
+						<h3 id="architecture">Architecture</h3>
+						<pre class="plaintext">
+SysmonDrv.sys  — kernel driver, hooks process/thread creation, registry, file system
+Sysmon.exe     — userspace service, manages driver, receives events, writes to event log
+Sysmon64.exe   — 64-bit variant
+config.xml     — XML configuration controlling which events to collect
+						</pre>
+						<p>
+							Sysmon writes events to
+							<code>Microsoft-Windows-Sysmon/Operational</code>
+							in the Windows Event Log. These
+							events can be forwarded via Windows Event Forwarding (WEF) or collected by Winlogbeat.
+						</p>
+					</section>
+					<section>
+						<h3 id="installation">Installation</h3>
+						<p>On Windows (elevated PowerShell):</p>
+						<pre class="powershell">
+# Download and install
+Invoke-WebRequest -Uri &#34;https://download.sysinternals.com/files/Sysmon.zip&#34; -OutFile Sysmon.zip
+Expand-Archive Sysmon.zip
+cd Sysmon
+
+# Install with configuration
+.\Sysmon64.exe -accepteula -i sysmonconfig.xml
+						</pre>
+					</section>
+					<section>
+						<h3 id="event-ids-reference">Event IDs Reference</h3>
+						<p>Sysmon generates events numbered 1 through 28 (version-dependent). The most critical for detection:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">ID</th>
+									<th align="center">Name</th>
+									<th align="center">Fields</th>
+									<th align="center">Detection Use</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">1</td>
+									<td align="center">ProcessCreate</td>
+									<td align="center">Image, CommandLine, ParentProcessId, Hashes, User</td>
+									<td align="center">Process lineage, suspicious commands</td>
+								</tr>
+								<tr>
+									<td align="center">2</td>
+									<td align="center">FileCreateTime</td>
+									<td align="center">UtcTime, PreviousTime, Image</td>
+									<td align="center">Timestomping (antiforensics)</td>
+								</tr>
+								<tr>
+									<td align="center">3</td>
+									<td align="center">NetworkConnect</td>
+									<td align="center">Image, User, Protocol, SourceIp, DestinationIp, DestinationPort</td>
+									<td align="center">C2 connections, lateral movement</td>
+								</tr>
+								<tr>
+									<td align="center">5</td>
+									<td align="center">ProcessTerminate</td>
+									<td align="center">Image, ProcessId</td>
+									<td align="center">Process kill events</td>
+								</tr>
+								<tr>
+									<td align="center">6</td>
+									<td align="center">DriverLoaded</td>
+									<td align="center">ImageLoaded, Hashes, Signature</td>
+									<td align="center">Rootkit detection</td>
+								</tr>
+								<tr>
+									<td align="center">7</td>
+									<td align="center">ImageLoad</td>
+									<td align="center">ImageLoaded, Hashes, Signed, Signature</td>
+									<td align="center">DLL injection, reflective loading</td>
+								</tr>
+								<tr>
+									<td align="center">8</td>
+									<td align="center">CreateRemoteThread</td>
+									<td align="center">SourceImage, TargetImage, StartAddress</td>
+									<td align="center">Process injection</td>
+								</tr>
+								<tr>
+									<td align="center">9</td>
+									<td align="center">RawAccessRead</td>
+									<td align="center">Device, Image</td>
+									<td align="center">Direct disk access (credential theft)</td>
+								</tr>
+								<tr>
+									<td align="center">10</td>
+									<td align="center">ProcessAccess</td>
+									<td align="center">SourceImage, TargetImage, GrantedAccess</td>
+									<td align="center">LSASS access, process hollowing</td>
+								</tr>
+								<tr>
+									<td align="center">11</td>
+									<td align="center">FileCreate</td>
+									<td align="center">Image, TargetFilename</td>
+									<td align="center">Malware dropped files</td>
+								</tr>
+								<tr>
+									<td align="center">12</td>
+									<td align="center">RegistryEvent (Create/Delete)</td>
+									<td align="center">Image, TargetObject</td>
+									<td align="center">Persistence registry keys</td>
+								</tr>
+								<tr>
+									<td align="center">13</td>
+									<td align="center">RegistryEvent (Set)</td>
+									<td align="center">Image, TargetObject, Details</td>
+									<td align="center">Registry value modification</td>
+								</tr>
+								<tr>
+									<td align="center">14</td>
+									<td align="center">RegistryEvent (Rename)</td>
+									<td align="center">Image, TargetObject, NewName</td>
+									<td align="center">Registry key rename</td>
+								</tr>
+								<tr>
+									<td align="center">15</td>
+									<td align="center">FileCreateStreamHash</td>
+									<td align="center">Image, TargetFilename, Hash</td>
+									<td align="center">Alternate Data Streams (ADS)</td>
+								</tr>
+								<tr>
+									<td align="center">16</td>
+									<td align="center">ServiceConfigurationChange</td>
+									<td align="center">Image, Configuration</td>
+									<td align="center">Service persistence</td>
+								</tr>
+								<tr>
+									<td align="center">17</td>
+									<td align="center">PipeEvent (Create)</td>
+									<td align="center">Image, PipeName</td>
+									<td align="center">Named pipe creation (lateral movement)</td>
+								</tr>
+								<tr>
+									<td align="center">18</td>
+									<td align="center">PipeEvent (Connect)</td>
+									<td align="center">Image, PipeName</td>
+									<td align="center">Named pipe connection</td>
+								</tr>
+								<tr>
+									<td align="center">19</td>
+									<td align="center">WmiEvent</td>
+									<td align="center">Image, Operation, Name, Query</td>
+									<td align="center">WMI persistence/monitoring</td>
+								</tr>
+								<tr>
+									<td align="center">21</td>
+									<td align="center">WmiEvent (Consumer)</td>
+									<td align="center">Destination, Consumer, Filter</td>
+									<td align="center">WMI subscription for persistence</td>
+								</tr>
+								<tr>
+									<td align="center">22</td>
+									<td align="center">DNSEvent</td>
+									<td align="center">Image, QueryName, QueryStatus</td>
+									<td align="center">DNS query monitoring</td>
+								</tr>
+								<tr>
+									<td align="center">23</td>
+									<td align="center">FileDelete</td>
+									<td align="center">Image, TargetFilename</td>
+									<td align="center">File deletion (log wiping)</td>
+								</tr>
+								<tr>
+									<td align="center">25</td>
+									<td align="center">ProcessTampering</td>
+									<td align="center">Image, Type</td>
+									<td align="center">Process hollowing/herpaderping</td>
+								</tr>
+								<tr>
+									<td align="center">27</td>
+									<td align="center">FileBlockExecutable</td>
+									<td align="center">Image, TargetFilename</td>
+									<td align="center">Driver block event</td>
+								</tr>
+								<tr>
+									<td align="center">28</td>
+									<td align="center">FileBlockShredding</td>
+									<td align="center">Image, TargetFilename</td>
+									<td align="center">SDelete/wipe detection</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="xml-configuration">XML Configuration</h3>
+						<p>
+							The config
+							<abbr title="Extensible Markup Language">XML</abbr>
+							uses
+							<code>&lt;Sysmon&gt;</code>
+							as root, containing
+							<code>&lt;EventFiltering&gt;</code>
+							with
+							<code>&lt;RuleGroup&gt;</code>
+							elements.
+						</p>
+						<pre class="xml">
+&lt;!-- sysmonconfig.xml — Production-ready partial configuration --&gt;
+&lt;Sysmon schemaversion=&#34;4.80&#34;&gt;
+  &lt;EventFiltering&gt;
+
+    &lt;!-- Event ID 1: Process Creation --&gt;
+    &lt;!-- Include: Capture everything, let SIEM filter --&gt;
+    &lt;RuleGroup name=&#34;Process Creation&#34; groupRelation=&#34;or&#34;&gt;
+      &lt;ProcessCreate onmatch=&#34;exclude&#34;&gt;
+        &lt;!-- Exclude noisy system processes --&gt;
+        &lt;Image condition=&#34;end with&#34;&gt;\svchost.exe&lt;/Image&gt;
+        &lt;Image condition=&#34;end with&#34;&gt;\RuntimeBroker.exe&lt;/Image&gt;
+        &lt;Image condition=&#34;end with&#34;&gt;\SearchIndexer.exe&lt;/Image&gt;
+        &lt;Image condition=&#34;end with&#34;&gt;\msiexec.exe&lt;/Image&gt;
+        &lt;Image condition=&#34;end with&#34;&gt;\taskhostw.exe&lt;/Image&gt;
+        &lt;Image condition=&#34;end with&#34;&gt;\wlms\wlms.exe&lt;/Image&gt;
+      &lt;/ProcessCreate&gt;
+    &lt;/RuleGroup&gt;
+
+    &lt;!-- Event ID 3: Network Connections --&gt;
+    &lt;RuleGroup name=&#34;Network&#34; groupRelation=&#34;or&#34;&gt;
+      &lt;NetworkConnect onmatch=&#34;include&#34;&gt;
+        &lt;!-- Include all network connections --&gt;
+      &lt;/NetworkConnect&gt;
+    &lt;/RuleGroup&gt;
+
+    &lt;!-- Event ID 7: DLL Loaded --&gt;
+    &lt;!-- Exclude Microsoft-signed DLLs to reduce noise --&gt;
+    &lt;RuleGroup name=&#34;Image Load&#34; groupRelation=&#34;or&#34;&gt;
+      &lt;ImageLoad onmatch=&#34;exclude&#34;&gt;
+        &lt;Signature condition=&#34;contains&#34;&gt;Microsoft Corporation&lt;/Signature&gt;
+        &lt;Signature condition=&#34;contains&#34;&gt;Microsoft Windows&lt;/Signature&gt;
+        &lt;ImageLoaded condition=&#34;end with&#34;&gt;\mscoree.dll&lt;/ImageLoaded&gt;
+        &lt;ImageLoaded condition=&#34;end with&#34;&gt;\clr.dll&lt;/ImageLoaded&gt;
+        &lt;ImageLoaded condition=&#34;end with&#34;&gt;\kernel32.dll&lt;/ImageLoaded&gt;
+        &lt;ImageLoaded condition=&#34;end with&#34;&gt;\ntdll.dll&lt;/ImageLoaded&gt;
+      &lt;/ImageLoad&gt;
+    &lt;/RuleGroup&gt;
+
+    &lt;!-- Event ID 8: CreateRemoteThread — always include --&gt;
+    &lt;RuleGroup name=&#34;Remote Thread&#34; groupRelation=&#34;or&#34;&gt;
+      &lt;CreateRemoteThread onmatch=&#34;exclude&#34;&gt;
+        &lt;!-- Exclude only if needed --&gt;
+      &lt;/CreateRemoteThread&gt;
+    &lt;/RuleGroup&gt;
+
+    &lt;!-- Event ID 10: Process Access — critical for detection --&gt;
+    &lt;RuleGroup name=&#34;Process Access&#34; groupRelation=&#34;or&#34;&gt;
+      &lt;ProcessAccess onmatch=&#34;include&#34;&gt;
+        &lt;!-- LSASS access grants that indicate credential dumping --&gt;
+        &lt;GrantedAccess condition=&#34;is&#34;&gt;0x1010&lt;/GrantedAccess&gt;   &lt;!-- PROCESS_VM_READ | PROCESS_QUERY_INFORMATION --&gt;
+        &lt;GrantedAccess condition=&#34;is&#34;&gt;0x1410&lt;/GrantedAccess&gt;   &lt;!-- + PROCESS_DUP_HANDLE --&gt;
+        &lt;GrantedAccess condition=&#34;is&#34;&gt;0x1438&lt;/GrantedAccess&gt;   &lt;!-- + PROCESS_VM_OPERATION --&gt;
+        &lt;GrantedAccess condition=&#34;is&#34;&gt;0x143A&lt;/GrantedAccess&gt;   &lt;!-- + PROCESS_VM_WRITE --&gt;
+        &lt;GrantedAccess condition=&#34;is&#34;&gt;0x1F0FFF&lt;/GrantedAccess&gt; &lt;!-- PROCESS_ALL_ACCESS --&gt;
+        &lt;GrantedAccess condition=&#34;is&#34;&gt;0x1F1FFF&lt;/GrantedAccess&gt; &lt;!-- PROCESS_ALL_ACCESS + PROCESS_QUERY_LIMITED_INFORMATION --&gt;
+        &lt;GrantedAccess condition=&#34;is&#34;&gt;0x1F2FFF&lt;/GrantedAccess&gt;
+        &lt;GrantedAccess condition=&#34;is&#34;&gt;0x1F3FFF&lt;/GrantedAccess&gt;
+      &lt;/ProcessAccess&gt;
+    &lt;/RuleGroup&gt;
+
+    &lt;!-- Event ID 11: File Creation --&gt;
+    &lt;RuleGroup name=&#34;File Create&#34; groupRelation=&#34;or&#34;&gt;
+      &lt;FileCreate onmatch=&#34;include&#34;&gt;
+        &lt;!-- Monitor startup folders (persistence) --&gt;
+        &lt;TargetFilename condition=&#34;contains&#34;&gt;\Start Menu\Programs\Startup&lt;/TargetFilename&gt;
+        &lt;TargetFilename condition=&#34;contains&#34;&gt;\Startup\&lt;/TargetFilename&gt;
+        &lt;!-- Temp directories --&gt;
+        &lt;TargetFilename condition=&#34;begin with&#34;&gt;C:\Windows\Temp\&lt;/TargetFilename&gt;
+        &lt;TargetFilename condition=&#34;begin with&#34;&gt;C:\Users\&lt;/TargetFilename&gt;
+        &lt;!-- Executable file extensions --&gt;
+        &lt;TargetFilename condition=&#34;end with&#34;&gt;.exe&lt;/TargetFilename&gt;
+        &lt;TargetFilename condition=&#34;end with&#34;&gt;.dll&lt;/TargetFilename&gt;
+        &lt;TargetFilename condition=&#34;end with&#34;&gt;.ps1&lt;/TargetFilename&gt;
+        &lt;TargetFilename condition=&#34;end with&#34;&gt;.vbs&lt;/TargetFilename&gt;
+        &lt;TargetFilename condition=&#34;end with&#34;&gt;.js&lt;/TargetFilename&gt;
+        &lt;TargetFilename condition=&#34;end with&#34;&gt;.vbe&lt;/TargetFilename&gt;
+        &lt;TargetFilename condition=&#34;end with&#34;&gt;.bat&lt;/TargetFilename&gt;
+        &lt;TargetFilename condition=&#34;end with&#34;&gt;.scr&lt;/TargetFilename&gt;
+      &lt;/FileCreate&gt;
+    &lt;/RuleGroup&gt;
+
+    &lt;!-- Event ID 12-14: Registry Events --&gt;
+    &lt;RuleGroup name=&#34;Registry&#34; groupRelation=&#34;or&#34;&gt;
+      &lt;RegistryEvent onmatch=&#34;include&#34;&gt;
+        &lt;!-- Persistence locations --&gt;
+        &lt;TargetObject condition=&#34;contains&#34;&gt;\CurrentVersion\Run&lt;/TargetObject&gt;
+        &lt;TargetObject condition=&#34;contains&#34;&gt;\CurrentVersion\RunOnce&lt;/TargetObject&gt;
+        &lt;TargetObject condition=&#34;contains&#34;&gt;\CurrentVersion\Windows\Run&lt;/TargetObject&gt;
+        &lt;TargetObject condition=&#34;contains&#34;&gt;\CurrentVersion\Policies\Explorer\Run&lt;/TargetObject&gt;
+        &lt;TargetObject condition=&#34;contains&#34;&gt;\CurrentVersion\RunServices&lt;/TargetObject&gt;
+        &lt;TargetObject condition=&#34;contains&#34;&gt;\Software\Microsoft\Windows\CurrentVersion\Run&lt;/TargetObject&gt;
+        &lt;TargetObject condition=&#34;contains&#34;&gt;\Winlogon\Shell&lt;/TargetObject&gt;
+        &lt;TargetObject condition=&#34;contains&#34;&gt;\Winlogon\Userinit&lt;/TargetObject&gt;
+        &lt;TargetObject condition=&#34;contains&#34;&gt;\Image File Execution Options&lt;/TargetObject&gt;
+        &lt;!-- Service registry hives --&gt;
+        &lt;TargetObject condition=&#34;contains&#34;&gt;\Services\&lt;/TargetObject&gt;
+        &lt;!-- WMI persistence --&gt;
+        &lt;TargetObject condition=&#34;contains&#34;&gt;\WBEM\&lt;/TargetObject&gt;
+        &lt;TargetObject condition=&#34;contains&#34;&gt;\WOW6432Node\Microsoft\Windows\CurrentVersion\Run&lt;/TargetObject&gt;
+      &lt;/RegistryEvent&gt;
+    &lt;/RuleGroup&gt;
+
+    &lt;!-- Event ID 22: DNS Queries --&gt;
+    &lt;RuleGroup name=&#34;DNS&#34; groupRelation=&#34;or&#34;&gt;
+      &lt;DnsQuery onmatch=&#34;include&#34;&gt;
+      &lt;/DnsQuery&gt;
+    &lt;/RuleGroup&gt;
+
+  &lt;/EventFiltering&gt;
+&lt;/Sysmon&gt;
+						</pre>
+					</section>
+					<section>
+						<h3 id="configuration-strategies">Configuration Strategies</h3>
+						<h4 id="onmatch-rules">onmatch Rules</h4>
+						<p>Two approaches:</p>
+						<ul>
+							<li><b>exclude with onmatch=exclude</b> : List noise to exclude; everything else matches. Higher volume, no gaps.</li>
+							<li><b>include with onmatch=include</b> : Only include what you specify. Lower volume, risk of blind spots.</li>
+						</ul>
+						<p>
+							Best practice: use
+							<code>onmatch=exclude</code>
+							for broad event types (ProcessCreate, NetworkConnect) -
+							you rarely miss what you didn't know to include. Use
+							<code>onmatch=include</code>
+							for targeted rules (ProcessAccess
+							with specific GrantMask values).
+						</p>
+						<h4 id="community-configurations">Community Configurations</h4>
+						<p>
+							<b>SwiftOnSecurity</b>
+							sysmon-config is the most widely deployed community baseline. It balances
+							coverage with noise reduction. Covers 25+ event types with tuned exclusions.
+						</p>
+						<pre class="powershell">
+# Install with SwiftOnSecurity config
+Invoke-WebRequest -Uri &#34;https://raw.githubusercontent.com/SwiftOnSecurity/sysmon-config/master/sysmonconfig-export.xml&#34; -OutFile sysmonconfig.xml
+Sysmon64.exe -accepteula -i sysmonconfig.xml
+						</pre>
+						<p>
+							<b>Olaf Hartong's Sysmon-Modular</b>
+							takes a building-block approach: separate config files per
+							event type, merged at install time.
+						</p>
+						<pre class="powershell">
+# Clone and merge modular rules
+git clone https://github.com/olafhartong/sysmon-modular.git
+cd sysmon-modular
+. .\Merge-SysmonXml.ps1
+Merge-AllSysmonXml -Path (Get-ChildItem &#39;[0-9]*\*.xml&#39;) -AsString | Out-File sysmonconfig-merged.xml
+Sysmon64.exe -accepteula -i sysmonconfig-merged.xml
+						</pre>
+					</section>
+					<section>
+						<h3 id="siem-integration">SIEM Integration</h3>
+						<h4 id="winlogbeat">Winlogbeat</h4>
+						<p>Winlogbeat ships Windows Event Logs (including Sysmon channel) to Elasticsearch or Logstash.</p>
+						<pre class="yaml">
+# winlogbeat.yml
+winlogbeat.event_logs:
+  - name: Microsoft-Windows-Sysmon/Operational
+    fields:
+      log_type: sysmon
+      environment: production
+    ignore_older: 72h
+    processors:
+      - add_host_metadata: ~
+      - add_cloud_metadata: ~
+
+output.elasticsearch:
+  hosts: [&#34;elasticsearch.example.com:9200&#34;]
+  index: &#34;winlogbeat-%{+yyyy.MM.dd}&#34;
+						</pre>
+						<h4 id="windows-event-forwarding-wef">Windows Event Forwarding (WEF)</h4>
+						<pre class="powershell">
+# Create WEF subscription for Sysmon events on collector
+wecutil qc  # Quick configure
+wecutil cs sysmon-subscription.xml
+
+# Destination: central Windows Event Collector
+						</pre>
+					</section>
+					<section>
+						<h3 id="detection-examples">Detection Examples</h3>
+						<h4 id="malicious-process-tree-detection">Malicious Process Tree Detection</h4>
+						<p>Attackers often chain process execution in detectable patterns:</p>
+						<pre class="plaintext">
+Word.exe → cmd.exe → powershell.exe → encoded command
+Service → rundll32.exe → suspicious DLL
+wmic.exe → cmd.exe → net.exe user /add
+						</pre>
+						<p>
+							In a
+							<abbr title="Security Information and Event Management">SIEM</abbr>
+							query (Elastic/Kibana):
+						</p>
+						<pre class="plaintext">
+event_id:1 AND (parent_process.name:winword.exe AND process.name:cmd.exe)
+ OR (parent_process.name:cmd.exe AND process.name:powershell.exe)
+ OR (parent_process.name:excel.exe AND process.name:cscript.exe)
+						</pre>
+						<h4 id="lsass-access-detection">LSASS Access Detection</h4>
+						<pre class="plaintext">
+event_id:10 AND target_process.name:lsass.exe
+ AND NOT (source_process.name:svchost.exe OR
+          source_process.name:vmcompute.exe OR
+          source_process.name:MsMpEng.exe)
+						</pre>
+						<p>
+							Legitimate processes accessing
+							<abbr title="Local Security Authority Subsystem Service">LSASS</abbr>
+							:
+							<code>svchost.exe</code>
+							(SCM),
+							<code>vmcompute.exe</code>
+							(Hyper-V),
+							<code>MsMpEng.exe</code>
+							(Defender),
+							<code>csrss.exe</code>
+							(subsystem). Anything
+							else is suspect, especially
+							<code>rundll32.exe</code>
+							,
+							<code>taskmgr.exe</code>
+							,
+							<code>procdump.exe</code>
+							, or any process
+							not signed by Microsoft.
+						</p>
+						<h4 id="lateral-movement-detection">Lateral Movement Detection</h4>
+						<pre class="plaintext">
+# PsExec: Service creation with random name + network connection from SMB
+event_id:16 AND service_name matches &#34;^[A-Z0-9]{8}\$&#34; AND service_cmd_line contains &#34;PSEXESVC&#34;
+
+# WMI lateral movement
+event_id:19 AND operation:&#34;Created&#34; AND query contains &#34;SELECT * FROM Win32_Process&#34;
+
+# WinRM lateral movement (wsmprovhost)
+event_id:1 AND process.name:&#34;wsmprovhost.exe&#34; AND parent_process.name:&#34;svchost.exe&#34;
+						</pre>
+						<h4 id="c2-beaconing-detection">C2 Beaconing Detection</h4>
+						<pre class="plaintext">
+# Sysmon Event ID 3 + 22 correlation
+# A process making periodic DNS queries to the same domain, and
+# periodic outbound connections on non-standard ports
+
+event_id:22 AND query_name:*.baddomain.xyz
+event_id:3 AND destination_port NOT IN (80,443) AND destination_ip NOT IN (private_ranges)
+						</pre>
+					</section>
+					<section>
+						<h3 id="configuring-sysmon-updates">Configuring Sysmon Updates</h3>
+						<pre class="powershell">
+# Check current config version
+sysmon64.exe -c
+
+# Update config without service restart
+sysmon64.exe -c sysmonconfig-v2.xml
+
+# Uninstall
+sysmon64.exe -u force
+
+# Verbose installation
+sysmon64.exe -accepteula -i config.xml -l -n
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that reads an exported Sysmon event log in
+							<abbr title="Extensible Markup Language">XML</abbr>
+							form and reports process creation events (Event ID 1) where an Office or web server process
+							spawns a command interpreter. On a Windows host,
+							<code>wevtutil qe Microsoft-Windows-Sysmon/Operational /f:xml</code>
+							produces the input; the sample below is enough to test the tool.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;encoding/xml&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;strings&#34;
+)
+
+type event struct {
+	XMLName xml.Name `xml:&#34;Event&#34;`
+	System  struct {
+		EventID int `xml:&#34;EventID&#34;`
+	} `xml:&#34;System&#34;`
+	EventData struct {
+		Data []struct {
+			Name  string `xml:&#34;Name,attr&#34;`
+			Value string `xml:&#34;,chardata&#34;`
+		} `xml:&#34;Data&#34;`
+	} `xml:&#34;EventData&#34;`
+}
+
+var suspicious = map[string][]string{
+	&#34;winword.exe&#34;: {&#34;cmd.exe&#34;, &#34;powershell.exe&#34;, &#34;wscript.exe&#34;, &#34;cscript.exe&#34;, &#34;mshta.exe&#34;},
+	&#34;excel.exe&#34;:   {&#34;cmd.exe&#34;, &#34;powershell.exe&#34;, &#34;wscript.exe&#34;, &#34;cscript.exe&#34;, &#34;mshta.exe&#34;},
+	&#34;outlook.exe&#34;: {&#34;cmd.exe&#34;, &#34;powershell.exe&#34;, &#34;wscript.exe&#34;, &#34;cscript.exe&#34;, &#34;mshta.exe&#34;},
+	&#34;w3wp.exe&#34;:    {&#34;cmd.exe&#34;, &#34;powershell.exe&#34;, &#34;whoami.exe&#34;, &#34;net.exe&#34;},
+	&#34;httpd&#34;:       {&#34;bash&#34;, &#34;sh&#34;, &#34;python&#34;, &#34;perl&#34;},
+	&#34;apache2&#34;:     {&#34;bash&#34;, &#34;sh&#34;, &#34;python&#34;, &#34;perl&#34;},
+}
+
+func base(path string) string {
+	path = strings.ReplaceAll(path, &#34;\\&#34;, &#34;/&#34;)
+	parts := strings.Split(path, &#34;/&#34;)
+	return strings.ToLower(parts[len(parts)-1])
+}
+
+func main() {
+
+	decoder := xml.NewDecoder(os.Stdin)
+
+	for {
+
+		var e event
+
+		if err := decoder.Decode(&amp;e); err != nil {
+			break
+		}
+
+		if e.System.EventID != 1 {
+			continue
+		}
+
+		fields := make(map[string]string)
+
+		for _, d := range e.EventData.Data {
+			fields[d.Name] = strings.TrimSpace(d.Value)
+		}
+
+		children, ok := suspicious[base(fields[&#34;ParentImage&#34;])]
+
+		if ok == false {
+			continue
+		}
+
+		for _, child := range children {
+			if base(fields[&#34;Image&#34;]) == child {
+				fmt.Printf(&#34;[SUSPICIOUS LINEAGE] %s -&gt; %s\n&#34;, fields[&#34;ParentImage&#34;], fields[&#34;Image&#34;])
+				fmt.Printf(&#34;    %s\n&#34;, fields[&#34;CommandLine&#34;])
+				break
+			}
+		}
+
+	}
+
+}
+						</pre>
+						<p>Feed it the sample stream:</p>
+						<pre class="bash">
+wevtutil qe Microsoft-Windows-Sysmon/Operational /f:xml &gt; sysmon-events.xml
+						</pre>
+						<pre class="xml">
+&lt;Event&gt;
+  &lt;System&gt;&lt;EventID&gt;1&lt;/EventID&gt;&lt;/System&gt;
+  &lt;EventData&gt;
+    &lt;Data Name=&#34;Image&#34;&gt;C:\Windows\System32\cmd.exe&lt;/Data&gt;
+    &lt;Data Name=&#34;ParentImage&#34;&gt;C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE&lt;/Data&gt;
+    &lt;Data Name=&#34;CommandLine&#34;&gt;cmd.exe /c whoami&lt;/Data&gt;
+  &lt;/EventData&gt;
+&lt;/Event&gt;
+&lt;Event&gt;
+  &lt;System&gt;&lt;EventID&gt;1&lt;/EventID&gt;&lt;/System&gt;
+  &lt;EventData&gt;
+    &lt;Data Name=&#34;Image&#34;&gt;C:\Windows\System32\notepad.exe&lt;/Data&gt;
+    &lt;Data Name=&#34;ParentImage&#34;&gt;C:\Windows\explorer.exe&lt;/Data&gt;
+    &lt;Data Name=&#34;CommandLine&#34;&gt;notepad.exe&lt;/Data&gt;
+  &lt;/EventData&gt;
+&lt;/Event&gt;
+						</pre>
+						<pre class="bash">
+go build -o lineage lineage.go
+./lineage &lt; sysmon-events.xml
+# [SUSPICIOUS LINEAGE] C:\Program Files\...\WINWORD.EXE -&gt; C:\Windows\System32\cmd.exe
+#     cmd.exe /c whoami
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/sysinternals/downloads/sysmon" target="_blank">Sysmon Documentation (Microsoft)</a></li>
+							<li><a class="icon-github" href="https://github.com/SwiftOnSecurity/sysmon-config" target="_blank">SwiftOnSecurity sysmon-config</a></li>
+							<li><a class="icon-github" href="https://github.com/olafhartong/sysmon-modular" target="_blank">Olaf Hartong sysmon-modular</a></li>
+							<li><a class="icon-website" href="https://www.ultimatewindowssecurity.com/securitylog/encyclopedia/" target="_blank">Sysmon Event ID Reference (UltimateWindowsSecurity)</a></li>
+							<li><a class="icon-website" href="https://attack.mitre.org/datasources/DS0017/" target="_blank">MITRE ATT&CK - Sysmon Event Mappings</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

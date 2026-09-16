@@ -1,0 +1,1771 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>eBPF | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="eBPF">
+		<meta name="keywords" content="bpf, btf, core, ebpf, kernel, sysinternals, tracepoint, verifier, xdp">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="eBPF">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="The eBPF in-kernel virtual machine, covering its architecture, instruction set, verifier, program types, maps, helper functions, BTF, and CO-RE.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/sysinternals/ebpf.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="eBPF">
+		<meta name="twitter:description" itemprop="description" content="The eBPF in-kernel virtual machine, covering its architecture, instruction set, verifier, program types, maps, helper functions, BTF, and CO-RE.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ebpf-architecture-overview">1. eBPF Architecture Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ebpf-vm-and-instruction-set">2. eBPF VM and Instruction Set</a></b>
+					<ul>
+						<li><a href="#register-map">2.1 Register Map</a></li>
+						<li><a href="#instruction-encoding">2.2 Instruction Encoding</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ebpf-call-instruction">eBPF Call Instruction</a></b>
+					<ul>
+						<li><a href="#common-ebpf-helpers">Common eBPF Helpers</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-verifier">3. The Verifier</a></b>
+					<ul>
+						<li><a href="#verifier-pipeline">3.1 Verifier Pipeline</a></li>
+						<li><a href="#register-type-system">3.2 Register Type System</a></li>
+						<li><a href="#bounds-tracking">3.3 Bounds Tracking</a></li>
+						<li><a href="#safety-guarantees">3.4 Safety Guarantees</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ebpf-program-types">4. eBPF Program Types</a></b>
+					<ul>
+						<li><a href="#program-type-matrix">4.1 Program Type Matrix</a></li>
+						<li><a href="#xdp-program-flow">4.2 XDP Program Flow</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ebpf-maps">5. eBPF Maps</a></b>
+					<ul>
+						<li><a href="#map-types">5.1 Map Types</a></li>
+						<li><a href="#map-lifecycle">5.2 Map Lifecycle</a></li>
+						<li><a href="#map-selection-guide">5.3 Map Selection Guide</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ring-buffer-bpf-map-type-ringbuf">6. Ring Buffer (BPF_MAP_TYPE_RINGBUF)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#btf-bpf-type-format">7. BTF - BPF Type Format</a></b>
+					<ul>
+						<li><a href="#btf-structure">7.1 BTF Structure</a></li>
+						<li><a href="#btf-type-kinds">7.2 BTF Type Kinds</a></li>
+						<li><a href="#co-re-compile-once-run-everywhere">7.3 CO-RE - Compile Once, Run Everywhere</a></li>
+						<li><a href="#btftool-usage">7.4 btftool Usage</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#program-loading-pipeline">8. Program Loading Pipeline</a></b>
+					<ul>
+						<li><a href="#the-bpf-syscall">8.1 The bpf() Syscall</a></li>
+						<li><a href="#bpf-program-load-with-libbpf">8.2 BPF Program Load with libbpf</a></li>
+						<li><a href="#bpf-links">8.3 BPF Links</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ebpf-concurrency">9. eBPF Concurrency</a></b>
+					<ul>
+						<li><a href="#per-cpu-maps">9.1 Per-CPU Maps</a></li>
+						<li><a href="#spin-locks-in-maps">9.2 Spin Locks in Maps</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tail-calls-and-function-calls">10. Tail Calls and Function Calls</a></b>
+					<ul>
+						<li><a href="#tail-calls">10.1 Tail Calls</a></li>
+						<li><a href="#function-calls-bpf-to-bpf">10.2 Function Calls (BPF-to-BPF)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ebpf-for-security-lsm-hooks">11. eBPF for Security - LSM Hooks</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#minimal-ebpf-program">12. Minimal eBPF Program</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#writing-a-custom-loader-with-libbpf">13. Writing a Custom Loader with libbpf</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification">Verification</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/sysinternals/index.html">Sysinternals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/sysinternals/ebpf.html">Ebpf</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="ebpf">eBPF</h2>
+					<p>
+						The
+						<abbr title="Extended Berkeley Packet Filter">eBPF</abbr>
+						in-kernel virtual machine, covering its architecture,
+						instruction set, verifier, program types, maps, helper functions, BTF, and CO-RE.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							<abbr title="Extended Berkeley Packet Filter">eBPF</abbr>
+							(extended Berkeley Packet Filter) is an in-kernel virtual
+							machine that executes sandboxed programs inside the Linux kernel. Originally designed for network
+							packet filtering, it has grown into a general-purpose execution engine for tracing, security,
+							networking, and observability, all without loading a kernel module. An
+							<abbr title="Extended Berkeley Packet Filter">eBPF</abbr>
+							program is verified at load time for safety, compiled and JIT-translated to native instructions,
+							and then attached to a kernel hook point.
+						</p>
+						<p>
+							This article dissects the
+							<abbr title="Extended Berkeley Packet Filter">eBPF</abbr>
+							subsystem from the instruction
+							set upward: registers, verifier, maps, helpers, program types, BTF, CO-RE, and the loading pipeline.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/sysinternals/kernel-architecture.html">Kernel Architecture</a> - kernel design, privilege rings, memory layout</li>
+							<li><a href="/wiki/articles/sysinternals/system-call-dispatch.html">System Call Dispatch</a> - the bpf() syscall mechanism and syscall table</li>
+							<li><a href="/wiki/articles/fundamentals/system-calls.html">System Calls</a> - user/kernel boundary crossing, syscall mechanics</li>
+							<li><a href="/wiki/articles/fundamentals/elf.html">ELF</a> - ELF binary format, relocations, sections</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="ebpf-architecture-overview">1. eBPF Architecture Overview</h3>
+						<pre class="plaintext">
+User Space                              Kernel Space
+══════════                              ═════════════
+
+ Application
+      │
+      ▼
+ libbpf (loader library)
+      │
+      │  bpf(BPF_PROG_LOAD, ...)
+      │  bpf(BPF_MAP_CREATE, ...)
+      │  bpf(BPF_PROG_ATTACH, ...)
+      │
+      ▼
+ ┌──────────────────────┐
+ │   bpf() syscall      │────► sys_bpf()
+ └──────────────────────┘           │
+                                    ▼
+                             ┌──────────────┐
+                             │   Verifier    │  ← safety check
+                             └──────+───────┘
+                                    │ approved
+                                    ▼
+                             ┌──────────────┐
+                             │  JIT Compiler │  ← eBPF → native
+                             └──────+───────┘
+                                    │
+                                    ▼
+                             ┌──────────────────────┐
+                             │  eBPF Program (native)│
+                             │  attached to hook:    │
+                             │  - kprobe/kretprobe   │
+                             │  - tracepoint         │
+                             │  - XDP                │
+                             │  - cgroup             │
+                             │  - socket filter      │
+                             │  - LSM hook           │
+                             └──────────+───────────┘
+                                        │
+                                ┌───────▼───────┐
+                                │   eBPF Maps   │ ← data sharing
+                                │ (hash, array,  │    between kernel
+                                │  ringbuf, ...) │    and user space
+                                └───────────────┘
+						</pre>
+						<p>
+							The flow is: user space compiles
+							<abbr title="Extended Berkeley Packet Filter">eBPF</abbr>
+							C -> LL
+							<abbr title="Virtual Machine">VM</abbr>
+							->
+							<abbr title="Extended Berkeley Packet Filter">eBPF</abbr>
+							bytecode -> ELF object -> libbpf loads via bpf()
+							syscall -> verifier checks safety -> JIT compiles to native -> program attaches to a hook ->
+							runs in kernel context when the hook fires.
+						</p>
+					</section>
+					<section>
+						<h3 id="ebpf-vm-and-instruction-set">2. eBPF VM and Instruction Set</h3>
+						<p>
+							The
+							<abbr title="Extended Berkeley Packet Filter">eBPF</abbr>
+							
+							<abbr title="Virtual Machine">VM</abbr>
+							is a 64-bit RISC-like register
+							machine with 11 registers and a stack.
+						</p>
+						<h4 id="register-map">2.1 Register Map</h4>
+						<pre class="plaintext">
+Register  Role              Caller-saved?   Notes
+────────  ────────────────  ─────────────  ──────────────────────
+R0        Return value      Yes             Also stores map fd, ptr
+R1-R5     Function args     Yes             Overwritten by callee
+R6-R9     Callee-saved      No              Preserved across calls
+R10       Frame pointer     No              Read-only, points to stack
+						</pre>
+						<pre class="plaintext">
+ ┌───────────────────────────────────┐
+ │           eBPF Registers           │
+ ├───────+───────────────────────────┤
+ │  R0   │ Return / scratch           │
+ │  R1   │ Arg 0 (ctx pointer)        │
+ │  R2   │ Arg 1                      │
+ │  R3   │ Arg 2                      │
+ │  R4   │ Arg 3                      │
+ │  R5   │ Arg 4                      │
+ │  R6   │ Callee-saved               │
+ │  R7   │ Callee-saved               │
+ │  R8   │ Callee-saved               │
+ │  R9   │ Callee-saved               │
+ │  R10  │ Frame pointer (stack)      │
+ ├───────+───────────────────────────┤
+ │  Stack: 512 bytes                  │
+ │  ┌─────────────────────────────┐   │
+ │  │ R10-0  (top of stack)        │   │
+ │  │ ...                          │   │
+ │  │ R10-511 (bottom of stack)    │   │
+ │  └─────────────────────────────┘   │
+ └───────────────────────────────────┘
+						</pre>
+						<p>
+							R1 always receives the context pointer when a program is invoked - the type depends on the program
+							type (e.g.,
+							<code>struct xdp_md *</code>
+							for XDP,
+							<code>struct __sk_buff *</code>
+							for socket filters,
+							<code>struct pt_regs *</code>
+							for kprobes).
+						</p>
+						<h4 id="instruction-encoding">2.2 Instruction Encoding</h4>
+						<p>
+							Each
+							<abbr title="Extended Berkeley Packet Filter">eBPF</abbr>
+							instruction is exactly 64 bits (8 bytes) wide:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">opcode (MSB)</th>
+									<th align="center">src</th>
+									<th align="center">dst</th>
+									<th align="center">offset (16)</th>
+									<th align="center">immediate (32) (LSB)</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">8 bits</td>
+									<td align="center">1 bit</td>
+									<td align="center">1 bit</td>
+									<td align="center">signed</td>
+									<td align="center">signed</td>
+								</tr>
+							</tbody>
+						</table>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Instruction Class</th>
+									<th align="center">Opcode Range</th>
+									<th align="center">Examples</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>BPF_LD</code></td>
+									<td align="center">0x00</td>
+									<td align="center"><code>lddw</code>(load 64-bit immediate)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>BPF_LDX</code></td>
+									<td align="center">0x01</td>
+									<td align="center"><code>ldxb</code>,<code>ldxh</code>,<code>ldxw</code>,<code>ldxdw</code>(load from memory)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>BPF_ST</code></td>
+									<td align="center">0x02</td>
+									<td align="center"><code>stb</code>,<code>sth</code>,<code>stw</code>,<code>stdw</code>(store to memory)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>BPF_STX</code></td>
+									<td align="center">0x03</td>
+									<td align="center"><code>stxb</code>,<code>stxh</code>,<code>stxw</code>,<code>stxdw</code>(store from register)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>BPF_ALU</code></td>
+									<td align="center">0x04</td>
+									<td align="center"><code>add</code>,<code>sub</code>,<code>mul</code>,<code>div</code>,<code>or</code>,<code>and</code>,<code>lsh</code>,<code>rsh</code>,<code>neg</code>,<code>mod</code>,<code>xor</code>,<code>mov</code>,<code>arsh</code>,<code>end</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>BPF_JMP</code></td>
+									<td align="center">0x05</td>
+									<td align="center"><code>ja</code>,<code>jeq</code>,<code>jgt</code>,<code>jge</code>,<code>jset</code>,<code>jne</code>,<code>jsgt</code>,<code>jsge</code>,<code>jlt</code>,<code>jle</code>,<code>jslt</code>,<code>jsle</code>,<code>call</code>,<code>exit</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>BPF_ALU64</code></td>
+									<td align="center">0x07</td>
+									<td align="center">Same as ALU but on 64-bit registers</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="ebpf-call-instruction">eBPF Call Instruction</h3>
+						<p>
+							The
+							<code>call</code>
+							instruction has several modes, distinguished by the
+							<code>src</code>
+							field:
+						</p>
+						<pre class="plaintext">
+src = BPF_PSEUDO_CALL (1):   call another BPF function (BPF-to-BPF call)
+src = BPF_PSEUDO_KFUNC_CALL (2):   call a kernel function (kfunc)
+src = 0 (normal):            call a helper function (imm = helper ID)
+						</pre>
+						<h4 id="common-ebpf-helpers">Common eBPF Helpers</h4>
+						<pre class="c">
+// Map operations
+void *bpf_map_lookup_elem(struct bpf_map *map, const void *key);
+long bpf_map_update_elem(struct bpf_map *map, const void *key, const void *value, u64 flags);
+long bpf_map_delete_elem(struct bpf_map *map, const void *key);
+
+// Debug/trace output
+long bpf_trace_printk(const char *fmt, u32 fmt_size, ...);
+
+// Safe memory access
+long bpf_probe_read(void *dst, u32 size, const void *src);
+long bpf_probe_read_str(void *dst, u32 size, const void *src);
+long bpf_probe_read_user(void *dst, u32 size, const void *src);
+long bpf_probe_read_kernel(void *dst, u32 size, const void *src);
+
+// Perf ring buffer output
+long bpf_perf_event_output(void *ctx, struct bpf_map *map, u64 flags, void *data, u64 size);
+
+// Ring buffer
+long bpf_ringbuf_output(void *ringbuf, void *data, u64 size, u64 flags);
+void *bpf_ringbuf_reserve(void *ringbuf, u64 size, u64 flags);
+long bpf_ringbuf_submit(void *data, u64 flags);
+long bpf_ringbuf_discard(void *data, u64 flags);
+
+// Current task info
+u64 bpf_get_current_pid_tgid(void);
+u64 bpf_get_current_uid_gid(void);
+
+// Timestamps
+u64 bpf_ktime_get_ns(void);
+u64 bpf_ktime_get_boot_ns(void);
+
+// Random numbers
+u32 bpf_get_prandom_u32(void);
+
+// Tail calls
+long bpf_tail_call(void *ctx, struct bpf_map *prog_array_map, u32 index);
+						</pre>
+					</section>
+					<section>
+						<h3 id="the-verifier">3. The Verifier</h3>
+						<p>
+							The verifier is the security boundary of
+							<abbr title="Extended Berkeley Packet Filter">eBPF</abbr>
+							. It statically
+							analyzes every instruction of every possible execution path before the kernel allows the program
+							to run. A rejected program cannot compromise the kernel.
+						</p>
+						<h4 id="verifier-pipeline">3.1 Verifier Pipeline</h4>
+						<pre class="plaintext">
+ ┌──────────────┐    ┌───────────────┐    ┌──────────────────┐
+ │ check_cfg()  │───►│ do_check()    │───►│ convert_ctx()    │
+ │ DAG + loops  │    │ instruction   │    │ context access   │
+ │              │    │ simulation    │    │ rewriting        │
+ └──────────────┘    └───────+───────┘    └──────────────────┘
+                             │
+                    ┌────────▼────────┐
+                    │ Bounds Tracking │
+                    │ Type Tracking   │
+                    │ Pointer Leaks   │
+                    │ Helper Args     │
+                    └─────────────────┘
+						</pre>
+						<p>
+							<b>Step 1: 'check_cfg()'</b>
+							- Builds a control flow graph (CFG) from the bytecode. The graph must
+							be a
+							<abbr title="Domain Admin">DA</abbr>
+							G except for bounded loops, which are allowed since kernel 5.3. Any
+							unreachable code is rejected, and the verifier must prove that every loop terminates. The stack
+							depth must never exceed 512 bytes.
+						</p>
+						<p>
+							<b>Step 2: 'do_check()'</b>
+							- Symbolically executes every instruction, tracking the type and possible
+							value range of each register. For each instruction, the verifier: - Ensures registers hold expected
+							types before use (
+							<abbr title="Penetration Test">PT</abbr>
+							R_TO_CTX,
+							<abbr title="Penetration Test">PT</abbr>
+							R_TO_M
+							<abbr title="Access Point">AP</abbr>
+							_VALUE, S
+							<abbr title="Certificate Authority">CA</abbr>
+							LAR_VALUE, etc.) - For pointer registers, tracks the valid
+							offset range (e.g., map value pointer + 0 to size-1) - For arithmetic, propagates known bounds
+						</p>
+						<p>
+							<b>Step 3: 'convert_ctx_accesses()'</b>
+							- Rewrites context accesses (e.g.,
+							<code>ctx-&gt;data</code>
+							) into direct
+							offsets into the kernel's actual data structure.
+						</p>
+						<h4 id="register-type-system">3.2 Register Type System</h4>
+						<p>Every register has a type tracked by the verifier:</p>
+						<pre class="c">
+enum bpf_reg_type {
+    NOT_INIT = 0,          // unused, must be written before read
+    SCALAR_VALUE,          // holds an integer, can be used for arithmetic
+    PTR_TO_CTX,            // pointer to program-specific context (sk_buff, xdp_md, pt_regs)
+    CONST_PTR_TO_MAP,      // constant pointer to a map descriptor (for helpers)
+    PTR_TO_MAP_VALUE,      // pointer to a map element value
+    PTR_TO_MAP_VALUE_OR_NULL, // pointer to map value or NULL (must check before deref)
+    PTR_TO_STACK,          // pointer to stack memory (validated range)
+    PTR_TO_PACKET,         // pointer to network packet data (validated range)
+    PTR_TO_PACKET_END,     // pointer to one-past-end of packet data
+    PTR_TO_MEM,            // pointer to valid memory (from helper)
+    PTR_TO_MEM_OR_NULL,    // pointer to valid memory or NULL
+    PTR_TO_BTF_ID,         // pointer to kernel object (BTF-typed)
+    PTR_TO_BTF_ID_OR_NULL, // as above, possibly NULL
+    PTR_TO_SOCKET,         // pointer to kernel socket
+    PTR_TO_TCP_SOCK,       // pointer to TCP socket
+    PTR_TO_TP_BUFFER,      // pointer to tracepoint buffer
+    PTR_TO_FLOW_KEYS,      // pointer to flow dissector keys
+    PTR_TO_XDP_SOCK,       // pointer to XDP socket
+};
+						</pre>
+						<h4 id="bounds-tracking">3.3 Bounds Tracking</h4>
+						<pre class="c">
+struct bpf_reg_state {
+    enum bpf_reg_type type;
+    // ... union of type-specific fields ...
+    struct {
+        s64 smin_value;   // signed minimum known value
+        s64 smax_value;   // signed maximum known value
+        u64 umin_value;   // unsigned minimum known value
+        u64 umax_value;   // unsigned maximum known value
+        s32 s32_min_value;
+        s32 s32_max_value;
+        u32 u32_min_value;
+        u32 u32_max_value;
+        struct tnum var_off; // bitwise: known 0s and 1s mask
+        s64 s64_max;
+        u64 u64_max;
+        u32 u32_max;
+        s32 s32_max;
+    };
+    // ...
+    s32 off;            // offset from the variable pointed to
+    u32 id;             // ID for pointer tracking (correlated pointers)
+    u32 ref_obj_id;     // reference tracking ID
+};
+						</pre>
+						<p>
+							Example: After
+							<code>if (r1 &lt; 100)</code>
+							, the verifier tracks
+							<code>r1 &lt;= 99</code>
+							on the true branch and
+							<code>r1 &gt;= 100</code>
+							on the false branch. The
+							<code>tnum</code>
+							(tristate number) tracks exact bit patterns:
+						</p>
+						<pre class="c">
+struct tnum {
+    u64 value;  // bits known to be 1
+    u64 mask;   // bits known (0 = unknown, 1 = known)
+};
+// Example: r1 = 0x??00FF00 → value=0x0000FF00, mask=0xFF00FFFF
+						</pre>
+						<h4 id="safety-guarantees">3.4 Safety Guarantees</h4>
+						<p>The verifier enforces these guarantees:</p>
+						<ol>
+							<li><b>No uninitialized registers</b> : Every register must be written before read</li>
+							<li><b>Bounded loops</b> : All loops must provably terminate; <code>bpf_loop()</code> helper or explicit bounded counter</li>
+							<li><b>No out-of-bounds access</b> : All pointer arithmetic checked against known sizes</li>
+							<li><b>No type confusion</b> : Registers cannot change type in unsafe ways</li>
+							<li><b>No pointer leaks</b> : Pointer values cannot be stored to maps or returned to user space (prevents ASLR bypass)</li>
+							<li><b>Proper helper arguments</b> : Every bpf_helper call checked for correct argument types</li>
+							<li><b>Stack depth limit</b> : MAX_BPF_STACK = 512 bytes</li>
+							<li><b>Maximum instruction count</b> : 1 million instructions (Linux 5.2+), previously 4096</li>
+						</ol>
+						<pre class="plaintext">
+ ┌─────────────────────────────────────────────────────┐
+ │ Load Process: User writes C → LLVM → BPF bytecode    │
+ │                                                       │
+ │ ┌─────────┐   ┌──────────┐   ┌────────────────────┐ │
+ │ │ BPF C   │──►│ clang -g │──►│ BPF ELF (.text,    │ │
+ │ │ (.bpf.c)│   │ -target  │   │ .rodata, .maps,    │ │
+ │ │         │   │ bpf      │   │ .BTF, .BTF.ext)     │ │
+ │ └─────────┘   └──────────┘   └─────────+──────────┘ │
+ │                                        │             │
+ │                          ┌─────────────▼───────────┐ │
+ │                          │   bpf(BPF_PROG_LOAD)    │ │
+ │                          │   attr.prog_type        │ │
+ │                          │   attr.insns            │ │
+ │                          │   attr.insn_cnt         │ │
+ │                          │   attr.license = &#34;GPL&#34;  │ │
+ │                          │   attr.log_buf = ...    │ │
+ │                          └─────────────+───────────┘ │
+ │                                        │             │
+ │                          ┌─────────────▼───────────┐ │
+ │                          │   VERIFIER              │ │
+ │                          │   1. check_cfg()        │ │
+ │                          │   2. do_check() + state │ │
+ │                          │   3. replace_map_fd()   │ │
+ │                          │   4. convert_ctx()      │ │
+ │                          │   5. fixup_bpf_calls()  │ │
+ │                          └─────────+───────────────┘ │
+ │                                    │                  │
+ │                          ┌─────────▼───────────────┐ │
+ │                          │   JIT or interpreter     │ │
+ │                          └─────────────────────────┘ │
+ └─────────────────────────────────────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="ebpf-program-types">4. eBPF Program Types</h3>
+						<p>
+							The
+							<code>prog_type</code>
+							determines what context the program receives and where it can be attached.
+						</p>
+						<pre class="c">
+enum bpf_prog_type {
+    BPF_PROG_TYPE_UNSPEC = 0,
+    BPF_PROG_TYPE_SOCKET_FILTER,     // classic use: tcpdump-style filtering
+    BPF_PROG_TYPE_KPROBE,            // kernel function entry
+    BPF_PROG_TYPE_SCHED_CLS,         // traffic control classifier
+    BPF_PROG_TYPE_SCHED_ACT,         // traffic control action
+    BPF_PROG_TYPE_TRACEPOINT,        // kernel tracepoints
+    BPF_PROG_TYPE_XDP,               // eXpress Data Path (earliest RX hook)
+    BPF_PROG_TYPE_PERF_EVENT,        // perf event sampling
+    BPF_PROG_TYPE_CGROUP_SKB,        // cgroup packet filter
+    BPF_PROG_TYPE_CGROUP_SOCK,       // cgroup socket create/connect
+    BPF_PROG_TYPE_LWT_IN,            // lightweight tunnel input
+    BPF_PROG_TYPE_LWT_OUT,           // lightweight tunnel output
+    BPF_PROG_TYPE_LWT_XMIT,          // lightweight tunnel transmit
+    BPF_PROG_TYPE_SOCK_OPS,          // socket operations
+    BPF_PROG_TYPE_SK_SKB,            // socket-to-socket message
+    BPF_PROG_TYPE_CGROUP_DEVICE,     // cgroup device access control
+    BPF_PROG_TYPE_SK_MSG,            // socket message verdict
+    BPF_PROG_TYPE_RAW_TRACEPOINT,    // raw tracepoint (no args marshalling)
+    BPF_PROG_TYPE_CGROUP_SOCK_ADDR,  // cgroup socket address binding
+    BPF_PROG_TYPE_LWT_SEG6LOCAL,     // SRv6 lightweight tunnel
+    BPF_PROG_TYPE_LIRC_MODE2,        // infrared decoder
+    BPF_PROG_TYPE_SK_REUSEPORT,      // socket reuseport selection
+    BPF_PROG_TYPE_FLOW_DISSECTOR,    // flow dissector (hash)
+    BPF_PROG_TYPE_CGROUP_SYSCTL,     // cgroup sysctl access control
+    BPF_PROG_TYPE_RAW_TRACEPOINT_WRITABLE, // raw tracepoint, writable ctx
+    BPF_PROG_TYPE_CGROUP_SOCKOPT,    // cgroup getsockopt/setsockopt
+    BPF_PROG_TYPE_TRACING,           // fentry/fexit/fmod_ret
+    BPF_PROG_TYPE_STRUCT_OPS,        // struct_ops (TCP congestion control)
+    BPF_PROG_TYPE_EXT,               // freplace (program extension)
+    BPF_PROG_TYPE_LSM,               // Linux Security Module hooks
+    BPF_PROG_TYPE_SK_LOOKUP,         // socket lookup (steering)
+    BPF_PROG_TYPE_SYSCALL,           // syscall (BPF_PROG_TYPE_SYSCALL)
+    BPF_PROG_TYPE_NETFILTER,         // netfilter hooks
+};
+						</pre>
+						<h4 id="program-type-matrix">4.1 Program Type Matrix</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Program Type</th>
+									<th align="center">Hook Point</th>
+									<th align="center">Context Type</th>
+									<th align="center">Attach Type</th>
+									<th align="center">Use Case</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>SOCKET_FILTER</code></td>
+									<td align="center">Packet socket</td>
+									<td align="center"><code>struct __sk_buff *</code></td>
+									<td align="center"><code>SO_ATTACH_BPF</code></td>
+									<td align="center">Classic filtering</td>
+								</tr>
+								<tr>
+									<td align="center"><code>KPROBE</code></td>
+									<td align="center">Kernel function entry/ret</td>
+									<td align="center"><code>struct pt_regs *</code></td>
+									<td align="center"><code>perf_event_open()</code></td>
+									<td align="center">Dynamic kernel tracing</td>
+								</tr>
+								<tr>
+									<td align="center"><code>TRACEPOINT</code></td>
+									<td align="center">Static tracepoints</td>
+									<td align="center">tracepoint-specific</td>
+									<td align="center"><code>perf_event_open()</code></td>
+									<td align="center">Stable kernel tracepoints</td>
+								</tr>
+								<tr>
+									<td align="center"><code>RAW_TRACEPOINT</code></td>
+									<td align="center">Same but raw</td>
+									<td align="center"><code>struct bpf_raw_tracepoint_args *</code></td>
+									<td align="center"><code>bpf_raw_tracepoint_open()</code></td>
+									<td align="center">Lower overhead</td>
+								</tr>
+								<tr>
+									<td align="center"><code>XDP</code></td>
+									<td align="center">Network driver RX</td>
+									<td align="center"><code>struct xdp_md *</code></td>
+									<td align="center"><code>netlink</code></td>
+									<td align="center">Early packet processing</td>
+								</tr>
+								<tr>
+									<td align="center"><code>PERF_EVENT</code></td>
+									<td align="center">PMU event sampling</td>
+									<td align="center"><code>struct bpf_perf_event_data *</code></td>
+									<td align="center"><code>perf_event_open()</code></td>
+									<td align="center">Sampling/profiling</td>
+								</tr>
+								<tr>
+									<td align="center"><code>CGROUP_SKB</code></td>
+									<td align="center">Cgroup egress/ingress</td>
+									<td align="center"><code>struct __sk_buff *</code></td>
+									<td align="center"><code>BPF_CGROUP_INET_INGRESS</code></td>
+									<td align="center">Container network policy</td>
+								</tr>
+								<tr>
+									<td align="center"><code>CGROUP_SOCK</code></td>
+									<td align="center">Socket creation</td>
+									<td align="center"><code>struct bpf_sock *</code></td>
+									<td align="center"><code>BPF_CGROUP_INET_SOCK_CREATE</code></td>
+									<td align="center">Restrict socket types</td>
+								</tr>
+								<tr>
+									<td align="center"><code>TRACING</code></td>
+									<td align="center">fentry/fexit</td>
+									<td align="center">kernel function-like</td>
+									<td align="center"><code>bpf_link</code></td>
+									<td align="center">Low-overhead function hooks</td>
+								</tr>
+								<tr>
+									<td align="center"><code>LSM</code></td>
+									<td align="center">LSM hooks</td>
+									<td align="center">LSM-specific</td>
+									<td align="center"><code>bpf()</code>attach</td>
+									<td align="center">Kernel security policy</td>
+								</tr>
+								<tr>
+									<td align="center"><code>STRUCT_OPS</code></td>
+									<td align="center">Kernel ops struct</td>
+									<td align="center">e.g.,<code>tcp_congestion_ops</code></td>
+									<td align="center"><code>bpf()</code>attach</td>
+									<td align="center">Replace kernel algorithms</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="xdp-program-flow">4.2 XDP Program Flow</h4>
+						<pre class="plaintext">
+NIC Driver RX Interrupt
+        │
+        ▼
+ ┌──────────────┐
+ │  NAPI poll   │
+ └──────+───────┘
+        │
+        ▼
+ ┌──────────────┐
+ │  XDP hook    │ ← EARLIEST possible BPF hook
+ │  (before SKB │    before sk_buff allocation
+ │   allocation)│    before any kernel processing
+ └──+───+───+───┘
+    │   │   │
+    ▼   ▼   ▼
+  XDP   XDP   XDP   XDP
+  ABORT DROP  PASS  TX
+  (error) (drop) (to stack) (back out NIC)
+
+PASS continues:
+        │
+        ▼
+ ┌──────────────┐
+ │ sk_buff alloc │
+ └──────+───────┘
+        │
+        ▼
+ ┌──────────────┐
+ │ Netfilter     │ ← hooks: prerouting, forward, postrouting
+ │ TC ingress    │ ← BPF_PROG_TYPE_SCHED_CLS
+ └──────+───────┘
+        │
+        ▼
+ ┌──────────────┐
+ │ Protocol stack│ ← TCP/IP processing
+ │ Socket layer  │ ← BPF_PROG_TYPE_SOCKET_FILTER
+ └──────+───────┘
+        │
+        ▼
+   User space application
+						</pre>
+						<p>
+							XDP is the earliest possible BPF hook for network packets - it runs in the
+							<abbr title="Network Interface Card">NIC</abbr>
+							driver context, before
+							<code>sk_buff</code>
+							allocation, before the kernel
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							/
+							<abbr title="Internet Protocol">IP</abbr>
+							stack touches the packet. This makes XDP extremely fast (can process
+							millions of packets per second per core).
+						</p>
+					</section>
+					<section>
+						<h3 id="ebpf-maps">5. eBPF Maps</h3>
+						<p>
+							Maps are the primary data-sharing mechanism between
+							<abbr title="Extended Berkeley Packet Filter">eBPF</abbr>
+							programs and user space. They are persistent key-value stores allocated in kernel memory.
+						</p>
+						<h4 id="map-types">5.1 Map Types</h4>
+						<pre class="c">
+enum bpf_map_type {
+    BPF_MAP_TYPE_HASH,              // Generic hash table
+    BPF_MAP_TYPE_ARRAY,             // Fixed-size array, index is the key
+    BPF_MAP_TYPE_PROG_ARRAY,        // Array of program FDs (for tail calls)
+    BPF_MAP_TYPE_PERF_EVENT_ARRAY,  // Connects to perf ring buffer
+    BPF_MAP_TYPE_PERCPU_HASH,       // Per-CPU hash table (lock-free)
+    BPF_MAP_TYPE_PERCPU_ARRAY,      // Per-CPU array
+    BPF_MAP_TYPE_STACK_TRACE,       // Stack trace storage
+    BPF_MAP_TYPE_CGROUP_ARRAY,      // Cgroup FDs
+    BPF_MAP_TYPE_LRU_HASH,          // Hash with LRU eviction
+    BPF_MAP_TYPE_LRU_PERCPU_HASH,   // Per-CPU LRU hash
+    BPF_MAP_TYPE_LPM_TRIE,          // Longest prefix match trie
+    BPF_MAP_TYPE_ARRAY_OF_MAPS,     // Array of map FDs
+    BPF_MAP_TYPE_HASH_OF_MAPS,      // Hash of map FDs
+    BPF_MAP_TYPE_DEVMAP,            // Device array (XDP redirect)
+    BPF_MAP_TYPE_SOCKMAP,           // Socket map (sk_skb redirect)
+    BPF_MAP_TYPE_CPUMAP,            // CPU map (XDP redirect to CPU)
+    BPF_MAP_TYPE_XSKMAP,            // XSK (AF_XDP) socket map
+    BPF_MAP_TYPE_SOCKHASH,          // Hash map of sockets
+    BPF_MAP_TYPE_CGROUP_STORAGE,    // Per-cgroup storage
+    BPF_MAP_TYPE_REUSEPORT_SOCKARRAY, // reuseport socket array
+    BPF_MAP_TYPE_PERCPU_CGROUP_STORAGE, // Per-CPU per-cgroup storage
+    BPF_MAP_TYPE_QUEUE,             // FIFO queue
+    BPF_MAP_TYPE_STACK,             // LIFO stack
+    BPF_MAP_TYPE_SK_STORAGE,        // Per-socket storage
+    BPF_MAP_TYPE_DEVMAP_HASH,       // Hash-based device map
+    BPF_MAP_TYPE_STRUCT_OPS,        // Struct ops map
+    BPF_MAP_TYPE_RINGBUF,           // Ring buffer (producer/consumer)
+    BPF_MAP_TYPE_INODE_STORAGE,     // Per-inode storage
+    BPF_MAP_TYPE_TASK_STORAGE,      // Per-task storage
+    BPF_MAP_TYPE_BLOOM_FILTER,      // Bloom filter (probabilistic set)
+    BPF_MAP_TYPE_USER_RINGBUF,      // User-space ring buffer
+    BPF_MAP_TYPE_CGRP_STORAGE,      // Cgroup local storage
+};
+						</pre>
+						<h4 id="map-lifecycle">5.2 Map Lifecycle</h4>
+						<pre class="plaintext">
+ ┌──────────────┐
+ │  MAP_CREATE   │  User space: bpf(BPF_MAP_CREATE, ...)
+ │  via bpf()    │  Returns fd. Kernel allocates memory.
+ └──────+───────┘
+        │
+        ▼
+ ┌──────────────┐
+ │  Map exists   │  Programs reference via fd_array in prog load
+ │  in kernel    │  User space holds fd, can read/write
+ └──+───+───────┘
+    │   │
+    │   ▼
+    │  ┌──────────────┐
+    │  │  Reference    │  Map stays alive while any fd or prog refs it
+    │  │  counting     │
+    │  └──────────────┘
+    │
+    ▼
+ ┌──────────────┐
+ │  Last ref     │  When last fd closes AND last prog using it is unloaded
+ │  released     │
+ └──────+───────┘
+        │
+        ▼
+ ┌──────────────┐
+ │  Map freed    │  Memory returned to kernel
+ └──────────────┘
+						</pre>
+						<h4 id="map-selection-guide">5.3 Map Selection Guide</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Use Case</th>
+									<th align="center">Map Type</th>
+									<th align="center">Why</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Count events by IP</td>
+									<td align="center"><code>BPF_MAP_TYPE_HASH</code></td>
+									<td align="center">Dynamic key count, O(1) lookup</td>
+								</tr>
+								<tr>
+									<td align="center">Per-CPU counters</td>
+									<td align="center"><code>BPF_MAP_TYPE_PERCPU_ARRAY</code></td>
+									<td align="center">No locking, cache-local</td>
+								</tr>
+								<tr>
+									<td align="center">Fixed-size config</td>
+									<td align="center"><code>BPF_MAP_TYPE_ARRAY</code></td>
+									<td align="center">Simpler, faster for known sizes</td>
+								</tr>
+								<tr>
+									<td align="center">Tail call jump table</td>
+									<td align="center"><code>BPF_MAP_TYPE_PROG_ARRAY</code></td>
+									<td align="center">Required for<code>bpf_tail_call()</code></td>
+								</tr>
+								<tr>
+									<td align="center">Event streaming to userspace</td>
+									<td align="center"><code>BPF_MAP_TYPE_RINGBUF</code></td>
+									<td align="center">Lock-free, variable-size records</td>
+								</tr>
+								<tr>
+									<td align="center">LRU cache</td>
+									<td align="center"><code>BPF_MAP_TYPE_LRU_HASH</code></td>
+									<td align="center">Automatic eviction on memory pressure</td>
+								</tr>
+								<tr>
+									<td align="center">IP prefix matching</td>
+									<td align="center"><code>BPF_MAP_TYPE_LPM_TRIE</code></td>
+									<td align="center">Efficient longest prefix match</td>
+								</tr>
+								<tr>
+									<td align="center">Set membership test (probabilistic)</td>
+									<td align="center"><code>BPF_MAP_TYPE_BLOOM_FILTER</code></td>
+									<td align="center">O(1) memory, false positives OK</td>
+								</tr>
+								<tr>
+									<td align="center">Per-task data</td>
+									<td align="center"><code>BPF_MAP_TYPE_TASK_STORAGE</code></td>
+									<td align="center">Automatic cleanup when task exits</td>
+								</tr>
+								<tr>
+									<td align="center">Per-cgroup policy</td>
+									<td align="center"><code>BPF_MAP_TYPE_CGROUP_STORAGE</code></td>
+									<td align="center">Tied to cgroup lifecycle</td>
+								</tr>
+								<tr>
+									<td align="center">Persistent FIFO queue</td>
+									<td align="center"><code>BPF_MAP_TYPE_QUEUE</code></td>
+									<td align="center">Enforce ordered processing</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="ring-buffer-bpf-map-type-ringbuf">6. Ring Buffer (BPF_MAP_TYPE_RINGBUF)</h3>
+						<p>
+							The ring buffer is the modern replacement for
+							<code>BPF_MAP_TYPE_PERF_EVENT_ARRAY</code>
+							for streaming
+							data from BPF to user space. It is lock-free, supports variable-length records, and handles
+							multiple producers.
+						</p>
+						<pre class="plaintext">
+ ┌────────────────────────────────────────────────────┐
+ │  Ring Buffer Layout                                 │
+ │                                                      │
+ │  consumer_pos                                       │
+ │  ┌──────────────────────────────────────────────┐  │
+ │  │         Ring Buffer Memory                     │  │
+ │  │  ┌───────────────────────────────────────┐    │  │
+ │  │  │ Record 0 | Record 1 | ... | Free      │    │  │
+ │  │  │ 8B header│ variable payload           │    │  │
+ │  │  └───────────────────────────────────────┘    │  │
+ │  │  ┌──────────────┐ (currently being written)   │  │
+ │  │  │  producer_pos │                              │  │
+ │  └──────────────────────────────────────────────┘  │
+ └────────────────────────────────────────────────────┘
+
+Each record header (8 bytes):
+ +------------------------------+-------------------+
+ | len (32 bit: high 2 = flags) | pg_off (32 bit)   |
+ +------------------------------+-------------------+
+ Busy = bit 31 of len, Discard = bit 30 of len.
+						</pre>
+						<p>
+							BPF-side
+							<abbr title="Application Programming Interface">API</abbr>
+							:
+						</p>
+						<pre class="c">
+// Reserve space in the ring buffer
+void *bpf_ringbuf_reserve(struct bpf_map *ringbuf, u64 size, u64 flags);
+// Submit the reserved record (makes it visible to consumer)
+long bpf_ringbuf_submit(void *data, u64 flags);
+// Discard the reservation (record not published)
+long bpf_ringbuf_discard(void *data, u64 flags);
+// Direct output (reserve + copy + submit in one call)
+long bpf_ringbuf_output(struct bpf_map *ringbuf, void *data, u64 size, u64 flags);
+						</pre>
+						<p>
+							User-space
+							<abbr title="Application Programming Interface">API</abbr>
+							:
+						</p>
+						<pre class="c">
+#include &lt;bpf/libbpf.h&gt;
+
+// Open ring buffer consumer
+struct ring_buffer *ring_buffer__new(int map_fd,
+    ring_buffer_sample_fn sample_cb, void *ctx, void *opts);
+
+// Poll for new records (blocks until timeout)
+int ring_buffer__poll(struct ring_buffer *rb, int timeout_ms);
+
+// Free ring buffer consumer
+void ring_buffer__free(struct ring_buffer *rb);
+
+// Callback signature
+typedef int (*ring_buffer_sample_fn)(void *ctx, void *data, size_t size);
+						</pre>
+					</section>
+					<section>
+						<h3 id="btf-bpf-type-format">7. BTF - BPF Type Format</h3>
+						<p>
+							BTF is the metadata format that describes the types used in BPF programs and the kernel. It
+							is the enabling technology for CO-RE (Compile Once - Run Everywhere).
+						</p>
+						<h4 id="btf-structure">7.1 BTF Structure</h4>
+						<pre class="plaintext">
+ ┌────────────────────────────────────────────────────────────┐
+ │  BTF data:                                                  │
+ │  ┌──────────────────────────────────────────────────────┐  │
+ │  │ Header                                                │  │
+ │  │  magic = 0xeb9f                                       │  │
+ │  │  version = 1                                          │  │
+ │  │  hdr_len, type_len, str_len                          │  │
+ │  ├──────────────────────────────────────────────────────┤  │
+ │  │ Type section (array of btf_type entries)              │  │
+ │  │  ┌─────+─────+─────+─────┐                           │  │
+ │  │  │ INT │ PTR │STRUCT│ FUNC│ ...                       │  │
+ │  │  └─────+─────+─────+─────┘                           │  │
+ │  │  Each type has: name_off, info (kind+vlen), size/type│  │
+ │  ├──────────────────────────────────────────────────────┤  │
+ │  │ String section (null-terminated C identifiers)        │  │
+ │  │  &#34;int\0sk_buff\0xdp_md\0unsigned int\0...&#34;           │  │
+ │  └──────────────────────────────────────────────────────┘  │
+ └────────────────────────────────────────────────────────────┘
+						</pre>
+						<h4 id="btf-type-kinds">7.2 BTF Type Kinds</h4>
+						<pre class="c">
+#define BTF_KIND_INT        1   // integer type (size, signedness, encoding)
+#define BTF_KIND_PTR        2   // pointer to another type
+#define BTF_KIND_ARRAY      3   // array: element type, index type, number of elements
+#define BTF_KIND_STRUCT     4   // struct: list of members
+#define BTF_KIND_UNION      5   // union
+#define BTF_KIND_ENUM       6   // enum
+#define BTF_KIND_FWD        7   // forward declaration
+#define BTF_KIND_TYPEDEF    8   // typedef
+#define BTF_KIND_VOLATILE   9   // volatile qualifier
+#define BTF_KIND_CONST      10  // const qualifier
+#define BTF_KIND_RESTRICT   11  // restrict qualifier
+#define BTF_KIND_FUNC       12  // function (subprogram in BPF)
+#define BTF_KIND_FUNC_PROTO 13  // function prototype
+#define BTF_KIND_VAR        14  // global variable
+#define BTF_KIND_DATASEC    15  // data section (section layout info)
+#define BTF_KIND_FLOAT      16  // floating point type
+#define BTF_KIND_DECL_TAG   17  // declaration tag (annotations)
+#define BTF_KIND_TYPE_TAG   18  // type tag
+#define BTF_KIND_ENUM64     19  // 64-bit enum
+						</pre>
+						<h4 id="co-re-compile-once-run-everywhere">7.3 CO-RE - Compile Once, Run Everywhere</h4>
+						<p>
+							CO-RE allows a single BPF binary to run on different kernel versions without recompilation.
+							It works through relocations that are resolved at load time based on the target kernel's BTF.
+						</p>
+						<pre class="plaintext">
+Traditional BPF:                 CO-RE BPF:
+ ┌──────────────┐                ┌──────────────┐
+ │ Compile for │                │ Compile once │
+ │ kernel 5.10 │                │ (with BTF)   │
+ └──────+───────┘                └──────+───────┘
+        │                               │
+        ▼                               ▼
+ Load on 5.10 ✓                ┌────────────────────┐
+ Load on 5.15 ✗ (wrong offsets)│ libbpf relocation  │
+                               │ resolver           │
+                               │                    │
+                               │ 1. Read vmlinux.h  │
+                               │    types            │
+                               │ 2. Match struct by │
+                               │    name             │
+                               │ 3. Resolve field    │
+                               │    offsets via BTF  │
+                               │ 4. Patch eBPF insns │
+                               └────────+───────────┘
+                                        │
+                                        ▼
+                               Load on 5.10 ✓
+                               Load on 5.15 ✓
+                               Load on 6.1  ✓
+						</pre>
+						<p>CO-RE relies on these BPF instructions and relocations:</p>
+						<pre class="c">
+// Field existence check
+if (bpf_core_field_exists(skb-&gt;queue_mapping)) { ... }
+
+// Field size check
+if (bpf_core_field_size(skb-&gt;len) == 4) { ... }
+
+// Field offset relocation (implicit, libbpf handles it)
+data = skb-&gt;data;  // offset resolved at load time
+
+// Enum value relocation
+if (bpf_core_enum_value(enum skb_drop_reason, SKB_DROP_REASON_NOT_SPECIFIED) == 1) { ... }
+
+// Type size relocation
+if (bpf_core_type_size(struct sk_buff) &gt; 200) { ... }
+
+// Type existence
+if (bpf_core_type_exists(struct bpf_timer)) { ... }
+						</pre>
+						<p>
+							These macros compile down to BPF instructions with special relocations (
+							<code>BPF_CORE_READ</code>
+							,
+							<code>BPF_CORE_WRITE</code>
+							, etc.) that libbpf resolves at load time.
+						</p>
+						<h4 id="btftool-usage">7.4 btftool Usage</h4>
+						<pre class="bash">
+# Show all BTF types in vmlinux
+bpftool btf dump file /sys/kernel/btf/vmlinux format c
+
+# Show BTF info for a specific map
+bpftool btf dump map id 123
+
+# Show BTF info for a loaded program
+bpftool btf dump prog id 456
+
+# List all BTF IDs
+bpftool btf list
+
+# Show a specific BTF ID
+bpftool btf show id 1
+
+# Extract struct definition from BTF
+bpftool btf dump file /sys/kernel/btf/vmlinux format c | grep -A 50 &#39;struct sk_buff&#39;
+
+# Check if kernel has BTF (CONFIG_DEBUG_INFO_BTF=y)
+ls -la /sys/kernel/btf/vmlinux
+						</pre>
+					</section>
+					<section>
+						<h3 id="program-loading-pipeline">8. Program Loading Pipeline</h3>
+						<h4 id="the-bpf-syscall">8.1 The bpf() Syscall</h4>
+						<pre class="c">
+#include &lt;linux/bpf.h&gt;
+
+// Single syscall for all BPF operations
+int bpf(int cmd, union bpf_attr *attr, unsigned int size);
+
+// Key commands:
+#define BPF_MAP_CREATE        0  // Create a map
+#define BPF_MAP_LOOKUP_ELEM   1  // Look up a map element
+#define BPF_MAP_UPDATE_ELEM   2  // Update a map element
+#define BPF_MAP_DELETE_ELEM   3  // Delete a map element
+#define BPF_MAP_GET_NEXT_KEY  4  // Iterate map keys
+#define BPF_PROG_LOAD         5  // Load a program
+#define BPF_OBJ_PIN           6  // Pin an object to bpffs
+#define BPF_OBJ_GET           7  // Get a pinned object
+#define BPF_PROG_ATTACH       8  // Attach a program to a cgroup
+#define BPF_PROG_DETACH       9  // Detach
+#define BPF_PROG_TEST_RUN     10 // Test-run a program
+#define BPF_PROG_GET_NEXT_ID  11 // Enumerate loaded programs
+#define BPF_MAP_GET_NEXT_ID   12 // Enumerate maps
+#define BPF_PROG_GET_FD_BY_ID 13 // Get fd for a program by ID
+#define BPF_MAP_GET_FD_BY_ID  14 // Get fd for a map by ID
+#define BPF_OBJ_GET_INFO_BY_FD  15 // Get info about an object
+#define BPF_PROG_QUERY        16 // Query attached programs
+#define BPF_RAW_TRACEPOINT_OPEN 17 // Open a raw tracepoint
+#define BPF_BTF_LOAD          18 // Load BTF data
+#define BPF_BTF_GET_FD_BY_ID  19 // Get fd for BTF by ID
+#define BPF_TASK_FD_QUERY     20 // Query fds from pid/tid
+#define BPF_MAP_LOOKUP_AND_DELETE_ELEM 21
+#define BPF_MAP_FREEZE        22 // Make map read-only
+#define BPF_BTF_GET_NEXT_ID   23
+#define BPF_MAP_LOOKUP_BATCH  24
+#define BPF_MAP_LOOKUP_AND_DELETE_BATCH 25
+#define BPF_MAP_UPDATE_BATCH  26
+#define BPF_MAP_DELETE_BATCH  27
+#define BPF_LINK_CREATE       28 // Create a BPF link (persistent attachment)
+#define BPF_LINK_UPDATE       29 // Update a BPF link
+#define BPF_LINK_GET_FD_BY_ID 31
+#define BPF_LINK_GET_NEXT_ID  32
+#define BPF_ENABLE_STATS      33 // Enable global BPF runtime stats
+#define BPF_ITER_CREATE       34 // Create a BPF iterator
+#define BPF_LINK_DETACH       35
+#define BPF_PROG_BIND_MAP     36 // Bind a map to a program
+						</pre>
+						<h4 id="bpf-program-load-with-libbpf">8.2 BPF Program Load with libbpf</h4>
+						<pre class="c">
+#include &lt;bpf/libbpf.h&gt;
+#include &lt;bpf/bpf.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+
+int main(int argc, char **argv) {
+    struct bpf_object *obj;
+    struct bpf_program *prog;
+    struct bpf_link *link;
+    int err;
+
+    // Step 1: Open and load the BPF object file
+    obj = bpf_object__open_file(&#34;myprog.bpf.o&#34;, NULL);
+    if (libbpf_get_error(obj)) {
+        fprintf(stderr, &#34;Failed to open BPF object\n&#34;);
+        return 1;
+    }
+
+    // Step 2: Load the program (verification + JIT + maps)
+    err = bpf_object__load(obj);
+    if (err) {
+        fprintf(stderr, &#34;Failed to load BPF object: %d\n&#34;, err);
+        return 1;
+    }
+
+    // Step 3: Find the program by section name
+    prog = bpf_object__find_program_by_name(obj, &#34;my_prog&#34;);
+    if (!prog) {
+        fprintf(stderr, &#34;Program not found\n&#34;);
+        return 1;
+    }
+
+    // Step 4: Attach the program (depends on program type)
+    link = bpf_program__attach(prog);
+    if (libbpf_get_error(link)) {
+        fprintf(stderr, &#34;Failed to attach program\n&#34;);
+        return 1;
+    }
+
+    // Step 5: Main loop — read from BPF maps, poll ring buffers
+    printf(&#34;BPF program loaded and attached. Press Ctrl-C to exit.\n&#34;);
+    while (1) {
+        sleep(1);
+    }
+
+    // Step 6: Cleanup (automatic if using bpf_link)
+    bpf_link__destroy(link);
+    bpf_object__close(obj);
+    return 0;
+}
+						</pre>
+						<h4 id="bpf-links">8.3 BPF Links</h4>
+						<p>
+							Before BPF links (kernel 5.7+), program attachment was handled by returning an fd from the attach
+							call and relying on fd lifecycle for detachment. BPF links provide a persistent, file-descriptor-based
+							lifetime for attachments:
+						</p>
+						<pre class="c">
+// Creating a BPF link for a tracing program
+int bpf_link_create(int prog_fd, int target_fd,
+    enum bpf_attach_type attach_type,
+    const struct bpf_link_create_opts *opts,
+    size_t opts_sz);
+
+// Pinning a link to bpffs for persistence
+int bpf_link__pin(struct bpf_link *link, const char *path);
+
+// Opening a pinned link
+struct bpf_link *bpf_link__open(const char *path);
+
+// Link types:
+BPF_TRACE_RAW_TP      // raw tracepoint
+BPF_TRACE_FENTRY      // function entry
+BPF_TRACE_FEXIT       // function exit
+BPF_TRACE_ITER        // iterator
+BPF_PERF_EVENT        // perf_event-based (kprobe, tracepoint, uprobe)
+BPF_CGROUP_INET_INGRESS
+BPF_CGROUP_INET_EGRESS
+BPF_CGROUP_INET_SOCK_CREATE
+BPF_NETKIT_PRIMARY     // netkit device
+BPF_NETKIT_PEER
+BPF_TCX_INGRESS        // TC-BPF extended ingress
+BPF_TCX_EGRESS         // TC-BPF extended egress
+BPF_XDP
+BPF_LSM_CGROUP
+BPF_STRUCT_OPS
+BPF_NETFILTER
+BPF_TCX_INGRESS
+						</pre>
+						<p>
+							Links can be pinned to the BPF filesystem (
+							<code>/sys/fs/bpf/</code>
+							) so they survive the lifetime of
+							the loader process:
+						</p>
+						<pre class="bash">
+mount -t bpf bpf /sys/fs/bpf
+bpftool prog pin id 42 /sys/fs/bpf/my_prog
+bpftool prog show pinned /sys/fs/bpf/my_prog
+						</pre>
+					</section>
+					<section>
+						<h3 id="ebpf-concurrency">9. eBPF Concurrency</h3>
+						<p>
+							<abbr title="Extended Berkeley Packet Filter">eBPF</abbr>
+							programs can run concurrently across multiple
+							<abbr title="Central Processing Unit">CPU</abbr>
+							s. The verifier assumes concurrent execution and enforces safety.
+						</p>
+						<h4 id="per-cpu-maps">9.1 Per-CPU Maps</h4>
+						<pre class="plaintext">
+ ┌──────────────+──────────────+──────────────┐
+ │   CPU 0       │   CPU 1       │   CPU 2       │
+ │ ┌──────────┐ │ ┌──────────┐ │ ┌──────────┐ │
+ │ │ Per-CPU  │ │ │ Per-CPU  │ │ │ Per-CPU  │ │
+ │ │ Array[0] │ │ │ Array[1] │ │ │ Array[2] │ │
+ │ └──────────┘ │ └──────────┘ │ └──────────┘ │
+ └──────────────+──────────────+──────────────┘
+						</pre>
+						<p>
+							Per-
+							<abbr title="Central Processing Unit">CPU</abbr>
+							maps give each
+							<abbr title="Central Processing Unit">CPU</abbr>
+							its own copy
+							of the data. Reads and writes are always local and lock-free. Aggregation is done in user space.
+						</p>
+						<pre class="c">
+// BPF-side: bpf_get_smp_processor_id() returns current CPU
+u32 cpu = bpf_get_smp_processor_id();
+u64 *counter = bpf_map_lookup_elem(&amp;percpu_counters, &amp;cpu);
+if (counter)
+    (*counter)++;
+						</pre>
+						<h4 id="spin-locks-in-maps">9.2 Spin Locks in Maps</h4>
+						<p>BPF supports spin locks stored inside map values for shared data protection:</p>
+						<pre class="c">
+struct map_value {
+    struct bpf_spin_lock lock;
+    int counter;
+    u64 last_update;
+};
+
+SEC(&#34;kprobe/sys_execve&#34;)
+int trace_exec(struct pt_regs *ctx) {
+    u32 key = 0;
+    struct map_value *val = bpf_map_lookup_elem(&amp;shared_map, &amp;key);
+    if (!val)
+        return 0;
+
+    bpf_spin_lock(&amp;val-&gt;lock);
+    val-&gt;counter++;
+    val-&gt;last_update = bpf_ktime_get_ns();
+    bpf_spin_unlock(&amp;val-&gt;lock);
+
+    return 0;
+}
+						</pre>
+						<p>
+							The verifier enforces that spin locks are held for bounded code regions, properly paired (lock/unlock),
+							and not held across helper calls that might sleep.
+						</p>
+					</section>
+					<section>
+						<h3 id="tail-calls-and-function-calls">10. Tail Calls and Function Calls</h3>
+						<h4 id="tail-calls">10.1 Tail Calls</h4>
+						<p>
+							A tail call jumps from one BPF program to another without returning. The target program is looked
+							up from a
+							<code>BPF_MAP_TYPE_PROG_ARRAY</code>
+							map. Tail calls are limited to 33 nested calls to prevent
+							infinite recursion.
+						</p>
+						<pre class="c">
+// Jump table
+struct {
+    __uint(type, BPF_MAP_TYPE_PROG_ARRAY);
+    __uint(max_entries, 4);
+    __uint(key_size, sizeof(u32));
+    __uint(value_size, sizeof(u32));
+} jump_table SEC(&#34;.maps&#34;);
+
+SEC(&#34;xdp&#34;)
+int xdp_entry(struct xdp_md *ctx) {
+    u32 action = parse_packet(ctx);
+    // Tail call to handler based on parsed action
+    bpf_tail_call(ctx, &amp;jump_table, action);
+    // If tail call fails (no entry), fall through
+    return XDP_PASS;
+}
+
+SEC(&#34;xdp/0&#34;)
+int handle_tcp(struct xdp_md *ctx) {
+    // TCP-specific logic
+    return XDP_PASS;
+}
+						</pre>
+						<pre class="plaintext">
+ ┌──────────────┐
+ │ xdp_entry     │ bpf_tail_call(ctx, table, 0)
+ └──────+───────┘
+        │
+        ▼
+ ┌──────────────┐
+ │ handle_tcp    │ ← new program, same context ctx
+ └──────+───────┘
+        │
+        ▼
+ ┌──────────────┐
+ │ handle_http   │ bpf_tail_call(ctx, table, 1) — nested call #2
+ └──────────────┘
+        ...
+ max depth: 33 total calls
+						</pre>
+						<h4 id="function-calls-bpf-to-bpf">10.2 Function Calls (BPF-to-BPF)</h4>
+						<p>Since Linux 4.16, BPF programs can define and call functions within the same program:</p>
+						<pre class="c">
+static __always_inline int compute_hash(const void *data, u32 len) {
+    u32 hash = 0;
+    for (u32 i = 0; i &lt; len; i++)
+        hash = hash * 31 + ((u8 *)data)[i];
+    return hash;
+}
+
+SEC(&#34;xdp&#34;)
+int xdp_prog(struct xdp_md *ctx) {
+    void *data = (void *)(long)ctx-&gt;data;
+    void *data_end = (void *)(long)ctx-&gt;data_end;
+
+    if (data + 20 &gt; data_end)
+        return XDP_DROP;
+
+    int h = compute_hash(data, 20);
+    // ... use hash ...
+    return XDP_PASS;
+}
+						</pre>
+						<p>
+							The callee-saved registers (R6-R9) are preserved across calls. Stack frame per function is allocated
+							from the 512-byte stack. Recursion is forbidden.
+						</p>
+					</section>
+					<section>
+						<h3 id="ebpf-for-security-lsm-hooks">11. eBPF for Security - LSM Hooks</h3>
+						<p>
+							<code>BPF_PROG_TYPE_LSM</code>
+							allows
+							<abbr title="Extended Berkeley Packet Filter">eBPF</abbr>
+							programs to attach to Linux
+							Security Module (LSM) hooks - the same hooks used by SELinux and AppArmor. This enables dynamic,
+							programmable security policies without a kernel module.
+						</p>
+						<pre class="c">
+SEC(&#34;lsm/file_open&#34;)
+int BPF_PROG(restrict_open, struct file *file, int ret) {
+    // Allow only read-only opens on sensitive files
+    char path_buf[256];
+    bpf_d_path(&amp;file-&gt;f_path, path_buf, sizeof(path_buf));
+
+    if (strncmp(path_buf, &#34;/etc/shadow&#34;, 11) == 0) {
+        // Check the flags
+        int flags = file-&gt;f_flags;
+        if (flags &amp; (O_WRONLY | O_RDWR)) {
+            bpf_printk(&#34;Blocked write open on %s&#34;, path_buf);
+            return -EPERM;
+        }
+    }
+
+    return 0; // allow
+}
+						</pre>
+						<p>
+							LSM hooks available through BPF include: -
+							<code>file_open</code>
+							,
+							<code>file_permission</code>
+							,
+							<code>file_ioctl</code>
+							-
+							<code>inode_create</code>
+							,
+							<code>inode_unlink</code>
+							,
+							<code>inode_mkdir</code>
+							-
+							<code>task_alloc</code>
+							,
+							<code>task_fix_setuid</code>
+							-
+							<code>socket_create</code>
+							,
+							<code>socket_connect</code>
+							,
+							<code>socket_bind</code>
+							-
+							<code>bpf</code>
+							,
+							<code>bpf_map</code>
+							,
+							<code>bpf_prog</code>
+							-
+							<code>ptrace_access_check</code>
+							,
+							<code>ptrace_traceme</code>
+						</p>
+						<p>
+							Both
+							<code>bpfilter</code>
+							(the BPF-based firewall replacement for iptables) and Cilium's network policy
+							engine use LSM and TC/XDP hooks for programmable security.
+						</p>
+					</section>
+					<section>
+						<h3 id="minimal-ebpf-program">12. Minimal eBPF Program</h3>
+						<pre class="c">
+// counter.bpf.c — minimal BPF C program
+#include &lt;linux/bpf.h&gt;
+#include &lt;bpf/bpf_helpers.h&gt;
+
+char LICENSE[] SEC(&#34;license&#34;) = &#34;GPL&#34;;
+
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __uint(max_entries, 1);
+    __type(key, u32);
+    __type(value, u64);
+} counter SEC(&#34;.maps&#34;);
+
+SEC(&#34;tracepoint/syscalls/sys_enter_execve&#34;)
+int count_execve(void *ctx) {
+    u32 key = 0;
+    u64 *val = bpf_map_lookup_elem(&amp;counter, &amp;key);
+    if (val)
+        (*val)++;
+    return 0;
+}
+						</pre>
+						<p>Compile, load, and inspect:</p>
+						<pre class="bash">
+# Compile BPF object
+clang -O2 -g -target bpf \
+    -I/usr/include/x86_64-linux-gnu \
+    -c counter.bpf.c -o counter.bpf.o
+
+# Verify the ELF sections
+llvm-objdump -h counter.bpf.o
+
+# Load with bpftool
+sudo bpftool prog load counter.bpf.o /sys/fs/bpf/counter \
+    type tracepoint
+
+# Inspect loaded program
+sudo bpftool prog list
+sudo bpftool prog show id $(bpftool prog list -j | jq &#39;.[0].id&#39;)
+
+# Inspect maps
+sudo bpftool map list
+sudo bpftool map dump id $(bpftool map list -j | jq &#39;.[0].id&#39;)
+
+# Check map contents
+sudo bpftool map dump name counter
+
+# Unload
+sudo rm /sys/fs/bpf/counter
+						</pre>
+					</section>
+					<section>
+						<h3 id="writing-a-custom-loader-with-libbpf">13. Writing a Custom Loader with libbpf</h3>
+						<pre class="c">
+// loader.c — custom BPF loader
+#include &lt;bpf/libbpf.h&gt;
+#include &lt;bpf/bpf.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;signal.h&gt;
+#include &lt;unistd.h&gt;
+
+static volatile sig_atomic_t running = 1;
+void sig_handler(int sig) { running = 0; }
+
+int main(int argc, char **argv) {
+    struct bpf_object *obj;
+    struct bpf_program *prog;
+    struct bpf_link *link;
+    int map_fd;
+    int err;
+
+    if (argc != 2) {
+        fprintf(stderr, &#34;Usage: %s &lt;bpf_object.o&gt;\n&#34;, argv[0]);
+        return 1;
+    }
+
+    // 1. Open BPF object from file
+    DECLARE_LIBBPF_OPTS(bpf_object_open_opts, open_opts,
+        .relaxed_maps = true,
+    );
+    obj = bpf_object__open_file(argv[1], &amp;open_opts);
+    if (libbpf_get_error(obj)) {
+        fprintf(stderr, &#34;ERROR: opening BPF object: %ld\n&#34;, libbpf_get_error(obj));
+        return 1;
+    }
+
+    // 2. Load all programs and maps
+    err = bpf_object__load(obj);
+    if (err) {
+        fprintf(stderr, &#34;ERROR: loading BPF object: %d\n&#34;, err);
+        return 1;
+    }
+
+    // 3. Attach all auto-attachable programs
+    bpf_object__for_each_program(prog, obj) {
+        link = bpf_program__attach(prog);
+        if (libbpf_get_error(link)) {
+            fprintf(stderr, &#34;WARNING: bpf_program__attach failed: %ld\n&#34;,
+                libbpf_get_error(link));
+            continue;
+        }
+        printf(&#34;Attached program: %s\n&#34;, bpf_program__name(prog));
+    }
+
+    // 4. Find the counter map and poll it
+    struct bpf_map *map = bpf_object__find_map_by_name(obj, &#34;counter&#34;);
+    if (!map) {
+        fprintf(stderr, &#34;Map &#39;counter&#39; not found\n&#34;);
+        return 1;
+    }
+    map_fd = bpf_map__fd(map);
+
+    signal(SIGINT, sig_handler);
+    signal(SIGTERM, sig_handler);
+
+    printf(&#34;Polling counter map every second. Ctrl-C to exit.\n&#34;);
+    while (running) {
+        u32 key = 0;
+        u64 value = 0;
+        err = bpf_map_lookup_elem(map_fd, &amp;key, &amp;value);
+        if (!err)
+            printf(&#34;\rexecve calls: %llu&#34;, (unsigned long long)value);
+        fflush(stdout);
+        sleep(1);
+    }
+
+    printf(&#34;\nCleaning up...\n&#34;);
+    bpf_object__close(obj);
+    return 0;
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="verification">Verification</h3>
+						<pre class="bash">
+# 1. Check eBPF support in your kernel
+bpftool feature probe kernel
+
+# 2. List all loaded BPF programs
+bpftool prog list
+
+# 3. List all BPF maps
+bpftool map list
+
+# 4. Show program details
+bpftool prog show id 1
+
+# 5. Dump BTF for vmlinux
+bpftool btf dump file /sys/kernel/btf/vmlinux format raw | head -80
+
+# 6. Inspect BTF for a map
+bpftool btf list
+bpftool btf show id 1
+
+# 7. Check available helpers for a program type
+bpftool feature probe kernel | grep -A 50 &#39;eBPF helpers&#39;
+
+# 8. Write and compile a minimal BPF program
+cat &gt; /tmp/test.bpf.c &lt;&lt; &#39;EOF&#39;
+#include &lt;linux/bpf.h&gt;
+#include &lt;bpf/bpf_helpers.h&gt;
+char LICENSE[] SEC(&#34;license&#34;) = &#34;GPL&#34;;
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __uint(max_entries, 1);
+    __type(key, u32);
+    __type(value, u64);
+} counter SEC(&#34;.maps&#34;);
+SEC(&#34;tracepoint/syscalls/sys_enter_execve&#34;)
+int on_exec(void *ctx) {
+    u32 key = 0;
+    u64 *val = bpf_map_lookup_elem(&amp;counter, &amp;key);
+    if (val) (*val)++;
+    return 0;
+}
+EOF
+
+clang -O2 -g -target bpf -c /tmp/test.bpf.c -o /tmp/test.bpf.o
+llvm-objdump -S /tmp/test.bpf.o | head -60
+
+# 9. Load the program with bpftool
+sudo bpftool prog load /tmp/test.bpf.o /sys/fs/bpf/test_counter type tracepoint
+sudo bpftool prog show pinned /sys/fs/bpf/test_counter
+
+# 10. Check program is attached
+sudo bpftool prog list | grep test
+
+# 11. Dump the map contents
+sudo bpftool map dump name counter
+
+# 12. Unload
+sudo rm /sys/fs/bpf/test_counter
+
+# 13. Check JIT is enabled (0 = interpreter, 1 = JIT)
+cat /proc/sys/net/core/bpf_jit_enable
+
+# 14. Enable JIT if not already on
+echo 1 | sudo tee /proc/sys/net/core/bpf_jit_enable
+
+# 15. Dump generated JIT images to the kernel log (2 = JIT + debug)
+echo 2 | sudo tee /proc/sys/net/core/bpf_jit_enable
+
+# 16. Expose JITed symbols and blind constants (JIT spraying defense)
+echo 1 | sudo tee /proc/sys/net/core/bpf_jit_kallsyms
+echo 2 | sudo tee /proc/sys/net/core/bpf_jit_harden
+cat /proc/kallsyms | grep &#39;__bpf_prog&#39; | head -5
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>Build the container and compile, load, and inspect a BPF syscall counter with bpftool.</p>
+						<p><a href="/wiki/articles/sysinternals/ebpf.Containerfile">ebpf.Containerfile</a></p>
+						<pre class="bash">
+podman build -t ebpf-lab -f sysinternals/ebpf.Containerfile .
+podman run -it --rm --privileged \
+    -v /sys/kernel/debug:/sys/kernel/debug \
+    ebpf-lab
+						</pre>
+						<p>
+							Then extend the sample program: add a ring buffer map, print the filename on each
+							<code>execve</code>
+							,
+							and observe the events from a user-space loader.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a href="/wiki/articles/sysinternals/ebpf-tracing.html">eBPF Tracing</a> - <abbr title="Extended Berkeley Packet Filter">eBPF</abbr> -based kernel and user-space tracing</li>
+							<li><a href="/wiki/articles/sysinternals/kernel-architecture.html">Kernel Architecture</a> - kernel privilege rings and security boundaries</li>
+							<li><a class="icon-website" href="https://www.kernel.org/doc/html/latest/bpf/index.html" target="_blank">Linux Kernel BPF Documentation</a></li>
+							<li><a class="icon-website" href="https://docs.cilium.io/en/stable/bpf/" target="_blank">BPF and XDP Reference Guide - Cilium</a></li>
+							<li><a class="icon-website" href="https://www.kernel.org/doc/html/latest/bpf/instruction-set.html" target="_blank">eBPF Instruction Set Specification</a></li>
+							<li><a class="icon-website" href="https://libbpf.readthedocs.io/" target="_blank">libbpf API documentation</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/bpftool.8" target="_blank">bpftool(8)</a></li>
+							<li><a class="icon-website" href="https://www.kernel.org/doc/html/latest/bpf/btf.html" target="_blank">BTF - BPF Type Format</a></li>
+							<li><a class="icon-website" href="https://nakryiko.com/posts/bpf-portability-and-co-re/" target="_blank">CO-RE - Compile Once Run Everywhere</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/kernel/bpf/verifier.c" target="_blank">eBPF Verifier - kernel source</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

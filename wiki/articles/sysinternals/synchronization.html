@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Synchronization | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Synchronization">
+		<meta name="keywords" content="atomic, kernel, lockdep, locking, mutex, preempt-rt, rcu, spinlock, synchronization, sysinternals">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Synchronization">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Kernel concurrency control from spinlocks to RCU - the locking hierarchy, lockdep, atomic operations, memory barriers, and real-time kernel synchronization on x86-64 Linux.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/sysinternals/synchronization.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Synchronization">
+		<meta name="twitter:description" itemprop="description" content="Kernel concurrency control from spinlocks to RCU - the locking hierarchy, lockdep, atomic operations, memory barriers, and real-time kernel synchronization on x86-64 Linux.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#why-kernel-synchronization-exists">Why Kernel Synchronization Exists</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#spinlocks">Spinlocks</a></b>
+					<ul>
+						<li><a href="#classic-ticket-spinlock">Classic Ticket Spinlock</a></li>
+						<li><a href="#queued-spinlocks-qspinlock">Queued Spinlocks (qspinlock)</a></li>
+						<li><a href="#spinlock-api">Spinlock API</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#mutexes">Mutexes</a></b>
+					<ul>
+						<li><a href="#spinlock-vs-mutex-decision-rule">Spinlock vs Mutex decision rule</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#semaphores">Semaphores</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#read-write-locks">Read-Write Locks</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#rcu-read-copy-update">RCU - Read-Copy-Update</a></b>
+					<ul>
+						<li><a href="#rcu-grace-period">RCU Grace Period</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#atomic-operations">Atomic Operations</a></b>
+					<ul>
+						<li><a href="#compare-and-swap-cmpxchg-in-depth">compare-and-swap (cmpxchg) in depth</a></li>
+						<li><a href="#memory-ordering-barriers">Memory ordering barriers</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#seqlocks">Seqlocks</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#completion-variables-and-wait-queues">Completion Variables and Wait Queues</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#lockdep-lock-dependency-validator">Lockdep - Lock Dependency Validator</a></b>
+					<ul>
+						<li><a href="#lockdep-test">Lockdep Test</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#preempt-rt-and-priority-inversion">Preempt-RT and Priority Inversion</a></b>
+					<ul>
+						<li><a href="#priority-inversion-problem">Priority Inversion Problem</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#common-kernel-race-conditions">Common Kernel Race Conditions</a></b>
+					<ul>
+						<li><a href="#double-fetch-toctou-in-kernel">Double-fetch (TOCTOU in kernel)</a></li>
+						<li><a href="#per-cpu-race-with-preemption">Per-CPU race with preemption</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/sysinternals/index.html">Sysinternals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/sysinternals/synchronization.html">Synchronization</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="synchronization">Synchronization</h2>
+					<p>
+						Kernel concurrency control from spinlocks to RCU - the locking hierarchy, lockdep, atomic operations,
+						memory barriers, and real-time kernel synchronization on x86-64 Linux.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Kernel code runs concurrently with itself: preemption, interrupts, and other cores can all touch
+							the same data structure at the same moment. This article follows the primitives the kernel uses
+							to keep that safe, from spinlocks and mutexes through RCU and seqlocks, then shows how lockdep
+							finds deadlocks before they happen and how PREEM
+							<abbr title="Penetration Test">PT</abbr>
+							_RT reshapes the locking
+							model.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/threads.html">/wiki/articles/fundamentals/threads.html</a> - thread creation, clone(2), thread models</li>
+							<li><a href="/wiki/articles/fundamentals/race-conditions.html">/wiki/articles/fundamentals/race-conditions.html</a> - thread safety, data races, TOCTOU</li>
+							<li><a href="/wiki/articles/fundamentals/processes.html">/wiki/articles/fundamentals/processes.html</a> - process fundamentals, /proc, fork/exec</li>
+							<li><a href="/wiki/articles/sysinternals/kernel-architecture.html">Kernel Architecture</a> - kernel layout, boot, subsystems</li>
+							<li><a href="/wiki/articles/sysinternals/context-switching.html">/wiki/articles/sysinternals/context-switching.html</a> - context switch mechanics, preemption</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="why-kernel-synchronization-exists">Why Kernel Synchronization Exists</h3>
+						<p>
+							User-space programs can get away with sloppy locking because the kernel provides scheduling
+							boundaries. In kernel space, there is no such safety net. A kernel thread can be preempted at
+							any instruction (with
+							<code>CONFIG_PREEMPT</code>
+							), interrupts can fire between any two machine instructions,
+							and other
+							<abbr title="Central Processing Unit">CPU</abbr>
+							cores execute code simultaneously on the same data
+							structures. The three forces that create concurrency in the kernel are:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Source</th>
+									<th align="center">Description</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Preemption</td>
+									<td align="center">A higher-priority task wakes up while your kernel code is mid-execution -> schedule()</td>
+								</tr>
+								<tr>
+									<td align="center">Interrupts</td>
+									<td align="center">A hardware IRQ fires -> top-half handler runs on the same CPU, potentially touching shared data structures your code is modifying</td>
+								</tr>
+								<tr>
+									<td align="center">SMP</td>
+									<td align="center">Another CPU core is executing the same kernel code path simultaneously, operating on global per-subsystem data structures</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>The kernel's locking hierarchy is designed to address all three sources proportionally:</p>
+						<pre class="plaintext">
+Critical section protected only against →  Mechanism needed
+════════════════════════════════════════   ══════════════════
+Other CPUs (SMP)                           spin_lock()
+Other CPUs + bottom halves                 spin_lock_bh()
+Other CPUs + interrupts                    spin_lock_irqsave()
+Multiple writers + readers                 read/write locks
+Writer exclusion (no CPU spinning)         mutex / semaphore
+Read-mostly scalability                    RCU
+Lockless producer/consumer                 seqlock
+						</pre>
+					</section>
+					<section>
+						<h3 id="spinlocks">Spinlocks</h3>
+						<p>
+							A spinlock is the simplest and most fundamental kernel synchronization primitive. It busy-waits
+							(spins) until the lock is acquired, consuming
+							<abbr title="Central Processing Unit">CPU</abbr>
+							cycles but avoiding
+							the overhead of context switching. Spinlocks are suitable only for short critical sections -
+							microseconds, not milliseconds.
+						</p>
+						<h4 id="classic-ticket-spinlock">Classic Ticket Spinlock</h4>
+						<p>The traditional Linux spinlock used a ticket-based fairness scheme:</p>
+						<pre class="plaintext">
+ticket spinlock structure (arch/x86/include/asm/spinlock_types.h):
+
+struct arch_spinlock {
+    union {
+        __ticketpair_t head_tail;
+        struct __raw_tickets {
+            __ticket_t head;   // ticket currently being served
+            __ticket_t tail;   // next ticket to hand out
+        } tickets;
+    };
+};
+						</pre>
+						<pre class="c">
+// Conceptual ticket spinlock implementation
+static __always_inline void arch_spin_lock(arch_spinlock_t *lock)
+{
+    register struct __raw_tickets inc = { .tail = TICKET_INC };
+    inc = xadd(&amp;lock-&gt;tickets, inc);   // Atomic fetch-and-add tail
+
+    // Spin until our ticket is being served
+    while (lock-&gt;tickets.head != inc.tail)
+        cpu_relax();  // PAUSE instruction — reduces power, avoids speculation
+}
+
+static __always_inline void arch_spin_unlock(arch_spinlock_t *lock)
+{
+    __add(&amp;lock-&gt;tickets.head, TICKET_INC);  // Increment head, next waiter can go
+}
+						</pre>
+						<p>The ticket mechanism guarantees FIFO ordering: waiters are served in the order they arrived.</p>
+						<h4 id="queued-spinlocks-qspinlock">Queued Spinlocks (qspinlock)</h4>
+						<p>
+							Starting from Linux 4.2, x86-64 uses queued spinlocks. Each
+							<abbr title="Central Processing Unit">CPU</abbr>
+							waiting
+							for the lock forms a queue using per-
+							<abbr title="Central Processing Unit">CPU</abbr>
+							
+							<code>qnode</code>
+							structures. When
+							the lock holder releases, only the next
+							<abbr title="Central Processing Unit">CPU</abbr>
+							in the queue is awoken
+							<ul>
+								<li>eliminating the cache-line bouncing of ticket spinlocks where all waiters poll the same</li>
+							</ul>
+							cache
+							line.
+						</p>
+						<pre class="plaintext">
+qspinlock structure:
+
+  ┌────────────────────────────────┐
+  │ 32-bit atomic value            │
+  ├───────+───────+────────────────┤
+  │ locked│pending│ tail (CPU idx) │
+  │  1 bit│ 1 bit │    14 bits     │   (remaining bits: unused/debug)
+  └───────+───────+────────────────┘
+
+  Locked: 1 = held by someone
+  Pending: 1 = one waiter in pending slot (optimistic, no queue needed)
+  Tail: points to last CPU in the MCS-based wait queue
+						</pre>
+						<pre class="c">
+// arch/x86/include/asm/qspinlock.h
+// The queued spinlock for x86 is derived from the generic MCS-based qspinlock
+
+// Fast path (no contention):
+void queued_spin_lock_slowpath(struct qspinlock *lock, u32 val)
+{
+    // Complex queue building with MCS nodes
+    // See kernel/locking/qspinlock.c for the complete implementation
+}
+
+// The unlock simply clears the locked byte:
+static __always_inline void queued_spin_unlock(struct qspinlock *lock)
+{
+    smp_store_release(&amp;lock-&gt;locked, 0);
+}
+						</pre>
+						<h4 id="spinlock-api">Spinlock API</h4>
+						<pre class="c">
+// Basic usage — protects against other CPUs only
+DEFINE_SPINLOCK(my_lock);
+
+spin_lock(&amp;my_lock);
+    /* Critical section — runs on this CPU, other CPUs spin */
+spin_unlock(&amp;my_lock);
+
+// Protect against interrupts on this CPU too:
+unsigned long flags;
+spin_lock_irqsave(&amp;my_lock, flags);
+    /* Interrupts disabled on this CPU; preemption disabled; SMP-safe */
+spin_unlock_irqrestore(&amp;my_lock, flags);
+
+// Protect against bottom halves on all CPUs:
+spin_lock_bh(&amp;my_lock);
+    /* Softirqs disabled on this CPU; SMP-safe */
+spin_unlock_bh(&amp;my_lock);
+
+// Non-blocking trylock:
+if (spin_trylock(&amp;my_lock)) {
+    /* Got the lock */
+    spin_unlock(&amp;my_lock);
+}
+						</pre>
+						<pre class="bash">
+# Which spinlock implementation is this kernel using?
+zcat /proc/config.gz 2&gt;/dev/null | grep QUEUED_SPINLOCKS
+# CONFIG_QUEUED_SPINLOCKS=y  — qspinlock
+# If absent: ticket spinlock (older kernels)
+						</pre>
+					</section>
+					<section>
+						<h3 id="mutexes">Mutexes</h3>
+						<p>
+							A mutex is a sleeping lock. If the lock is unavailable, the task goes to sleep (
+							<code>TASK_UNINTERRUPTIBLE</code>
+							) rather than spinning. This makes mutexes suitable for longer critical sections where context
+							switch overhead is amortized.
+						</p>
+						<pre class="c">
+// include/linux/mutex.h
+struct mutex {
+    atomic_long_t       owner;       // Pointer to owning task_struct
+    raw_spinlock_t      wait_lock;   // Protects the wait list
+    struct list_head    wait_list;   // Tasks waiting for this mutex
+    ...
+};
+						</pre>
+						<p>
+							<b>Linux mutex's optimistic spinning:</b>
+							before sleeping, a task spins briefly hoping the lock
+							holder (which might be running on another
+							<abbr title="Central Processing Unit">CPU</abbr>
+							) releases the lock
+							soon. This is the MCS-based optimistic spinning from the MCS lock algorithm:
+						</p>
+						<pre class="c">
+// kernel/locking/mutex.c (simplified flow)
+void __sched mutex_lock(struct mutex *lock)
+{
+    might_sleep();
+
+    // Fast path: uncontended
+    if (__mutex_trylock_fast(lock))
+        return;
+
+    // Slow path: contended
+    __mutex_lock_slowpath(lock);
+    // Inside slow path:
+    // 1. Optimistic spin (MCS-style) if owner is running on another CPU
+    // 2. If spin fails, sleep on wait_list
+    // 3. When awoken, try to acquire
+    // 4. On success, set owner and return
+}
+
+void __sched mutex_unlock(struct mutex *lock)
+{
+    __mutex_unlock_slowpath(lock);
+}
+						</pre>
+						<pre class="c">
+// Usage:
+DEFINE_MUTEX(my_mutex);
+
+mutex_lock(&amp;my_mutex);
+    /* Can sleep here — but don&#39;t call schedule() explicitly */
+    /* OK to use GFP_KERNEL allocations */
+mutex_unlock(&amp;my_mutex);
+
+// Trylock variant:
+if (mutex_trylock(&amp;my_mutex)) {
+    /* Got it without sleeping */
+    mutex_unlock(&amp;my_mutex);
+}
+						</pre>
+						<h4 id="spinlock-vs-mutex-decision-rule">Spinlock vs Mutex decision rule</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Factor</th>
+									<th align="center">Use Spinlock</th>
+									<th align="center">Use Mutex</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Critical section duration</td>
+									<td align="center">< 10 us (busy-wait OK)</td>
+									<td align="center">> 10 us (sleep is cheaper)</td>
+								</tr>
+								<tr>
+									<td align="center">Can you sleep?</td>
+									<td align="center">No (interrupt context)</td>
+									<td align="center">Yes (process context)</td>
+								</tr>
+								<tr>
+									<td align="center">Data structure shared with ISR?</td>
+									<td align="center">Yes (must spin)</td>
+									<td align="center">No (ISR can't sleep)</td>
+								</tr>
+								<tr>
+									<td align="center">Contention rare?</td>
+									<td align="center">Yes (spinning is cheap)</td>
+									<td align="center">Either</td>
+								</tr>
+								<tr>
+									<td align="center">Memory pressure OK?</td>
+									<td align="center">Yes (no alloc)</td>
+									<td align="center">Yes (struct mutex is prealloc)</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="semaphores">Semaphores</h3>
+						<p>
+							A semaphore generalizes a mutex to allow a configurable number of concurrent holders. A binary
+							semaphore (count = 1) is equivalent to a mutex. A counting semaphore (count > 1) is used when
+							multiple identical resources are available.
+						</p>
+						<pre class="c">
+// include/linux/semaphore.h
+struct semaphore {
+    raw_spinlock_t      lock;
+    unsigned int        count;
+    struct list_head    wait_list;
+};
+
+// API:
+void down(struct semaphore *sem);          // Decrement, sleep if zero
+int down_interruptible(struct semaphore *sem);  // Returns -EINTR on signal
+int down_trylock(struct semaphore *sem);   // Return 0 on success, 1 if would block
+void up(struct semaphore *sem);            // Increment, wake one waiter
+
+// Initialization:
+DEFINE_SEMAPHORE(my_sem);                  // count = 1
+static DECLARE_SEMAPHORE_GENERIC(my_sem_5, 5);  // count = 5
+						</pre>
+						<pre class="c">
+// Classic producer/consumer with counting semaphore:
+// Buffer has N slots → semaphore initialized to N
+// Consumer does down() before reading; producer does up() after writing
+
+static DECLARE_SEMAPHORE_GENERIC(empty, 8);  // 8 empty slots
+static DECLARE_SEMAPHORE_GENERIC(full, 0);   // 0 filled slots
+static DEFINE_SPINLOCK(buf_lock);
+static char buffer[8];
+static int head, tail;
+
+// Producer:
+down(&amp;empty);
+spin_lock(&amp;buf_lock);
+    buffer[head] = produce_item();
+    head = (head + 1) % 8;
+spin_unlock(&amp;buf_lock);
+up(&amp;full);
+
+// Consumer:
+down(&amp;full);
+spin_lock(&amp;buf_lock);
+    item = buffer[tail];
+    tail = (tail + 1) % 8;
+spin_unlock(&amp;buf_lock);
+up(&amp;empty);
+						</pre>
+					</section>
+					<section>
+						<h3 id="read-write-locks">Read-Write Locks</h3>
+						<p>
+							Read-write locks distinguish between readers (shared access) and writers (exclusive access).
+							Multiple readers can hold the lock simultaneously, but a writer must wait for all readers to
+							leave.
+						</p>
+						<pre class="c">
+// Spinlock-based rwlock:
+DEFINE_RWLOCK(my_rwlock);
+
+// Reader:
+read_lock(&amp;my_rwlock);
+    /* Multiple readers OK concurrently */
+read_unlock(&amp;my_rwlock);
+
+// Writer:
+write_lock(&amp;my_rwlock);
+    /* Exclusive access — no readers or other writers */
+write_unlock(&amp;my_rwlock);
+
+// IRQ-safe variants:
+read_lock_irqsave(&amp;my_rwlock, flags);
+write_lock_irqsave(&amp;my_rwlock, flags);
+						</pre>
+						<p>
+							The x86-64
+							<code>rwlock</code>
+							uses a single 32-bit counter where bit 31 indicates a writer, and bits 0-30
+							count readers. A writer waiting sets bit 31 which blocks new readers (reader preference is configurable).
+						</p>
+						<pre class="c">
+// arch/x86/include/asm/rwlock.h — conceptual:
+static __always_inline void arch_read_lock(arch_rwlock_t *rw)
+{
+    // Atomically: if (rw-&gt;lock &gt;&gt; 1) == 0 (no writer waiting or active)
+    //               rw-&gt;lock += 1 (increment reader count)
+    //             else
+    //               spin until writer releases
+    asm volatile(LOCK_PREFIX &#34; ; incl (%0)\n\t&#34;
+                 &#34;jns 1f\n\t&#34;
+                 &#34;call __read_lock_failed\n\t&#34;
+                 &#34;1:\n&#34;
+                 :: &#34;r&#34; (rw) : &#34;memory&#34;);
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="rcu-read-copy-update">RCU - Read-Copy-Update</h3>
+						<p>
+							RCU is Linux's most innovative synchronization mechanism. The key insight: for read-mostly data
+							structures, writers can create a new version, atomically swap the pointer, and wait until all
+							pre-existing readers have left their critical sections before freeing the old version.
+						</p>
+						<pre class="plaintext">
+RCU Update Pattern:
+
+Before:
+  ┌──────┐
+  │ Node │  ←── reader_ptr → points here
+  │  A   │
+  └──────┘
+
+Writer wants to change &#34;A&#34; to &#34;B&#34;:
+
+  1. Copy Node A → Node B&#39;
+     ┌──────┐     ┌──────┐
+     │ Node │     │ Node │
+     │  A   │     │  B&#39;  │  ← modified copy
+     └──────┘     └──────┘
+          ▲
+     reader_ptr
+
+  2. rcu_assign_pointer(): atomically swing pointer
+     ┌──────┐     ┌──────┐
+     │ Node │     │ Node │
+     │  A   │     │  B&#39;  │  ← new readers see B&#39;
+     └──────┘     └──────┘
+                    ▲
+               reader_ptr
+
+  3. synchronize_rcu(): wait for all pre-existing RCU readers to finish
+     (pre-existing readers might still hold a reference to A)
+
+  4. kfree(Node A) — safe now: no reader references A anymore
+						</pre>
+						<pre class="c">
+// RCU API:
+// Reader — extremely cheap (barrier-free on x86):
+rcu_read_lock();
+    struct my_node *node = rcu_dereference(global_ptr);
+    /* Use node — must NOT sleep, must NOT block */
+    /* Must NOT store pointer to node for later use outside critical section */
+    do_something(node);
+rcu_read_unlock();
+
+// Writer:
+struct my_node *old, *new;
+
+new = kmalloc(sizeof(*new), GFP_KERNEL);
+*new = *old;          // Copy
+new-&gt;field = updated_value;  // Modify copy
+old = rcu_replace_pointer(global_ptr, new, lockdep_is_held(&amp;my_lock));
+
+synchronize_rcu();    // Wait for grace period — can sleep!
+/* Or use call_rcu() for asynchronous callback: */
+// call_rcu(&amp;old-&gt;rcu_head, my_free_callback);
+
+kfree(old);           // Safe: all readers have released references
+						</pre>
+						<h4 id="rcu-grace-period">RCU Grace Period</h4>
+						<p>
+							A grace period is the interval during which every
+							<abbr title="Central Processing Unit">CPU</abbr>
+							has passed
+							through a quiescent state (context switch, return to user space, or idle).
+							<code>synchronize_rcu()</code>
+							blocks until all
+							<abbr title="Central Processing Unit">CPU</abbr>
+							s have reported a quiescent state.
+						</p>
+						<pre class="plaintext">
+CPU 0:  ████[reader]███████████[qs]██████████████████
+CPU 1:  ██████████[reader]██████████████[qs]██████████
+CPU 2:  █████████████████████[qs]██████████████████████
+CPU 3:  ███████████████[reader]████[qs]████████████████
+                        │                           │
+                        ▼                           ▼
+              synchronize_rcu() called        Grace period ends
+                                              (all CPUs passed QS)
+                                              kfree() is now safe
+						</pre>
+						<pre class="bash">
+# RCU statistics
+cat /sys/kernel/debug/rcu/rcu_sched/rcugp    # Grace period info
+cat /sys/kernel/debug/rcu/rcu_sched/rcuboost  # RCU boosting
+cat /sys/kernel/debug/rcu/rcu_sched/rcuexp    # Expedited grace periods
+
+# Check RCU implementation
+zcat /proc/config.gz 2&gt;/dev/null | grep RCU
+# CONFIG_TREE_RCU=y (or CONFIG_PREEMPT_RCU)
+# CONFIG_RCU_STALL_COMMON=y
+						</pre>
+					</section>
+					<section>
+						<h3 id="atomic-operations">Atomic Operations</h3>
+						<p>
+							Atomic operations are the building blocks of lock-free algorithms. They guarantee that a read-modify-write
+							operation completes without any other
+							<abbr title="Central Processing Unit">CPU</abbr>
+							observing an intermediate
+							state.
+						</p>
+						<pre class="c">
+// include/linux/atomic/atomic-instrumented.h
+
+typedef struct {
+    int counter;
+} atomic_t;
+
+typedef struct {
+    s64 counter;
+} atomic64_t;
+
+// Core operations — all return void (set/destroy) or old/new value:
+int atomic_read(const atomic_t *v);
+void atomic_set(atomic_t *v, int i);
+void atomic_inc(atomic_t *v);
+void atomic_dec(atomic_t *v);
+int atomic_inc_return(atomic_t *v);        // Return new value
+int atomic_dec_and_test(atomic_t *v);      // Return true if result == 0
+int atomic_cmpxchg(atomic_t *v, int old, int new);  // CAS — returns old value
+int atomic_xchg(atomic_t *v, int new);     // Exchange, return old
+int atomic_fetch_add(atomic_t *v, int i);  // Add, return old
+						</pre>
+						<h4 id="compare-and-swap-cmpxchg-in-depth">compare-and-swap (cmpxchg) in depth</h4>
+						<p>
+							<code>cmpxchg</code>
+							is the universal atomic primitive - all other atomic operations can be built from
+							it:
+						</p>
+						<pre class="c">
+// arch/x86/include/asm/cmpxchg.h
+// Hardware instruction: LOCK CMPXCHG
+//
+// Pseudocode: if (*ptr == old) { *ptr = new; return old; } else { return *ptr; }
+//
+// The LOCK prefix makes it atomic across all CPUs.
+
+static __always_inline unsigned long
+__cmpxchg(volatile void *ptr, unsigned long old, unsigned long new, int size)
+{
+    unsigned long prev;
+    switch (size) {
+    case 1:
+        asm volatile(LOCK_PREFIX &#34;cmpxchgb %b2,%1&#34;
+                     : &#34;=a&#34;(prev), &#34;+m&#34;(*(u8 *)ptr)
+                     : &#34;q&#34;(new), &#34;0&#34;(old)
+                     : &#34;memory&#34;);
+        return prev;
+    case 4:
+        asm volatile(LOCK_PREFIX &#34;cmpxchgl %2,%1&#34;
+                     : &#34;=a&#34;(prev), &#34;+m&#34;(*(u32 *)ptr)
+                     : &#34;r&#34;(new), &#34;0&#34;(old)
+                     : &#34;memory&#34;);
+        return prev;
+    case 8:
+        asm volatile(LOCK_PREFIX &#34;cmpxchgq %2,%1&#34;
+                     : &#34;=a&#34;(prev), &#34;+m&#34;(*(u64 *)ptr)
+                     : &#34;r&#34;(new), &#34;0&#34;(old)
+                     : &#34;memory&#34;);
+        return prev;
+    }
+    return old;
+}
+						</pre>
+						<h4 id="memory-ordering-barriers">Memory ordering barriers</h4>
+						<pre class="plaintext">
+x86-64 memory ordering model (strong — TSO):
+  Loads are not reordered with loads
+  Stores are not reordered with stores
+  Stores are not reordered with prior loads
+  Loads MAY be reordered with prior stores (only allowed reordering)
+
+Linux barrier macros:
+  barrier()          — Compiler barrier only (no asm volatile reordering)
+  smp_mb()           — Full memory barrier (mfence / lock;addl)
+  smp_rmb()          - Read barrier (compiler barrier on x86; loads stay ordered)
+  smp_wmb()          - Write barrier (compiler barrier on x86; stores stay ordered)
+  smp_store_release()— Store-release: all prior stores visible before this one
+  smp_load_acquire() — Load-acquire: all subsequent loads see this one&#39;s effect
+
+Linux atomic operations imply memory ordering:
+  atomic_read() / atomic_set()  — No ordering (RELAXED)
+  atomic_inc() / atomic_dec()   — Full barrier before and after
+  atomic_cmpxchg()              — Full barrier
+  atomic_fetch_add()            — Full barrier
+						</pre>
+					</section>
+					<section>
+						<h3 id="seqlocks">Seqlocks</h3>
+						<p>A seqlock (sequential lock) provides lock-free reads while writers use a spinlock:</p>
+						<pre class="c">
+// include/linux/seqlock.h
+typedef struct {
+    seqcount_spinlock_t seqcount;
+    spinlock_t          lock;
+} seqlock_t;
+
+// Writer:
+write_seqlock(&amp;my_seqlock);
+    /* Modify data under spinlock protection */
+    /* seqcount auto-incremented on unlock */
+write_sequnlock(&amp;my_seqlock);
+
+// Reader (lock-free, optimistic):
+unsigned seq;
+do {
+    seq = read_seqbegin(&amp;my_seqlock);
+    /* Read data — no locking! */
+    value = shared_data;
+} while (read_seqretry(&amp;my_seqlock, seq));
+/* If seq changed, a writer ran during our read → retry */
+						</pre>
+						<p>
+							The seqcount is the backbone of the kernel's timekeeping subsystem (
+							<code>ktime_get()</code>
+							). The timekeeper
+							sequence counter lets thousands of concurrent readers sample the clock while only the timer
+							interrupt writes it, without taking a lock. The
+							<code>jiffies_64</code>
+							counter itself is a plain variable
+							that readers load with
+							<code>READ_ONCE()</code>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="completion-variables-and-wait-queues">Completion Variables and Wait Queues</h3>
+						<p>
+							A completion is a one-shot synchronization primitive: one task waits for a specific event, and
+							another task signals when it occurs.
+						</p>
+						<pre class="c">
+// include/linux/completion.h
+struct completion {
+    unsigned int done;          // 0 = not done; 1 = done
+    swait_queue_head_t wait;    // Wait queue for sleepers
+};
+
+DECLARE_COMPLETION(my_done);
+
+// Waiter:
+wait_for_completion(&amp;my_done);  // Sleep until complete
+// Or with timeout:
+if (wait_for_completion_timeout(&amp;my_done, msecs_to_jiffies(5000)) == 0)
+    printk(&#34;Timeout!\n&#34;);
+
+// Signaler:
+complete(&amp;my_done);             // Wake exactly one waiter
+// complete_all(&amp;my_done);      // Wake all waiters
+						</pre>
+						<p>
+							<b>Wait queues</b>
+							are more general - they wake on arbitrary conditions:
+						</p>
+						<pre class="c">
+// Simplest usage: wait for a flag to become true
+static DECLARE_WAIT_QUEUE_HEAD(my_wq);
+static int condition = 0;
+
+// Waiter:
+wait_event(my_wq, condition != 0);
+// Or interruptible:
+if (wait_event_interruptible(my_wq, condition))
+    return -ERESTARTSYS;
+
+// Signaler:
+condition = 1;
+wake_up(&amp;my_wq);                // Wake all waiters (default for exclusive=0)
+// wake_up_interruptible(&amp;my_wq);
+						</pre>
+					</section>
+					<section>
+						<h3 id="lockdep-lock-dependency-validator">Lockdep - Lock Dependency Validator</h3>
+						<p>
+							Lockdep is the kernel's runtime deadlock detector. It tracks lock acquisition order across the
+							entire kernel and reports any potential deadlock cycles - before they actually deadlock.
+						</p>
+						<pre class="plaintext">
+How Lockdep works:
+
+  1. Every lock class (struct spinlock, struct mutex, etc. at a given code location)
+     is assigned a unique class ID.
+  2. Lockdep maintains a directed graph: if lock A is held while acquiring lock B,
+     an edge A → B is added.
+  3. Before each lock acquisition, Lockdep checks that adding the new edge does not
+     create a cycle. If it would, Lockdep warns immediately.
+  4. Lockdep also tracks interrupt state: holding a non-irq-safe lock while
+     interrupts are disabled is flagged as a potential deadlock.
+
+  Example detection:
+
+    CPU 0:  lock(A) → lock(B)         Creates edge A → B
+    CPU 1:  lock(B) → lock(A)         Detects cycle: A → B → A = DEADLOCK!
+                                          │
+                                          ▼
+    =============================================
+    WARNING: possible circular locking dependency detected
+    ...stack trace on both CPUs...
+    =============================================
+						</pre>
+						<pre class="bash">
+# Check if lockdep is enabled
+zcat /proc/config.gz 2&gt;/dev/null | grep LOCKDEP
+# CONFIG_LOCKDEP=y / CONFIG_LOCKDEP_SUPPORT=y
+
+# Enable lockdep diagnostics
+sudo cat /proc/lockdep_stats       # Global lockdep statistics
+sudo cat /proc/lock_stat           # Per-lock contention statistics
+sudo cat /proc/lockdep             # Active lock chains
+
+# Per-lock contention (sorted by wait time)
+sudo cat /proc/lock_stat | head -30
+# Output columns:
+# class_name     con-bounces  contentions  wait-min  wait-max  wait-total  acq-bounces  ...
+# con-bounces = contention bounces (lock was contended and caller went to slowpath)
+# contentions = number of times sleep was needed
+# wait-total  = total nanoseconds spent waiting for this lock
+						</pre>
+						<h4 id="lockdep-test">Lockdep Test</h4>
+						<p>
+							The Challenge section builds a kernel module that drives spinlocks, mutexes, RCU, and seqlocks
+							from kernel threads while the container reads
+							<code>/proc/sync_lab</code>
+							,
+							<code>/proc/lock_stat</code>
+							, and
+							<code>/proc/lockdep_stats</code>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="preempt-rt-and-priority-inversion">Preempt-RT and Priority Inversion</h3>
+						<p>
+							The
+							<code>CONFIG_PREEMPT_RT</code>
+							patch converts most kernel spinlocks into mutexes, making nearly all
+							kernel code preemptible at any point. This reduces scheduling latency but requires careful migration
+							of locking primitives:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Standard Kernel</th>
+									<th align="center">PREEMPT_RT Kernel</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">spinlock = raw spin</td>
+									<td align="center">spinlock = rt_mutex (sleeps!)</td>
+								</tr>
+								<tr>
+									<td align="center">local_irq_disable()</td>
+									<td align="center">local_irq_disable() (same)</td>
+								</tr>
+								<tr>
+									<td align="center">spin_lock_irqsave()</td>
+									<td align="center">spin_lock_irqsave() = rt_mutex</td>
+								</tr>
+								<tr>
+									<td align="center">raw_spinlock_t (true spinlock)</td>
+									<td align="center">raw_spinlock_t = true spinlock (for truly atomic sections)</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="priority-inversion-problem">Priority Inversion Problem</h4>
+						<pre class="plaintext">
+Without priority inheritance (standard kernel):
+  Low-priority task holds mutex M
+  High-priority task wakes, tries lock(M) → sleeps waiting
+  Medium-priority task runs, preempts low → high waits indefinitely
+  (Medium is not using M but has higher priority than low)
+
+With priority inheritance (PREEMPT_RT, also in pthread_mutex PI):
+  Low holds mutex M → inherits high&#39;s priority while holding M
+  Low runs at high priority → finishes quickly → releases M → high gets M
+  Priority inversion bounded
+						</pre>
+						<pre class="bash">
+# Check if running PREEMPT_RT
+uname -v | grep RT
+zcat /proc/config.gz 2&gt;/dev/null | grep PREEMPT_RT
+# CONFIG_PREEMPT_RT=y
+
+# Check kernel preemption model
+cat /sys/kernel/debug/sched/preempt
+						</pre>
+					</section>
+					<section>
+						<h3 id="common-kernel-race-conditions">Common Kernel Race Conditions</h3>
+						<h4 id="double-fetch-toctou-in-kernel">Double-fetch (TOCTOU in kernel)</h4>
+						<pre class="c">
+// Vulnerable: user pointer read twice, value can change between reads
+SYSCALL_DEFINE2(bad_copy, int __user *, user_ptr, size_t, size)
+{
+    int len;
+
+    if (copy_from_user(&amp;len, user_ptr, sizeof(len)))
+        return -EFAULT;
+    // ... ATTACKER CHANGES *user_ptr HERE ...
+    if (len &gt; MAX_BUF)
+        return -EINVAL;
+    // len is validated, but user memory may now contain a different value
+
+    copy_from_user(kbuf, user_buf, len);  // Uses unchecked len!
+    // Attacker races: first read len=small, second read len=huge → kernel overflow
+}
+
+// Correct: fetch once, validate and use the local copy
+SYSCALL_DEFINE2(good_copy, int __user *, user_ptr, size_t, size)
+{
+    int len;
+
+    if (copy_from_user(&amp;len, user_ptr, sizeof(len)))
+        return -EFAULT;
+    // Validate locally
+    if (len &gt; MAX_BUF)
+        return -EINVAL;
+    // Use local variable — cannot be changed by attacker
+    copy_from_user(kbuf, user_buf, len);
+}
+						</pre>
+						<h4 id="per-cpu-race-with-preemption">Per-CPU race with preemption</h4>
+						<pre class="c">
+// Wrong: preemption between get_cpu_ptr() and use
+void bad_percpu(void)
+{
+    int *ptr = per_cpu_ptr(&amp;shared_var, smp_processor_id());
+    // &lt;&lt;&lt; PREEMPTION HERE → we&#39;re on a different CPU → ptr is wrong! &gt;&gt;&gt;
+    *ptr = 42;
+}
+
+// Correct: disable preemption
+void good_percpu(void)
+{
+    int *ptr = get_cpu_ptr(&amp;shared_var);  // Disables preemption
+    *ptr = 42;
+    put_cpu_ptr(&amp;shared_var);             // Re-enables preemption
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Build the synchronization lab container. It compiles a kernel module that starts four kernel
+							threads contending on a spinlock, a mutex, a seqlock, and an RCU list, then reads the lock statistics.
+							After the container run, repeat the same measurements on the host.
+						</p>
+						<p><a href="/wiki/articles/sysinternals/synchronization.Containerfile">synchronization.Containerfile</a></p>
+						<pre class="bash">
+podman build -t sync-lab -f synchronization.Containerfile .
+podman run --rm --privileged -v /lib/modules:/lib/modules sync-lab
+						</pre>
+						<pre class="bash">
+# 1. Check lockdep status and stats
+sudo cat /proc/lockdep_stats 2&gt;/dev/null || echo &#34;lockdep not available&#34;
+
+# 2. Per-lock contention statistics
+sudo cat /proc/lock_stat 2&gt;/dev/null | head -20 || echo &#34;CONFIG_LOCK_STAT=n&#34;
+
+# 3. Verify RCU implementation
+zcat /proc/config.gz 2&gt;/dev/null | grep RCU
+cat /sys/kernel/debug/rcu/rcu_sched/rcugp 2&gt;/dev/null
+
+# 4. Check queued spinlock status
+zcat /proc/config.gz 2&gt;/dev/null | grep QUEUED_SPINLOCKS
+
+# 5. Inspect kernel preemption model
+zcat /proc/config.gz 2&gt;/dev/null | grep PREEMPT
+
+# 6. perf lock — analyze kernel lock contention
+sudo perf lock record -- sleep 5
+sudo perf lock report
+
+# 7. perf lock contention (modern kernels)
+sudo perf lock contention -- sleep 5
+
+# 8. Count atomic operations in a running kernel
+sudo perf stat -e &#39;atomic_t:atomic_*&#39; -a sleep 3 2&gt;/dev/null || \
+  echo &#34;no atomic tracepoints available&#34;
+
+# 9. Lock dependency graph (debugfs)
+sudo cat /sys/kernel/debug/lockdep 2&gt;/dev/null
+
+# 10. Check for priority inheritance support
+zcat /proc/config.gz 2&gt;/dev/null | grep RT_MUTEXES
+
+# 11. Test mutex priority inheritance with realtime threads
+cat &gt; /tmp/pi_test.c &lt;&lt; &#39;EOF&#39;
+#define _GNU_SOURCE
+#include &lt;pthread.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;unistd.h&gt;
+int main() {
+    pthread_mutex_t lock;
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&amp;attr);
+    pthread_mutexattr_setprotocol(&amp;attr, PTHREAD_PRIO_INHERIT);
+    pthread_mutex_init(&amp;lock, &amp;attr);
+    printf(&#34;PI mutex initialized — if PREEMPT_RT, this is the default kernel mutex\n&#34;);
+    return 0;
+}
+EOF
+gcc -pthread -o /tmp/pi_test /tmp/pi_test.c &amp;&amp; /tmp/pi_test
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/kernel/locking/spinlock.c" target="_blank">Linux kernel: kernel/locking/spinlock.c</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/kernel/locking/qspinlock.c" target="_blank">Linux kernel: kernel/locking/qspinlock.c</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/kernel/locking/mutex.c" target="_blank">Linux kernel: kernel/locking/mutex.c</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/kernel/rcu/tree.c" target="_blank">Linux kernel: kernel/rcu/tree.c - RCU grace period</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/include/linux/seqlock.h" target="_blank">Linux kernel: include/linux/seqlock.h</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/Documentation/locking/lockdep-design.rst" target="_blank">Linux kernel: Documentation/locking/lockdep-design.rst</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/Documentation/locking/locktypes.rst" target="_blank">Linux kernel: Documentation/locking/locktypes.rst</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/arch/x86/include/asm/cmpxchg.h" target="_blank">Linux kernel: arch/x86/include/asm/cmpxchg.h</a></li>
+							<li><a class="icon-website" href="https://lwn.net/Articles/590243/" target="_blank">LWN.net: MCS locks and qspinlocks</a></li>
+							<li><a class="icon-website" href="https://lwn.net/Articles/185666/" target="_blank">LWN.net: An introduction to lockdep</a></li>
+							<li><a class="icon-website" href="https://lwn.net/Articles/262464/" target="_blank">What is RCU, Fundamentally? - Paul E. McKenney</a></li>
+							<li><a class="icon-website" href="https://www.intel.com/sdm" target="_blank">Intel SDM Vol 3A, Chapter 8: Multiple-Processor Management (Locks)</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

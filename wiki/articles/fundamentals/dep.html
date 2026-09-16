@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>DEP (Data Execution Prevention) | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="DEP (Data Execution Prevention)">
+		<meta name="keywords" content="data-execution-prevention, dep, elf, exploit-mitigation, jit, memory-protection, nx, pt_gnu_stack, techniques, w^x">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="DEP (Data Execution Prevention)">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="How NX/W^X/DEP enforces memory execute permissions via page table entries, the CPU fault mechanism, ELF segments, and JIT compiler mitigations.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/fundamentals/dep.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="DEP (Data Execution Prevention)">
+		<meta name="twitter:description" itemprop="description" content="How NX/W^X/DEP enforces memory execute permissions via page table entries, the CPU fault mechanism, ELF segments, and JIT compiler mitigations.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-problem-dep-solves">The Problem DEP Solves</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#cpu-level-implementation">CPU-Level Implementation</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#x86-history">x86 History</a></b>
+					<ul>
+						<li><a href="#timeline">Timeline</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kernel-view-vm-exec">Kernel View: VM_EXEC</a></b>
+					<ul>
+						<li><a href="#kernel-wx-hardening">Kernel W^X Hardening</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#mmap-and-mprotect">mmap and mprotect</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#elf-program-headers-pt-gnu-stack">ELF Program Headers: PT_GNU_STACK</a></b>
+					<ul>
+						<li><a href="#the-p-flags-field-of-pt-gnu-stack">The p_flags field of PT_GNU_STACK</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#elf-program-headers-pt-gnu-relro">ELF Program Headers: PT_GNU_RELRO</a></b>
+					<ul>
+						<li><a href="#how-relro-works">How RELRO Works</a></li>
+						<li><a href="#two-levels-of-relro">Two levels of RELRO</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#runtime-verification">Runtime Verification</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#nx-stack-example">NX Stack Example</a></b>
+					<ul>
+						<li><a href="#compilation-and-verification">Compilation and verification</a></li>
+						<li><a href="#bypassing-nx-with-mprotect">Bypassing NX with mprotect</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#jit-compilation-under-wx">JIT Compilation Under W^X</a></b>
+					<ul>
+						<li><a href="#strategy-1-flip-mprotect">Strategy 1: Flip (mprotect)</a></li>
+						<li><a href="#strategy-2-dual-mapping">Strategy 2: Dual Mapping</a></li>
+						<li><a href="#strategy-3-out-of-process-jit">Strategy 3: Out-of-Process JIT</a></li>
+						<li><a href="#strategy-4-separate-w-and-x">Strategy 4: Separate W and X</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verifying-dep-system-wide">Verifying DEP System-Wide</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#dep-bypass-techniques">DEP Bypass Techniques</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#compiler-and-linker-flags">Compiler and Linker Flags</a></b>
+					<ul>
+						<li><a href="#archlinux-default-flags">ArchLinux default flags</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kernel-hardening-smep-and-smap">Kernel Hardening SMEP and SMAP</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#summary">Summary</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/fundamentals/index.html">Fundamentals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/fundamentals/dep.html">Dep</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="dep-data-execution-prevention">DEP (Data Execution Prevention)</h2>
+					<p>
+						How NX/W^X/
+						<abbr title="Data Execution Prevention">DEP</abbr>
+						enforces memory execute permissions via page table
+						entries, the
+						<abbr title="Central Processing Unit">CPU</abbr>
+						fault mechanism, ELF segments, and JIT compiler
+						mitigations.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Before hardware NX there was no per-page way to stop the
+							<abbr title="Central Processing Unit">CPU</abbr>
+							from
+							executing data. A buffer overflow could write shellcode to the stack or heap and then jump to
+							it. This article explains how the NX bit in the page tables, exposed as
+							<abbr title="Data Execution Prevention">DEP</abbr>
+							on Windows and W^X on OpenBSD, makes writable pages non-executable. It covers the
+							<abbr title="Central Processing Unit">CPU</abbr>
+							fault path, the
+							<code>PT_GNU_STACK</code>
+							ELF metadata that marks the stack NX, and the JIT techniques
+							that keep write and execute permissions separate.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/virtual-memory.html">Virtual Memory</a> - page tables, virtual address translation, page table entries</li>
+							<li><a href="/wiki/articles/fundamentals/elf.html">ELF</a> - ELF segments, program headers, ELF loader behavior</li>
+							<li><a href="/wiki/articles/fundamentals/buffer-overflows.html">Buffer Overflows</a> - why attackers write shellcode to writable buffers</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-problem-dep-solves">The Problem DEP Solves</h3>
+						<p>
+							Before 2004, memory on x86 was either completely executable or completely non-executable - there
+							was no per-page execution control. The x86 protected mode segmented memory model (introduced
+							with the 80286 in 1982, refined with the 80386 paging in 1985) could enforce read/write protection
+							per page via the Page Table Entry (
+							<abbr title="Page Table Entry">PTE</abbr>
+							) R/W bit, but had no equivalent
+							for execute permission. A page marked as writable was implicitly executable.
+						</p>
+						<p>This meant a buffer overflow on the stack, in the heap, or in the BSS segment gave an attacker:</p>
+						<ol>
+							<li>Write arbitrary shellcode to the writable buffer.</li>
+							<li>Overwrite the return address to point at that buffer.</li>
+							<li>When the function returns, the <abbr title="Central Processing Unit">CPU</abbr> fetches and executes the shellcode.</li>
+						</ol>
+						<p>
+							Classic shellcode exploits from the 1990s through mid-2000s exploited this directly. The famous
+							Aleph1 "Smashing the Stack for Fun and Profit" (Phrack 49, 1996) assumed an executable stack
+							was the natural default state.
+						</p>
+						<p>
+							<abbr title="Data Execution Prevention">DEP</abbr>
+							(Microsoft's branding) or NX (No-eXecute, AMD's branding) or
+							W^X (Write XOR Execute, OpenBSD's policy name) fundamentally changes this:
+							<em>memory can be writable or executable, but not both simultaneously</em>
+							. The stack and heap - the targets of buffer overflows - are marked non-executable. Shellcode
+							written there will cause a page fault, not arbitrary code execution.
+						</p>
+					</section>
+					<section>
+						<h3 id="cpu-level-implementation">CPU-Level Implementation</h3>
+						<p>
+							On x86-64 (AMD64 and Intel 64), every Page Table Entry (
+							<abbr title="Page Table Entry">PTE</abbr>
+							) and Page
+							Directory Entry (PDE) is 8 bytes (64 bits). The
+							<abbr title="Page Table Entry">PTE</abbr>
+							format for a 4 KiB page:
+						</p>
+						<pre class="plaintext">
+ 63  62     52 51             32 31             12 11     9 8 7 6 5 4 3 2 1 0
++--+--------+-----------------+-----------------+--------+-+-+-+-+-+-+-+-+-+-+
+|NX|Ignored | Physical Addr   | Physical Addr   |Ignored |G|P|D|A|P|P|U|R|P|
+|  | (MBZ)  | (bits 51..32)   | (bits 31..12)   |(MK+7)  | |A| | |C|W|/|/|
+|  |        |                 |                 |        | |T| | |D|T|S|W| |
++--+--------+-----------------+-----------------+--------+-+-+-+-+-+-+-+-+-+-+
+						</pre>
+						<p>
+							<b>Bit 63 - NX (No-eXecute)</b>
+							/ XD (eXecute Disable in Intel terminology):
+						</p>
+						<ul>
+							<li>0: instructions may be fetched from this page</li>
+							<li>1: instruction fetch from this page triggers a page fault</li>
+						</ul>
+						<p>
+							When the
+							<abbr title="Central Processing Unit">CPU</abbr>
+							's instruction fetch unit requests bytes from a virtual
+							address, the Memory Management Unit (MMU) walks the page tables:
+						</p>
+						<ol>
+							<li><code>CR3</code> register -> <code>PML4</code> table -> <code>PDPT</code> -> <code>PD</code> -> <code>PT</code> -> <code>PTE</code></li>
+							<li><abbr title="Central Processing Unit">CPU</abbr> checks the NX bit in the final <abbr title="Page Table Entry">PTE</abbr></li>
+							<li>If NX = 1, the MMU raises a page fault (interrupt #14, exception vector 14)</li>
+							<li>The kernel's page fault handler receives a <code>struct vm_area_struct</code> with <code>VM_EXEC</code> not set</li>
+							<li>If the faulting address has no <code>VM_EXEC</code>  <abbr title="Virtual Machine">VM</abbr> A, the kernel delivers <code>SIGSEGV</code> (signal 11) with <code>si_code = SEGV_ACCERR</code></li>
+						</ol>
+						<p>The key register-level pathway:</p>
+						<pre class="plaintext">
+IA32_EFER (Extended Feature Enable Register) - MSR 0xC0000080:
+  Bit 11 (NXE): No-Execute Enable. Must be 1 for NX to work.
+  Bit 8  (LME): Long Mode Enable. Set when entering 64-bit mode.
+
+Page Fault Error Code (pushed onto stack by CPU):
+  Bit 4: 1 = instruction fetch, 0 = data access
+  Bit 0: 1 = protection violation, 0 = not-present page
+						</pre>
+						<p>
+							If
+							<code>IA32_EFER.NXE</code>
+							is 0 (legacy mode or kernel didn't enable it), bit 63 of
+							<abbr title="Page Table Entry">PTE</abbr>
+							s is ignored - any page can execute regardless. All modern Linux kernels set NXE during boot.
+						</p>
+					</section>
+					<section>
+						<h3 id="x86-history">x86 History</h3>
+						<p>
+							The original 80386 (1985) paging system had a 2-level page table with 32-bit
+							<abbr title="Page Table Entry">PTE</abbr>
+							s. The
+							<abbr title="Page Table Entry">PTE</abbr>
+							format had no execute bit:
+						</p>
+						<pre class="plaintext">
+80386 PTE (32-bit):
+ 31                  12 11 9 8 7 6 5 4 3 2 1 0
++---------------------+---+-+-+-+---+-+-+-+---+-+
+| Physical Page (4KiB)|Avl|0|0|D|A|0|0|U|R|P|
+| address, bits 31-12 |   | | | | | | |/|/| |
++---------------------+---+-+-+-+---+-+-+-+---+-+
+                                          S W
+						</pre>
+						<p>
+							Only two protection bits: R/W (Read/Write, bit 1) and U/S (User/Supervisor, bit 2). No execute
+							bit.
+						</p>
+						<p>
+							The Pentium Pro (1995) introduced PAE (Physical Address Extension) with 64-bit
+							<abbr title="Page Table Entry">PTE</abbr>
+							s but still no execute bit. It wasn't until 2003 that AMD defined the NX bit in the AMD64 architecture
+							specification, and Intel followed in 2004 with XD on Prescott-core Pentium 4 processors.
+						</p>
+						<h4 id="timeline">Timeline</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Year</th>
+									<th align="center">Milestone</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">1985</td>
+									<td align="center">80386 paging - per-page R/W, no execute</td>
+								</tr>
+								<tr>
+									<td align="center">1995</td>
+									<td align="center">PAE - 64-bit PTEs, still no execute bit</td>
+								</tr>
+								<tr>
+									<td align="center">1996</td>
+									<td align="center">Linux 2.0 - initial mmap implementation; exec perm always implied</td>
+								</tr>
+								<tr>
+									<td align="center">2001</td>
+									<td align="center">PaX patches for Linux - first software NX via segmentation tricks</td>
+								</tr>
+								<tr>
+									<td align="center">2003</td>
+									<td align="center">AMD64 specification - NX bit (bit 63) defined</td>
+								</tr>
+								<tr>
+									<td align="center">2003</td>
+									<td align="center">Linux 2.6.0-test3 - kernel support for NX by Ingo Molnar (Red Hat)</td>
+								</tr>
+								<tr>
+									<td align="center">2004</td>
+									<td align="center">Intel Prescott - XD bit (same concept, different name)</td>
+								</tr>
+								<tr>
+									<td align="center">2004</td>
+									<td align="center">OpenBSD 3.3 - W^X policy enforced in kernel (Munro, de Raadt)</td>
+								</tr>
+								<tr>
+									<td align="center">2004</td>
+									<td align="center">Windows XP SP2 - DEP introduced</td>
+								</tr>
+								<tr>
+									<td align="center">2005</td>
+									<td align="center">GCC 4.0 - PT_GNU_STACK segment, -z execstack / -z noexecstack</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							Before hardware NX, the PaX project implemented software NX via x86 segmentation: the code segment
+							descriptor's limit was set below the data segment's base, so the
+							<abbr title="Central Processing Unit">CPU</abbr>
+							's segmentation unit would fault on instruction fetches from data regions before the paging
+							unit ever saw them. This was clever but incurred overhead from segment register manipulation
+							and didn't work on all microarchitectures.
+						</p>
+					</section>
+					<section>
+						<h3 id="kernel-view-vm-exec">Kernel View: VM_EXEC</h3>
+						<p>
+							Every virtual memory region in a Linux process is described by a
+							<code>vm_area_struct</code>
+							(defined in
+							<code>include/linux/mm_types.h</code>
+							). The
+							<code>vm_flags</code>
+							field is a bitmask of
+							<code>VM_*</code>
+							flags. The relevant
+							subset:
+						</p>
+						<pre class="c">
+#define VM_READ          0x00000001  // Page is readable
+#define VM_WRITE         0x00000002  // Page is writable
+#define VM_EXEC          0x00000004  // Page is executable
+#define VM_SHARED        0x00000008  // Page is shared between processes
+#define VM_MAYREAD       0x00000010  // Read access may be granted
+#define VM_MAYWRITE      0x00000020  // Write access may be granted
+#define VM_MAYEXEC       0x00000040  // Execute access may be granted
+#define VM_GROWSDOWN     0x00000100  // Stack grows downward
+#define VM_GROWSUP       0x00000200  // Stack (for other archs) grows upward
+#define VM_DENYWRITE     0x00000800  // ETXTBSY - deny writes to executable
+						</pre>
+						<p>
+							When
+							<code>mmap</code>
+							or
+							<code>mprotect</code>
+							sets a
+							<abbr title="Virtual Machine">VM</abbr>
+							A, the kernel translates
+							<code>PROT_*</code>
+							flags:
+						</p>
+						<pre class="c">
+// arch/x86/include/asm/mman.h
+// Kernel internal flag mapping:
+// PROT_READ  -&gt; VM_READ  | VM_MAYREAD
+// PROT_WRITE -&gt; VM_WRITE | VM_MAYWRITE
+// PROT_EXEC  -&gt; VM_EXEC  | VM_MAYEXEC
+						</pre>
+						<p>
+							The
+							<code>VM_WRITE</code>
+							and
+							<code>VM_EXEC</code>
+							flags are checked during page fault handling. If a region has
+							<code>VM_WRITE</code>
+							but not
+							<code>VM_EXEC</code>
+							, the
+							<abbr title="Page Table Entry">PTE</abbr>
+							is populated with
+							<code>NX=1</code>
+							. If the
+							<abbr title="Central Processing Unit">CPU</abbr>
+							then tries to fetch from that page, the hardware raises a page fault with the instruction-fetch
+							bit set in the error code. The kernel's
+							<code>do_page_fault</code>
+							then calls
+							<code>__bad_area</code>
+							->
+							<code>force_sig_fault(SIGSEGV, SEGV_ACCERR, address)</code>
+							.
+						</p>
+						<h4 id="kernel-wx-hardening">Kernel W^X Hardening</h4>
+						<p>The kernel enforces W^X on its own mappings (CONFIG_DEBUG_WX and CONFIG_STRICT_KERNEL_RWX):</p>
+						<pre class="c">
+// Kernel .text is mapped read-only + execute
+// Kernel .rodata is mapped read-only
+// Kernel .data and .bss are mapped read-write, no-exec
+// Kernel modules follow the same rules
+// Any RWX page in kernel space is a W^X violation and triggers a WARN()
+						</pre>
+						<p>You can verify this at runtime:</p>
+						<pre class="bash">
+# Check kernel page table permissions
+cat /sys/kernel/debug/kernel_page_tables | head -50
+# Look for &#34;RW&#34; entries - there should be none with &#34;x&#34; appended
+						</pre>
+					</section>
+					<section>
+						<h3 id="mmap-and-mprotect">mmap and mprotect</h3>
+						<p>
+							Userspace requests memory protection via
+							<code>mmap</code>
+							(new mapping) or
+							<code>mprotect</code>
+							(change existing
+							mapping):
+						</p>
+						<pre class="c">
+#include &lt;sys/mman.h&gt;
+
+// mmap: create a new mapping
+void *addr = mmap(
+    NULL,                       // let kernel choose address
+    4096,                       // length: one page
+    PROT_READ | PROT_WRITE,     // protection: no execute
+    MAP_PRIVATE | MAP_ANONYMOUS,// flags: private anonymous memory
+    -1,                         // fd: not used for anonymous
+    0                           // offset: not used
+);
+
+// mprotect: change protection of existing mapping
+mprotect(addr, 4096, PROT_READ | PROT_EXEC);
+// After this, the page is readable and executable but NOT writable.
+// W^X is enforced by discipline: {R,X} is allowed, {R,W} is allowed, {R,W,X} is usually avoided.
+						</pre>
+						<p>
+							Unlike some hardened operating systems, mainline Linux does not forbid a userspace
+							<code>PROT_READ | PROT_WRITE | PROT_EXEC</code>
+							mapping by default. The hardware only provides the per-page NX bit; the kernel trusts userspace
+							not to request RWX, and W^X is a design discipline that JITs follow. Security modules such as
+							SELinux and AppArmor can deny execute permission on writable mappings (
+							<code>execmem</code>
+							/
+							<code>execstack</code>
+							checks), and some distributions ship stricter policies.
+						</p>
+						<pre class="bash">
+# SELinux can block executable writable memory
+sestatus 2&gt;/dev/null | head -3
+sesearch -A -t unconfined_t -c process -p execmem 2&gt;/dev/null
+
+# Check current mappings for RWX regions
+grep &#39;rwx&#39; /proc/self/maps
+						</pre>
+					</section>
+					<section>
+						<h3 id="elf-program-headers-pt-gnu-stack">ELF Program Headers: PT_GNU_STACK</h3>
+						<p>
+							The ELF loader uses the
+							<code>PT_GNU_STACK</code>
+							program header to decide whether the process's main stack
+							should be executable. This segment has no data - it exists purely as metadata.
+						</p>
+						<h4 id="the-p-flags-field-of-pt-gnu-stack">The p_flags field of PT_GNU_STACK</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">p_flags value</th>
+									<th align="center">Stack permissions</th>
+									<th align="center">Note</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>PF_R</code>(4)</td>
+									<td align="center">Read-only, non-executable</td>
+									<td align="center">Unusual; stack must be writable</td>
+								</tr>
+								<tr>
+									<td align="center"><code>PF_R \| PF_W</code>(6)</td>
+									<td align="center">Read-Write, NO-EXEC</td>
+									<td align="center"><b>Default: NX stack</b></td>
+								</tr>
+								<tr>
+									<td align="center"><code>PF_R \| PF_W \| PF_X</code>(7)</td>
+									<td align="center">Read-Write-EXEC</td>
+									<td align="center"><b>Executable stack</b>(vulnerable)</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							The flag is set by the linker based on whether any input object file has
+							<code>.note.GNU-stack</code>
+							with
+							executable permissions. The compiler sets this based on the
+							<code>-z execstack</code>
+							/
+							<code>-z noexecstack</code>
+							flags.
+						</p>
+						<p>Check a binary's stack executability:</p>
+						<pre class="bash">
+# Method 1: readelf (most direct)
+readelf -l /bin/ls | grep GNU_STACK
+# Output: GNU_STACK  0x... 0x... 0x... 0x... 0x... RWE 0x10
+#                                              ^^^
+#                                        RWE = executable
+#                                        RW  = not executable
+
+# Method 2: scanelf (from pax-utils, installed by default on Arch)
+scanelf -e /bin/ls
+# TYPE   STACK/RELRO  FILE
+# ET_EXEC RW- R--     /bin/ls
+#         ^^^
+#         RW- = NX stack (R=read, W=write, -=no-exec)
+#         RWE = executable stack
+
+# Method 3: execstack (from prelink)
+execstack -q /bin/ls
+# - /bin/ls
+# &#34;-&#34; means the stack is not executable; &#34;X&#34; is printed if it is
+
+# Method 4: check all binaries on system
+scanelf -e /usr/bin/* | grep -v &#39;RW-&#39;
+# Shows binaries with executable stacks - should be empty on modern Arch
+						</pre>
+					</section>
+					<section>
+						<h3 id="elf-program-headers-pt-gnu-relro">ELF Program Headers: PT_GNU_RELRO</h3>
+						<p>
+							RELRO (RELocation Read-Only) makes parts of the Global Offset Table (GOT) read-only after the
+							dynamic linker resolves all relocations, preventing GOT overwrite attacks.
+						</p>
+						<h4 id="how-relro-works">How RELRO Works</h4>
+						<ol>
+							<li>The dynamic linker maps the GOT as read-write during process startup.</li>
+							<li>All necessary relocations are resolved (lazy binding must be disabled for full RELRO).</li>
+							<li>The dynamic linker calls <code>mprotect</code> to mark the GOT region as read-only.</li>
+							<li>Any subsequent write attempt to the GOT triggers SIGSEGV.</li>
+						</ol>
+						<h4 id="two-levels-of-relro">Two levels of RELRO</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Flag</th>
+									<th align="center">Linker flag</th>
+									<th align="center">Behavior</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">None</td>
+									<td align="center"><code>-z norelro</code></td>
+									<td align="center">GOT remains writable forever - vulnerable to GOT overwrite</td>
+								</tr>
+								<tr>
+									<td align="center">Partial</td>
+									<td align="center"><code>-z relro</code>(default)</td>
+									<td align="center"><code>.got.plt</code>section writable (for lazy binding),<code>.got</code>read-only after startup</td>
+								</tr>
+								<tr>
+									<td align="center">Full</td>
+									<td align="center"><code>-z relro -z now</code></td>
+									<td align="center">All GOT entries resolved at startup, entire GOT marked read-only</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							Full RELRO requires
+							<code>-z now</code>
+							(bind now), which disables lazy binding - all PLT function resolutions
+							happen at startup, increasing load time slightly but eliminating the writable GOT as an attack
+							surface.
+						</p>
+						<pre class="bash">
+# Check RELRO status
+readelf -l /bin/ls | grep GNU_RELRO
+# GNU_RELRO  0x... 0x... 0x... 0x... 0x... R   0x10
+#                                          ^
+#                                          R  = present
+
+# Full vs partial RELRO
+readelf -d /bin/ls | grep -E &#39;BIND_NOW|FLAGS_1&#39;
+# 0x0000000000000006 (BIND_NOW)          # Present = full RELRO
+# 0x000000006ffffffb (FLAGS_1)  Flags_1: NOW
+# If BIND_NOW is absent: partial RELRO (lazy binding enabled)
+
+# scanelf summarizes both stack and RELRO
+scanelf -e /bin/ls
+# TYPE   STACK/RELRO  FILE
+# ET_DYN RW- R--      /bin/ls
+#            ^^^
+#            RELRO permissions (read-only once relocated)
+						</pre>
+					</section>
+					<section>
+						<h3 id="runtime-verification">Runtime Verification</h3>
+						<p>
+							Each process's
+							<code>/proc/PID/maps</code>
+							file shows all
+							<abbr title="Virtual Machine">VM</abbr>
+							As with their permissions:
+						</p>
+						<pre class="plaintext">
+# cat /proc/self/maps
+5d4b9d600000-5d4b9d601000 r--p 00000000 ...  /bin/cat
+5d4b9d601000-5d4b9d602000 r-xp 00001000 ...  /bin/cat      # text: R+X
+5d4b9d602000-5d4b9d603000 r--p 00002000 ...  /bin/cat      # rodata: R
+5d4b9d603000-5d4b9d604000 r--p 00002000 ...  /bin/cat
+5d4b9d604000-5d4b9d605000 rw-p 00003000 ...  /bin/cat      # data: R+W
+7f8a6c000000-7f8a6c001000 rw-p 00000000 ...                 # heap (anon): RW
+7ffe12340000-7ffe12361000 rw-p 00000000 ...  [stack]        # stack: RW
+7ffe123f2000-7ffe123f6000 r--p 00000000 ...  [vvar]         # vvar: R
+7ffe123f6000-7ffe123f8000 r-xp 00000000 ...  [vdso]         # vdso: R+X
+						</pre>
+						<p>
+							Permission characters:
+							<code>r</code>
+							= read,
+							<code>w</code>
+							= write,
+							<code>x</code>
+							= execute,
+							<code>p</code>
+							= private,
+							<code>s</code>
+							= shared.
+						</p>
+						<p>Key observations:</p>
+						<ul>
+							<li><code>.text</code> segment: <code>r-xp</code> (read + execute, not writable)</li>
+							<li><code>.data</code> segment: <code>rw-p</code> (read + write, not executable)</li>
+							<li><code>[stack]</code> : <code>rw-p</code> (RW, NX stack - <abbr title="Data Execution Prevention">DEP</abbr> active)</li>
+							<li><code>[vdso]</code> : <code>r-xp</code> (kernel-provided code, executable)</li>
+							<li><code>[heap]</code> : <code>rw-p</code> (RW, NX heap - <abbr title="Data Execution Prevention">DEP</abbr> active)</li>
+						</ul>
+						<p>
+							<b>Detecting a missing PT_GNU_STACK:</b>
+							if
+							<code>[stack]</code>
+							shows
+							<code>rwxp</code>
+							, the stack is executable:
+						</p>
+						<pre class="bash">
+# Find processes with executable stacks
+grep &#39;rwx.*\[stack\]&#39; /proc/*/maps 2&gt;/dev/null
+# (should return nothing on a properly configured system)
+						</pre>
+						<p>
+							Use
+							<code>pmap</code>
+							for more readable output:
+						</p>
+						<pre class="bash">
+pmap $$ | tail -20
+# Shows the current shell&#39;s memory map with permissions
+						</pre>
+					</section>
+					<section>
+						<h3 id="nx-stack-example">NX Stack Example</h3>
+						<p>This C program places shellcode on the stack and tries to execute it via a function pointer:</p>
+						<pre class="c">
+// test_nx.c - verify DEP/NX on the stack
+// Compile: gcc -o test_nx_nx test_nx.c -z noexecstack
+// Compile: gcc -o test_nx_exec test_nx.c -z execstack
+// Run: ./test_nx_nx &amp;&amp; ./test_nx_exec
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+#include &lt;sys/mman.h&gt;
+#include &lt;unistd.h&gt;
+
+// exit(0) shellcode - x86-64 Linux
+// mov eax, 60; xor edi, edi; syscall
+unsigned char exit_shellcode[] = {
+    0xb8, 0x3c, 0x00, 0x00, 0x00,   // mov eax, 60
+    0x31, 0xff,                       // xor edi, edi
+    0x0f, 0x05                        // syscall
+};
+
+int main(void) {
+    char buffer[64];
+    void (*func)(void);
+
+    printf(&#34;Stack buffer at  : %p\n&#34;, (void *)buffer);
+    printf(&#34;shellcode size  : %lu bytes\n&#34;, sizeof(exit_shellcode));
+
+    memcpy(buffer, exit_shellcode, sizeof(exit_shellcode));
+    func = (void (*)(void))buffer;
+
+    printf(&#34;Attempting to execute shellcode on stack...\n&#34;);
+    fflush(stdout);
+
+    func();  // SIGSEGV if NX enabled, clean exit(0) if executable stack
+
+    printf(&#34;This line should never be reached.\n&#34;);
+    return 1;
+}
+						</pre>
+						<h4 id="compilation-and-verification">Compilation and verification</h4>
+						<pre class="bash">
+# Compile WITH NX (default, secure)
+gcc -o test_nx_nx test_nx.c -z noexecstack
+readelf -l test_nx_nx | grep GNU_STACK
+# GNU_STACK   0x0000  0x0000  0x0000  0x0000  0x0000  RW  0x10  &lt;- RW, not RWE
+
+# Compile WITHOUT NX stack (legacy, vulnerable)
+gcc -o test_nx_exec test_nx.c -z execstack
+readelf -l test_nx_exec | grep GNU_STACK
+# GNU_STACK   0x0000  0x0000  0x0000  0x0000  0x0000  RWE 0x10  &lt;- RWE, executable
+
+# Run both:
+./test_nx_nx
+# -&gt; Segmentation fault (SIGSEGV) - DEP prevents execution
+
+./test_nx_exec
+# -&gt; Clean exit(0) - shellcode executed from stack successfully
+						</pre>
+						<h4 id="bypassing-nx-with-mprotect">Bypassing NX with mprotect</h4>
+						<pre class="c">
+// mprotect_demo.c - show how JITs make memory executable
+// Compile: gcc -o mprotect_demo mprotect_demo.c
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+#include &lt;sys/mman.h&gt;
+#include &lt;unistd.h&gt;
+
+unsigned char shellcode[] = {
+    0xb8, 0x3c, 0x00, 0x00, 0x00,   // mov eax, 60
+    0x31, 0xff,                       // xor edi, edi
+    0x0f, 0x05                        // syscall
+};
+
+int main(void) {
+    // Allocate one page of RW memory (not executable)
+    void *page = mmap(NULL, 4096,
+                      PROT_READ | PROT_WRITE,
+                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+
+    printf(&#34;Allocated RW page at: %p\n&#34;, page);
+
+    // Copy shellcode to the page
+    memcpy(page, shellcode, sizeof(shellcode));
+
+    // At this point, page is RW. Executing would SIGSEGV.
+    // JITs flip page to RX before executing:
+    mprotect(page, 4096, PROT_READ | PROT_EXEC);
+
+    printf(&#34;Page flipped to RX. Executing shellcode...\n&#34;);
+
+    void (*code)(void) = page;
+    code();  // works: page is now RX (R+X, not W+X)
+
+    munmap(page, 4096);
+    printf(&#34;This line is not reached (clean exit via syscall).\n&#34;);
+    return 0;
+}
+						</pre>
+						<p>
+							The critical detail: the page was
+							<b>never simultaneously writable and executable</b>
+							. The JIT
+							wrote code while it was RW, then flipped to RX. This is the dual-mapping technique - W^X is
+							respected because at no point is a single page both W and X.
+						</p>
+					</section>
+					<section>
+						<h3 id="jit-compilation-under-wx">JIT Compilation Under W^X</h3>
+						<p>
+							JIT compilers (JavaScript engines, .NET, Java HotSpot) must generate and execute native code
+							at runtime. Since a single page should not be both writable and executable, JITs use one of
+							these strategies:
+						</p>
+						<h4 id="strategy-1-flip-mprotect">Strategy 1: Flip (mprotect)</h4>
+						<pre class="plaintext">
+1. mmap(PROT_READ | PROT_WRITE)
+2. Generate native code -&gt; write to buffer
+3. mprotect(buffer, len, PROT_READ | PROT_EXEC)
+4. Execute
+5. If recompilation needed: mprotect back to RW, modify, flip back to RX
+						</pre>
+						<p>
+							Used by: simpler JITs, older V8 (now uses strategy 2). Drawback:
+							<code>mprotect</code>
+							flushes TLBs for
+							the affected pages, and making syscalls per compilation unit is expensive.
+						</p>
+						<h4 id="strategy-2-dual-mapping">Strategy 2: Dual Mapping</h4>
+						<pre class="plaintext">
+1. Allocate RESERVED region at fixed address with memfd_create or shm_open
+2. mmap the same physical pages TWICE at different virtual addresses:
+   - mapping A: PROT_READ | PROT_WRITE  (writable view)
+   - mapping B: PROT_READ | PROT_EXEC   (executable view)
+3. Write code through mapping A
+4. Execute code from mapping B
+						</pre>
+						<p>
+							The physical page is accessible via two virtual aliases with different permissions. The
+							<abbr title="Central Processing Unit">CPU</abbr>
+							's page table has two entries pointing to the same physical frame - one with NX=1 (RW alias),
+							one with NX=0 (RX alias). The writable alias cannot be executed; the executable alias cannot
+							be written. W^X is satisfied.
+						</p>
+						<p>Used by: V8 (modern), JavaScriptCore (WebKit), SpiderMonkey.</p>
+						<h4 id="strategy-3-out-of-process-jit">Strategy 3: Out-of-Process JIT</h4>
+						<pre class="plaintext">
+1. Fork a child process with an RWX mapping (or use a separate JIT process)
+2. Generate native code in the child&#39;s address space
+3. Share the code pages back to the parent via shared memory (with RX permissions)
+						</pre>
+						<p>Used by: some hardened browser configurations, Apple's "bulletproof JIT" on iOS.</p>
+						<h4 id="strategy-4-separate-w-and-x">Strategy 4: Separate W and X</h4>
+						<pre class="plaintext">
+1. Thread A: maps region as RW, writes code
+2. Thread B: maps same region as RX, executes code
+3. Coordination via atomics/futexes
+						</pre>
+						<p>Rare in practice due to complexity; mostly a research concept.</p>
+					</section>
+					<section>
+						<h3 id="verifying-dep-system-wide">Verifying DEP System-Wide</h3>
+						<pre class="bash">
+# 1. Check kernel NX support (should be present on all 64-bit kernels)
+dmesg | grep -i &#34;nx.*protection&#34;
+# Output: NX (Execute Disable) protection: active
+
+# 2. Check /proc/cpuinfo for NX capability (all x86-64 CPUs have it)
+grep -o &#39;nx&#39; /proc/cpuinfo | sort -u
+# Output: nx
+# (if empty, your CPU doesn&#39;t support the NX bit - impossible on x86-64)
+
+# 3. Check CPU flags for &#34;nx&#34; or &#34;xd&#34; (AMD vs Intel naming)
+lscpu | grep -i flags | grep -o &#39;\bnx\b&#39;
+# Output: nx
+
+# 4. Check if the kernel compiled with NX support
+zgrep NX /proc/config.gz 2&gt;/dev/null || grep NX /boot/config-$(uname -r)
+# CONFIG_X86_64=y (implies NX support on 64-bit)
+# CONFIG_DEBUG_WX=y (W^X hardening in kernel)
+
+# 5. Check all running processes for executable stacks
+for pid in $(ls /proc | grep -E &#39;^[0-9]+$&#39;); do
+    if grep -q &#39;rwx.*\[stack\]&#39; /proc/$pid/maps 2&gt;/dev/null; then
+        exe=$(readlink /proc/$pid/exe 2&gt;/dev/null)
+        echo &#34;PID $pid ($exe): executable stack&#34;
+    fi
+done
+
+# 6. Audit installed binaries for executable stacks
+scanelf -e /usr/bin/* 2&gt;/dev/null | grep -v &#39;RW-&#39;
+
+# 7. Check for RWX mappings in any process (should be empty or minimal)
+grep &#39;rwx&#39; /proc/self/maps
+# Should show nothing (or only [vvar] which isn&#39;t really RWX)
+						</pre>
+					</section>
+					<section>
+						<h3 id="dep-bypass-techniques">DEP Bypass Techniques</h3>
+						<p>
+							No mitigation is absolute.
+							<abbr title="Data Execution Prevention">DEP</abbr>
+							eliminates the simplest attack -
+							shellcode execution from writable data regions. Attackers adapted:
+						</p>
+						<p>
+							<b>Return-to-Libc (ret2libc):</b>
+							Instead of executing shellcode, redirect execution to existing
+							libc functions like
+							<code>system()</code>
+							,
+							<code>execve()</code>
+							, or
+							<code>mprotect()</code>
+							. These functions are already
+							in executable memory (.text segment). Set up function arguments on the stack (or via
+							<abbr title="Return-Oriented Programming">ROP</abbr>
+							gadgets), then return to
+							<code>system(&#34;/bin/sh&#34;)</code>
+							.
+						</p>
+						<p>
+							<b>Return-Oriented Programming (ROP):</b>
+							An extension of ret2libc that chains together short code
+							snippets (gadgets) ending in
+							<code>ret</code>
+							. Each gadget is 2-5 instructions from existing executable
+							code.
+							<abbr title="Return-Oriented Programming">ROP</abbr>
+							can express arbitrary computation without writing a
+							single instruction - see
+							<a href="/wiki/articles/fundamentals/rop.html">ROP</a>
+							.
+						</p>
+						<p>
+							<b>JIT Spraying:</b>
+							Exploit a JIT compiler to generate native code that, when interpreted at different
+							byte alignments, produces attacker-controlled instructions. The JIT writes "benign" code but
+							the attacker jumps into the middle of an instruction stream where the bytes form a different,
+							malicious instruction sequence. Mitigated by constant blinding and instruction alignment randomization
+							in modern JITs.
+						</p>
+						<p>
+							<b>mprotect/stack-protector disabling:</b>
+							Chain a call to
+							<code>mprotect(stack_base, size, PROT_READ|PROT_WRITE|PROT_EXEC)</code>
+							to make the stack executable, then jump to shellcode. Blocked by seccomp filters that prevent
+							<code>mprotect</code>
+							from setting
+							<code>PROT_EXEC</code>
+							on writable pages.
+						</p>
+					</section>
+					<section>
+						<h3 id="compiler-and-linker-flags">Compiler and Linker Flags</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Flag</th>
+									<th align="center">Effect</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>-z noexecstack</code></td>
+									<td align="center">Mark<code>PT_GNU_STACK</code>as<code>PF_R \| PF_W</code>(NX stack) -<b>default since GCC 4.x</b></td>
+								</tr>
+								<tr>
+									<td align="center"><code>-z execstack</code></td>
+									<td align="center">Mark<code>PT_GNU_STACK</code>as<code>PF_R \| PF_W \| PF_X</code>(executable stack) -<b>insecure</b></td>
+								</tr>
+								<tr>
+									<td align="center"><code>-z relro</code></td>
+									<td align="center">Enable partial RELRO - GOT read-only after startup except<code>.got.plt</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>-z norelro</code></td>
+									<td align="center">Disable RELRO - GOT remains writable</td>
+								</tr>
+								<tr>
+									<td align="center"><code>-z now</code></td>
+									<td align="center">Resolve all symbols at load time (bind now) - required for full RELRO</td>
+								</tr>
+								<tr>
+									<td align="center"><code>-z lazy</code></td>
+									<td align="center">Lazy binding - PLT stubs resolved on first call (default, incompatible with full RELRO)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>-z separate-code</code></td>
+									<td align="center">Map ELF segments with separate PROT for code vs data (enables W^X at .text boundary)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>-z noseparate-code</code></td>
+									<td align="center">Map code+data as one big read-execute segment (legacy)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>-Wl,-z,noexecstack</code></td>
+									<td align="center">Pass -z noexecstack through gcc to linker</td>
+								</tr>
+								<tr>
+									<td align="center"><code>-Wl,-z,relro,-z,now</code></td>
+									<td align="center">Full RELRO + bind now</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="archlinux-default-flags">ArchLinux default flags</h4>
+						<pre class="bash">
+# Check what flags your system gcc uses by default
+gcc -dumpspecs | grep -A5 &#39;link:&#39;
+# On Arch: %{!r:--build-id} --no-add-needed --eh-frame-hdr --hash-style=gnu
+#          -m elf_x86_64 %{!shared:%{!static:%{static-pie:} ...
+
+# Verify with a test compile
+echo &#39;int main(){return 0;}&#39; | gcc -xc -o /tmp/test_elf - &amp;&amp; readelf -l /tmp/test_elf | grep -E &#39;GNU_STACK|GNU_RELRO&#39;
+rm /tmp/test_elf
+						</pre>
+					</section>
+					<section>
+						<h3 id="kernel-hardening-smep-and-smap">Kernel Hardening SMEP and SMAP</h3>
+						<p>
+							Beyond userspace, the
+							<abbr title="Central Processing Unit">CPU</abbr>
+							provides supervisor-mode execution prevention:
+						</p>
+						<p>
+							<b>SMEP</b>
+							(Supervisor Mode Execution Prevention) - bit 20 of CR4:
+						</p>
+						<ul>
+							<li>Prevents the kernel from executing code at userspace addresses.</li>
+							<li>Blocks attacks where the kernel's instruction pointer is redirected to a userspace buffer.</li>
+							<li>Enabled by default on Linux since kernel 3.0.</li>
+							<li>Check: <code>grep smep /proc/cpuinfo</code> or <code>dmesg | grep SMEP</code></li>
+						</ul>
+						<p>
+							<b>SMAP</b>
+							(Supervisor Mode Access Prevention) - bit 21 of CR4:
+						</p>
+						<ul>
+							<li>Prevents the kernel from <em>reading or writing</em> userspace memory directly.</li>
+							<li>Must use <code>copy_from_user</code> / <code>copy_to_user</code> which temporarily disable <code>SMAP</code> via <code>STAC</code> / <code>CLAC</code> instructions.</li>
+							<li>Check: <code>grep smap /proc/cpuinfo</code></li>
+						</ul>
+						<p>
+							<b>PXN</b>
+							(Privileged eXecute Never) - ARM64 equivalent of SMEP:
+						</p>
+						<ul>
+							<li>Prevents the kernel from executing userspace code.</li>
+							<li>Part of the ARMv8 architecture.</li>
+						</ul>
+						<pre class="bash">
+# Check all CPU mitigation features on Linux
+cat /sys/devices/system/cpu/vulnerabilities/*
+
+# Check SMEP/SMAP
+journalctl -k --grep=&#39;SM[EAP][P ]&#39;
+# or
+dmesg | grep -i &#39;sm[ea][mp]&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="summary">Summary</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Attack type</th>
+									<th align="center">Stopped by DEP?</th>
+									<th align="center">Why</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Shellcode on stack</td>
+									<td align="center">Yes</td>
+									<td align="center">Stack marked NX via PT_GNU_STACK</td>
+								</tr>
+								<tr>
+									<td align="center">Shellcode on heap</td>
+									<td align="center">Yes</td>
+									<td align="center">Heap allocations NX by default</td>
+								</tr>
+								<tr>
+									<td align="center">Shellcode in BSS/data</td>
+									<td align="center">Yes</td>
+									<td align="center">Data segments NX by default</td>
+								</tr>
+								<tr>
+									<td align="center">ret2libc</td>
+									<td align="center">No</td>
+									<td align="center">libc .text is legitimately executable</td>
+								</tr>
+								<tr>
+									<td align="center">ROP</td>
+									<td align="center">No</td>
+									<td align="center">Gadgets come from executable code</td>
+								</tr>
+								<tr>
+									<td align="center">JIT spraying</td>
+									<td align="center">Partial</td>
+									<td align="center">Can bypass if JIT doesn't use constant blinding</td>
+								</tr>
+								<tr>
+									<td align="center">GOT overwrite -> code redirect</td>
+									<td align="center">No</td>
+									<td align="center">Redirects to existing executable code</td>
+								</tr>
+								<tr>
+									<td align="center">vtable overwrite</td>
+									<td align="center">No</td>
+									<td align="center">Indirect control flow, not code injection</td>
+								</tr>
+								<tr>
+									<td align="center">Sigreturn-oriented programming (SROP)</td>
+									<td align="center">No</td>
+									<td align="center">Uses sigreturn syscall, no injected code</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							<abbr title="Data Execution Prevention">DEP</abbr>
+							is the first line of defense but not the last. It transforms
+							the attacker's problem from "write code, jump to it" to "reuse existing code, redirect control
+							flow." The mitigations in the next articles - ASLR, PIE, stack canaries, CFI, shadow stacks
+							<ul>
+								<li>add layers on top of this foundation.</li>
+							</ul>
+						</p>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that reads an ELF binary and reports whether its stack is executable and whether
+							RELRO is present. This reproduces the
+							<code>checksec</code>
+							checks using only the standard library:
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;debug/elf&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+)
+
+func main() {
+	if len(os.Args) != 2 {
+		fmt.Fprintln(os.Stderr, &#34;usage: check-nx binary&#34;)
+		os.Exit(2)
+	}
+
+	f, err := elf.Open(os.Args[1])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer f.Close()
+
+	for _, prog := range f.Progs {
+		switch prog.Type {
+		case elf.PT_GNU_STACK:
+			exec := prog.Flags&amp;elf.PF_X != 0
+			fmt.Printf(&#34;PT_GNU_STACK: R=%v W=%v X=%v\n&#34;,
+				prog.Flags&amp;elf.PF_R != 0,
+				prog.Flags&amp;elf.PF_W != 0,
+				exec)
+			fmt.Printf(&#34;NX stack:     %v\n&#34;, !exec)
+		case elf.PT_GNU_RELRO:
+			fmt.Println(&#34;PT_GNU_RELRO: present&#34;)
+		}
+	}
+}
+						</pre>
+						<p>
+							Build a test binary with
+							<code>gcc -z execstack -o exec.bin test_nx.c</code>
+							and one with plain
+							<code>gcc -o nx.bin test_nx.c</code>
+							, then run the tool against both. The first should report
+							<code>X=true</code>
+							and
+							<code>NX stack: false</code>
+							; the
+							second
+							<code>X=false</code>
+							and
+							<code>NX stack: true</code>
+							. Extend the tool to walk a directory tree and flag every
+							binary with an executable stack.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/virtual-memory.html">Virtual Memory</a> - page tables, MMU, TLB</li>
+							<li><a href="/wiki/articles/fundamentals/elf.html">ELF</a> - ELF segments and program headers</li>
+							<li><a href="/wiki/articles/fundamentals/rop.html">ROP</a> - Return-Oriented Programming</li>
+							<li><a href="/wiki/articles/fundamentals/buffer-overflows.html">Buffer Overflows</a> - the vulnerability <abbr title="Data Execution Prevention">DEP</abbr> was built to stop</li>
+							<li><a class="icon-website" href="https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html" target="_blank">Intel 64 and IA-32 Architectures Software Developer's Manual</a></li>
+							<li><a class="icon-website" href="https://www.amd.com/en/support/tech-docs/amd64-architecture-programmer-s-manual-volume-2-system-programming" target="_blank">AMD64 Architecture Programmer's Manual Volume 2: System Programming</a></li>
+							<li><a class="icon-download" href="https://refspecs.linuxfoundation.org/elf/elf.pdf" target="_blank">ELF - Tool Interface Standard</a></li>
+							<li><a class="icon-website" href="https://pkg.go.dev/debug/elf" target="_blank">Go debug/elf package</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

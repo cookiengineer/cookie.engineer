@@ -1,0 +1,1139 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Persistence Analysis | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Persistence Analysis">
+		<meta name="keywords" content="forensics, linux, malware-analysis, reverse-engineering">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Persistence Analysis">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Identifying and analyzing persistence mechanisms in Linux malware: crontab, systemd, shell profiles, SSH keys, and LD_PRELOAD.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/reverse-engineering/persistence-analysis.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Persistence Analysis">
+		<meta name="twitter:description" itemprop="description" content="Identifying and analyzing persistence mechanisms in Linux malware: crontab, systemd, shell profiles, SSH keys, and LD_PRELOAD.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-persistence-problem">The Persistence Problem</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#persistence-vectors-reference">Persistence Vectors Reference</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tracing-persistence-setup-with-strace">Tracing Persistence Setup with strace</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#persistence-detection-with-ld-preload">Persistence Detection with LD_PRELOAD</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#persistence-mechanism-analysis">Persistence Mechanism Analysis</a></b>
+					<ul>
+						<li><a href="#shell-configuration-injection">1. Shell Configuration Injection</a></li>
+						<li><a href="#detection-in-disassembly">Detection in disassembly</a></li>
+						<li><a href="#what-strace-reveals">What strace reveals</a></li>
+						<li><a href="#manual-inspection">Manual inspection</a></li>
+						<li><a href="#cron-based-persistence">2. Cron-Based Persistence</a></li>
+						<li><a href="#user-crontab">User crontab</a></li>
+						<li><a href="#system-crontab-root-only">System crontab (root only)</a></li>
+						<li><a href="#crond-drop-in-root-only">cron.d drop-in (root only)</a></li>
+						<li><a href="#how-cron-files-are-structured">How cron files are structured</a></li>
+						<li><a href="#analyzing-suspicious-crontabs">Analyzing suspicious crontabs</a></li>
+						<li><a href="#systemd-service-persistence">3. Systemd Service Persistence</a></li>
+						<li><a href="#minimal-malicious-service-file">Minimal malicious service file</a></li>
+						<li><a href="#malwares-installation-sequence">Malware's installation sequence</a></li>
+						<li><a href="#strace-reveals-the-whole-chain">strace reveals the whole chain</a></li>
+						<li><a href="#analyzing-suspicious-systemd-services">Analyzing suspicious systemd services</a></li>
+						<li><a href="#user-level-systemd-units">User-Level systemd Units</a></li>
+						<li><a href="#ssh-authorized-keys">4. SSH Authorized Keys</a></li>
+						<li><a href="#analysis">Analysis</a></li>
+						<li><a href="#ld-preload-persistence-system-wide">5. LD_PRELOAD Persistence (System-Wide)</a></li>
+						<li><a href="#malware-implementation">Malware implementation</a></li>
+						<li><a href="#effect">Effect</a></li>
+						<li><a href="#pam-module-persistence">6. PAM Module Persistence</a></li>
+						<li><a href="#desktop-autostart">7. Desktop Autostart</a></li>
+						<li><a href="#kernel-module-autoload">8. Kernel Module Autoload</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#persistence-detection-script">Persistence Detection Script</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#dropper-analysis-pattern">Dropper Analysis Pattern</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#persistence-across-container-escapes">Persistence Across Container Escapes</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#post-infection-cleanup">Post-Infection Cleanup</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#summary">Summary</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/reverse-engineering/index.html">Reverse Engineering</a></li>
+						<li aria-current="page"><a href="/wiki/articles/reverse-engineering/persistence-analysis.html">Persistence Analysis</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="persistence-analysis">Persistence Analysis</h2>
+					<p>
+						Identifying and analyzing persistence mechanisms in Linux malware: crontab, systemd, shell profiles,
+						<abbr title="Secure Shell">SSH</abbr>
+						keys, and LD_PRELOAD.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Persistence is how malware survives reboots, user logouts, and process kills. A dropper that
+							infects a machine, runs once, and disappears after reboot is a failed infection, so malware
+							invests code in creating a trigger the OS honors automatically. This article maps the persistence
+							vectors on Linux, shows how
+							<code>strace</code>
+							and an LD_PRELOAD spy library expose them, walks through
+							crontab, systemd,
+							<abbr title="Secure Shell">SSH</abbr>
+							key,
+							<abbr title="Pluggable Authentication Modules">PAM</abbr>
+							, and kernel
+							module mechanisms, and ends with a Go tool that audits a system for the file writes these mechanisms
+							leave behind.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/reverse-engineering/tracing.html">Tracing</a> - tracing binary execution with strace, ltrace, ftrace</li>
+							<li><a href="/wiki/articles/reverse-engineering/ld-preload.html">LD_PRELOAD</a> - intercepting function calls with LD_PRELOAD</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-persistence-problem">The Persistence Problem</h3>
+						<p>
+							A Linux process dies when the user logs out (SIGHUP to the session), when the system reboots,
+							when an admin runs
+							<code>kill</code>
+							, or when a competing infection kills it. To survive, the malware
+							must create a trigger that the OS itself honors: something that runs automatically on boot,
+							login, or on a schedule.
+						</p>
+						<p>
+							Every persistence mechanism reduces to writing a file to a well-known location that the OS reads
+							at startup, then waiting for the OS to execute its contents.
+						</p>
+					</section>
+					<section>
+						<h3 id="persistence-vectors-reference">Persistence Vectors Reference</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Vector</th>
+									<th align="center">Path / Command</th>
+									<th align="center">Trigger</th>
+									<th align="center">Privilege Required</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Shell profiles</td>
+									<td align="center"><code>~/.bashrc</code>,<code>~/.profile</code>,<code>~/.zshrc</code></td>
+									<td align="center">User shell login</td>
+									<td align="center">User</td>
+								</tr>
+								<tr>
+									<td align="center">Global shell profiles</td>
+									<td align="center"><code>/etc/profile</code>,<code>/etc/bash.bashrc</code></td>
+									<td align="center">Any user shell login</td>
+									<td align="center">Root</td>
+								</tr>
+								<tr>
+									<td align="center">User crontab</td>
+									<td align="center"><code>crontab -e</code>-><code>/var/spool/cron/crontabs/$USER</code></td>
+									<td align="center">Scheduled time</td>
+									<td align="center">User</td>
+								</tr>
+								<tr>
+									<td align="center">System crontab</td>
+									<td align="center"><code>/etc/crontab</code></td>
+									<td align="center">Scheduled time</td>
+									<td align="center">Root</td>
+								</tr>
+								<tr>
+									<td align="center">cron.d directory</td>
+									<td align="center"><code>/etc/cron.d/*</code></td>
+									<td align="center">Scheduled time</td>
+									<td align="center">Root</td>
+								</tr>
+								<tr>
+									<td align="center">cron.{hourly,daily,weekly}</td>
+									<td align="center"><code>/etc/cron.hourly/*</code></td>
+									<td align="center">Fixed intervals</td>
+									<td align="center">Root</td>
+								</tr>
+								<tr>
+									<td align="center">systemd user services</td>
+									<td align="center"><code>~/.config/systemd/user/*.service</code></td>
+									<td align="center">User login / timer</td>
+									<td align="center">User</td>
+								</tr>
+								<tr>
+									<td align="center">systemd system services</td>
+									<td align="center"><code>/etc/systemd/system/*.service</code></td>
+									<td align="center">Boot</td>
+									<td align="center">Root</td>
+								</tr>
+								<tr>
+									<td align="center">systemd system timers</td>
+									<td align="center"><code>/etc/systemd/system/*.timer</code></td>
+									<td align="center">Scheduled (like cron)</td>
+									<td align="center">Root</td>
+								</tr>
+								<tr>
+									<td align="center">SSH authorized_keys</td>
+									<td align="center"><code>~/.ssh/authorized_keys</code></td>
+									<td align="center">Incoming SSH connection</td>
+									<td align="center">User</td>
+								</tr>
+								<tr>
+									<td align="center">LD_PRELOAD (per-process)</td>
+									<td align="center"><code>LD_PRELOAD=./lib.so ./binary</code></td>
+									<td align="center">Binary execution</td>
+									<td align="center">User</td>
+								</tr>
+								<tr>
+									<td align="center">LD_PRELOAD (system-wide)</td>
+									<td align="center"><code>/etc/ld.so.preload</code></td>
+									<td align="center">Every process start</td>
+									<td align="center">Root</td>
+								</tr>
+								<tr>
+									<td align="center">PAM modules</td>
+									<td align="center"><code>/etc/pam.d/*</code>files</td>
+									<td align="center">Authentication events</td>
+									<td align="center">Root</td>
+								</tr>
+								<tr>
+									<td align="center">Desktop autostart</td>
+									<td align="center"><code>~/.config/autostart/*.desktop</code></td>
+									<td align="center">Desktop session start</td>
+									<td align="center">User</td>
+								</tr>
+								<tr>
+									<td align="center">XDG autostart</td>
+									<td align="center"><code>/etc/xdg/autostart/*.desktop</code></td>
+									<td align="center">Any desktop session</td>
+									<td align="center">Root</td>
+								</tr>
+								<tr>
+									<td align="center">Init scripts (sysvinit)</td>
+									<td align="center"><code>/etc/init.d/*</code>,<code>/etc/rc.local</code></td>
+									<td align="center">Boot (runlevel transitions)</td>
+									<td align="center">Root</td>
+								</tr>
+								<tr>
+									<td align="center">Kernel module autoload</td>
+									<td align="center"><code>/etc/modules-load.d/*.conf</code></td>
+									<td align="center">Boot</td>
+									<td align="center">Root</td>
+								</tr>
+								<tr>
+									<td align="center">MOTD (Message of the Day)</td>
+									<td align="center"><code>/etc/update-motd.d/*</code></td>
+									<td align="center">SSH/login banner display</td>
+									<td align="center">Root</td>
+								</tr>
+								<tr>
+									<td align="center">udev rules</td>
+									<td align="center"><code>/etc/udev/rules.d/*.rules</code></td>
+									<td align="center">Device insertion/removal</td>
+									<td align="center">Root</td>
+								</tr>
+								<tr>
+									<td align="center">at jobs</td>
+									<td align="center"><code>at now + 5 minutes</code>-><code>/var/spool/cron/atjobs/</code></td>
+									<td align="center">One-time scheduled</td>
+									<td align="center">User</td>
+								</tr>
+								<tr>
+									<td align="center">tmux/screen RC</td>
+									<td align="center"><code>~/.tmux.conf</code>,<code>~/.screenrc</code></td>
+									<td align="center">Terminal multiplexer start</td>
+									<td align="center">User</td>
+								</tr>
+								<tr>
+									<td align="center">/etc/rc.local (systemd compat)</td>
+									<td align="center"><code>/etc/rc.local</code>(if systemd-rc-local-generator exists)</td>
+									<td align="center">Boot</td>
+									<td align="center">Root</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="tracing-persistence-setup-with-strace">Tracing Persistence Setup with strace</h3>
+						<p>When analyzing an unknown binary, filter strace for writes to known persistence paths:</p>
+						<pre class="bash">
+# Broad persistence monitor — watch all file writes to suspicious paths
+strace -e trace=open,openat,write,creat,rename,mkdir -f \
+  -o trace.log ./malware_sample
+
+# Post-analysis: filter for persistence-relevant paths
+grep -E &#39;/(etc|home/.*/\.(bashrc|profile|zshrc|ssh|config/autostart|config/systemd))&#39; trace.log
+
+# Specific filter patterns:
+PATHS=(
+  &#39;/etc/crontab&#39;
+  &#39;/etc/cron.d/&#39;
+  &#39;/etc/cron.hourly/&#39;
+  &#39;/etc/cron.daily/&#39;
+  &#39;/etc/cron.weekly/&#39;
+  &#39;/etc/cron.monthly/&#39;
+  &#39;/etc/systemd/system/&#39;
+  &#39;/etc/init.d/&#39;
+  &#39;/etc/rc.local&#39;
+  &#39;/etc/profile&#39;
+  &#39;/etc/bash.bashrc&#39;
+  &#39;/etc/ld.so.preload&#39;
+  &#39;/etc/modules-load.d/&#39;
+  &#39;/etc/pam.d/&#39;
+  &#39;/etc/xdg/autostart/&#39;
+  &#39;/etc/update-motd.d/&#39;
+  &#39;/etc/udev/rules.d/&#39;
+  &#39;bashrc&#39;
+  &#39;.profile&#39;
+  &#39;.zshrc&#39;
+  &#39;.ssh/authorized_keys&#39;
+  &#39;.config/autostart/&#39;
+  &#39;.config/systemd/user/&#39;
+  &#39;/var/spool/cron/crontabs/&#39;
+)
+
+for p in &#34;${PATHS[@]}&#34;; do
+  grep &#34;$p&#34; trace.log &amp;&amp; echo &#34;^^^ FOUND PERSISTENCE: $p&#34;
+done
+						</pre>
+					</section>
+					<section>
+						<h3 id="persistence-detection-with-ld-preload">Persistence Detection with LD_PRELOAD</h3>
+						<p>A persistent spy library that only logs writes to suspicious locations:</p>
+						<pre class="c">
+/*
+ * persist_spy.c — LD_PRELOAD library for persistence detection
+ * Compile: gcc -shared -fPIC -fno-builtin -o persist_spy.so persist_spy.c -ldl
+ * Usage:   LD_PRELOAD=./persist_spy.so ./malware_sample
+ */
+
+#define _GNU_SOURCE
+#include &lt;dlfcn.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;stdarg.h&gt;
+#include &lt;sys/stat.h&gt;
+#include &lt;sys/types.h&gt;
+
+static const char *PERSIST_PATHS[] = {
+    &#34;/etc/crontab&#34;,
+    &#34;/etc/cron.d/&#34;,
+    &#34;/etc/cron.hourly/&#34;,
+    &#34;/etc/cron.daily/&#34;,
+    &#34;/etc/cron.weekly/&#34;,
+    &#34;/etc/cron.monthly/&#34;,
+    &#34;/etc/systemd/system/&#34;,
+    &#34;/etc/init.d/&#34;,
+    &#34;/etc/rc.local&#34;,
+    &#34;/etc/rc.d/&#34;,
+    &#34;/etc/profile&#34;,
+    &#34;/etc/bash.bashrc&#34;,
+    &#34;/etc/ld.so.preload&#34;,
+    &#34;/etc/modules-load.d/&#34;,
+    &#34;/etc/pam.d/&#34;,
+    &#34;/etc/xdg/autostart/&#34;,
+    &#34;/etc/update-motd.d/&#34;,
+    &#34;/etc/udev/rules.d/&#34;,
+    &#34;.bashrc&#34;,
+    &#34;.profile&#34;,
+    &#34;.zshrc&#34;,
+    &#34;.ssh/authorized_keys&#34;,
+    &#34;.config/autostart/&#34;,
+    &#34;.config/systemd/user/&#34;,
+    &#34;/var/spool/cron/crontabs/&#34;,
+    NULL
+};
+
+static int is_persist_path(const char *path)
+{
+    if (!path) return 0;
+    for (int i = 0; PERSIST_PATHS[i]; i++) {
+        if (strstr(path, PERSIST_PATHS[i]))
+            return 1;
+    }
+    return 0;
+}
+
+/* Hook: open / open64 */
+typedef int (*orig_open_t)(const char *, int, ...);
+
+int open(const char *pathname, int flags, ...)
+{
+    orig_open_t f = (orig_open_t)dlsym(RTLD_NEXT, &#34;open&#34;);
+    mode_t mode = 0;
+    if (flags &amp; O_CREAT) {
+        va_list ap;
+        va_start(ap, flags);
+        mode = va_arg(ap, mode_t);
+        va_end(ap);
+    }
+
+    if (is_persist_path(pathname)) {
+        const char *op = (flags &amp; O_WRONLY || flags &amp; O_RDWR) ? &#34;WRITE&#34; : &#34;READ&#34;;
+        fprintf(stderr, &#34;[!] PERSISTENCE DETECTED: open(%s %s)\n&#34;, op, pathname);
+
+        /* Print backtrace — who opened this file? */
+        void *bt[32];
+        int n = backtrace(bt, 32);
+        char **syms = backtrace_symbols(bt, n);
+        fprintf(stderr, &#34;[!] Backtrace:\n&#34;);
+        for (int i = 1; i &lt; n &amp;&amp; i &lt; 8; i++)  /* skip first frame (self) */
+            fprintf(stderr, &#34;    #%d  %s\n&#34;, i, syms[i]);
+        free(syms);
+    }
+
+    return f ? f(pathname, flags, mode) : -1;
+}
+
+/* Hook: write — detect writes to already-open persistence FDs */
+typedef ssize_t (*orig_write_t)(int, const void *, size_t);
+
+ssize_t write(int fd, const void *buf, size_t count)
+{
+    orig_write_t f = (orig_write_t)dlsym(RTLD_NEXT, &#34;write&#34;);
+
+    /* Check if this FD points to a persistence path */
+    char fdpath[256];
+    snprintf(fdpath, sizeof(fdpath), &#34;/proc/self/fd/%d&#34;, fd);
+    char link[1024];
+    ssize_t n = readlink(fdpath, link, sizeof(link) - 1);
+    if (n &gt; 0) {
+        link[n] = &#39;\0&#39;;
+        if (is_persist_path(link)) {
+            fprintf(stderr, &#34;[!] PERSISTENCE WRITE: fd=%d → %s (%zu bytes)\n&#34;,
+                    fd, link, count);
+            /* Print first 128 bytes of what was written */
+            if (count &gt; 0) {
+                fprintf(stderr, &#34;[!] Data: &#34;);
+                for (size_t i = 0; i &lt; count &amp;&amp; i &lt; 128; i++)
+                    fprintf(stderr, &#34;%c&#34;, ((char *)buf)[i] &gt;= 0x20 &amp;&amp;
+                            ((char *)buf)[i] &lt; 0x7f ? ((char *)buf)[i] : &#39;.&#39;);
+                fprintf(stderr, &#34;\n&#34;);
+            }
+        }
+    }
+
+    return f ? f(fd, buf, count) : -1;
+}
+
+/* Hook: execve — detect installation commands */
+typedef int (*orig_execve_t)(const char *, char *const[], char *const[]);
+
+int execve(const char *pathname, char *const argv[], char *const envp[])
+{
+    orig_execve_t f = (orig_execve_t)dlsym(RTLD_NEXT, &#34;execve&#34;);
+
+    /* Detect persistence-related command execution */
+    const char *persist_cmds[] = {
+        &#34;crontab&#34;, &#34;systemctl&#34;, &#34;useradd&#34;, &#34;usermod&#34;, &#34;passwd&#34;,
+        &#34;chkconfig&#34;, &#34;update-rc.d&#34;, &#34;rc-update&#34;, &#34;apt&#34;, &#34;pacman&#34;,
+        &#34;yum&#34;, &#34;dnf&#34;, &#34;ssh-keygen&#34;, &#34;ssh&#34;, &#34;scp&#34;, &#34;mkdir&#34;,
+        &#34;chmod&#34;, &#34;chown&#34;, NULL
+    };
+
+    /* Extract just the command name from pathname */
+    const char *basename_cmd = strrchr(pathname, &#39;/&#39;);
+    basename_cmd = basename_cmd ? basename_cmd + 1 : pathname;
+
+    for (int i = 0; persist_cmds[i]; i++) {
+        if (strcmp(basename_cmd, persist_cmds[i]) == 0) {
+            fprintf(stderr, &#34;[!] PERSISTENCE CMD: %s&#34;, pathname);
+            if (argv) {
+                for (int j = 0; argv[j]; j++)
+                    fprintf(stderr, &#34; \&#34;%s\&#34;&#34;, argv[j]);
+            }
+            fprintf(stderr, &#34;\n&#34;);
+            break;
+        }
+    }
+
+    return f ? f(pathname, argv, envp) : -1;
+}
+						</pre>
+						<p>Compile and link with backtrace support:</p>
+						<pre class="bash">
+gcc -shared -fPIC -fno-builtin -o persist_spy.so persist_spy.c -ldl -rdynamic
+						</pre>
+					</section>
+					<section>
+						<h3 id="persistence-mechanism-analysis">Persistence Mechanism Analysis</h3>
+						<h4 id="shell-configuration-injection">1. Shell Configuration Injection</h4>
+						<p>
+							Most common in user-level malware: append a command to
+							<code>~/.bashrc</code>
+							or
+							<code>~/.profile</code>
+							so it executes
+							on every shell login.
+						</p>
+						<h4 id="detection-in-disassembly">Detection in disassembly</h4>
+						<pre class="c">
+// Ghidra decompilation of a shell-config injection routine:
+void install_persistence(void) {
+    char *home = getenv(&#34;HOME&#34;);
+    char bashrc[256];
+    snprintf(bashrc, sizeof(bashrc), &#34;%s/.bashrc&#34;, home);
+    int fd = open(bashrc, O_WRONLY | O_APPEND);
+    if (fd &gt; 0) {
+        write(fd, &#34;\n# system update check\n/path/to/malware &amp;\n&#34;, 43);
+        close(fd);
+    }
+}
+						</pre>
+						<h4 id="what-strace-reveals">What strace reveals</h4>
+						<pre class="plaintext">
+openat(AT_FDCWD, &#34;/root/.bashrc&#34;, O_WRONLY|O_APPEND) = 3
+write(3, &#34;\n# system update check\n/path/to/malware &amp;\n&#34;, 43) = 43
+close(3)
+						</pre>
+						<h4 id="manual-inspection">Manual inspection</h4>
+						<pre class="bash">
+# Check all user profiles:
+grep -rln &#39;malware_multiple_backtick\|# system\|# update&#39; /home/*/.bashrc /home/*/.profile /home/*/.zshrc 2&gt;/dev/null
+grep -rln &#39;malware_multiple_backtick\|# system\|# update&#39; /root/.bashrc /root/.profile 2&gt;/dev/null
+
+# The malware often disguises itself with benign-sounding comments:
+# &#34;# system service check&#34;
+# &#34;# kernel module loader&#34;
+# &#34;# license manager daemon&#34;
+						</pre>
+						<h4 id="cron-based-persistence">2. Cron-Based Persistence</h4>
+						<h4 id="user-crontab">User crontab</h4>
+						<pre class="bash">
+# Malware executes: crontab -l | { cat; echo &#34;*/5 * * * * /tmp/.hidden/malware&#34;; } | crontab -
+# Appends a cron job that runs every 5 minutes
+
+# strace shows:
+execve(&#34;/usr/bin/crontab&#34;, [&#34;crontab&#34;, &#34;-&#34;], [...])  # reading/installing crontab
+write(1, &#34;*/5 * * * * /tmp/.hidden/malware\n&#34;, 33)
+						</pre>
+						<h4 id="system-crontab-root-only">System crontab (root only)</h4>
+						<pre class="bash">
+# Malware (as root) writes directly to /etc/crontab:
+echo &#34;*/10 * * * * root /usr/lib/.hidden/update-daemon&#34; &gt;&gt; /etc/crontab
+
+# strace shows:
+openat(AT_FDCWD, &#34;/etc/crontab&#34;, O_WRONLY|O_APPEND) = 4
+write(4, &#34;*/10 * * * * root /usr/lib/.hidden/update-daemon\n&#34;, 50) = 50
+						</pre>
+						<h4 id="crond-drop-in-root-only">cron.d drop-in (root only)</h4>
+						<pre class="bash">
+# More sophisticated malware creates a dedicated cron.d file:
+echo &#39;*/5 * * * * root /lib/.sys/daemon &gt;/dev/null 2&gt;&amp;1&#39; &gt; /etc/cron.d/system-update
+
+# strace shows:
+openat(AT_FDCWD, &#34;/etc/cron.d/system-update&#34;, O_WRONLY|O_CREAT|O_TRUNC, 0644) = 4
+write(4, &#34;*/5 * * * * root /lib/.sys/daemon &gt;/dev/null 2&gt;&amp;1\n&#34;, 51) = 51
+						</pre>
+						<h4 id="how-cron-files-are-structured">How cron files are structured</h4>
+						<pre class="plaintext">
+# /etc/crontab format:
+# m h dom mon dow user command
+*/15 * *   *   *   root /usr/lib/system-update &gt;/dev/null 2&gt;&amp;1
+
+# /etc/cron.d/* format (same, but filename is arbitrary):
+# m h dom mon dow user command
+0   3 *   *   *   root /usr/lib/cleanup.sh
+						</pre>
+						<h4 id="analyzing-suspicious-crontabs">Analyzing suspicious crontabs</h4>
+						<pre class="bash">
+# Dump all cron entries system-wide:
+for u in $(cut -d: -f1 /etc/passwd); do echo &#34;=== $u ===&#34;; crontab -u &#34;$u&#34; -l 2&gt;/dev/null; done
+
+# Check all cron-spooled files:
+for f in /var/spool/cron/crontabs/*; do echo &#34;=== $f ===&#34;; cat &#34;$f&#34;; done
+
+# Check /etc/cron.* directories:
+for d in /etc/cron.d /etc/cron.hourly /etc/cron.daily /etc/cron.weekly /etc/cron.monthly; do
+    echo &#34;=== $d ===&#34;
+    ls -la &#34;$d&#34; 2&gt;/dev/null
+done
+
+# Common suspicious entries:
+# - Commands running from /tmp, /dev/shm, /var/tmp
+# - Periods shorter than 1 hour
+# - Files in hidden directories (prefixed with .)
+						</pre>
+						<h4 id="systemd-service-persistence">3. Systemd Service Persistence</h4>
+						<p>
+							Systemd is the default init on ArchLinux and most modern distributions. Malware creates a
+							<code>.service</code>
+							file that systemd starts at boot.
+						</p>
+						<h4 id="minimal-malicious-service-file">Minimal malicious service file</h4>
+						<pre class="ini">
+[Unit]
+Description=System Update Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/.hidden/system-update
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+						</pre>
+						<h4 id="malwares-installation-sequence">Malware's installation sequence</h4>
+						<pre class="bash">
+# 1. Write the service file
+cat &gt; /etc/systemd/system/system-update.service &lt;&lt; &#39;EOF&#39;
+[Unit]
+Description=System Update Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/.hidden/system-update
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 2. Drop the payload binary
+cp /tmp/payload /usr/lib/.hidden/system-update
+chmod +x /usr/lib/.hidden/system-update
+
+# 3. Enable and start
+systemctl daemon-reload
+systemctl enable system-update.service
+systemctl start system-update.service
+						</pre>
+						<h4 id="strace-reveals-the-whole-chain">strace reveals the whole chain</h4>
+						<pre class="plaintext">
+# File creates:
+openat(AT_FDCWD, &#34;/etc/systemd/system/system-update.service&#34;, O_WRONLY|O_CREAT, 0644)
+write(4, &#34;[Unit]\nDescription=System Update Service...&#34;, ...)
+
+openat(AT_FDCWD, &#34;/usr/lib/.hidden/system-update&#34;, O_WRONLY|O_CREAT, 0755)
+write(5, &lt;ELF binary contents&gt;, ...)
+
+# Command execution:
+execve(&#34;/usr/bin/systemctl&#34;, [&#34;systemctl&#34;, &#34;daemon-reload&#34;], [...])
+execve(&#34;/usr/bin/systemctl&#34;, [&#34;systemctl&#34;, &#34;enable&#34;, &#34;system-update.service&#34;], [...])
+execve(&#34;/usr/bin/systemctl&#34;, [&#34;systemctl&#34;, &#34;start&#34;, &#34;system-update.service&#34;], [...])
+						</pre>
+						<h4 id="analyzing-suspicious-systemd-services">Analyzing suspicious systemd services</h4>
+						<pre class="bash">
+# List all enabled services and look for unknown ones:
+systemctl list-unit-files --state=enabled | grep -vE &#39;^(systemd|dbus|NetworkManager|sshd|cron|docker|podman)&#39;
+# Any unknown service is suspect
+
+# Check the ExecStart path:
+systemctl cat suspicious-service.service
+# Read the service file directly:
+cat /etc/systemd/system/suspicious-service.service
+
+# Look for services in user scope (malware running as non-root):
+ls -la ~/.config/systemd/user/
+# User-level systemd services start at user login, not system boot.
+
+# Check for timers (cron-like scheduling):
+systemctl list-timers --all
+# Timers can trigger services periodically — check any unknown timer&#39;s linked service
+systemctl cat suspicious.timer
+						</pre>
+						<h4 id="user-level-systemd-units">User-Level systemd Units</h4>
+						<pre class="bash">
+mkdir -p ~/.config/systemd/user/
+cat &gt; ~/.config/systemd/user/persist-daemon.service &lt;&lt; &#39;EOF&#39;
+[Unit]
+Description=User Daemon
+
+[Service]
+ExecStart=/home/user/.local/bin/malware
+Restart=always
+
+[Install]
+WantedBy=default.target
+EOF
+
+systemctl --user daemon-reload
+systemctl --user enable persist-daemon.service
+systemctl --user start persist-daemon.service
+						</pre>
+						<h4 id="ssh-authorized-keys">4. SSH Authorized Keys</h4>
+						<p>
+							A backdoor that adds the attacker's public key to
+							<code>~/.ssh/authorized_keys</code>
+							:
+						</p>
+						<pre class="bash">
+# Detection in strace:
+openat(AT_FDCWD, &#34;/root/.ssh/authorized_keys&#34;, O_WRONLY|O_CREAT|O_APPEND, 0600)
+write(4, &#34;ssh-rsa AAAA.... attacker@c2-server\n&#34;, ...)
+chmod(&#34;/root/.ssh/authorized_keys&#34;, 0600)
+chmod(&#34;/root/.ssh&#34;, 0700)
+
+# If user has no .ssh directory:
+mkdir(&#34;/root/.ssh&#34;, 0700)
+						</pre>
+						<h4 id="analysis">Analysis</h4>
+						<pre class="bash">
+# Check for unauthorized SSH keys:
+for h in /root /home/*; do
+    keyfile=&#34;$h/.ssh/authorized_keys&#34;
+    if [ -f &#34;$keyfile&#34; ]; then
+        echo &#34;=== $keyfile ===&#34;
+        cat &#34;$keyfile&#34;
+    fi
+done
+
+# Look for comments in keys referencing unknown hosts
+# Also check: the .ssh directory&#39;s creation timestamp
+stat ~/.ssh/authorized_keys  # mtime should match when the key was installed
+						</pre>
+						<h4 id="ld-preload-persistence-system-wide">5. LD_PRELOAD Persistence (System-Wide)</h4>
+						<p>
+							Writing to
+							<code>/etc/ld.so.preload</code>
+							injects the specified library into every subsequently started
+							process. This is a rootkit-level persistence mechanism.
+						</p>
+						<pre class="bash">
+# Detection:
+cat /etc/ld.so.preload
+# /usr/local/lib/libsystem.so   ← SUSPICIOUS: no standard library has this path/name
+
+# Any entry in ld.so.preload that does not come from a known package is malicious:
+pacman -Qo /usr/local/lib/libsystem.so                         # Arch: check ownership
+dpkg -S /usr/local/lib/libsystem.so                            # Debian
+rpm -qf /usr/local/lib/libsystem.so                            # RHEL/Fedora
+						</pre>
+						<h4 id="malware-implementation">Malware implementation</h4>
+						<pre class="c">
+void install_ld_preload_persistence(const char *lib_path) {
+    int fd = open(&#34;/etc/ld.so.preload&#34;, O_WRONLY | O_CREAT | O_APPEND, 0644);
+    if (fd &lt; 0) return;
+    write(fd, lib_path, strlen(lib_path));
+    write(fd, &#34;\n&#34;, 1);
+    close(fd);
+    // Now every process maps this library
+}
+						</pre>
+						<h4 id="effect">Effect</h4>
+						<p>
+							If the library hooks
+							<code>fopen</code>
+							,
+							<code>stat</code>
+							,
+							<code>opendir</code>
+							, etc., it can hide files, processes, and
+							network connections from every tool on the system.
+							<code>ls</code>
+							uses
+							<code>opendir</code>
+							-> hook filters directory
+							entries.
+							<code>ps</code>
+							reads
+							<code>/proc</code>
+							-> hook filters PID entries.
+							<code>ss</code>
+							reads
+							<code>/proc/net/tcp</code>
+							-> hook
+							filters connection lines.
+						</p>
+						<h4 id="pam-module-persistence">6. PAM Module Persistence</h4>
+						<p>
+							<abbr title="Pluggable Authentication Modules">PAM</abbr>
+							persistence replaces or extends authentication logic:
+						</p>
+						<pre class="bash">
+# Malware adds a line to /etc/pam.d/sshd:
+# auth required pam_unix.so
+# auth sufficient pam_malware.so    ← added by malware
+
+# The pam_malware.so module:
+# - Accepts any password that matches a backdoor password
+# - Logs all passwords to a file
+# - Opens a reverse shell on &#34;special&#34; authentication
+
+# Detection:
+find /lib/security /usr/lib/security -name &#39;pam_*.so&#39; -type f | while read f; do
+    pacman -Qo &#34;$f&#34; 2&gt;/dev/null || rpm -qf &#34;$f&#34; 2&gt;/dev/null || echo &#34;ORPHAN: $f&#34;
+done
+						</pre>
+						<h4 id="desktop-autostart">7. Desktop Autostart</h4>
+						<p>
+							<abbr title="Graphical User Interface">GUI</abbr>
+							-targeted malware persists via the freedesktop.org autostart
+							specification:
+						</p>
+						<pre class="ini">
+# ~/.config/autostart/system-helper.desktop
+[Desktop Entry]
+Type=Application
+Name=System Helper
+Exec=/home/user/.local/share/system-helper
+Hidden=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+						</pre>
+						<pre class="bash">
+# Detection:
+ls -la ~/.config/autostart/
+# Look for entries without corresponding packages:
+pacman -Qo ~/.config/autostart/*.desktop
+
+# System-wide autostart:
+ls -la /etc/xdg/autostart/
+						</pre>
+						<h4 id="kernel-module-autoload">8. Kernel Module Autoload</h4>
+						<p>Root-level malware can install a kernel module that loads on every boot:</p>
+						<pre class="bash">
+# Malware writes:
+echo &#34;malicious_module&#34; &gt; /etc/modules-load.d/malware.conf
+
+# And places the .ko file:
+cp malicious_module.ko /lib/modules/$(uname -r)/kernel/drivers/net/malicious.ko
+depmod -a
+
+# Detection:
+cat /etc/modules-load.d/*.conf
+# Any module not from an official package:
+for mod in $(cat /etc/modules-load.d/*.conf 2&gt;/dev/null); do
+    modinfo &#34;$mod&#34; 2&gt;/dev/null | grep -E &#39;filename|author|description&#39;
+done
+						</pre>
+					</section>
+					<section>
+						<h3 id="persistence-detection-script">Persistence Detection Script</h3>
+						<p>A comprehensive system audit script:</p>
+						<pre class="bash">
+#!/bin/bash
+# persist_audit.sh — audit a system for persistence mechanisms
+
+echo &#34;=== Shell Profiles ===&#34;
+for f in /root/.bashrc /root/.profile /home/*/.bashrc /home/*/.profile; do
+    [ -f &#34;$f&#34; ] &amp;&amp; echo &#34;$f: $(wc -l &lt; &#34;$f&#34;) lines&#34;
+done
+
+echo &#34;=== /etc/ld.so.preload ===&#34;
+cat /etc/ld.so.preload 2&gt;/dev/null || echo &#34;(none)&#34;
+
+echo &#34;=== crontabs ===&#34;
+for u in $(cut -d: -f1 /etc/passwd); do
+    crontab -u &#34;$u&#34; -l 2&gt;/dev/null | grep -v &#39;^#&#39; | grep -v &#39;^$&#39; | while read line; do
+        echo &#34;  USER=$u: $line&#34;
+    done
+done
+
+for f in /etc/cron.d/* /etc/cron.hourly/* /etc/cron.daily/* /etc/cron.weekly/* /etc/cron.monthly/*; do
+    [ -f &#34;$f&#34; ] &amp;&amp; echo &#34;  SYSTEM: $f&#34;
+done
+
+echo &#34;=== systemd services ===&#34;
+systemctl list-unit-files --state=enabled 2&gt;/dev/null | grep -vE &#39;^(systemd|dbus|NetworkManager|sshd|cron|getty|polkit|accounts-daemon|udisks2|upower|wpa_supplicant|ModemManager|bluetooth|avahi-daemon|cups|docker|podman)&#39;
+for u in /home/*/.config/systemd/user/*.service; do
+    echo &#34;  USER: $u&#34;
+done
+
+echo &#34;=== SSH keys ===&#34;
+for h in /root /home/*; do
+    [ -f &#34;$h/.ssh/authorized_keys&#34; ] &amp;&amp; echo &#34;  $h/.ssh/authorized_keys: $(head -1 &#34;$h/.ssh/authorized_keys&#34;)&#34;
+done
+
+echo &#34;=== Desktop autostart ===&#34;
+for d in /root/.config/autostart /home/*/.config/autostart /etc/xdg/autostart; do
+    [ -d &#34;$d&#34; ] &amp;&amp; ls -la &#34;$d/&#34;
+done
+
+echo &#34;=== Kernel modules ===&#34;
+cat /etc/modules-load.d/*.conf 2&gt;/dev/null || echo &#34;(none)&#34;
+
+echo &#34;=== MOTD ===&#34;
+ls -la /etc/update-motd.d/ 2&gt;/dev/null
+
+echo &#34;=== PAM oddities ===&#34;
+grep -r &#39;auth.*sufficient&#39; /etc/pam.d/ 2&gt;/dev/null | grep -v &#39;pam_unix\|pam_ldap\|pam_sss\|pam_fprintd&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="dropper-analysis-pattern">Dropper Analysis Pattern</h3>
+						<p>A dropper is malware whose purpose is installing other malware. The pattern in strace is characteristic:</p>
+						<pre class="plaintext">
+1. write(&#34;/tmp/.hidden/payload&#34;, &lt;ELF binary bytes&gt;)    # Drop payload file
+2. chmod(&#34;/tmp/.hidden/payload&#34;, 0755)                    # Make executable
+3. write(&#34;/etc/systemd/system/bad.service&#34;, &lt;service file&gt;) # Set up persistence
+4. execve(&#34;/usr/bin/systemctl&#34;, [&#34;systemctl&#34;, &#34;enable&#34;, &#34;bad.service&#34;])  # Enable
+5. execve(&#34;/usr/bin/systemctl&#34;, [&#34;systemctl&#34;, &#34;start&#34;, &#34;bad.service&#34;])   # Start
+6. unlink(&#34;/tmp/dropper&#34;)                                 # Clean up self
+						</pre>
+						<p>
+							The dropper itself is ephemeral - it runs once, drops the real payload, installs persistence,
+							and deletes itself. The persistence mechanism is what keeps the payload alive after the dropper
+							exits.
+						</p>
+					</section>
+					<section>
+						<h3 id="persistence-across-container-escapes">Persistence Across Container Escapes</h3>
+						<p>Malware targeting containerized environments may attempt host-level persistence:</p>
+						<pre class="bash">
+# Malware in container writes to a mounted host directory:
+echo &#34;0 */6 * * * root /usr/lib/systemd/systemd-update&#34; &gt;&gt; /host/etc/crontab
+
+# Or via container socket:
+podman run --restart=always -d --name system-update malicious-image
+
+# Detection in the container:
+# Look for writes to paths that are likely host mounts:
+strace -e openat,write -f ./container_malware 2&gt;&amp;1 | grep -E &#39;/(host|rootfs|mnt)&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="post-infection-cleanup">Post-Infection Cleanup</h3>
+						<p>When persistence is confirmed, cleanup follows the reverse chain:</p>
+						<pre class="bash">
+# 1. Kill the active process
+kill -9 $(pgrep -f &#39;/usr/lib/.hidden/system-update&#39;)
+
+# 2. Disable and remove the systemd service
+systemctl stop system-update.service
+systemctl disable system-update.service
+rm /etc/systemd/system/system-update.service
+systemctl daemon-reload
+
+# 3. Remove cron entries
+crontab -u root -l | grep -v &#39;/usr/lib/.hidden/system-update&#39; | crontab -u root -
+
+# 4. Clean shell profiles
+sed -i &#39;/system-update/d&#39; /root/.bashrc /etc/profile /etc/bash.bashrc
+
+# 5. Remove the payload
+rm -rf /usr/lib/.hidden/
+
+# 6. Check LD_PRELOAD
+: &gt; /etc/ld.so.preload  # clear if malicious
+
+# 7. Verify cleanup
+bash /path/to/persist_audit.sh
+						</pre>
+					</section>
+					<section>
+						<h3 id="summary">Summary</h3>
+						<p>
+							Persistence is malware's anchor in the system. Every persistence mechanism writes a file to
+							a well-known location that the OS reads at startup. These writes are visible in
+							<code>strace</code>
+							logs,
+							interceptable with
+							<code>LD_PRELOAD</code>
+							hooks, and identifiable in disassembly. Shell profiles, crontabs,
+							systemd services,
+							<abbr title="Secure Shell">SSH</abbr>
+							keys, and LD_PRELOAD preloads form the complete vector
+							surface. When analyzing unknown malware, filter
+							<code>strace</code>
+							output for writes to persistence paths
+							first - this reveals the infection chain immediately. The cleanup procedure reverses the chain:
+							kill the process, disable the trigger, remove the trigger file, delete the payload binary.
+						</p>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that audits a Linux filesystem for persistence artifacts. Walk the paths from
+							the vectors table, skip missing entries, and print each existing artifact with its modification
+							time and size. Treat
+							<code>/etc/ld.so.preload</code>
+							,
+							<code>~/.ssh/authorized_keys</code>
+							, and the autostart and
+							systemd directories as suspicious, and exit with a non-zero status when at least one is found.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;path/filepath&#34;
+)
+
+type candidate struct {
+	path       string
+	suspicious bool
+}
+
+func main() {
+	home, _ := os.UserHomeDir()
+
+	targets := []candidate{
+		{&#34;/etc/ld.so.preload&#34;, true},
+		{&#34;/etc/crontab&#34;, true},
+		{&#34;/etc/rc.local&#34;, true},
+		{&#34;/etc/profile&#34;, false},
+		{&#34;/etc/bash.bashrc&#34;, false},
+		{filepath.Join(home, &#34;.bashrc&#34;), false},
+		{filepath.Join(home, &#34;.profile&#34;), false},
+		{filepath.Join(home, &#34;.ssh/authorized_keys&#34;), true},
+		{filepath.Join(home, &#34;.config/autostart&#34;), true},
+		{filepath.Join(home, &#34;.config/systemd/user&#34;), true},
+		{&#34;/etc/cron.d&#34;, true},
+		{&#34;/etc/systemd/system&#34;, true},
+		{&#34;/etc/pam.d&#34;, false},
+		{&#34;/etc/modules-load.d&#34;, true},
+		{&#34;/etc/udev/rules.d&#34;, false},
+		{&#34;/etc/xdg/autostart&#34;, true},
+		{&#34;/etc/update-motd.d&#34;, false},
+	}
+
+	found := 0
+
+	for _, target := range targets {
+		info, err := os.Stat(target.path)
+		if err != nil {
+			continue
+		}
+
+		label := &#34;present&#34;
+		if target.suspicious {
+			label = &#34;SUSPICIOUS&#34;
+			found++
+		}
+
+		mode := &#34;file&#34;
+		if info.IsDir() {
+			mode = &#34;dir&#34;
+		}
+		fmt.Printf(&#34;%-10s %-4s %s (%s, %d bytes)\n&#34;,
+			label, mode, target.path, info.ModTime().UTC(), info.Size())
+	}
+
+	if found &gt; 0 {
+		fmt.Printf(&#34;\n%d suspicious artifact(s) found\n&#34;, found)
+		os.Exit(2)
+	}
+
+	fmt.Println(&#34;no suspicious persistence artifacts found&#34;)
+}
+						</pre>
+						<p>Run it on a clean host and inside a container where you have created a test cron entry:</p>
+						<pre class="bash">
+go run persist_audit.go
+echo &#34;exit: $?&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://www.freedesktop.org/software/systemd/man/systemd.service.html" target="_blank">systemd.service manual</a> - service unit format</li>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man5/crontab.5.html" target="_blank">crontab(5) man page</a> - cron file format</li>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man8/ld.so.8.html" target="_blank">ld.so(8) man page</a> - <code>ld.so.preload</code> behavior</li>
+							<li><a class="icon-website" href="https://www.kernel.org/pub/linux/libs/pam/" target="_blank">PAM documentation</a> - Pluggable Authentication Modules</li>
+							<li><a class="icon-website" href="https://attack.mitre.org/matrices/enterprise/linux/" target="_blank">MITRE ATT&CK - Linux</a> - persistence technique catalog</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

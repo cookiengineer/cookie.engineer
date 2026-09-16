@@ -1,0 +1,1580 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Obfuscation & Deobfuscation | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Obfuscation & Deobfuscation">
+		<meta name="keywords" content="malware-analysis, reverse-engineering, unpacking">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Obfuscation & Deobfuscation">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Techniques malware uses to hide code and how to defeat them, from UPX packing to control flow flattening and virtual machines.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/reverse-engineering/obfuscation.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Obfuscation & Deobfuscation">
+		<meta name="twitter:description" itemprop="description" content="Techniques malware uses to hide code and how to defeat them, from UPX packing to control flow flattening and virtual machines.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-obfuscation-arms-race">The Obfuscation Arms Race</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#upx-the-universal-packer">UPX: The Universal Packer</a></b>
+					<ul>
+						<li><a href="#how-upx-works">How UPX Works</a></li>
+						<li><a href="#identifying-upx">Identifying UPX</a></li>
+						<li><a href="#automated-unpacking">Automated Unpacking</a></li>
+						<li><a href="#manual-unpacking-with-gdb">Manual Unpacking with GDB</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#import-reconstruction">Import Reconstruction</a></b>
+					<ul>
+						<li><a href="#approach-1-fix-the-got-in-the-dump">Approach 1: Fix the GOT in the dump</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#encrypted-code-xor-cipher">Encrypted Code: XOR Cipher</a></b>
+					<ul>
+						<li><a href="#breaking-single-byte-xor">Breaking Single-Byte XOR</a></li>
+						<li><a href="#multi-byte-xor-keys">Multi-Byte XOR Keys</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#rc4-encryption">RC4 Encryption</a></b>
+					<ul>
+						<li><a href="#identifying-rc4-in-disassembly">Identifying RC4 in Disassembly</a></li>
+						<li><a href="#recovering-rc4-key">Recovering RC4 Key</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#aes-encryption">AES Encryption</a></b>
+					<ul>
+						<li><a href="#aes-s-box-first-16-bytes">AES S-box (first 16 bytes)</a></li>
+						<li><a href="#aes-inverse-s-box-first-16-bytes">AES Inverse S-box (first 16 bytes)</a></li>
+						<li><a href="#rcon-round-constants">Rcon (Round Constants)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#string-obfuscation">String Obfuscation</a></b>
+					<ul>
+						<li><a href="#stack-strings-x86-64">Stack Strings (x86-64)</a></li>
+						<li><a href="#xor-encoded-strings">XOR-Encoded Strings</a></li>
+						<li><a href="#base64-xor-combination">Base64 + XOR Combination</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#opaque-predicates">Opaque Predicates</a></b>
+					<ul>
+						<li><a href="#defeating-opaque-predicates">Defeating Opaque Predicates</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#control-flow-flattening">Control Flow Flattening</a></b>
+					<ul>
+						<li><a href="#identifying-cff">Identifying CFF</a></li>
+						<li><a href="#deobfuscating-cff">Deobfuscating CFF</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#virtual-machine-obfuscation">Virtual Machine Obfuscation</a></b>
+					<ul>
+						<li><a href="#how-it-works">How It Works</a></li>
+						<li><a href="#identifying-vmprotect">Identifying VMProtect</a></li>
+						<li><a href="#analysis-approaches">Analysis Approaches</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#deobfuscation-workflow">Deobfuscation Workflow</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#obfuscation-scanner-script">Obfuscation Scanner Script</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/reverse-engineering/index.html">Reverse Engineering</a></li>
+						<li aria-current="page"><a href="/wiki/articles/reverse-engineering/obfuscation.html">Obfuscation</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="obfuscation-deobfuscation">Obfuscation & Deobfuscation</h2>
+					<p>
+						Techniques malware uses to hide code and how to defeat them, from UPX packing to control flow
+						flattening and virtual machines.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Obfuscation raises the cost of static analysis. Packers compress code, crypters encrypt data,
+							protectors add anti-debug and anti-dump checks, and virtualizers translate native instructions
+							into a private bytecode. Each layer wraps the one below, so a sample may be a custom packer
+							around an RC4 payload around a virtualized routine. This article walks the layers from outside
+							in: detection, automated and manual unpacking, crypto identification, string deobfuscation,
+							control flow recovery, and virtual machine analysis.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/reverse-engineering/reading-assembly.html">Reading Assembly</a> - register conventions, calling conventions, stack frame layout</li>
+							<li><a href="/wiki/articles/reverse-engineering/ghidra-fundamentals.html">Ghidra Fundamentals</a> - navigating disassembly, cross-reference analysis, decompiler usage</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-obfuscation-arms-race">The Obfuscation Arms Race</h3>
+						<p>
+							Malware authors and reverse engineers operate in an escalating conflict. Each generation of
+							obfuscation spawns a generation of deobfuscation tools, which in turn drives more sophisticated
+							obfuscation. The taxonomy follows a clear progression:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Level</th>
+									<th align="center">Technique</th>
+									<th align="center">Goal</th>
+									<th align="center">Defeat Difficulty</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">1</td>
+									<td align="center">Packer (UPX, MPRESS)</td>
+									<td align="center">Compress binary, evade signature</td>
+									<td align="center">Trivial (automated)</td>
+								</tr>
+								<tr>
+									<td align="center">2</td>
+									<td align="center">Crypter (XOR, RC4)</td>
+									<td align="center">Encrypt sections, hide strings</td>
+									<td align="center">Low</td>
+								</tr>
+								<tr>
+									<td align="center">3</td>
+									<td align="center">Protector (Themida, ASPack)</td>
+									<td align="center">Anti-debug, anti-dump, import destruction</td>
+									<td align="center">Medium</td>
+								</tr>
+								<tr>
+									<td align="center">4</td>
+									<td align="center">Virtualizer (VMProtect, Code Virtualizer)</td>
+									<td align="center">Translate x86 to custom bytecode</td>
+									<td align="center">Hard</td>
+								</tr>
+								<tr>
+									<td align="center">5</td>
+									<td align="center">Full metamorphism</td>
+									<td align="center">Rewrite entire binary per-sample</td>
+									<td align="center">Extreme</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							Each layer wraps the one below. A
+							<abbr title="Virtual Machine">VM</abbr>
+							Protect-protected binary might contain
+							an RC4-crypted payload, packed with a custom packer. The reverse engineer must unwind these
+							layers from outermost to innermost - onion-peeling the binary.
+						</p>
+					</section>
+					<section>
+						<h3 id="upx-the-universal-packer">UPX: The Universal Packer</h3>
+						<p>
+							UPX is the most common packer in Linux malware. It is not malicious - it is a legitimate compression
+							tool - but it is widely abused because it is free, open-source, and trivially scripted.
+						</p>
+						<h4 id="how-upx-works">How UPX Works</h4>
+						<p>
+							The packer reads the original ELF, compresses the loadable sections (
+							<code>.text</code>
+							,
+							<code>.data</code>
+							), and
+							rewrites the binary with three components:
+						</p>
+						<pre class="plaintext">
+[UPX Stub (decompressor)] -&gt; [Compressed Data Block] -&gt; [ELF Footer]
+						</pre>
+						<p>The stub is a small (a few KB) position-independent piece of code that:</p>
+						<ol>
+							<li>Locates the compressed data, positioned after itself in memory.</li>
+							<li>Allocates memory for the decompressed sections.</li>
+							<li>Decompresses using the UCL/NRV algorithm.</li>
+							<li>Resolves dynamic imports (GOT/PLT reconstruction).</li>
+							<li>Transfers control to the Original Entry Point (OEP).</li>
+						</ol>
+						<h4 id="identifying-upx">Identifying UPX</h4>
+						<pre class="bash">
+$ strings suspicious_elf | grep -i upx
+UPX!
+$Info: This file is packed with the UPX executable packer
+UPX1
+UPX2
+						</pre>
+						<p>
+							The section names
+							<code>UPX0</code>
+							,
+							<code>UPX1</code>
+							,
+							<code>UPX2</code>
+							are characteristic.
+							<code>UPX0</code>
+							is empty in the file (zeros)
+							but holds the uncompressed original
+							<code>.text</code>
+							in memory.
+							<code>UPX1</code>
+							contains both the stub code and
+							compressed data.
+						</p>
+						<pre class="bash">
+$ readelf -S suspicious_elf
+[ 1] UPX0             PROGBITS         0000000000401000  00001000
+     000000000001f000  0000000000000000         0         0
+[ 2] UPX1             PROGBITS         000000000041f000  00001000
+     000000000000c000  0000000000000000         0         0
+						</pre>
+						<p>
+							Notice
+							<code>UPX0</code>
+							has a filesize of 0 but memory size of
+							<code>0x1f000</code>
+							- the section exists only in
+							memory after decompression.
+						</p>
+						<h4 id="automated-unpacking">Automated Unpacking</h4>
+						<p>The simplest approach:</p>
+						<pre class="bash">
+$ upx -d packed_binary -o unpacked_binary
+						</pre>
+						<p>
+							This works because UPX stores the necessary decompression metadata in the binary. The
+							<code>-d</code>
+							flag
+							invokes UPX's own decompressor on the file.
+						</p>
+						<h4 id="manual-unpacking-with-gdb">Manual Unpacking with GDB</h4>
+						<p>
+							When
+							<code>upx -d</code>
+							fails (modified UPX header, corrupted metadata), manual unpacking is required.
+							The core technique is finding the OEP - the point where the stub finishes decompressing and
+							jumps to the original code.
+						</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;find_oep.py — Locate Original Entry Point in UPX-packed binary&#34;&#34;&#34;
+
+import struct
+import sys
+
+def find_tail_jump(filepath):
+    &#34;&#34;&#34;
+    UPX stubs end with a tail jump to OEP. The pattern:
+    - Long unconditional jump: jmp 0x... (0xE9 + 4-byte relative)
+    - POPA + RET: 0x61 0xC3 (restore registers, return to OEP)
+    - PUSH + RET: push addr; ret  (0x68 + 4-byte addr + 0xC3)
+    
+    We search the stub section (UPX1) for these patterns.
+    &#34;&#34;&#34;
+    with open(filepath, &#39;rb&#39;) as f:
+        data = f.read()
+
+    # Find UPX1 section offset from ELF program headers
+    # PHDR offset at e_phoff (usually 0x40 for 64-bit ELF)
+    elf64 = data[4] == 2  # ELFCLASS64
+
+    if elf64:
+        phoff = struct.unpack_from(&#39;&lt;Q&#39;, data, 0x20)[0]
+        phnum = struct.unpack_from(&#39;&lt;H&#39;, data, 0x38)[0]
+        phentsize = struct.unpack_from(&#39;&lt;H&#39;, data, 0x36)[0]
+
+        for i in range(phnum):
+            off = phoff + i * phentsize
+            p_type = struct.unpack_from(&#39;&lt;I&#39;, data, off)[0]
+            if p_type == 1:  # PT_LOAD
+                p_offset = struct.unpack_from(&#39;&lt;Q&#39;, data, off + 8)[0]
+                p_vaddr  = struct.unpack_from(&#39;&lt;Q&#39;, data, off + 16)[0]
+                p_filesz = struct.unpack_from(&#39;&lt;Q&#39;, data, off + 32)[0]
+                p_memsz  = struct.unpack_from(&#39;&lt;Q&#39;, data, off + 40)[0]
+
+                # UPX1: filesz matches compressed data, memsz larger
+                if p_filesz &gt; 0 and p_memsz &gt; p_filesz * 2:
+                    stub_start = p_offset
+                    stub_end   = p_offset + p_filesz
+                    stub_data  = data[stub_start:stub_end]
+                    print(f&#34;[+] Found UPX1 segment: file offset 0x{stub_start:x} &#34;
+                          f&#34;size 0x{p_filesz:x}&#34;)
+
+                    # Search for tail jump patterns
+                    # Pattern 1: jmp rel32 (0xE9 XX XX XX XX)
+                    for j in range(len(stub_data) - 5):
+                        if stub_data[j] == 0xE9:  # JMP rel32
+                            rel = struct.unpack(&#39;&lt;i&#39;, stub_data[j+1:j+5])[0]
+                            target = p_vaddr + j + 5 + rel
+                            # OEP is usually in high address range
+                            if target &gt; p_vaddr + p_memsz:
+                                print(f&#34;  [*] Possible OEP via JMP rel32 at &#34;
+                                      f&#34;0x{p_vaddr+j:x} → 0x{target:x}&#34;)
+
+                    # Pattern 2: popa (0x61) followed by jmp/ret within 8 bytes
+                    for j in range(len(stub_data) - 10):
+                        if stub_data[j] == 0x61:  # POPA
+                            tail = stub_data[j+1:j+9]
+                            # Check for JMP near
+                            for k in range(min(8, len(tail) - 4)):
+                                if tail[k] == 0xE9:
+                                    print(f&#34;  [*] POPA at 0x{p_vaddr+j:x}, &#34;
+                                          f&#34;JMP at +{k+1}&#34;)
+
+    else:
+        print(&#34;[-] Only 64-bit ELF supported in this script&#34;)
+
+if __name__ == &#39;__main__&#39;:
+    find_tail_jump(sys.argv[1])
+						</pre>
+						<p>Run it:</p>
+						<pre class="bash">
+$ python3 find_oep.py packed_malware.elf
+[+] Found UPX1 segment: file offset 0x1000 size 0xc000
+  [*] Possible OEP via JMP rel32 at 0x41f800 → 0x403c10
+						</pre>
+						<p>Once the OEP is known, set a breakpoint there in GDB:</p>
+						<pre class="gdb">
+$ gdb ./packed_malware.elf
+(gdb) break *0x403c10
+(gdb) run
+Breakpoint 1, 0x0000000000403c10 in ???
+(gdb) info proc mappings
+process 12345
+Mapped address spaces:
+      0x400000    0x402000  r--p  00000000  /home/user/packed_malware.elf
+      0x402000    0x41f000  r-xp  00002000  /home/user/packed_malware.elf
+      0x41f000    0x421000  rw-p  0001f000  /home/user/packed_malware.elf
+      0x421000    0x440000  rwxp  00000000  [heap]
+						</pre>
+						<p>At this point the original binary is fully decompressed in memory. Dump the relevant regions:</p>
+						<pre class="gdb">
+(gdb) dump binary memory unpacked_dump.bin 0x401000 0x41f000
+(gdb) dump binary memory unpacked_data.bin 0x421000 0x440000
+						</pre>
+					</section>
+					<section>
+						<h3 id="import-reconstruction">Import Reconstruction</h3>
+						<p>
+							After unpacking, the dumped binary has broken imports. UPX resolves imports dynamically at runtime
+							<ul>
+								<li>the GOT entries are populated with resolved addresses. The dumped file contains the <em>runtime</em></li>
+							</ul>
+						</p>
+						<p>GOT values (absolute addresses from the host process), not the original import stubs.</p>
+						<p>For Linux ELF imports, there are two approaches:</p>
+						<h4 id="approach-1-fix-the-got-in-the-dump">Approach 1: Fix the GOT in the dump</h4>
+						<p>
+							Write a script that walks the dynamic symbol table, identifies GOT entries, and converts absolute
+							addresses back to relocation entries:
+						</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;fix_imports.py — Reconstruct ELF imports from a memory dump&#34;&#34;&#34;
+
+import struct
+import sys
+from elftools.elf.elffile import ELFFile
+
+def reconstruct_imports(dump_path, original_path):
+    &#34;&#34;&#34;
+    The memory dump contains resolved GOT addresses.
+    We match these against the original binary&#39;s symbol table
+    to determine which symbol each GOT slot corresponds to.
+    &#34;&#34;&#34;
+    with open(original_path, &#39;rb&#39;) as f:
+        orig = ELFFile(f)
+
+    with open(dump_path, &#39;rb&#39;) as f:
+        dump = bytearray(f.read())
+
+    # Find .got.plt section in original
+    for section in orig.iter_sections():
+        if section.name == &#39;.got.plt&#39;:
+            got_off = section[&#39;sh_offset&#39;]
+            got_size = section[&#39;sh_size&#39;]
+            got_addr = section[&#39;sh_addr&#39;]
+            print(f&#34;[+] .got.plt at offset 0x{got_off:x} size {got_size}&#34;)
+
+            # GOT[0] = _DYNAMIC, GOT[1] = link_map, GOT[2] = _dl_runtime_resolve
+            # GOT[3+] = resolved function addresses
+
+            for i in range(3, got_size // 8):
+                entry_off = got_off + i * 8
+                if entry_off + 8 &gt; len(dump):
+                    break
+
+                addr = struct.unpack_from(&#39;&lt;Q&#39;, dump, entry_off)[0]
+                print(f&#34;  GOT[{i}] @ 0x{got_addr + i*8:x} → &#34;
+                      f&#34;rva 0x{addr - 0x400000:x}&#34;)
+						</pre>
+						<p>In practice, for comprehensive import reconstruction, use LIEF:</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;reconstruct_elf.py — Use LIEF to rebuild import table&#34;&#34;&#34;
+
+import lief
+
+def rebuild_imports(unpacked_path, output_path):
+    binary = lief.parse(unpacked_path)
+
+    # LIEF can reconstruct imports from the dynamic section
+    # if the .dynsym and .dynstr sections survived unpacking
+    if binary.has_dynamic_symbols:
+        for sym in binary.dynamic_symbols:
+            if sym.imported:
+                print(f&#34;  Import: {sym.name} @ {hex(sym.value)}&#34;)
+
+    binary.write(output_path)
+    print(f&#34;[+] Reconstructed binary written to {output_path}&#34;)
+						</pre>
+					</section>
+					<section>
+						<h3 id="encrypted-code-xor-cipher">Encrypted Code: XOR Cipher</h3>
+						<p>The simplest encryption malware uses is XOR - fast, reversible, and trivially implemented:</p>
+						<pre class="c">
+/* xor_decrypt.c — Typical malware string decoder */
+void decode_string(unsigned char *data, size_t len, unsigned char key) {
+    for (size_t i = 0; i &lt; len; i++) {
+        data[i] ^= key;
+    }
+}
+						</pre>
+						<p>In disassembly, an XOR decode loop is unmistakable:</p>
+						<pre class="x86asm">
+; Ghidra decompiler output, cleaned up
+void decode_buffer(byte *buf, ulong len, byte key)
+{
+    ulong i;
+    for (i = 0; i &lt; len; i = i + 1) {
+        buf[i] = buf[i] ^ key;
+    }
+    return;
+}
+						</pre>
+						<h4 id="breaking-single-byte-xor">Breaking Single-Byte XOR</h4>
+						<p>Without knowing the key, frequency analysis recovers it:</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;xor_crack.py — Recover XOR key via frequency analysis&#34;&#34;&#34;
+
+FREQ_ENGLISH = {
+    &#39; &#39;: 13.0, &#39;e&#39;: 12.7, &#39;t&#39;: 9.1, &#39;a&#39;: 8.2, &#39;o&#39;: 7.5,
+    &#39;i&#39;: 7.0, &#39;n&#39;: 6.7, &#39;s&#39;: 6.3, &#39;h&#39;: 6.1, &#39;r&#39;: 6.0,
+    &#39;d&#39;: 4.3, &#39;l&#39;: 4.0, &#39;c&#39;: 2.8, &#39;u&#39;: 2.8, &#39;m&#39;: 2.4,
+}
+
+def score_text(text: bytes) -&gt; float:
+    &#34;&#34;&#34;Score how &#39;English-like&#39; a byte sequence is.&#34;&#34;&#34;
+    if not text:
+        return 0.0
+    score = 0.0
+    for b in text:
+        ch = chr(b).lower()
+        if ch in FREQ_ENGLISH:
+            score += FREQ_ENGLISH[ch]
+        elif b &lt; 0x20 and b not in (0x0a, 0x0d, 0x09):
+            score -= 2.0  # Penalty for control chars
+        elif b &gt; 0x7e:
+            score -= 2.0
+    return score / len(text)
+
+def crack_single_byte_xor(data: bytes) -&gt; tuple:
+    best_score = -999.0
+    best_key   = 0
+    best_plain = b&#39;&#39;
+
+    for key in range(256):
+        plain = bytes([b ^ key for b in data])
+        sc = score_text(plain)
+        if sc &gt; best_score:
+            best_score = sc
+            best_key   = key
+            best_plain = plain
+
+    return best_key, best_plain
+
+# Known-plaintext attack: if you know part of plaintext
+def crack_with_known_plaintext(ciphertext: bytes, known_plain: bytes, offset: int = 0):
+    &#34;&#34;&#34;XOR ciphertext with known plaintext bytes to reveal key.&#34;&#34;&#34;
+    key_bytes = []
+    for i, kp in enumerate(known_plain):
+        key_bytes.append(ciphertext[offset + i] ^ kp)
+
+    # Check if all key bytes are the same (single-byte key)
+    if len(set(key_bytes)) == 1:
+        return key_bytes[0]
+    else:
+        print(&#34;[*] Multi-byte key detected&#34;)
+        return bytes(key_bytes)
+						</pre>
+						<h4 id="multi-byte-xor-keys">Multi-Byte XOR Keys</h4>
+						<p>If single-byte XOR fails to produce readable text, the key may be multi-byte (repeating XOR):</p>
+						<pre class="python">
+def crack_repeating_xor(data: bytes, min_len: int = 1, max_len: int = 40):
+    &#34;&#34;&#34;Attempt to crack repeating-key XOR via Hamming distance analysis.&#34;&#34;&#34;
+    
+    def hamming(a: bytes, b: bytes) -&gt; int:
+        dist = 0
+        for x, y in zip(a, b):
+            dist += bin(x ^ y).count(&#39;1&#39;)
+        return dist
+
+    def normalized_distance(data: bytes, keylen: int) -&gt; float:
+        blocks = [data[i:i+keylen] for i in range(0, len(data), keylen)][:4]
+        if len(blocks) &lt; 2:
+            return float(&#39;inf&#39;)
+        dist = 0
+        pairs = 0
+        for i in range(len(blocks)):
+            for j in range(i+1, len(blocks)):
+                dist += hamming(blocks[i], blocks[j])
+                pairs += 1
+        return (dist / pairs) / keylen
+
+    # Find most likely key lengths
+    scores = []
+    for kl in range(min_len, max_len + 1):
+        if kl * 4 &lt;= len(data):
+            scores.append((kl, normalized_distance(data, kl)))
+
+    scores.sort(key=lambda x: x[1])
+
+    for keylen, _ in scores[:3]:
+        # For each key length, crack each byte
+        key = []
+        for pos in range(keylen):
+            block = data[pos::keylen]
+            k, _ = crack_single_byte_xor(block)
+            key.append(k)
+
+        plain = bytes([data[i] ^ key[i % keylen] for i in range(len(data))])
+        print(f&#34;  keylen={keylen} key={bytes(key).hex()} plain_preview={plain[:60]}&#34;)
+						</pre>
+					</section>
+					<section>
+						<h3 id="rc4-encryption">RC4 Encryption</h3>
+						<p>
+							RC4 is a stream cipher frequently found in malware due to its simplicity (no block operations
+							needed). The algorithm initializes a 256-byte state with the key, then generates a keystream
+							XORed with the plaintext:
+						</p>
+						<pre class="c">
+/* rc4.c — Standard RC4 implementation */
+typedef struct {
+    unsigned char S[256];
+    unsigned char i, j;
+} rc4_state;
+
+void rc4_init(rc4_state *state, const unsigned char *key, size_t keylen) {
+    state-&gt;i = 0;
+    state-&gt;j = 0;
+    for (int k = 0; k &lt; 256; k++)
+        state-&gt;S[k] = k;
+
+    int j = 0;
+    for (int k = 0; k &lt; 256; k++) {
+        j = (j + state-&gt;S[k] + key[k % keylen]) % 256;
+        unsigned char tmp = state-&gt;S[k];
+        state-&gt;S[k] = state-&gt;S[j];
+        state-&gt;S[j] = tmp;
+    }
+}
+
+void rc4_crypt(rc4_state *state, unsigned char *data, size_t len) {
+    for (size_t n = 0; n &lt; len; n++) {
+        state-&gt;i = (state-&gt;i + 1) % 256;
+        state-&gt;j = (state-&gt;j + state-&gt;S[state-&gt;i]) % 256;
+        unsigned char tmp = state-&gt;S[state-&gt;i];
+        state-&gt;S[state-&gt;i] = state-&gt;S[state-&gt;j];
+        state-&gt;S[state-&gt;j] = tmp;
+        data[n] ^= state-&gt;S[(state-&gt;S[state-&gt;i] + state-&gt;S[state-&gt;j]) % 256];
+    }
+}
+						</pre>
+						<h4 id="identifying-rc4-in-disassembly">Identifying RC4 in Disassembly</h4>
+						<p>
+							RC4 has a distinctive pattern: two 256-byte loops. The first (KSA - Key Scheduling Algorithm)
+							initializes
+							<code>S[0..255] = 0..255</code>
+							then permutes. The second (PRGA - Pseudo-Random Generation
+							Algorithm) generates keystream. Look for:
+						</p>
+						<ul>
+							<li>Array of 256 bytes ( <code>S[256]</code> ) accessed with modulo-256 arithmetic</li>
+							<li>Two index variables ( <code>i</code> , <code>j</code> ) that wrap around</li>
+							<li>XOR of data with <code>S[(S[i] + S[j]) % 256]</code></li>
+						</ul>
+						<p>
+							The KSA loop is especially recognizable because it fills an array with sequential values 0-255,
+							then permutes it. In Ghidra, this appears as a loop initializing
+							<code>local_108[0..0xff]</code>
+							with ascending
+							values.
+						</p>
+						<h4 id="recovering-rc4-key">Recovering RC4 Key</h4>
+						<p>
+							If you observe the KSA executing (via debugger or emulation), you can recover the key by capturing
+							the key material passed to the KSA. Or, if you have known plaintext, XOR it with ciphertext
+							to get the keystream - then backtrack through the RC4 state (if you captured the initial state).
+						</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;rc4_identify.py — Scan binary for RC4 constant patterns&#34;&#34;&#34;
+
+def find_rc4_ksa_pattern(filepath: str):
+    &#34;&#34;&#34;
+    Scan for the 256-byte initialization loop pattern.
+    RC4 KSA: for(i=0;i&lt;256;i++) S[i]=i;
+    Compiles to: mov byte [base+i], i  (with increment)
+    &#34;&#34;&#34;
+    with open(filepath, &#39;rb&#39;) as f:
+        data = f.read()
+
+    # Look for byte sequences that might be RC4 init
+    # Common pattern: XOR EDX,EDX; MOV [RCX+RDX],DL; INC RDX; CMP RDX,0x100
+    # In x86-64: 31 d2 88 14 11 48 ff c2 48 81 fa 00 01 00 00
+    
+    patterns = [
+        # mov [rcx+rdx], dl ; inc rdx ; cmp rdx, 0x100 ; jl loop
+        bytes([0x88, 0x14, 0x11, 0x48, 0xFF, 0xC2, 0x48, 0x81, 0xFA, 0x00, 0x01]),
+        # xor edx,edx ; mov [mem+edx], dl ; inc edx ; cmp edx, 0x100
+        bytes([0x31, 0xD2, 0x88, 0x14]),
+        # ARM variant: strb rX, [rY, rZ]; add rZ, #1; cmp rZ, #256
+    ]
+
+    for pattern in patterns:
+        pos = data.find(pattern)
+        if pos != -1:
+            print(f&#34;[+] Potential RC4 KSA pattern at offset 0x{pos:x}&#34;)
+            return pos
+    return -1
+						</pre>
+					</section>
+					<section>
+						<h3 id="aes-encryption">AES Encryption</h3>
+						<p>
+							<abbr title="Advanced Encryption Standard">AES</abbr>
+							is common in ransomware and sophisticated malware. Unlike
+							RC4, it operates on fixed 16-byte blocks with a key schedule expansion. Detection relies on
+							the constant tables embedded in the binary:
+						</p>
+						<h4 id="aes-s-box-first-16-bytes">AES S-box (first 16 bytes)</h4>
+						<pre class="plaintext">
+0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5,
+0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76
+						</pre>
+						<h4 id="aes-inverse-s-box-first-16-bytes">AES Inverse S-box (first 16 bytes)</h4>
+						<pre class="plaintext">
+0x52, 0x09, 0x6a, 0xd5, 0x30, 0x36, 0xa5, 0x38,
+0xbf, 0x40, 0xa3, 0x9e, 0x81, 0xf3, 0xd7, 0xfb
+						</pre>
+						<h4 id="rcon-round-constants">Rcon (Round Constants)</h4>
+						<pre class="plaintext">
+0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36
+						</pre>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;find_crypto.py — Scan binary for cryptographic constant tables&#34;&#34;&#34;
+
+import struct
+
+AES_SBOX = bytes([
+    0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5,
+    0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
+    0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0,
+    0xad, 0xd4, 0xa2, 0xaf, 0x9c, 0xa4, 0x72, 0xc0,
+    0xb7, 0xfd, 0x93, 0x26, 0x36, 0x3f, 0xf7, 0xcc,
+    0x34, 0xa5, 0xe5, 0xf1, 0x71, 0xd8, 0x31, 0x15,
+    0x04, 0xc7, 0x23, 0xc3, 0x18, 0x96, 0x05, 0x9a,
+    0x07, 0x12, 0x80, 0xe2, 0xeb, 0x27, 0xb2, 0x75,
+    0x09, 0x83, 0x2c, 0x1a, 0x1b, 0x6e, 0x5a, 0xa0,
+    0x52, 0x3b, 0xd6, 0xb3, 0x29, 0xe3, 0x2f, 0x84,
+    0x53, 0xd1, 0x00, 0xed, 0x20, 0xfc, 0xb1, 0x5b,
+    0x6a, 0xcb, 0xbe, 0x39, 0x4a, 0x4c, 0x58, 0xcf,
+    0xd0, 0xef, 0xaa, 0xfb, 0x43, 0x4d, 0x33, 0x85,
+    0x45, 0xf9, 0x02, 0x7f, 0x50, 0x3c, 0x9f, 0xa8,
+    0x51, 0xa3, 0x40, 0x8f, 0x92, 0x9d, 0x38, 0xf5,
+    0xbc, 0xb6, 0xda, 0x21, 0x10, 0xff, 0xf3, 0xd2,
+    0xcd, 0x0c, 0x13, 0xec, 0x5f, 0x97, 0x44, 0x17,
+    0xc4, 0xa7, 0x7e, 0x3d, 0x64, 0x5d, 0x19, 0x73,
+    0x60, 0x81, 0x4f, 0xdc, 0x22, 0x2a, 0x90, 0x88,
+    0x46, 0xee, 0xb8, 0x14, 0xde, 0x5e, 0x0b, 0xdb,
+    0xe0, 0x32, 0x3a, 0x0a, 0x49, 0x06, 0x24, 0x5c,
+    0xc2, 0xd3, 0xac, 0x62, 0x91, 0x95, 0xe4, 0x79,
+    0xe7, 0xc8, 0x37, 0x6d, 0x8d, 0xd5, 0x4e, 0xa9,
+    0x6c, 0x56, 0xf4, 0xea, 0x65, 0x7a, 0xae, 0x08,
+    0xba, 0x78, 0x25, 0x2e, 0x1c, 0xa6, 0xb4, 0xc6,
+    0xe8, 0xdd, 0x74, 0x1f, 0x4b, 0xbd, 0x8b, 0x8a,
+    0x70, 0x3e, 0xb5, 0x66, 0x48, 0x03, 0xf6, 0x0e,
+    0x61, 0x35, 0x57, 0xb9, 0x86, 0xc1, 0x1d, 0x9e,
+    0xe1, 0xf8, 0x98, 0x11, 0x69, 0xd9, 0x8e, 0x94,
+    0x9b, 0x1e, 0x87, 0xe9, 0xce, 0x55, 0x28, 0xdf,
+    0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68,
+    0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16,
+])
+
+CRC32_TABLE_HEAD = bytes([0x00, 0x00, 0x00, 0x00, 0x77, 0x07, 0x30, 0x96,
+                          0xee, 0x0e, 0x61, 0x2c, 0x99, 0x09, 0x51, 0xba])
+
+MD5_CONSTANTS = bytes([
+    0x01, 0x23, 0x45, 0x67,  # A initial value
+    0x89, 0xab, 0xcd, 0xef,  # B
+    0xfe, 0xdc, 0xba, 0x98,  # C
+    0x76, 0x54, 0x32, 0x10,  # D
+])
+
+SHA1_CONSTANTS = bytes([
+    0x67, 0x45, 0x23, 0x01,  # A
+    0xef, 0xcd, 0xab, 0x89,  # B
+    0x98, 0xba, 0xdc, 0xfe,  # C
+    0x10, 0x32, 0x54, 0x76,  # D
+    0xc3, 0xd2, 0xe1, 0xf0,  # E
+])
+
+def scan_crypto_constants(data: bytes, base_offset: int = 0):
+    &#34;&#34;&#34;Scan data for embedded cryptographic constants.&#34;&#34;&#34;
+    results = []
+
+    # Search AES S-box (256 bytes)
+    pos = data.find(AES_SBOX)
+    if pos &gt;= 0:
+        results.append((&#39;AES S-box&#39;, pos + base_offset))
+        print(f&#34;[+] AES S-box found at offset 0x{pos + base_offset:x}&#34;)
+
+    # Search CRC32 table head (multiples of 4 bytes)
+    pos = data.find(CRC32_TABLE_HEAD)
+    if pos &gt;= 0:
+        results.append((&#39;CRC32 table&#39;, pos + base_offset))
+        print(f&#34;[+] CRC32 table at offset 0x{pos + base_offset:x}&#34;)
+
+    # Search MD5 IV
+    for md5_const in [MD5_CONSTANTS]:
+        pos = data.find(md5_const)
+        if pos &gt;= 0:
+            results.append((&#39;MD5 IV&#39;, pos + base_offset))
+            print(f&#34;[+] MD5 initialization vector at 0x{pos + base_offset:x}&#34;)
+
+    # Search SHA1 IV
+    for sha1_const in [SHA1_CONSTANTS]:
+        pos = data.find(sha1_const)
+        if pos &gt;= 0:
+            results.append((&#39;SHA1 IV&#39;, pos + base_offset))
+            print(f&#34;[+] SHA1 initialization vector at 0x{pos + base_offset:x}&#34;)
+
+    return results
+
+if __name__ == &#39;__main__&#39;:
+    import sys
+    with open(sys.argv[1], &#39;rb&#39;) as f:
+        scan_crypto_constants(f.read())
+						</pre>
+					</section>
+					<section>
+						<h3 id="string-obfuscation">String Obfuscation</h3>
+						<p>Malware hides strings to evade static analysis. The techniques and their countermeasures:</p>
+						<h4 id="stack-strings-x86-64">Stack Strings (x86-64)</h4>
+						<p>
+							Instead of storing the string as a data constant, the malware constructs it byte-by-byte on
+							the stack:
+						</p>
+						<pre class="x86asm">
+; CONSTRUCTING THE STRING &#34;/bin/sh&#34; ON THE STACK
+mov    rax, 0x0068732f6e69622f   ; &#34;/bin/sh\0&#34; in little-endian
+push   rax
+mov    rdi, rsp                   ; rdi now points to &#34;/bin/sh&#34;
+; ... execve syscall ...
+						</pre>
+						<p>
+							This is visible when Ghidra shows
+							<code>local_18 = 0x68732f6e69622f</code>
+							and the decompiler outputs a
+							comment. To find stack strings programmatically:
+						</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;scan_stack_strings.py — Find stack-constructed strings in disassembly&#34;&#34;&#34;
+
+import re
+
+def find_stack_strings(ghidra_export_file: str):
+    &#34;&#34;&#34;
+    Parse a Ghidra export (or use r2/Ghidra scripting) to find
+    MOV-immediate instructions that push string bytes.
+    
+    Pattern: MOV RAX, 0xXXXX (where high bytes are printable ASCII)
+    followed by PUSH RAX within a few instructions.
+    &#34;&#34;&#34;
+    stack_strings = []
+
+    with open(ghidra_export_file) as f:
+        lines = f.readlines()
+
+    for i, line in enumerate(lines):
+        # Match: mov reg, imm64 where imm64 looks like a string fragment
+        m = re.search(r&#39;mov\s+(r\w+),\s*(0x[0-9a-fA-F]+)&#39;, line)
+        if m:
+            imm = int(m.group(2), 16)
+            # Check if the immediate decodes to printable ASCII
+            try:
+                s = imm.to_bytes(8, &#39;little&#39;).decode(&#39;ascii&#39;, errors=&#39;ignore&#39;)
+                printable = &#39;&#39;.join(c for c in s if 0x20 &lt;= ord(c) &lt;= 0x7e)
+                if len(printable) &gt;= 4:
+                    # Look for a push within next 5 lines
+                    for j in range(i, min(i+5, len(lines))):
+                        if m.group(1) in lines[j] and &#39;push&#39; in lines[j]:
+                            stack_strings.append((i, printable))
+                            break
+            except:
+                pass
+
+    return stack_strings
+						</pre>
+						<h4 id="xor-encoded-strings">XOR-Encoded Strings</h4>
+						<p>
+							The malware stores encrypted strings in
+							<code>.rodata</code>
+							and decodes them at runtime:
+						</p>
+						<pre class="c">
+/* Typical XOR string decode wrapper */
+static char encoded_config[] = {
+    0x9e, 0x91, 0x9a, 0x9b, 0x96, 0x91, 0xff,  // &#34;C2_HOST&#34; ^ 0xfe
+    0x9e, 0x8c, 0x91, 0x8e, 0x87, 0xff,         // &#34;C2_GET&#34; ^ 0xfe
+};
+
+void init_strings(void) {
+    for (int i = 0; i &lt; sizeof(encoded_config); i++) {
+        encoded_config[i] ^= 0xfe;
+    }
+}
+						</pre>
+						<p>
+							To deobfuscate, identify the decode function and emulate it (see
+							<a href="/wiki/articles/reverse-engineering/binary-emulation.html">binary-emulation.html</a>
+							), or use
+							<code>floss</code>
+							(FireEye's FLARE Obfuscated String Solver):
+						</p>
+						<pre class="bash">
+$ floss -n 8 malware.elf
+FLOSS decoded 23 strings
+Decoding function at 0x4023a0 (XOR, key=0xfe):
+  &#34;C2_HOST&#34;
+  &#34;C2_GET&#34;
+  &#34;/proc/self/exe&#34;
+  ...
+						</pre>
+						<p>
+							If
+							<code>floss</code>
+							misses built-in strings, write a custom Unicorn-based decoder (emulation approach
+							in binary-emulation article).
+						</p>
+						<h4 id="base64-xor-combination">Base64 + XOR Combination</h4>
+						<p>A common pattern layers base64 encoding over XOR:</p>
+						<pre class="c">
+char encoded[] = &#34;dGhpcyBpcyBhIHNlY3JldA==&#34;;  // base64(xor(plaintext, key))
+						</pre>
+						<p>The decode sequence: base64_decode -> xor_decrypt -> use. To deobfuscate, reverse the order:</p>
+						<pre class="python">
+import base64
+
+def decode_b64_xor(encoded: str, key: int) -&gt; str:
+    decoded = base64.b64decode(encoded)
+    plain = bytes([b ^ key for b in decoded])
+    return plain.decode(&#39;ascii&#39;, errors=&#39;replace&#39;)
+						</pre>
+					</section>
+					<section>
+						<h3 id="opaque-predicates">Opaque Predicates</h3>
+						<p>
+							An opaque predicate is a conditional expression whose value is known at obfuscation time but
+							appears complex to the analyst:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Type</th>
+									<th align="center">Expression</th>
+									<th align="center">Always</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Zero algebra</td>
+									<td align="center"><code>x - x</code></td>
+									<td align="center">0</td>
+								</tr>
+								<tr>
+									<td align="center">Zero multiply</td>
+									<td align="center"><code>x * 0</code></td>
+									<td align="center">0</td>
+								</tr>
+								<tr>
+									<td align="center">Identity OR</td>
+									<td align="center"><code>x \| 0</code></td>
+									<td align="center">x</td>
+								</tr>
+								<tr>
+									<td align="center">Identity AND</td>
+									<td align="center"><code>x &amp; -1</code></td>
+									<td align="center">x</td>
+								</tr>
+								<tr>
+									<td align="center">Square hash</td>
+									<td align="center"><code>(x * x) % 4 == 0</code>(x even)</td>
+									<td align="center">1</td>
+								</tr>
+								<tr>
+									<td align="center">Fermat ltl</td>
+									<td align="center"><code>a^(p-1) % p == 1</code>(p prime)</td>
+									<td align="center">1</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>In disassembly:</p>
+						<pre class="x86asm">
+; OPAQUE PREDICATE: branching on 0xF1 + 0x0F
+mov    eax, 0xF1
+add    eax, 0x0F       ; eax = 0x100 = 256
+cmp    eax, 0x100
+je     target          ; ALWAYS taken — the add result is deterministic
+						</pre>
+						<p>
+							The branch is always taken. Its purpose: bifurcate the control flow graph, creating a "dead
+							branch" that the disassembler may follow but execution never reaches. This confuses both static
+							analysis and decompilation.
+						</p>
+						<h4 id="defeating-opaque-predicates">Defeating Opaque Predicates</h4>
+						<ol>
+							<li><b>Pattern recognition</b> - most opaque predicates follow known formulas. A Ghidra script can fold them:</li>
+						</ol>
+						<pre class="java">
+/* OpaquePredicateCleanup.java — Ghidra script to fold known predicate patterns */
+import ghidra.app.script.GhidraScript;
+import ghidra.program.model.listing.*;
+import ghidra.program.model.pcode.*;
+import ghidra.program.model.symbol.*;
+
+public class OpaquePredicateCleanup extends GhidraScript {
+    @Override
+    public void run() throws Exception {
+        // Iterate conditional jumps
+        Listing listing = currentProgram.getListing();
+        InstructionIterator iter = listing.getInstructions(true);
+        
+        while (iter.hasNext()) {
+            Instruction instr = iter.next();
+            FlowType flow = instr.getFlowType();
+            
+            if (flow.isJump() &amp;&amp; flow.isConditional()) {
+                // Trace back to the compare — is it on deterministic operands?
+                Object[] results = 
+                    getReferencesFrom(instr.getAddress());
+                // Check if condition evaluates to constant
+                // ... pattern matching logic ...
+            }
+        }
+    }
+}
+						</pre>
+						<ol>
+							<li><b>Symbolic execution</b> - angr trivially solves opaque predicates. Feed the binary through angr's CFGFast and check which branches are unreachable:</li>
+						</ol>
+						<pre class="python">
+import angr
+
+proj = angr.Project(&#39;obfuscated.elf&#39;, auto_load_libs=False)
+cfg = proj.analyses.CFGFast()
+
+# Find dead branches (edges where the condition is unsatisfiable)
+for node in cfg.graph.nodes():
+    successors = list(cfg.graph.successors(node))
+    if len(successors) &gt; 1:
+        # Check each successor&#39;s guard condition
+        for succ in successors:
+            edge = cfg.graph.get_edge_data(node, succ)
+            if edge and &#39;jumpkind&#39; in edge:
+                print(f&#34;  {node.addr:x} → {succ.addr:x} : {edge[&#39;jumpkind&#39;]}&#34;)
+						</pre>
+						<ol>
+							<li><b>Dynamic tracing</b> - run the binary and record which branches are actually taken. Dead branches are never executed and can be pruned from the CFG.</li>
+						</ol>
+					</section>
+					<section>
+						<h3 id="control-flow-flattening">Control Flow Flattening</h3>
+						<p>
+							Control flow flattening (CFF) is a transformation that replaces the natural control flow of
+							a function with a switch-based dispatcher:
+						</p>
+						<pre class="plaintext">
+NATURAL CFG:                    FLATTENED CFG:
+
+  A                              dispatcher:
+  |\                               state = next_state
+  | B                              switch(state):
+  | |                                case 0: goto A&#39;
+  | C                                case 1: goto B&#39;
+  |/                                 case 2: goto C&#39;
+  D                                ...
+                                    A&#39;:
+  A → B → C → D                      ...code...
+                                     state = F(B); goto dispatcher
+                                   B&#39;:
+                                     ...code...
+                                     state = F(B); goto dispatcher
+                                   C&#39;:
+                                     ...code...
+                                     state = F(C); goto dispatcher
+						</pre>
+						<p>
+							Each basic block is split out and assigned a numeric state. After executing, the block computes
+							the next state and jumps back to the dispatcher. The original control flow is encoded in the
+							state variable assignments.
+						</p>
+						<h4 id="identifying-cff">Identifying CFF</h4>
+						<p>
+							In Ghidra, a flattened function shows: - A large switch statement (indirect jump table) at the
+							function entry - Every block ending with
+							<code>state_var = &lt;constant&gt;; goto dispatcher</code>
+							- No fall-through
+							between logical blocks
+						</p>
+						<p>
+							The telltale sign in assembly is a function that is essentially one giant loop with an indirect
+							jump:
+						</p>
+						<pre class="x86asm">
+; FLATTENED FUNCTION (Ghidra decompiler view)
+undefined8 flattened_func(void)
+{
+    int state;
+    undefined8 result;
+    
+    state = 0;
+    do {
+        switch(state) {
+        case 0:
+            /* Block A */
+            local_variable = 42;
+            state = 1;
+            break;
+        case 1:
+            /* Block B */
+            if (local_variable &gt; 10) {
+                state = 3;
+            } else {
+                state = 2;
+            }
+            break;
+        case 2:
+            /* Block C (else branch) */
+            local_variable = local_variable * 2;
+            state = 1;
+            break;
+        case 3:
+            /* Block D (exit) */
+            return local_variable;
+        }
+    } while( true );
+}
+						</pre>
+						<h4 id="deobfuscating-cff">Deobfuscating CFF</h4>
+						<p>
+							<code>O-LLVM</code>
+							is the most common tool producing CFF.
+							<code>Tigress</code>
+							and Hikari also implement it. Each
+							produces predictable patterns.
+						</p>
+						<p>
+							Use
+							<code>deflat.py</code>
+							(open-source deobfuscation tool) to recover the original CFG:
+						</p>
+						<pre class="bash">
+$ git clone https://github.com/purseclab/deflat
+$ cd deflat
+$ python3 deflat.py -f obfuscated.elf --addr 0x4023a0
+[+] Recovered 12 basic blocks in function 0x4023a0
+[+] Graph built, writing patched binary to obfuscated.elf_recovered
+						</pre>
+						<p>Manual approach: reconstruct the state transition table:</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;cff_recover.py — Manually recover CFF control flow&#34;&#34;&#34;
+
+def recover_cff_states(trace_log: str):
+    &#34;&#34;&#34;
+    From a runtime trace, build the state transition table.
+    trace_log format: each line is &lt;address&gt; &lt;state_after&gt;
+
+    Then use NetworkX to build the CFG and perform path analysis.
+    &#34;&#34;&#34;
+    import networkx as nx
+
+    G = nx.DiGraph()
+    states = {}
+    current = None
+
+    with open(trace_log) as f:
+        for line in f:
+            addr, next_state = line.strip().split()
+            addr = int(addr, 16)
+            next_state = int(next_state)
+
+            if current is not None:
+                G.add_edge(current, addr)
+            current = addr
+            states[addr] = next_state
+
+    print(f&#34;[+] Recovered graph: {G.number_of_nodes()} nodes, &#34;
+          f&#34;{G.number_of_edges()} edges&#34;)
+
+    # Find the original CFG structure
+    # Shortest path from entry to exit
+    entry = list(G.nodes())[0]
+    for node in G.nodes():
+        if G.out_degree(node) == 0:
+            print(f&#34;  Exit block: 0x{node:x}&#34;)
+            path = nx.shortest_path(G, entry, node)
+            print(f&#34;  Path: {&#39; → &#39;.join(hex(n) for n in path)}&#34;)
+						</pre>
+					</section>
+					<section>
+						<h3 id="virtual-machine-obfuscation">Virtual Machine Obfuscation</h3>
+						<p>
+							<abbr title="Virtual Machine">VM</abbr>
+							Protect and Themida represent the apex of obfuscation difficulty. They
+							translate native x86 instructions into custom bytecode executed by an embedded interpreter.
+						</p>
+						<h4 id="how-it-works">How It Works</h4>
+						<ol>
+							<li>The protector selects critical functions</li>
+							<li>Each x86 instruction is translated to equivalent <abbr title="Virtual Machine">VM</abbr> bytecode (e.g., <code>add rax, rbx</code> -> <code>VM_ADD_R64_R64 0 1</code> )</li>
+							<li>The original code is replaced with a <code>VM_ENTER</code> stub</li>
+							<li>At runtime, the <abbr title="Virtual Machine">VM</abbr> interpreter fetches, decodes, and executes bytecodes</li>
+							<li>The <abbr title="Virtual Machine">VM</abbr> handler table is a set of small functions - one per opcode</li>
+						</ol>
+						<h4 id="identifying-vmprotect">Identifying VMProtect</h4>
+						<p>
+							The
+							<abbr title="Virtual Machine">VM</abbr>
+							interpreter has a recognizable structure:
+						</p>
+						<pre class="x86asm">
+; TYPICAL VM HANDLER DISPATCH LOOP
+vm_loop:
+    movzx  eax, byte [esi]      ; fetch opcode
+    inc    esi                   ; advance VM IP
+    jmp    [handler_table + eax*8] ; dispatch to handler
+
+handler_ADD_R64:
+    mov    rax, [vregs + rbx*8]
+    mov    rcx, [vregs + rdx*8]
+    add    rax, rcx
+    mov    [vregs + rbx*8], rax
+    jmp    vm_loop
+						</pre>
+						<p>
+							The handler table is an array of function pointers - typically 50-200 entries, each a small
+							code block. This is visible in Ghidra as a large jump table.
+						</p>
+						<h4 id="analysis-approaches">Analysis Approaches</h4>
+						<ol>
+							<li><b>VM handler identification</b> : Find the dispatch loop, dump the handler table, categorize handlers by operation (arithmetic, memory, control flow).</li>
+						</ol>
+						<ol>
+							<li><b>Bytecode extraction</b> : Locate the <abbr title="Virtual Machine">VM</abbr> bytecode (usually in <code>.vmp0</code> or <code>.themida</code> section), parse the custom instruction format:</li>
+						</ol>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;vm_bytecode_dump.py — Dump VMProtect bytecode section&#34;&#34;&#34;
+
+def parse_vmp_bytecode(data: bytes):
+    &#34;&#34;&#34;
+    VMProtect bytecode format (simplified):
+    - Opcode: 1 byte (handler table index)
+    - Operands: variable length depending on opcode
+    
+    This script dumps a disassembly of the bytecode stream.
+    &#34;&#34;&#34;
+    pos = 0
+    handlers = {
+        0x00: &#39;VM_ENTER&#39;,
+        0x01: &#39;VM_PUSH_IMM32&#39;,
+        0x02: &#39;VM_PUSH_IMM64&#39;,
+        0x03: &#39;VM_POP_R64&#39;,
+        0x04: &#39;VM_PUSH_R64&#39;,
+        0x10: &#39;VM_ADD_R64&#39;,
+        0x11: &#39;VM_SUB_R64&#39;,
+        0x12: &#39;VM_MUL_R64&#39;,
+        0x20: &#39;VM_JMP&#39;,
+        0x21: &#39;VM_JZ&#39;,
+        0x22: &#39;VM_JNZ&#39;,
+        0x30: &#39;VM_CALL_NATIVE&#39;,
+        0xFF: &#39;VM_EXIT&#39;,
+    }
+
+    while pos &lt; len(data):
+        opcode = data[pos]
+        handler_name = handlers.get(opcode, f&#39;UNK_{opcode:02X}&#39;)
+        pos += 1
+
+        if opcode == 0x01:  # VM_PUSH_IMM32
+            imm = int.from_bytes(data[pos:pos+4], &#39;little&#39;)
+            print(f&#34;  {handler_name} 0x{imm:x}&#34;)
+            pos += 4
+        elif opcode == 0x02:  # VM_PUSH_IMM64
+            imm = int.from_bytes(data[pos:pos+8], &#39;little&#39;)
+            print(f&#34;  {handler_name} 0x{imm:x}&#34;)
+            pos += 8
+        elif opcode in (0x03, 0x04, 0x10, 0x11, 0x12):
+            reg = data[pos]
+            print(f&#34;  {handler_name} r{reg}&#34;)
+            pos += 1
+        elif opcode in (0x20, 0x21, 0x22):
+            target = int.from_bytes(data[pos:pos+2], &#39;little&#39;)
+            print(f&#34;  {handler_name} {target}&#34;)
+            pos += 2
+        elif opcode == 0x30:
+            native_addr = int.from_bytes(data[pos:pos+8], &#39;little&#39;)
+            print(f&#34;  {handler_name} 0x{native_addr:x}&#34;)
+            pos += 8
+        elif opcode == 0xFF:
+            print(f&#34;  {handler_name}&#34;)
+            break
+        else:
+            pos += 1
+						</pre>
+						<ol>
+							<li><b>Dynamic analysis</b> : Hook the <abbr title="Virtual Machine">VM</abbr> dispatch loop, log opcodes and operands, reconstruct the execution trace.</li>
+						</ol>
+						<ol>
+							<li><b>Lifting</b> : If you fully document the <abbr title="Virtual Machine">VM</abbr> instruction set, write a "lifter" that translates <abbr title="Virtual Machine">VM</abbr> bytecode back to native x86 or to an IL (Intermediate Language) for analysis.</li>
+						</ol>
+					</section>
+					<section>
+						<h3 id="deobfuscation-workflow">Deobfuscation Workflow</h3>
+						<p>A systematic approach to deobfuscating an unknown binary:</p>
+						<pre class="plaintext">
+1. IDENTIFY
+   strings → entropy → section analysis → detect packer/protector
+
+2. UNPACK (if packed)
+   upx -d → manual OEP find → memory dump → import fix
+
+3. DECRYPT (if encrypted)
+   find crypto constants → locate decode function → emulate → extract plaintext
+
+4. STRING DECODE
+   floss → unicorn emulation of decode routines → custom scripts
+
+5. CFG RECOVERY
+   identify CFF patterns → deflat → manual state reconstruction
+
+6. VM DECOMPILE (if virtualized)
+   handler identification → bytecode extraction → lifter construction
+						</pre>
+					</section>
+					<section>
+						<h3 id="obfuscation-scanner-script">Obfuscation Scanner Script</h3>
+						<p>A comprehensive scanner that runs all detection checks:</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;obfuscation_scanner.py — Full-spectrum obfuscation detection&#34;&#34;&#34;
+
+import sys
+import struct
+import math
+from collections import Counter
+
+def entropy(data: bytes) -&gt; float:
+    &#34;&#34;&#34;Shannon entropy of byte sequence.&#34;&#34;&#34;
+    if not data:
+        return 0.0
+    counter = Counter(data)
+    length = len(data)
+    return -sum((count/length) * math.log2(count/length) 
+                for count in counter.values())
+
+def detect_packer(filepath: str) -&gt; dict:
+    results = {
+        &#39;file&#39;: filepath,
+        &#39;packed&#39;: False,
+        &#39;packer&#39;: None,
+        &#39;entropy&#39;: 0.0,
+        &#39;crypto_detected&#39;: [],
+        &#39;suspicious_imports&#39;: [],
+        &#39;section_anomalies&#39;: [],
+    }
+
+    with open(filepath, &#39;rb&#39;) as f:
+        data = f.read()
+
+    # 1. Section name analysis
+    if b&#39;UPX&#39; in data[:0x1000]:
+        results[&#39;packed&#39;] = True
+        results[&#39;packer&#39;] = &#39;UPX&#39;
+
+    # 2. Entropy analysis (&gt;7.0 = encrypted/compressed)
+    # Sample .text section
+    text_entropy = entropy(data[:min(len(data), 0x10000)])
+    results[&#39;entropy&#39;] = text_entropy
+    if text_entropy &gt; 7.0:
+        results[&#39;packed&#39;] = True
+        results[&#39;section_anomalies&#39;].append(f&#39;High entropy: {text_entropy:.2f}&#39;)
+
+    # 3. Import table analysis
+    # Packed binaries typically have very few imports
+    if b&#39;GetProcAddress&#39; in data and b&#39;LoadLibrary&#39; in data:
+        results[&#39;suspicious_imports&#39;].append(&#39;Dynamic loading detected&#39;)
+
+    # 4. Crypto constant scan
+    from find_crypto import scan_crypto_constants
+    crypto_hits = scan_crypto_constants(data, 0)
+    results[&#39;crypto_detected&#39;] = [c[0] for c in crypto_hits]
+
+    # 5. Stack string detection — scan for push+mov string patterns
+    # (simplified — full implementation would parse disassembly)
+    stack_string_patterns = find_stack_string_heuristic(data)
+    if stack_string_patterns:
+        results[&#39;section_anomalies&#39;].append(
+            f&#39;{len(stack_string_patterns)} stack-constructed strings&#39;)
+
+    return results
+
+def find_stack_string_heuristic(data: bytes) -&gt; list:
+    &#34;&#34;&#34;
+    Heuristic for stack strings: look for MOV RAX, &lt;ascii&gt; patterns.
+    Search for 48 B8 (MOV RAX, imm64) where imm64 contains printable bytes.
+    &#34;&#34;&#34;
+    results = []
+    pos = 0
+    while True:
+        pos = data.find(b&#39;\x48\xB8&#39;, pos)
+        if pos == -1:
+            break
+        if pos + 10 &lt;= len(data):
+            imm = struct.unpack_from(&#39;&lt;Q&#39;, data, pos + 2)[0]
+            try:
+                s = imm.to_bytes(8, &#39;little&#39;)
+                # Check if mainly printable
+                printable = sum(0x20 &lt;= b &lt;= 0x7e for b in s)
+                if printable &gt;= 5:
+                    results.append({&#39;offset&#39;: pos, &#39;string&#39;: s})
+            except:
+                pass
+        pos += 1
+    return results
+
+if __name__ == &#39;__main__&#39;:
+    for path in sys.argv[1:]:
+        result = detect_packer(path)
+        print(f&#34;\n{&#39;=&#39;*60}&#34;)
+        print(f&#34;File: {result[&#39;file&#39;]}&#34;)
+        print(f&#34;Packed: {result[&#39;packed&#39;]} ({result[&#39;packer&#39;] or &#39;unknown&#39;})&#34;)
+        print(f&#34;Entropy: {result[&#39;entropy&#39;]:.2f}&#34;)
+        print(f&#34;Crypto: {result[&#39;crypto_detected&#39;]}&#34;)
+        print(f&#34;Suspicious imports: {result[&#39;suspicious_imports&#39;]}&#34;)
+        print(f&#34;Anomalies: {result[&#39;section_anomalies&#39;]}&#34;)
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that reads an ELF file, prints each section with its Shannon entropy, and flags
+							a section as packed when its entropy exceeds
+							<code>7.0</code>
+							. Then scan the whole file for the first
+							bytes of the
+							<abbr title="Advanced Encryption Standard">AES</abbr>
+							S-box and report whether a crypto implementation
+							is statically linked.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;debug/elf&#34;
+	&#34;fmt&#34;
+	&#34;math&#34;
+	&#34;os&#34;
+)
+
+func entropy(b []byte) float64 {
+	if len(b) == 0 {
+		return 0
+	}
+	var counts [256]int
+	for _, c := range b {
+		counts[c]++
+	}
+	l := float64(len(b))
+	e := 0.0
+	for _, c := range counts {
+		if c == 0 {
+			continue
+		}
+		p := float64(c) / l
+		e -= p * math.Log2(p)
+	}
+	return e
+}
+
+var aesSbox = []byte{0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5}
+
+func indexOf(haystack, needle []byte) int {
+	for i := 0; i+len(needle) &lt;= len(haystack); i++ {
+		match := true
+		for j := range needle {
+			if haystack[i+j] != needle[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return i
+		}
+	}
+	return -1
+}
+
+func main() {
+	if len(os.Args) != 2 {
+		fmt.Fprintln(os.Stderr, &#34;usage: entropy &lt;elf&gt;&#34;)
+		os.Exit(1)
+	}
+
+	f, err := elf.Open(os.Args[1])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer f.Close()
+
+	for _, s := range f.Sections {
+		data, err := s.Data()
+		if err != nil || len(data) == 0 {
+			continue
+		}
+		e := entropy(data)
+		flag := &#34;&#34;
+		if e &gt; 7.0 {
+			flag = &#34;  &lt;-- high entropy&#34;
+		}
+		fmt.Printf(&#34;%-16s %8d bytes entropy=%.3f%s\n&#34;, s.Name, len(data), e, flag)
+	}
+
+	raw, err := os.ReadFile(os.Args[1])
+	if err == nil {
+		if idx := indexOf(raw, aesSbox); idx &gt;= 0 {
+			fmt.Printf(&#34;AES S-box candidate at offset 0x%x\n&#34;, idx)
+		} else {
+			fmt.Println(&#34;no AES S-box found&#34;)
+		}
+	}
+}
+						</pre>
+						<p>
+							Run it against a packed sample and its unpacked form, then explain which section changed entropy
+							and why:
+						</p>
+						<pre class="bash">
+go run entropy.go packed_binary
+upx -d packed_binary -o unpacked_binary
+go run entropy.go unpacked_binary
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://nostarch.com/practicalbinaryanalysis" target="_blank">Practical Binary Analysis</a> - Andriesse, Chapter 7 on code obfuscation</li>
+							<li><a class="icon-website" href="https://nostarch.com/idapro2.htm" target="_blank">The IDA Pro Book</a> - Eagle, obfuscated code analysis</li>
+							<li><a class="icon-website" href="https://upx.github.io/" target="_blank">UPX</a> - official packer and decompressor</li>
+							<li><a class="icon-website" href="https://www.unicorn-engine.org/" target="_blank">Unicorn engine</a> - <abbr title="Central Processing Unit">CPU</abbr> emulator for decode routines</li>
+							<li><a class="icon-website" href="https://angr.io/" target="_blank">angr</a> - symbolic execution for opaque predicates</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

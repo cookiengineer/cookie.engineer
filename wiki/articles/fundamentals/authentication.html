@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Authentication | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Authentication">
+		<meta name="keywords" content="authentication, kerberos, mfa, pam, ssh, techniques, totp">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Authentication">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Proving identity through knowledge, possession, and inherence factors on Linux systems">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/fundamentals/authentication.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Authentication">
+		<meta name="twitter:description" itemprop="description" content="Proving identity through knowledge, possession, and inherence factors on Linux systems">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-three-authentication-factors">1. The Three Authentication Factors</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#password-authentication">2. Password Authentication</a></b>
+					<ul>
+						<li><a href="#transmission">2.1 Transmission</a></li>
+						<li><a href="#storage">2.2 Storage</a></li>
+						<li><a href="#complexity-policies">2.3 Complexity Policies</a></li>
+						<li><a href="#rate-limiting">2.4 Rate Limiting</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge-response-authentication">3. Challenge-Response Authentication</a></b>
+					<ul>
+						<li><a href="#hmac-based-challenge-response">3.1 HMAC-Based Challenge-Response</a></li>
+						<li><a href="#digital-signature-challenge-response">3.2 Digital Signature Challenge-Response</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kerberos-authentication">4. Kerberos Authentication</a></b>
+					<ul>
+						<li><a href="#architecture">4.1 Architecture</a></li>
+						<li><a href="#authentication-flow">4.2 Authentication Flow</a></li>
+						<li><a href="#kerberos-on-arch-linux">4.3 Kerberos on Arch Linux</a></li>
+						<li><a href="#kerberos-strengths-and-weaknesses">4.4 Kerberos Strengths and Weaknesses</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ntlm-authentication">5. NTLM Authentication</a></b>
+					<ul>
+						<li><a href="#ntlmv2-flow">5.1 NTLMv2 Flow</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#totp-and-hotp">6. TOTP and HOTP</a></b>
+					<ul>
+						<li><a href="#how-totp-works">6.1 How TOTP Works</a></li>
+						<li><a href="#generating-totp-on-linux">6.2 Generating TOTP on Linux</a></li>
+						<li><a href="#totp-in-c">6.3 TOTP in C</a></li>
+						<li><a href="#totp-security-properties">6.4 TOTP Security Properties</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ssh-key-authentication">7. SSH Key Authentication</a></b>
+					<ul>
+						<li><a href="#key-types">7.1 Key Types</a></li>
+						<li><a href="#key-generation">7.2 Key Generation</a></li>
+						<li><a href="#authentication-flow">7.3 Authentication Flow</a></li>
+						<li><a href="#authorized-keys-file">7.4 authorized_keys File</a></li>
+						<li><a href="#ssh-agent">7.5 SSH Agent</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#pam-modules">8. PAM Modules</a></b>
+					<ul>
+						<li><a href="#pam-stack-configuration">8.1 PAM Stack Configuration</a></li>
+						<li><a href="#pam-types">8.2 PAM Types</a></li>
+						<li><a href="#control-flags">8.3 Control Flags</a></li>
+						<li><a href="#common-pam-modules">8.4 Common PAM Modules</a></li>
+						<li><a href="#setting-up-mfa-with-pam">8.5 Setting Up MFA with PAM</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#certificate-based-authentication">9. Certificate-Based Authentication</a></b>
+					<ul>
+						<li><a href="#how-it-works">9.1 How It Works</a></li>
+						<li><a href="#creating-client-certificates">9.2 Creating Client Certificates</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#session-management">10. Session Management</a></b>
+					<ul>
+						<li><a href="#http-sessions">10.1 HTTP Sessions</a></li>
+						<li><a href="#ssh-sessions">10.2 SSH Sessions</a></li>
+						<li><a href="#session-fixation">10.3 Session Fixation</a></li>
+						<li><a href="#session-hijacking">10.4 Session Hijacking</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#authentication-vs-authorization">11. Authentication vs Authorization</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#auditing-authentication">12. Auditing Authentication</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#summary-table">13. Summary Table</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/fundamentals/index.html">Fundamentals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/fundamentals/authentication.html">Authentication</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="authentication">Authentication</h2>
+					<p>Proving identity through knowledge, possession, and inherence factors on Linux systems</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Authentication is the process of verifying that a subject (user, process, device) is who it
+							claims to be. It is distinct from authorization, which determines what that verified subject
+							may then do, and confusing the two is a common source of security architecture failures. This
+							article covers the three factor types, password transport and storage, challenge-response, Kerberos,
+							<abbr title="NT LAN Manager">NTLM</abbr>
+							, TOTP,
+							<abbr title="Secure Shell">SSH</abbr>
+							keys,
+							<abbr title="Pluggable Authentication Modules">PAM</abbr>
+							, certificates, and session management. After reading it you can audit and reason about the
+							authentication stack on a Linux system.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/authorization.html">Authorization</a> - access control for a verified identity</li>
+							<li><a href="/wiki/articles/fundamentals/password-hashing.html">Password Hashing</a> - one-way password storage</li>
+							<li><a href="/wiki/articles/fundamentals/public-key-cryptography.html">Public Key Cryptography</a> - asymmetric keys and signatures</li>
+							<li><a href="/wiki/articles/fundamentals/tls.html">TLS</a> - encrypted transport and certificates</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-three-authentication-factors">1. The Three Authentication Factors</h3>
+						<p>Every authentication mechanism relies on one or more of three factor types:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Factor</th>
+									<th align="center">Category</th>
+									<th align="center">Examples</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Knowledge</td>
+									<td align="center">Something you<em>know</em></td>
+									<td align="center">Password, PIN, passphrase, secret question answer</td>
+								</tr>
+								<tr>
+									<td align="center">Possession</td>
+									<td align="center">Something you<em>have</em></td>
+									<td align="center">Smart card, YubiKey, phone (SMS/TOTP), hardware token</td>
+								</tr>
+								<tr>
+									<td align="center">Inherence</td>
+									<td align="center">Something you<em>are</em></td>
+									<td align="center">Fingerprint, face geometry, iris pattern, voiceprint, typing cadence</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							Two-factor authentication (2FA) means combining two distinct factor types - typically knowledge
+							<ul>
+								<li>possession. Multi-factor ( <abbr title="Multi-Factor Authentication">MFA</abbr> ) means two or more factors.</li>
+							</ul>
+						</p>
+						<p>
+							Using two passwords is
+							<em>not</em>
+							2FA; that is two knowledge factors.
+						</p>
+						<p>
+							Single-factor authentication is trivially broken when the factor is compromised. A stolen password
+							grants full access. A lost phone with SMS-based OTP grants nothing without the password. A fingerprint
+							without the device is useless. Each factor protects the others.
+						</p>
+					</section>
+					<section>
+						<h3 id="password-authentication">2. Password Authentication</h3>
+						<h4 id="transmission">2.1 Transmission</h4>
+						<p>
+							Passwords must never travel in cleartext. The standard mechanism on the web is to send the password
+							over a
+							<abbr title="Transport Layer Security">TLS</abbr>
+							-encrypted channel. The password arrives at the server
+							in plaintext inside the encrypted tunnel, and the server immediately hashes it for comparison
+							against stored hashes.
+						</p>
+						<pre class="plaintext">
+Client                          Server
+  |                               |
+  |---- TLS handshake -----------&gt;|
+  |&lt;--- TLS established ----------|
+  |                               |
+  |---- POST /login (password) --&gt;|  (encrypted by TLS)
+  |                               |  server hashes password
+  |                               |  compare to stored hash
+  |&lt;--- 200 OK (session cookie) --|
+  |                               |
+						</pre>
+						<p>
+							An alternative is PAKE (Password-Authenticated Key Exchange) such as
+							<code>SRP</code>
+							(Secure Remote Password)
+							or OPAQUE, where the password never leaves the client. These are superior but not yet universal.
+						</p>
+						<p>
+							For
+							<abbr title="Secure Shell">SSH</abbr>
+							, password authentication sends the password through the encrypted
+							<abbr title="Secure Shell">SSH</abbr>
+							tunnel. Key-based authentication avoids transmitting any password entirely.
+						</p>
+						<h4 id="storage">2.2 Storage</h4>
+						<p>
+							Passwords must never be stored in plaintext. They must not be encrypted (encryption implies
+							a decryption key exists - if the server is compromised, the attacker obtains both the key and
+							the encrypted passwords). Instead, passwords are stored as the output of a one-way cryptographic
+							hash function designed to be deliberately slow.
+						</p>
+						<p>
+							This topic is covered in depth in the
+							<a href="/wiki/articles/fundamentals/password-hashing.html">Password Hashing</a>
+							article. In summary:
+						</p>
+						<pre class="plaintext">
+/etc/shadow on a modern Linux system:
+
+user:$y$j9T$salt$hash:19500:0:99999:7:::
+      |   |   |    |
+      |   |   |    +-- actual hash output
+      |   |   +------- random salt
+      |   +----------- yescrypt identifier ($y$)
+      +--------------- full hash string
+						</pre>
+						<p>
+							The
+							<code>$y$</code>
+							prefix indicates yescrypt, the default on modern Arch Linux. Older systems may show
+							<code>$6$</code>
+							(SHA-512crypt) or
+							<code>$2b$</code>
+							(bcrypt).
+						</p>
+						<h4 id="complexity-policies">2.3 Complexity Policies</h4>
+						<p>Password entropy, measured in bits, is:</p>
+						<pre class="plaintext">
+entropy = length × log2(charset_size)
+						</pre>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Policy</th>
+									<th align="center">Example</th>
+									<th align="center">Entropy</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">8 chars, lowercase only</td>
+									<td align="center"><code>abcxyzpd</code></td>
+									<td align="center">8 x 4.7 = 37.6 bits</td>
+								</tr>
+								<tr>
+									<td align="center">8 chars, full ASCII</td>
+									<td align="center"><code>aB3$xYq!</code></td>
+									<td align="center">8 x 6.55 = 52.4 bits</td>
+								</tr>
+								<tr>
+									<td align="center">4-word Diceware</td>
+									<td align="center"><code>correct horse battery staple</code></td>
+									<td align="center">4 x 12.9 = 51.6 bits</td>
+								</tr>
+								<tr>
+									<td align="center">6-word Diceware</td>
+									<td align="center"><code>unmoved spike helium ravioli vowel drawn</code></td>
+									<td align="center">6 x 12.9 = 77.4 bits</td>
+								</tr>
+								<tr>
+									<td align="center">20-char truly random</td>
+									<td align="center"><code>Dx3#kL9$mP2@vR7!qN5^</code></td>
+									<td align="center">20 x 6.55 = 131 bits</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							The famous NIST SP 800-63B recommendation (2017): minimum 8 characters, allow up to 64, screen
+							against known compromised passwords, eliminate periodic change requirements, and eliminate arbitrary
+							composition rules (no mandatory special characters). Check passwords against haveibeenpwned's
+							SHA1 range
+							<abbr title="Application Programming Interface">API</abbr>
+							or the k-anonymity model.
+						</p>
+						<h4 id="rate-limiting">2.4 Rate Limiting</h4>
+						<p>Password authentication is vulnerable to online brute force. Mitigations:</p>
+						<pre class="bash">
+# Arch Linux: PAM tally2 for account lockout
+# /etc/pam.d/system-auth
+
+auth     required   pam_tally2.so   file=/var/log/tallylog deny=5 unlock_time=900
+account  required   pam_tally2.so
+						</pre>
+						<pre class="plaintext">
+# /etc/security/faillock.conf (modern alternative)
+deny = 5
+unlock_time = 600
+						</pre>
+						<p>
+							<abbr title="Secure Shell">SSH</abbr>
+							brute force mitigation:
+						</p>
+						<pre class="bash">
+# /etc/ssh/sshd_config
+MaxAuthTries 3
+MaxSessions 5
+
+# With fail2ban installed:
+# /etc/fail2ban/jail.local
+[sshd]
+enabled  = true
+maxretry = 3
+bantime  = 3600
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge-response-authentication">3. Challenge-Response Authentication</h3>
+						<p>
+							Challenge-response avoids sending secrets over the wire. The server sends a random challenge
+							(nonce), and the client must produce a response that proves knowledge of a shared secret without
+							revealing it.
+						</p>
+						<h4 id="hmac-based-challenge-response">3.1 HMAC-Based Challenge-Response</h4>
+						<pre class="plaintext">
+Server                            Client
+  |                                 |
+  |---- nonce (random 256-bit) ----&gt;|
+  |                                 |  response = HMAC-SHA256(secret, nonce)
+  |&lt;--- response ------------------|
+  |                                 |
+  |  Expected = HMAC-SHA256(secret, nonce)
+  |  Compare(response, Expected)
+						</pre>
+						<p>
+							The secret is never transmitted. An eavesdropper captures nonce and response but cannot compute
+							valid responses for different nonces without the secret. A replay attack fails because the nonce
+							is never reused (servers track used nonces).
+						</p>
+						<h4 id="digital-signature-challenge-response">3.2 Digital Signature Challenge-Response</h4>
+						<p>With asymmetric keys, the client signs the challenge with its private key:</p>
+						<pre class="plaintext">
+#!/bin/bash
+# Server generates challenge
+CHALLENGE=$(openssl rand -hex 32)
+echo &#34;Challenge: $CHALLENGE&#34;
+
+# Client signs challenge with private key
+# SIGNATURE=$(ssh-keygen -Y sign -f ~/.ssh/id_ed25519 -n file &lt;(echo &#34;$CHALLENGE&#34;))
+
+# Server verifies with client&#39;s public key
+# ssh-keygen -Y verify -f allowed_signers -I user -n file -s SIGNATURE &lt;(echo &#34;$CHALLENGE&#34;)
+						</pre>
+					</section>
+					<section>
+						<h3 id="kerberos-authentication">4. Kerberos Authentication</h3>
+						<p>
+							Kerberos is a trusted-third-party authentication protocol using symmetric cryptography. All
+							parties trust the Key Distribution Center (
+							<code>KDC</code>
+							).
+						</p>
+						<h4 id="architecture">4.1 Architecture</h4>
+						<pre class="plaintext">
+          KDC (Key Distribution Center)
+          +---------------------------+
+          |  AS  (Authentication      |
+          |       Service)            |
+          |  TGS (Ticket Granting     |
+          |       Service)            |
+          +---------------------------+
+                ^              ^
+               /                \
+              /                  \
+             /                    \
+        Client                  Service
+						</pre>
+						<h4 id="authentication-flow">4.2 Authentication Flow</h4>
+						<pre class="plaintext">
+Step 1: AS-REQ (Authentication Service Request)
+  Client → KDC:  {principal, TGT_REQUEST}
+  Client sends its principal name. No credentials yet.
+
+Step 2: AS-REP (Authentication Service Reply)
+  KDC → Client:  {K_C_TGS}K_c, TGT
+  KDC looks up client&#39;s secret key K_c (derived from password).
+  KDC generates a session key K_C_TGS for client↔TGS communication.
+  KDC creates TGT = {client, K_C_TGS, expiration}K_TGS (encrypted with TGS secret key).
+  KDC sends both: the session key encrypted with K_c, and the TGT.
+  Client decrypts the session key using K_c. The TGT it cannot decrypt (encrypted with K_TGS).
+
+Step 3: TGS-REQ (Ticket Granting Service Request)
+  Client → KDC:  {service_name, TGT, authenticator}
+  authenticator = {client, timestamp}K_C_TGS
+  The authenticator proves the client knows the session key.
+
+Step 4: TGS-REP (Ticket Granting Service Reply)
+  KDC → Client:  {K_C_S}K_C_TGS, service_ticket
+  KDC decrypts TGT, verifies authenticator.
+  KDC generates session key K_C_S for client↔service.
+  KDC creates service_ticket = {client, K_C_S, expiration}K_S.
+  Client receives the service ticket (encrypted with service key, unreadable by client).
+
+Step 5: AP-REQ (Application Request)
+  Client → Service:  {service_ticket, {client, timestamp}K_C_S}
+  Service decrypts ticket with its own key K_S to obtain K_C_S.
+  Service decrypts authenticator with K_C_S.
+  Service verifies timestamp (within clock skew window, typically 5 minutes).
+  Service grants access.
+
+Step 6: AP-REP (Application Reply, optional mutual auth)
+  Service → Client:  {timestamp+1}K_C_S
+  Client verifies: the service knows the session key, proving it decrypted the ticket.
+						</pre>
+						<h4 id="kerberos-on-arch-linux">4.3 Kerberos on Arch Linux</h4>
+						<pre class="bash">
+# Install Kerberos client
+pacman -S krb5
+
+# /etc/krb5.conf
+[libdefaults]
+    default_realm = EXAMPLE.COM
+    dns_lookup_realm = false
+    dns_lookup_kdc = false
+
+[realms]
+    EXAMPLE.COM = {
+        kdc = kdc.example.com
+        admin_server = kdc.example.com
+    }
+
+# Obtain a TGT
+kinit user@EXAMPLE.COM
+# Enter password. This sends AS-REQ and receives TGT (stored in credential cache).
+
+# List tickets
+klist
+
+# Destroy tickets
+kdestroy
+						</pre>
+						<h4 id="kerberos-strengths-and-weaknesses">4.4 Kerberos Strengths and Weaknesses</h4>
+						<p>
+							Strengths: mutual authentication, delegation (forwardable tickets), time-limited tickets, single
+							sign-on within a realm, no password sent over wire (password-derived key only used once to decrypt
+							TGT).
+						</p>
+						<p>
+							Weaknesses: the
+							<code>KDC</code>
+							is a single point of failure and compromise; time synchronization is critical
+							(
+							<abbr title="Network Time Protocol">NTP</abbr>
+							); password-derived key is susceptible to offline brute force
+							if AS-REP is captured (Kerberoasting); complex setup.
+						</p>
+					</section>
+					<section>
+						<h3 id="ntlm-authentication">5. NTLM Authentication</h3>
+						<p>
+							<abbr title="NT LAN Manager">NTLM</abbr>
+							(NT
+							<abbr title="Local Area Network">LAN</abbr>
+							Manager) is Microsoft's legacy challenge-response
+							protocol. The fundamentals are covered here; the
+							<a href="/wiki/articles/fundamentals/ntlm-attacks.html">NTLM Attacks</a>
+							article covers relay and hash-passing techniques in depth.
+						</p>
+						<h4 id="ntlmv2-flow">5.1 NTLMv2 Flow</h4>
+						<pre class="plaintext">
+Client                          Server
+  |                               |
+  |--- NEGOTIATE_MESSAGE --------&gt;|
+  |                               |
+  |&lt;-- CHALLENGE_MESSAGE ---------|
+  |    (server_nonce: 8 bytes)    |
+  |                               |
+  |--- AUTHENTICATE_MESSAGE -----&gt;|
+  |    (client_nonce, timestamp,  |
+  |     HMAC-MD5 response)        |
+  |                               |
+
+Response = HMAC-MD5(
+    HMAC_MD5(NT_Hash(password), upper(username) + domain),
+    server_nonce + client_nonce + timestamp
+)
+						</pre>
+						<p>
+							<abbr title="NT LAN Manager">NTLM</abbr>
+							hashes the password with MD4 (NT hash), then uses
+							<abbr title="Hash-based Message Authentication Code">HMAC</abbr>
+							-MD5 for challenge-response. Critically, the password hash is equivalent to the password: if
+							an attacker captures the NT hash, they can perform Pass-the-Hash without knowing the plaintext.
+							No salt is used - identical passwords produce identical NT hashes.
+						</p>
+					</section>
+					<section>
+						<h3 id="totp-and-hotp">6. TOTP and HOTP</h3>
+						<p>One-Time Passwords (OTPs) provide the "something you have" factor. The two standards are:</p>
+						<ul>
+							<li><b>HOTP</b> ( <abbr title="Hash-based Message Authentication Code">HMAC</abbr> -based OTP, RFC 4226): counter-based</li>
+							<li><b>TOTP</b> (Time-based OTP, RFC 6238): time-based (HOTP with Unix epoch time as counter)</li>
+						</ul>
+						<h4 id="how-totp-works">6.1 How TOTP Works</h4>
+						<pre class="plaintext">
+Both sides share:
+  - A secret key (20 bytes, typically Base32 encoded)
+  - A time step (usually 30 seconds)
+
+TOTP = HOTP(K, T)
+     = Truncate(HMAC-SHA1(K, T))
+
+Where T = floor((current_unix_time - T0) / time_step)
+
+The HMAC-SHA1 output is 20 bytes.
+Truncate extracts 31 bits via dynamic truncation:
+  1. Take the last 4 bits of the last byte → offset (0-15)
+  2. Take 4 bytes starting at offset
+  3. Mask off the most significant bit (to avoid signed integer issues)
+  4. Modulo 10^digits (usually 6 digits)
+
+Output: 6 or 8 decimal digits
+						</pre>
+						<h4 id="generating-totp-on-linux">6.2 Generating TOTP on Linux</h4>
+						<pre class="bash">
+# Generate a random TOTP secret (20 bytes, Base32)
+TOTP_SECRET=$(openssl rand 20 | base32)
+echo &#34;Secret: $TOTP_SECRET&#34;
+
+# Compute TOTP code (using oathtool)
+pacman -S oath-toolkit
+oathtool --totp --base32 &#34;$TOTP_SECRET&#34;
+
+# Verify with current time step
+oathtool --totp --base32 --now=&#34;$(date +%s)&#34; &#34;$TOTP_SECRET&#34;
+						</pre>
+						<h4 id="totp-in-c">6.3 TOTP in C</h4>
+						<pre class="c">
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+#include &lt;time.h&gt;
+#include &lt;openssl/hmac.h&gt;
+#include &lt;stdlib.h&gt;
+
+uint32_t hotp(const uint8_t *key, size_t key_len, uint64_t counter) {
+    uint8_t counter_be[8];
+    for (int i = 7; i &gt;= 0; i--) {
+        counter_be[i] = counter &amp; 0xFF;
+        counter &gt;&gt;= 8;
+    }
+
+    uint8_t hmac_result[20];
+    unsigned int result_len;
+    HMAC(EVP_sha1(), key, key_len, counter_be, 8,
+         hmac_result, &amp;result_len);
+
+    uint8_t offset = hmac_result[19] &amp; 0x0F;
+    uint32_t binary = (hmac_result[offset]     &amp; 0x7F) &lt;&lt; 24
+                    | (hmac_result[offset + 1] &amp; 0xFF) &lt;&lt; 16
+                    | (hmac_result[offset + 2] &amp; 0xFF) &lt;&lt; 8
+                    | (hmac_result[offset + 3] &amp; 0xFF);
+
+    return binary % 1000000;
+}
+
+uint32_t totp(const uint8_t *key, size_t key_len, uint32_t time_step) {
+    uint64_t counter = time(NULL) / time_step;
+    return hotp(key, key_len, counter);
+}
+						</pre>
+						<h4 id="totp-security-properties">6.4 TOTP Security Properties</h4>
+						<ul>
+							<li><b>Time synchronization</b> : Both client and server must agree on time. Typically +/-1 time step is allowed (30-second grace window).</li>
+							<li><b>Shared secret compromise</b> : If the secret is stolen from the server's database, all OTPs can be generated. The secret must be protected as strongly as passwords.</li>
+							<li><b>No protection against real-time phishing</b> : An attacker who captures the OTP via a phishing page and replays it within the same 30-second window can authenticate. FIDO2/ <abbr title="Universal 2nd Factor">U2F</abbr> solves this by binding to the <abbr title="Transport Layer Security">TLS</abbr> channel (origin-bound).</li>
+							<li><b>Replay protection</b> : Servers must track the last used counter/time window and reject reuse.</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="ssh-key-authentication">7. SSH Key Authentication</h3>
+						<p>
+							<abbr title="Secure Shell">SSH</abbr>
+							public key authentication uses asymmetric cryptography to prove identity
+							without transmitting secrets.
+						</p>
+						<h4 id="key-types">7.1 Key Types</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Type</th>
+									<th align="center">Algorithm</th>
+									<th align="center">Recommended</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>ssh-ed25519</code></td>
+									<td align="center">Ed25519 (Curve25519)</td>
+									<td align="center">Yes - preferred</td>
+								</tr>
+								<tr>
+									<td align="center"><code>ecdsa-sha2-nistp256</code></td>
+									<td align="center">ECDSA over NIST P-256</td>
+									<td align="center">Okay</td>
+								</tr>
+								<tr>
+									<td align="center"><code>ecdsa-sha2-nistp384</code></td>
+									<td align="center">ECDSA over NIST P-384</td>
+									<td align="center">Okay</td>
+								</tr>
+								<tr>
+									<td align="center"><code>ecdsa-sha2-nistp521</code></td>
+									<td align="center">ECDSA over NIST P-521</td>
+									<td align="center">Okay</td>
+								</tr>
+								<tr>
+									<td align="center"><code>ssh-rsa</code></td>
+									<td align="center">RSA with SHA-1 signatures</td>
+									<td align="center"><b>Deprecated</b>OpenSSH 8.8+</td>
+								</tr>
+								<tr>
+									<td align="center"><code>rsa-sha2-256</code></td>
+									<td align="center">RSA with SHA-256 signatures</td>
+									<td align="center">Acceptable (3072+ bits)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>rsa-sha2-512</code></td>
+									<td align="center">RSA with SHA-512 signatures</td>
+									<td align="center">Acceptable (3072+ bits)</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="key-generation">7.2 Key Generation</h4>
+						<pre class="bash">
+# Ed25519 (recommended)
+ssh-keygen -t ed25519 -C &#34;user@host&#34; -f ~/.ssh/id_ed25519
+
+# RSA 4096 (acceptable alternative)
+ssh-keygen -t rsa -b 4096 -C &#34;user@host&#34; -f ~/.ssh/id_rsa
+
+# Extract public key from private key
+ssh-keygen -y -f ~/.ssh/id_ed25519
+						</pre>
+						<h4 id="authentication-flow">7.3 Authentication Flow</h4>
+						<pre class="plaintext">
+Client                                              Server
+  |                                                   |
+  |--- SSH_MSG_USERAUTH_REQUEST -------------------&gt;  |
+  |    (username, &#34;publickey&#34;, key_algorithm, pubkey)  |
+  |                                                   | Checks authorized_keys
+  |                                                   | If key found for user:
+  |&lt;-- SSH_MSG_USERAUTH_PK_OK ---------------------   |
+  |    (key_algorithm, pubkey)                         |
+  |                                                   |
+  |    signature = sign(private_key,                  |
+  |        session_id +                                |
+  |        SSH_MSG_USERAUTH_REQUEST +                  |
+  |        username + service + &#34;publickey&#34; +          |
+  |        TRUE + key_algorithm + pubkey)              |
+  |                                                   |
+  |--- SSH_MSG_USERAUTH_REQUEST -------------------&gt;  |
+  |    (username, &#34;publickey&#34;, TRUE,                   |
+  |     key_algorithm, pubkey, signature)              |
+  |                                                   | verify(pubkey, data, signature)
+  |&lt;-- SSH_MSG_USERAUTH_SUCCESS -------------------   |
+						</pre>
+						<p>
+							The message signed includes the
+							<abbr title="Secure Shell">SSH</abbr>
+							session identifier, binding the authentication
+							to this specific encrypted session. This prevents a server from recording an authentication
+							attempt and replaying it against a different server (the session IDs would differ).
+						</p>
+						<h4 id="authorized-keys-file">7.4 authorized_keys File</h4>
+						<pre class="plaintext">
+~/.ssh/authorized_keys (one key per line):
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... user@host
+						</pre>
+						<p>Options can restrict keys:</p>
+						<pre class="plaintext">
+# Restrict to a specific command
+command=&#34;/usr/local/bin/backup.sh&#34;,no-agent-forwarding,no-port-forwarding,no-pty ssh-ed25519 AAA... backup-bot
+
+# Restrict by source IP
+from=&#34;10.0.0.0/8,192.168.1.0/24&#34; ssh-ed25519 AAA... user@host
+						</pre>
+						<h4 id="ssh-agent">7.5 SSH Agent</h4>
+						<p>
+							<code>ssh-agent</code>
+							holds decrypted private keys in memory, allowing use without re-entering passphrases:
+						</p>
+						<pre class="bash">
+# Start agent (typically done by DM/shell init)
+eval $(ssh-agent)
+
+# Add key (prompts for passphrase, decrypts, stores in agent)
+ssh-add ~/.ssh/id_ed25519
+
+# List loaded keys
+ssh-add -l
+
+# Forward agent to remote host (USE WITH CAUTION)
+ssh -A user@host
+# Then on remote host, ssh-agent socket forwards to local agent.
+# The remote root user can use your forwarded agent.
+						</pre>
+						<p>
+							Agent forwarding is dangerous: anyone with root on the intermediate host can use your agent
+							socket to authenticate as you to other hosts.
+						</p>
+					</section>
+					<section>
+						<h3 id="pam-modules">8. PAM Modules</h3>
+						<p>
+							<abbr title="Pluggable Authentication Modules">PAM</abbr>
+							is the authentication framework on Linux. Applications
+							call
+							<abbr title="Pluggable Authentication Modules">PAM</abbr>
+							;
+							<abbr title="Pluggable Authentication Modules">PAM</abbr>
+							calls
+							configured modules. This allows changing authentication policies without modifying applications.
+						</p>
+						<h4 id="pam-stack-configuration">8.1 PAM Stack Configuration</h4>
+						<pre class="plaintext">
+/etc/pam.d/
+  ├── system-auth    (main authentication stack)
+  ├── system-login   (login-specific)
+  ├── passwd         (password changes)
+  ├── sudo           (privilege escalation)
+  └── sshd           (SSH daemon)
+						</pre>
+						<p>
+							A
+							<abbr title="Pluggable Authentication Modules">PAM</abbr>
+							configuration file consists of lines in the format:
+						</p>
+						<pre class="plaintext">
+type    control    module-path    module-arguments
+						</pre>
+						<h4 id="pam-types">8.2 PAM Types</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Type</th>
+									<th align="center">Purpose</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>auth</code></td>
+									<td align="center">Authenticate the user (prove identity)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>account</code></td>
+									<td align="center">Account management (expiration, time restrictions)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>session</code></td>
+									<td align="center">Session setup/teardown (logging, environment, home directory)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>password</code></td>
+									<td align="center">Password updates (quality checking, hash update)</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="control-flags">8.3 Control Flags</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Control</th>
+									<th align="center">Behavior</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>required</code></td>
+									<td align="center">Module must succeed. If it fails, subsequent modules still run but overall auth fails.</td>
+								</tr>
+								<tr>
+									<td align="center"><code>requisite</code></td>
+									<td align="center">Module must succeed. If it fails, return immediately (no further modules).</td>
+								</tr>
+								<tr>
+									<td align="center"><code>sufficient</code></td>
+									<td align="center">If this module succeeds and no<code>required</code>modules have failed, return success immediately.</td>
+								</tr>
+								<tr>
+									<td align="center"><code>optional</code></td>
+									<td align="center">Only matters if no other module determines success/failure.</td>
+								</tr>
+								<tr>
+									<td align="center"><code>include</code></td>
+									<td align="center">Pull in another config file's stack.</td>
+								</tr>
+								<tr>
+									<td align="center"><code>substack</code></td>
+									<td align="center">Like include, but the included stack's results are aggregated into a single result.</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="common-pam-modules">8.4 Common PAM Modules</h4>
+						<pre class="bash">
+# /etc/pam.d/system-auth (Arch Linux example)
+
+# Authenticate
+auth      required  pam_unix.so     try_first_pass nullok
+auth      required  pam_faillock.so preauth silent
+auth      optional  pam_permit.so
+
+# Account
+account   required  pam_unix.so
+account   required  pam_time.so
+account   optional  pam_permit.so
+
+# Password
+password  required  pam_unix.so     sha512 shadow nullok
+password  optional  pam_permit.so
+
+# Session
+session   required  pam_unix.so
+session   optional  pam_permit.so
+						</pre>
+						<p>Important modules:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Module</th>
+									<th align="center">Purpose</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>pam_unix.so</code></td>
+									<td align="center">Traditional Unix password authentication (/etc/shadow)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>pam_faillock.so</code></td>
+									<td align="center">Account lockout after failed attempts</td>
+								</tr>
+								<tr>
+									<td align="center"><code>pam_tally2.so</code></td>
+									<td align="center">Account lockout (legacy, replaced by faillock)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>pam_google_authenticator.so</code></td>
+									<td align="center">TOTP second factor</td>
+								</tr>
+								<tr>
+									<td align="center"><code>pam_u2f.so</code></td>
+									<td align="center">FIDO U2F hardware token support</td>
+								</tr>
+								<tr>
+									<td align="center"><code>pam_ssh.so</code></td>
+									<td align="center">SSH key authentication via PAM</td>
+								</tr>
+								<tr>
+									<td align="center"><code>pam_ldap.so</code></td>
+									<td align="center">LDAP directory authentication</td>
+								</tr>
+								<tr>
+									<td align="center"><code>pam_mount.so</code></td>
+									<td align="center">Auto-mount volumes on login</td>
+								</tr>
+								<tr>
+									<td align="center"><code>pam_env.so</code></td>
+									<td align="center">Set environment variables</td>
+								</tr>
+								<tr>
+									<td align="center"><code>pam_limits.so</code></td>
+									<td align="center">Enforce resource limits (/etc/security/limits.conf)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>pam_access.so</code></td>
+									<td align="center">Host-based access control (/etc/security/access.conf)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>pam_time.so</code></td>
+									<td align="center">Time-based access restrictions</td>
+								</tr>
+								<tr>
+									<td align="center"><code>pam_shells.so</code></td>
+									<td align="center">Verify user's shell is in /etc/shells</td>
+								</tr>
+								<tr>
+									<td align="center"><code>pam_ecryptfs.so</code></td>
+									<td align="center">Mount encrypted home directories</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="setting-up-mfa-with-pam">8.5 Setting Up MFA with PAM</h4>
+						<pre class="bash">
+# Install Google Authenticator PAM module
+pacman -S libpam-google-authenticator
+
+# Generate secret for user
+google-authenticator -t -d -f -r 3 -R 30 -W
+# This creates ~/.google_authenticator with the shared secret
+
+# /etc/pam.d/sshd
+# Add before the pam_unix.so line:
+auth     required  pam_google_authenticator.so
+
+# /etc/pam.d/sudo (for sudo MFA)
+auth     required  pam_google_authenticator.so
+
+# /etc/ssh/sshd_config
+ChallengeResponseAuthentication yes
+UsePAM yes
+						</pre>
+					</section>
+					<section>
+						<h3 id="certificate-based-authentication">9. Certificate-Based Authentication</h3>
+						<p>
+							<abbr title="Transport Layer Security">TLS</abbr>
+							client certificates provide mutual authentication: not only
+							does the client verify the server (standard
+							<abbr title="Transport Layer Security">TLS</abbr>
+							), but the server
+							verifies the client via a certificate.
+						</p>
+						<h4 id="how-it-works">9.1 How It Works</h4>
+						<pre class="plaintext">
+1. Client generates key pair and CSR (Certificate Signing Request)
+2. CA signs the CSR, producing a client certificate
+3. Server&#39;s trust store contains the CA certificate
+4. During TLS handshake, server sends CertificateRequest
+5. Client sends its certificate
+6. Client signs the handshake data with its private key (CertificateVerify)
+7. Server verifies: certificate chain → CA trust, signature matches public key
+						</pre>
+						<h4 id="creating-client-certificates">9.2 Creating Client Certificates</h4>
+						<pre class="bash">
+# Create a CA (Certificate Authority)
+openssl genpkey -algorithm ed25519 -out ca-key.pem
+openssl req -new -x509 -key ca-key.pem -out ca-cert.pem -days 3650 \
+    -subj &#34;/CN=My CA&#34;
+
+# Create client key and CSR
+openssl genpkey -algorithm ed25519 -out client-key.pem
+openssl req -new -key client-key.pem -out client.csr \
+    -subj &#34;/CN=client.example.com&#34;
+
+# Sign client CSR with CA
+openssl x509 -req -in client.csr -CA ca-cert.pem -CAkey ca-key.pem \
+    -out client-cert.pem -days 365 -set_serial 01
+
+# Configure nginx to require client certificates
+cat &gt; /etc/nginx/sites-available/secure &lt;&lt; &#39;EOF&#39;
+server {
+    listen 443 ssl;
+    ssl_certificate     /etc/nginx/ssl/server-cert.pem;
+    ssl_certificate_key /etc/nginx/ssl/server-key.pem;
+
+    ssl_client_certificate /etc/nginx/ssl/ca-cert.pem;
+    ssl_verify_client on;
+    ssl_verify_depth 1;
+
+    location / {
+        root /srv/http;
+    }
+}
+EOF
+						</pre>
+					</section>
+					<section>
+						<h3 id="session-management">10. Session Management</h3>
+						<p>After authentication, a session is established to avoid re-authenticating every request.</p>
+						<h4 id="http-sessions">10.1 HTTP Sessions</h4>
+						<pre class="plaintext">
+POST /login (credentials) → 200 OK
+Set-Cookie: session_id=&lt;random_256bit_token&gt;; HttpOnly; Secure; SameSite=Lax
+
+All subsequent requests:
+Cookie: session_id=&lt;random_256bit_token&gt;
+
+Server looks up session_id in server-side store:
+{ session_id -&gt; { user_id, created_at, expires_at, ... } }
+						</pre>
+						<p>
+							The session token must be: - Generated from a
+							<abbr title="Content Security Policy">CSP</abbr>
+							RNG (not
+							<code>rand()</code>
+							or
+							<code>Math.random()</code>
+							) - At least 128 bits of entropy (256 bits recommended) - Transmitted only
+							over
+							<abbr title="Hypertext Transfer Protocol Secure">HTTPS</abbr>
+							(
+							<code>Secure</code>
+							flag) - Inaccessible to JavaScript
+							(
+							<code>HttpOnly</code>
+							flag) - Protected against
+							<abbr title="Cross-Site Request Forgery">CSRF</abbr>
+							(
+							<code>SameSite=Lax</code>
+							or
+							<code>SameSite=Strict</code>
+							)
+						</p>
+						<h4 id="ssh-sessions">10.2 SSH Sessions</h4>
+						<p>
+							<abbr title="Secure Shell">SSH</abbr>
+							sessions are inherent in the encrypted
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							connection. The session persists until the connection closes.
+							<abbr title="Secure Shell">SSH</abbr>
+							supports session
+							multiplexing:
+						</p>
+						<pre class="bash">
+# Configure multiplexing
+# ~/.ssh/config
+Host *
+    ControlMaster auto
+    ControlPath ~/.ssh/control/%C
+    ControlPersist 10m
+
+# First connection creates master
+ssh user@host  # Authenticates, starts master
+
+# Subsequent connections reuse master (no re-auth)
+ssh user@host  # Uses existing master connection
+						</pre>
+						<h4 id="session-fixation">10.3 Session Fixation</h4>
+						<p>
+							Session fixation occurs when an attacker forces a victim to use a known session ID. After the
+							victim authenticates, the attacker's known session ID becomes authenticated.
+						</p>
+						<p>
+							Mitigations: - Regenerate the session ID on authentication (
+							<abbr title="PHP Hypertest Preprocessor">PHP</abbr>
+							's
+							<code>session_regenerate_id(true)</code>
+							) - Never accept session IDs from
+							<abbr title="Uniform Resource Locator">URL</abbr>
+							parameters - Bind session to additional attributes (
+							<abbr title="Internet Protocol">IP</abbr>
+							, User-Agent -
+							with caution)
+						</p>
+						<h4 id="session-hijacking">10.4 Session Hijacking</h4>
+						<p>
+							If an attacker steals a valid session token (via
+							<abbr title="Cross-Site Scripting">XSS</abbr>
+							, network sniffing,
+							malware), they can impersonate the victim. Mitigations: -
+							<abbr title="Transport Layer Security">TLS</abbr>
+							everywhere
+							(encrypt the token in transit) - HttpOnly cookies (prevent
+							<abbr title="Cross-Site Scripting">XSS</abbr>
+							access)
+							<ul>
+								<li>Short session lifetimes + absolute timeouts</li>
+								<li>Session binding ( <abbr title="Internet Protocol">IP</abbr> , user agent fingerprint)</li>
+							</ul>
+						</p>
+					</section>
+					<section>
+						<h3 id="authentication-vs-authorization">11. Authentication vs Authorization</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Authentication</th>
+									<th align="center">Authorization</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><em>Who are you?</em></td>
+									<td align="center"><em>What can you do?</em></td>
+								</tr>
+								<tr>
+									<td align="center">Verifies identity</td>
+									<td align="center">Determines permissions</td>
+								</tr>
+								<tr>
+									<td align="center">Occurs first</td>
+									<td align="center">Depends on authentication</td>
+								</tr>
+								<tr>
+									<td align="center">Passwords, keys, biometrics</td>
+									<td align="center">ACLs, roles, capabilities</td>
+								</tr>
+								<tr>
+									<td align="center">Results in a session/principal</td>
+									<td align="center">Results in access decisions</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							This distinction is fundamental to security architecture. Many breaches occur because authentication
+							is strong but authorization is weak - the attacker gets in (or bypasses auth), and the system
+							assumes the authenticated user should have broad access. The principle of least privilege dictates
+							that authorization should grant only what is strictly necessary, regardless of the strength
+							of authentication.
+						</p>
+					</section>
+					<section>
+						<h3 id="auditing-authentication">12. Auditing Authentication</h3>
+						<pre class="bash">
+# Check successful SSH authentications
+journalctl -u sshd | grep &#34;Accepted publickey&#34;
+
+# Check failed authentications
+journalctl -u sshd | grep &#34;Failed password&#34;
+# Or check the btmp database (bad logins)
+lastb | head -20
+
+# List currently logged-in users and their origins
+who
+
+# Show last logins for all users
+last
+
+# Check PAM configuration
+cat /etc/pam.d/system-auth
+cat /etc/pam.d/sshd
+
+# List user password hashes (with expiration info)
+passwd -S username
+
+# Check for accounts without passwords
+awk -F: &#39;($2 == &#34;&#34; || $2 == &#34;!&#34; || $2 == &#34;*&#34;) { print $1 }&#39; /etc/shadow
+
+# Show SSH key fingerprints for current user
+ssh-keygen -lf ~/.ssh/id_ed25519.pub
+
+# List authorized keys
+cat ~/.ssh/authorized_keys
+
+# Check TOTP secret (if configured)
+# (stored in ~/.google_authenticator - protect this file!)
+						</pre>
+					</section>
+					<section>
+						<h3 id="summary-table">13. Summary Table</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Method</th>
+									<th align="center">Factor(s)</th>
+									<th align="center">Strength</th>
+									<th align="center">Weakness</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Password alone</td>
+									<td align="center">Knowledge</td>
+									<td align="center">Low</td>
+									<td align="center">Brute force, phishing, reuse, keyloggers</td>
+								</tr>
+								<tr>
+									<td align="center">SSH key (with passphrase)</td>
+									<td align="center">Knowledge + Possession</td>
+									<td align="center">High</td>
+									<td align="center">Key file theft, agent hijack</td>
+								</tr>
+								<tr>
+									<td align="center">TOTP + password</td>
+									<td align="center">Knowledge + Possession</td>
+									<td align="center">Medium-High</td>
+									<td align="center">Real-time phishing, secret DB theft</td>
+								</tr>
+								<tr>
+									<td align="center">FIDO2/U2F + password</td>
+									<td align="center">Knowledge + Possession</td>
+									<td align="center">Very High</td>
+									<td align="center">Physical token loss</td>
+								</tr>
+								<tr>
+									<td align="center">Smart card + PIN</td>
+									<td align="center">Knowledge + Possession</td>
+									<td align="center">High</td>
+									<td align="center">Reader required, physical theft</td>
+								</tr>
+								<tr>
+									<td align="center">TLS client certificate</td>
+									<td align="center">Possession</td>
+									<td align="center">High</td>
+									<td align="center">CA compromise, key file theft</td>
+								</tr>
+								<tr>
+									<td align="center">Biometric alone</td>
+									<td align="center">Inherence</td>
+									<td align="center">Medium</td>
+									<td align="center">Cannot rotate, spoofable, false accept/reject</td>
+								</tr>
+								<tr>
+									<td align="center">Kerberos ticket</td>
+									<td align="center">Knowledge (derived)</td>
+									<td align="center">Medium-High</td>
+									<td align="center">KDC availability, clock skew, Golden Ticket</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Implement TOTP verification in Go and compare the result with
+							<code>oathtool</code>
+							. Decode a Base32 secret,
+							compute HOTP for the current 30-second time step with
+							<code>crypto/hmac</code>
+							and
+							<code>crypto/sha1</code>
+							, apply
+							the dynamic truncation, then reduce modulo
+							<code>10^6</code>
+							. The example computes the code; extend it
+							to accept a window of plus or minus one time step when verifying user input.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;crypto/hmac&#34;
+	&#34;crypto/sha1&#34;
+	&#34;encoding/base32&#34;
+	&#34;encoding/binary&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;strings&#34;
+	&#34;time&#34;
+)
+
+func hotp(key []byte, counter uint64, digits int) int {
+	var buf [8]byte
+	binary.BigEndian.PutUint64(buf[:], counter)
+
+	mac := hmac.New(sha1.New, key)
+	mac.Write(buf[:])
+	sum := mac.Sum(nil)
+
+	offset := sum[len(sum)-1] &amp; 0x0f
+	code := binary.BigEndian.Uint32(sum[offset:offset+4]) &amp; 0x7fffffff
+
+	mod := 1
+	for i := 0; i &lt; digits; i++ {
+		mod *= 10
+	}
+	return int(code) % mod
+}
+
+func totp(secret string, step time.Duration, digits int) (int, error) {
+	key, err := base32.StdEncoding.WithPadding(base32.NoPadding).
+		DecodeString(strings.ToUpper(strings.TrimSpace(secret)))
+	if err != nil {
+		return 0, err
+	}
+	counter := uint64(time.Now().Unix()) / uint64(step.Seconds())
+	return hotp(key, counter, digits), nil
+}
+
+func main() {
+	if len(os.Args) != 2 {
+		fmt.Fprintf(os.Stderr, &#34;usage: %s &lt;base32-secret&gt;\n&#34;, os.Args[0])
+		os.Exit(1)
+	}
+	code, err := totp(os.Args[1], 30*time.Second, 6)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf(&#34;%06d\n&#34;, code)
+}
+						</pre>
+						<pre class="bash">
+SECRET=$(openssl rand 20 | base32 | tr -d &#39;=&#39;);
+go run . &#34;$SECRET&#34;;
+oathtool --totp --base32 &#34;$SECRET&#34;;
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc6238" target="_blank">RFC 6238 - TOTP: Time-Based One-Time Password Algorithm</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc4226" target="_blank">RFC 4226 - HOTP: An HMAC-Based One-Time Password Algorithm</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc4120" target="_blank">RFC 4120 - The Kerberos Network Authentication Service (V5)</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc6749" target="_blank">RFC 6749 - The OAuth 2.0 Authorization Framework</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc7519" target="_blank">RFC 7519 - JSON Web Token (JWT)</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/pam.8" target="_blank">pam(8) - Pluggable Authentication Modules</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/ssh-keygen.1" target="_blank">ssh-keygen(1) - OpenSSH key generation</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

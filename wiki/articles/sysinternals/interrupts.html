@@ -1,0 +1,1373 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Interrupts | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Interrupts">
+		<meta name="keywords" content="apic, idt, interrupts, irq, napi, nmi, softirqs, sysinternals, timer, x86-64">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Interrupts">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Hardware and software interrupt architecture on x86-64 Linux, from the IDT through the APIC, softirqs, and NAPI, to the Windows IRQL comparison.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/sysinternals/interrupts.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Interrupts">
+		<meta name="twitter:description" itemprop="description" content="Hardware and software interrupt architecture on x86-64 Linux, from the IDT through the APIC, softirqs, and NAPI, to the Windows IRQL comparison.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-interrupt-taxonomy">The Interrupt Taxonomy</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#x86-64-interrupt-vector-table-0-255">x86-64 Interrupt Vector Table (0-255)</a></b>
+					<ul>
+						<li><a href="#linux-interrupt-vectors">Linux Interrupt Vectors</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#interrupt-descriptor-table-idt">Interrupt Descriptor Table (IDT)</a></b>
+					<ul>
+						<li><a href="#dumping-the-idt-on-a-live-system">Dumping the IDT on a live system</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#apic-architecture">APIC Architecture</a></b>
+					<ul>
+						<li><a href="#msimsi-x-message-signaled-interrupts">MSI/MSI-X (Message Signaled Interrupts)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#procinterrupts-format">/proc/interrupts Format</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#interrupt-handling-flow">Interrupt Handling Flow</a></b>
+					<ul>
+						<li><a href="#kernel-source-references">Kernel source references</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#top-half-vs-bottom-half">Top Half vs Bottom Half</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#linux-bottom-half-mechanisms">Linux Bottom-Half Mechanisms</a></b>
+					<ul>
+						<li><a href="#softirqs">Softirqs</a></li>
+						<li><a href="#tasklets">Tasklets</a></li>
+						<li><a href="#workqueues">Workqueues</a></li>
+						<li><a href="#threaded-irqs">Threaded IRQs</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#napi-interrupt-coalescing">NAPI Interrupt Coalescing</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#interrupt-affinity">Interrupt Affinity</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#timer-interrupts">Timer Interrupts</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tracing-interrupts">Tracing Interrupts</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#windows-comparison-irql-and-dpcapc">Windows Comparison: IRQL and DPC/APC</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/sysinternals/index.html">Sysinternals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/sysinternals/interrupts.html">Interrupts</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="interrupts">Interrupts</h2>
+					<p>
+						Hardware and software interrupt architecture on x86-64 Linux, from the IDT through the
+						<abbr title="Application Programming Interface">API</abbr>
+						C, softirqs, and N
+						<abbr title="Application Programming Interface">API</abbr>
+						, to the Windows
+						<code>IRQL</code>
+						comparison.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							An interrupt suspends the current instruction stream so the
+							<abbr title="Central Processing Unit">CPU</abbr>
+							can
+							service an event. This article follows the complete path from a device asserting an interrupt
+							line, through the
+							<abbr title="Advanced Programmable Interrupt Controller">APIC</abbr>
+							and the Interrupt Descriptor
+							Table, into a Linux handler and its bottom-half mechanisms. After reading it you can decode
+							<code>/proc/interrupts</code>
+							, follow a handler through the kernel source, and contrast the Linux model
+							with the Windows
+							<code>IRQL</code>
+							model.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/system-calls.html">System Calls</a> - syscall mechanism, user-kernel transition</li>
+							<li><a href="/wiki/articles/sysinternals/kernel-architecture.html">Kernel Architecture</a> - kernel layout, boot process, subsystems</li>
+							<li><a href="/wiki/articles/fundamentals/virtual-memory.html">Virtual Memory</a> - page tables, page fault handling</li>
+							<li><a href="/wiki/articles/fundamentals/elf.html">ELF</a> - executable format, segmentation fault origins</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-interrupt-taxonomy">The Interrupt Taxonomy</h3>
+						<p>
+							<abbr title="Central Processing Unit">CPU</abbr>
+							s receive notification of events through three distinct mechanisms,
+							all routed through the same hardware table - the Interrupt Descriptor Table (IDT):
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Type</th>
+									<th align="center">Source</th>
+									<th align="center">Examples</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Hardware Interrupt</td>
+									<td align="center">External device via APIC/LAPIC</td>
+									<td align="center">NIC packet, disk I/O, timer keyboard, mouse, NMI</td>
+								</tr>
+								<tr>
+									<td align="center">Exception (Fault/Trap)</td>
+									<td align="center">CPU itself instruction error</td>
+									<td align="center">Page fault (#PF), div0 (#DE) breakpoint (#BP), GPF (#GP)</td>
+								</tr>
+								<tr>
+									<td align="center">Software Interrupt</td>
+									<td align="center">Program requested via<code>int N</code></td>
+									<td align="center">int $0x80 (legacy syscall) int3 (debugger breakpoint)</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>Exceptions are further subdivided into three categories based on the saved instruction pointer:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Category</th>
+									<th align="center">RIP points to...</th>
+									<th align="center">Example</th>
+									<th align="center">Behavior</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Fault</td>
+									<td align="center">Faulting instruction</td>
+									<td align="center">Page fault (#PF)</td>
+									<td align="center">Instruction can be retried after fix</td>
+								</tr>
+								<tr>
+									<td align="center">Trap</td>
+									<td align="center">Next instruction</td>
+									<td align="center">Breakpoint (#BP)</td>
+									<td align="center">Debugger single-step</td>
+								</tr>
+								<tr>
+									<td align="center">Abort</td>
+									<td align="center">Unpredictable location</td>
+									<td align="center">Machine check (#MC)</td>
+									<td align="center">Process/CPU likely unrecoverable</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="x86-64-interrupt-vector-table-0-255">x86-64 Interrupt Vector Table (0-255)</h3>
+						<p>
+							The x86-64 architecture reserves the first 32 vectors (0-31) for exceptions and non-maskable
+							interrupts. Vectors 32-255 are available for external hardware interrupts and software-defined
+							uses.
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Vec</th>
+									<th align="center">Mnemonic</th>
+									<th align="center">Name</th>
+									<th align="center">Linux Handler</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">0</td>
+									<td align="center">#DE</td>
+									<td align="center">Divide Error</td>
+									<td align="center">divide_error()</td>
+								</tr>
+								<tr>
+									<td align="center">1</td>
+									<td align="center">#DB</td>
+									<td align="center">Debug</td>
+									<td align="center">debug() / hw_breakpoint()</td>
+								</tr>
+								<tr>
+									<td align="center">2</td>
+									<td align="center">-</td>
+									<td align="center">NMI</td>
+									<td align="center">nmi()</td>
+								</tr>
+								<tr>
+									<td align="center">3</td>
+									<td align="center">#BP</td>
+									<td align="center">Breakpoint</td>
+									<td align="center">int3() - debugger trap</td>
+								</tr>
+								<tr>
+									<td align="center">4</td>
+									<td align="center">#OF</td>
+									<td align="center">Overflow</td>
+									<td align="center">overflow() - INTO instr.</td>
+								</tr>
+								<tr>
+									<td align="center">5</td>
+									<td align="center">#BR</td>
+									<td align="center">BOUND Range</td>
+									<td align="center">bounds() - BOUND instr.</td>
+								</tr>
+								<tr>
+									<td align="center">6</td>
+									<td align="center">#UD</td>
+									<td align="center">Invalid Opcode</td>
+									<td align="center">invalid_op()</td>
+								</tr>
+								<tr>
+									<td align="center">7</td>
+									<td align="center">#NM</td>
+									<td align="center">Device Not Avail</td>
+									<td align="center">device_not_available()</td>
+								</tr>
+								<tr>
+									<td align="center">8</td>
+									<td align="center">#DF</td>
+									<td align="center">Double Fault</td>
+									<td align="center">double_fault()</td>
+								</tr>
+								<tr>
+									<td align="center">9</td>
+									<td align="center">-</td>
+									<td align="center">Coprocessor</td>
+									<td align="center">(obsolete, see #NM)</td>
+								</tr>
+								<tr>
+									<td align="center">10</td>
+									<td align="center">#TS</td>
+									<td align="center">Invalid TSS</td>
+									<td align="center">invalid_TSS()</td>
+								</tr>
+								<tr>
+									<td align="center">11</td>
+									<td align="center">#NP</td>
+									<td align="center">Segment Not Pres</td>
+									<td align="center">segment_not_present()</td>
+								</tr>
+								<tr>
+									<td align="center">12</td>
+									<td align="center">#SS</td>
+									<td align="center">Stack Fault</td>
+									<td align="center">stack_segment()</td>
+								</tr>
+								<tr>
+									<td align="center">13</td>
+									<td align="center">#GP</td>
+									<td align="center">General Protect.</td>
+									<td align="center">general_protection()</td>
+								</tr>
+								<tr>
+									<td align="center">14</td>
+									<td align="center">#PF</td>
+									<td align="center">Page Fault</td>
+									<td align="center">page_fault() - crucial!</td>
+								</tr>
+								<tr>
+									<td align="center">15</td>
+									<td align="center">-</td>
+									<td align="center">Reserved</td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center">16</td>
+									<td align="center">#MF</td>
+									<td align="center">x87 FPU Error</td>
+									<td align="center">coprocessor_error()</td>
+								</tr>
+								<tr>
+									<td align="center">17</td>
+									<td align="center">#AC</td>
+									<td align="center">Alignment Check</td>
+									<td align="center">alignment_check()</td>
+								</tr>
+								<tr>
+									<td align="center">18</td>
+									<td align="center">#MC</td>
+									<td align="center">Machine Check</td>
+									<td align="center">machine_check()</td>
+								</tr>
+								<tr>
+									<td align="center">19</td>
+									<td align="center">#XM</td>
+									<td align="center">SIMD FP Exception</td>
+									<td align="center">simd_coprocessor_error()</td>
+								</tr>
+								<tr>
+									<td align="center">20</td>
+									<td align="center">#VE</td>
+									<td align="center">Virtualization</td>
+									<td align="center">(VT-x EPT violation)</td>
+								</tr>
+								<tr>
+									<td align="center">21</td>
+									<td align="center">#CP</td>
+									<td align="center">Control-flow Prot</td>
+									<td align="center">(CET shadow stack)</td>
+								</tr>
+								<tr>
+									<td align="center">22-31</td>
+									<td align="center">-</td>
+									<td align="center">Reserved</td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center">32</td>
+									<td align="center">-</td>
+									<td align="center">Local APIC Timer</td>
+									<td align="center">apic_timer_interrupt()</td>
+								</tr>
+								<tr>
+									<td align="center">33-</td>
+									<td align="center">-</td>
+									<td align="center">I/O APIC IRQs</td>
+									<td align="center">do_IRQ() -> device handler</td>
+								</tr>
+								<tr>
+									<td align="center">128</td>
+									<td align="center">-</td>
+									<td align="center">Legacy syscall</td>
+									<td align="center">entry_INT80_compat (int80)</td>
+								</tr>
+								<tr>
+									<td align="center">201</td>
+									<td align="center">-</td>
+									<td align="center">Reschedule IPI</td>
+									<td align="center">smp_reschedule_interrupt()</td>
+								</tr>
+								<tr>
+									<td align="center">202</td>
+									<td align="center">-</td>
+									<td align="center">Call Function IPI</td>
+									<td align="center">smp_call_function_interrupt()</td>
+								</tr>
+								<tr>
+									<td align="center">204</td>
+									<td align="center">-</td>
+									<td align="center">TLB Shootdown IPI</td>
+									<td align="center">smp_invalidate_interrupt()</td>
+								</tr>
+								<tr>
+									<td align="center">223</td>
+									<td align="center">-</td>
+									<td align="center">Spurious APIC</td>
+									<td align="center">spurious_interrupt()</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="linux-interrupt-vectors">Linux Interrupt Vectors</h4>
+						<pre class="bash">
+# Inspect vector assignments from running kernel
+sudo cat /proc/interrupts | head -5
+# Shows IRQ numbers, not vectors — but reveals allocation pattern
+
+# Full vector table lives in kernel memory
+sudo cat /proc/kallsyms | grep -E &#39;interrupt\[\]|def_idts&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="interrupt-descriptor-table-idt">Interrupt Descriptor Table (IDT)</h3>
+						<p>
+							The IDT is an array of 256 gate descriptors, each 16 bytes on x86-64. The
+							<abbr title="Central Processing Unit">CPU</abbr>
+							uses the vector number as an index into this table to find the handler address. The IDT base
+							address is stored in the
+							<code>idtr</code>
+							register and loaded via the
+							<code>lidt</code>
+							instruction.
+						</p>
+						<pre class="plaintext">
+Interrupt Gate Descriptor (16 bytes, x86-64):
+
+ 127                              96  95               64  63              32  31              0
+┌──────────────────────────────────+────────────────────+──────────────────+──────────────────┐
+│   Reserved (must be 0)           │  Offset 63:32       │  IST ────┐ DPL  │  Offset 31:16     │
+│                                  │                     │  │  Type │  │  │                  │
+└──────────────────────────────────+────────────────────+──+───+────+──+──+──────────────────┘
+  63                              32  31               16  15               0
+┌──────────────────────────────────+────────────────────+──────────────────┐
+│  Segment Selector                │  Offset 15:0       │   ── Offset ──    │
+└──────────────────────────────────+────────────────────+──────────────────┘
+
+  Type:  0xE = 64-bit Interrupt Gate (disables IF)
+         0xF = 64-bit Trap Gate (preserves IF)
+  DPL:   Descriptor Privilege Level (0 = kernel only, 3 = user allowed)
+  IST:   Interrupt Stack Table index (0-7) — uses dedicated stack
+						</pre>
+						<p>
+							<b>Key fields:</b>
+							-
+							<b>Offset</b>
+							: Full 64-bit address of the handler function -
+							<b>Segment Selector</b>
+							: Must be
+							<code>__KERNEL_CS</code>
+							(kernel code segment) -
+							<b>DPL</b>
+							: 0 for kernel-only vectors (most);
+							3 for
+							<code>int3</code>
+							,
+							<code>int $0x80</code>
+							-
+							<b>IST</b>
+							: If non-zero, the
+							<abbr title="Central Processing Unit">CPU</abbr>
+							switches
+							to a dedicated interrupt stack (used for NMI, #DF, #MC to avoid stack overflows on corrupted
+							stacks)
+						</p>
+						<h4 id="dumping-the-idt-on-a-live-system">Dumping the IDT on a live system</h4>
+						<pre class="bash">
+# Read IDTR register (requires kernel module or crash)
+sudo cat /proc/kallsyms | grep idt_table
+# ffffffff... D idt_table
+
+# Inspect IDT entries via kernel debugger (if available)
+sudo cat /sys/kernel/debug/x86/idt 2&gt;/dev/null
+
+# Or build a simple kernel module:
+# modprobe idt_dump  (hypothetical — you&#39;d write your own)
+						</pre>
+					</section>
+					<section>
+						<h3 id="apic-architecture">APIC Architecture</h3>
+						<p>
+							Modern x86-64 systems route interrupts through the Advanced Programmable Interrupt Controller
+							(
+							<abbr title="Application Programming Interface">API</abbr>
+							C), replacing the legacy 8259 PIC:
+						</p>
+						<pre class="plaintext">
+                         ┌──────────────────────────────────┐
+  External Devices       │          I/O APIC                 │
+  ═══════════════════    │                                  │
+  NIC ──────► IRQ 16 ────┤  Redirection Table               │
+  NVMe ─────► IRQ 17 ────┤  ┌────+──────+─────+──────────┐  │
+  SATA ─────► IRQ 18 ────┤  │IRQ │Vector│Dest │Delivery   │  │
+  USB  ─────► IRQ 19 ────┤  │ 16 │  42  │ 0-3 │Fixed      │  │
+                         │  │ 17 │  43  │ 0-3 │Fixed      │  │
+                         │  │ 18 │  44  │ 0-3 │Fixed      │  │
+                         │  │ 19 │  45  │ 0-3 │Fixed      │  │
+                         │  └────+──────+─────+──────────┘  │
+                         └──────────────+───────────────────┘
+                                        │ APIC bus / system bus
+┌───────────────────────────────────────+──────────────────────────────┐
+│                    Local APIC (per CPU core)                          │
+│  ┌──────────────────────────────────+──────────────────────────────┐ │
+│  │ CPU 0                            │ CPU 1                        │ │
+│  │  Timer, Thermal, PerfMon, Error  │  Timer, Thermal, PerfMon     │ │
+│  │  LVT: LINT0, LINT1, Timer, ...   │  LVT: LINT0, LINT1, Timer   │ │
+│  │  IRR, ISR, TPR, EOI register     │  IRR, ISR, TPR, EOI          │ │
+│  └──────────────────────────────────+──────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+						<h4 id="msimsi-x-message-signaled-interrupts">MSI/MSI-X (Message Signaled Interrupts)</h4>
+						<p>
+							Modern
+							<abbr title="Peripheral Component Interconnect">PCI</abbr>
+							e devices bypass the I/O
+							<abbr title="Application Programming Interface">API</abbr>
+							C entirely, writing interrupt messages directly to the L
+							<abbr title="Application Programming Interface">API</abbr>
+							C via the system bus. This eliminates the shared-
+							<abbr title="Incident Response">IR</abbr>
+							Q problem and reduces
+							latency:
+						</p>
+						<pre class="plaintext">
+PCIe device → MSI write to LAPIC address → LAPIC receives vector → CPU interrupted
+             (no I/O APIC involved)
+						</pre>
+						<pre class="bash">
+# List MSI/MSI-X usage
+sudo cat /proc/interrupts | grep -i &#39;msi\|msi-x\|nvme\|eth\|enp&#39;
+
+# Inspect MSI capabilities of a device
+sudo lspci -vvv -s 00:1f.6 | grep -A10 MSI
+						</pre>
+					</section>
+					<section>
+						<h3 id="procinterrupts-format">/proc/interrupts Format</h3>
+						<pre class="plaintext">
+$ cat /proc/interrupts
+            CPU0       CPU1       CPU2       CPU3
+   0:         23          0          0          0   IO-APIC   2-edge      timer
+   8:          0          0          0          1   IO-APIC   8-edge      rtc0
+   9:          0          0          0          0   IO-APIC   9-fasteoi   acpi
+  16:     423456     350012     290445     380123   IO-APIC  16-fasteoi   nvme0q0, i915
+  17:          0          0          0          0   IO-APIC  17-fasteoi   i801_smbus
+ 120:      12345      10034      11200       9800   PCI-MSI-0000:00:1f.6   0-edge      enp0s31f6
+ NMI:       1234       1100       1050       1150   Non-maskable interrupts
+ LOC:   12345678  12000000  11500000  11800000   Local timer interrupts
+ SPU:          0          0          0          0   Spurious interrupts
+ PMI:       1234       1100       1050       1150   Performance monitoring interrupts
+ IWI:        567        450        500        480   IRQ work interrupts
+ RTR:          1          0          0          0   APIC ICR read retries
+ RES:    5678900    5000000    4800000    5100000   Rescheduling interrupts
+ CAL:       2345       2100       2000       2200   Function call interrupts
+ TLB:       3456       3000       2900       3300   TLB shootdowns
+						</pre>
+						<p>
+							Columns:
+							<abbr title="Incident Response">IR</abbr>
+							Q number, per-
+							<abbr title="Central Processing Unit">CPU</abbr>
+							interrupt count,
+							interrupt controller type, trigger mode, device name.
+						</p>
+						<pre class="bash">
+# Watch interrupt rate live
+watch -n1 &#39;cat /proc/interrupts | head -20&#39;
+
+# Sort by IRQ count — find busiest device
+cat /proc/interrupts | awk &#39;NR==1 || /PCI-MSI/ || /nvme/ || /eth/&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="interrupt-handling-flow">Interrupt Handling Flow</h3>
+						<p>The complete path from hardware signal to device driver ISR:</p>
+						<pre class="plaintext">
+   Hardware Device
+        │
+        ▼
+  ┌─────────────┐
+  │ I/O APIC    │  (or MSI write)
+  └──────+──────┘
+         │
+         ▼
+  ┌─────────────┐
+  │ Local APIC  │  Raises INT pin on CPU (or priority arbitration)
+  └──────+──────┘
+         │
+         ▼  CPU accepts interrupt (between instructions, after EFLAGS.IF check)
+  ┌─────────────────────────────────────────────────────────────────┐
+  │ 1. CPU reads vector number from LAPIC                           │
+  │ 2. Indexes IDT[idt_vector] → gate descriptor                    │
+  │ 3. Switches stack to IST stack (if IST != 0)                    │
+  │ 4. Pushes SS, RSP, RFLAGS, CS, RIP onto stack                   │
+  │ 5. Clears EFLAGS.IF (mask further maskable interrupts)          │
+  │ 6. Loads CS:RIP from gate descriptor → handler entry            │
+  └─────────────────────────────────────────────────────────────────┘
+         │
+         ▼
+  common_interrupt()          // arch/x86/kernel/irq.c
+         │
+         ├─ SAVE_REGS         // Save all GPRs
+         │
+         ▼
+  do_IRQ()                    // kernel/irq/handle.c
+         │
+         ├─ irq_enter()        // Enter interrupt context
+         │
+         ├─ generic_handle_irq(irq)
+         │    │
+         │    └─ handle_fasteoi_irq()  ← for modern devices
+         │         │
+         │         ├─ handle_irq_event()
+         │         │    │
+         │         │    └─ __handle_irq_event_percpu()
+         │         │         │
+         │         │         └─ Calls every registered ISR (handler-&gt;handler())
+         │         │             (multiple drivers can share an IRQ line)
+         │         │
+         │         └─ cond_unmask_eoi_irq()  // Send EOI to LAPIC
+         │
+         ├─ irq_exit()
+         │    │
+         │    ├─ invoke_softirq()   // Process pending softirqs
+         │    │
+         │    └─ rcu_irq_exit()     // Notify RCU
+         │
+         └─ return from interrupt (iretq)
+						</pre>
+						<h4 id="kernel-source-references">Kernel source references</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">File</th>
+									<th align="center">Purpose</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>/usr/src/linux/arch/x86/kernel/irq.c</code></td>
+									<td align="center"><code>common_interrupt</code>, interrupt entry</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/usr/src/linux/kernel/irq/handle.c</code></td>
+									<td align="center"><code>do_IRQ</code>,<code>generic_handle_irq</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>/usr/src/linux/kernel/irq/chip.c</code></td>
+									<td align="center">Flow handlers (<code>handle_fasteoi_irq</code>)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/usr/src/linux/arch/x86/kernel/idt.c</code></td>
+									<td align="center">IDT table setup</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/usr/src/linux/arch/x86/include/asm/irq_vectors.h</code></td>
+									<td align="center">Vector definitions</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/usr/src/linux/arch/x86/entry/entry_64.S</code></td>
+									<td align="center">Assembly entry stubs</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="top-half-vs-bottom-half">Top Half vs Bottom Half</h3>
+						<p>
+							The interrupt handler running directly in the IDT path is the
+							<b>top half</b>
+							. It runs with interrupts
+							disabled (or at least the current
+							<abbr title="Incident Response">IR</abbr>
+							Q line masked) and must execute as
+							fast as possible. Any work that can be deferred belongs in a
+							<b>bottom half</b>
+							mechanism.
+						</p>
+						<pre class="plaintext">
+     Top Half (Hard IRQ Context)
+     ═══════════════════════════
+     - Interrupts disabled on this CPU
+     - NO sleeping, NO mutex, NO GFP_KERNEL
+     - Acknowledge device (clear interrupt)
+     - Copy data from device registers
+     - Schedule bottom half
+     - Return quickly
+
+     Bottom Half (Soft IRQ / Tasklet / Workqueue Context)
+     ══════════════════════════════════════════════════
+     - Interrupts enabled
+     - Can sleep (workqueues only)
+     - Protocol processing (TCP/IP)
+     - Block I/O completion
+     - Timer expiry processing
+						</pre>
+					</section>
+					<section>
+						<h3 id="linux-bottom-half-mechanisms">Linux Bottom-Half Mechanisms</h3>
+						<p>
+							Linux provides four bottom-half deferral mechanisms, each with different execution context and
+							constraints:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center"></th>
+									<th align="center">Softirq</th>
+									<th align="center">Tasklet</th>
+									<th align="center">Workqueue</th>
+									<th align="center">Threaded IRQ</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Sleep OK?</td>
+									<td align="center">No</td>
+									<td align="center">No</td>
+									<td align="center">Yes</td>
+									<td align="center">Yes</td>
+								</tr>
+								<tr>
+									<td align="center">Concurrency</td>
+									<td align="center">Same softirq can run on multiple CPUs</td>
+									<td align="center">Serialized (same tasklet not on 2 CPU)</td>
+									<td align="center">Per-CPU pool</td>
+									<td align="center">Per-thread</td>
+								</tr>
+								<tr>
+									<td align="center">Priority</td>
+									<td align="center">Fixed: HI, TIMER, NET, TASKLET, ...</td>
+									<td align="center">TASKLET_SOFTIRQ only</td>
+									<td align="center">worker_priority</td>
+									<td align="center">RT priority adjustable</td>
+								</tr>
+								<tr>
+									<td align="center">Preemptible?</td>
+									<td align="center">No (runs in irq context)</td>
+									<td align="center">No</td>
+									<td align="center">Yes</td>
+									<td align="center">Yes (thread)</td>
+								</tr>
+								<tr>
+									<td align="center">Use case</td>
+									<td align="center">High-perf networking</td>
+									<td align="center">Simpler than raw softirq</td>
+									<td align="center">Complex, blocking I/O</td>
+									<td align="center">Simple device drivers</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="softirqs">Softirqs</h4>
+						<p>
+							Softirqs are the fastest bottom-half mechanism. They are statically allocated at compile time
+							and run in interrupt context:
+						</p>
+						<pre class="c">
+// include/linux/interrupt.h
+enum {
+    HI_SOFTIRQ       = 0,  // High-priority tasklets
+    TIMER_SOFTIRQ    = 1,  // Timer wheel processing
+    NET_TX_SOFTIRQ   = 2,  // Network transmit completions
+    NET_RX_SOFTIRQ   = 3,  // Network receive processing (NAPI)
+    BLOCK_SOFTIRQ    = 4,  // Block layer completions
+    IRQ_POLL_SOFTIRQ = 5,  // Block layer polled completions
+    TASKLET_SOFTIRQ  = 6,  // Regular tasklets
+    SCHED_SOFTIRQ    = 7,  // Scheduler (load balancing)
+    HRTIMER_SOFTIRQ  = 8,  // High-resolution timers
+    RCU_SOFTIRQ      = 9,  // RCU processing (PREEMPT_RCU)
+    NR_SOFTIRQS
+};
+
+// Registration (compile-time only):
+// kernel/softirq.c
+static struct softirq_action softirq_vec[NR_SOFTIRQS];
+
+// Raising a softirq:
+void raise_softirq(unsigned int nr)
+{
+    unsigned long flags;
+    local_irq_save(flags);
+    raise_softirq_irqoff(nr);
+    local_irq_restore(flags);
+}
+
+// Processing loop:
+asmlinkage __visible void __softirq_entry __do_softirq(void)
+{
+    // ... runs through softirq_vec, calls registered handlers
+    // Limited to MAX_SOFTIRQ_TIME (2 ms) or MAX_SOFTIRQ_RESTART (10 restarts)
+    // If softirqs keep arriving, ksoftirqd/N thread takes over
+}
+						</pre>
+						<pre class="bash">
+# Inspect softirq counts system-wide
+cat /proc/softirqs
+#                 CPU0       CPU1       CPU2       CPU3
+#       HI:        234        150        180        200
+#    TIMER:   12345678   12000000   11500000   11800000
+#   NET_TX:     234567     200000     250000     210000
+#   NET_RX:    3456789    3000000    3200000    2900000
+#    BLOCK:     123456     100000     110000     105000
+#  TASKLET:         12          8         15         10
+#    SCHED:     456789     400000     420000     390000
+#  HRTIMER:      12345      10000      11000      10500
+#      RCU:    2345678    2000000    2100000    1950000
+
+# Watch softirq rate
+watch -n1 &#39;cat /proc/softirqs&#39;
+						</pre>
+						<h4 id="tasklets">Tasklets</h4>
+						<p>
+							Tasklets are built on top of
+							<code>TASKLET_SOFTIRQ</code>
+							and
+							<code>HI_SOFTIRQ</code>
+							. They provide a simpler
+							<abbr title="Application Programming Interface">API</abbr>
+							than raw softirqs and guarantee that the same tasklet never runs concurrently on two
+							<abbr title="Central Processing Unit">CPU</abbr>
+							s:
+						</p>
+						<pre class="c">
+// Declare and schedule a tasklet
+DECLARE_TASKLET(my_tasklet, my_tasklet_func);
+
+void my_tasklet_func(unsigned long data)
+{
+    // Deferred work — still cannot sleep
+    printk(KERN_INFO &#34;Tasklet running on CPU %d\n&#34;, smp_processor_id());
+}
+
+// Schedule (typically from hard IRQ handler):
+tasklet_schedule(&amp;my_tasklet);
+						</pre>
+						<h4 id="workqueues">Workqueues</h4>
+						<p>Workqueues run in process context (kernel threads), so they can sleep:</p>
+						<pre class="c">
+// Schedule work on the system workqueue
+static struct work_struct my_work;
+
+static void my_work_func(struct work_struct *work)
+{
+    // Can sleep, use mutex, allocate with GFP_KERNEL
+    mutex_lock(&amp;some_mutex);
+    // ... blocking I/O ...
+    mutex_unlock(&amp;some_mutex);
+}
+
+// Init: INIT_WORK(&amp;my_work, my_work_func);
+// Schedule: schedule_work(&amp;my_work);  // default workqueue
+// Or: queue_work(system_wq, &amp;my_work);
+						</pre>
+						<pre class="bash">
+# List kernel worker threads
+ps aux | grep &#39;\[kworker\|\[ksoftirqd&#39;
+
+# Workqueue statistics
+ls /sys/devices/virtual/workqueue/
+cat /sys/devices/virtual/workqueue/*/max_active
+						</pre>
+						<h4 id="threaded-irqs">Threaded IRQs</h4>
+						<p>
+							The simplest approach: when
+							<code>request_threaded_irq()</code>
+							returns, the top-half only acknowledges
+							the device; all processing runs in a dedicated kernel thread:
+						</p>
+						<pre class="c">
+// Modern device driver pattern
+static irqreturn_t my_hard_isr(int irq, void *dev_id)
+{
+    // Top half: acknowledge device, mask interrupt
+    return IRQ_WAKE_THREAD;  // Wake up the thread
+}
+
+static irqreturn_t my_threaded_isr(int irq, void *dev_id)
+{
+    // Bottom half: runs in process context, can sleep
+    mutex_lock(&amp;dev_lock);
+    // ... process data ...
+    mutex_unlock(&amp;dev_lock);
+    return IRQ_HANDLED;
+}
+
+// Registration
+request_threaded_irq(irq, my_hard_isr, my_threaded_isr,
+                     IRQF_ONESHOT, &#34;mydrv&#34;, dev);
+						</pre>
+						<pre class="bash">
+# Find threaded IRQ handlers
+ps aux | grep &#39;irq/&#39;
+# [irq/120-nvme0q0]
+# [irq/121-enp0s31f6]
+						</pre>
+					</section>
+					<section>
+						<h3 id="napi-interrupt-coalescing">NAPI Interrupt Coalescing</h3>
+						<p>
+							Under heavy network load, the interrupt rate can exceed the
+							<abbr title="Central Processing Unit">CPU</abbr>
+							's
+							ability to handle each packet individually. N
+							<abbr title="Application Programming Interface">API</abbr>
+							solves
+							this by switching between interrupt-driven and polling modes:
+						</p>
+						<pre class="plaintext">
+Low load (interrupt mode):
+  NIC packet → IRQ → softirq NET_RX → process single packet → return
+
+High load (polling mode):
+  NIC packet → IRQ → softirq NET_RX → disable NIC interrupts
+                                     → poll loop: reap N packets from ring buffer
+                                     → re-enable NIC interrupts when budget exhausted
+                                     → return
+  (More packets arrive while polling — handled without additional IRQs)
+						</pre>
+						<pre class="c">
+// Simplified NAPI poll function:
+static int my_napi_poll(struct napi_struct *napi, int budget)
+{
+    int work_done = 0;
+
+    while (work_done &lt; budget) {
+        struct sk_buff *skb = my_dequeue_packet(dev);
+        if (!skb)
+            break;
+        napi_gro_receive(napi, skb);  // GRO: Generic Receive Offload
+        work_done++;
+    }
+
+    if (work_done &lt; budget) {
+        napi_complete_done(napi, work_done);
+        enable_irq(dev-&gt;irq);  // Re-enable interrupts
+    }
+
+    return work_done;
+}
+						</pre>
+						<pre class="bash">
+# Check network driver&#39;s NAPI and interrupt coalescing settings
+ethtool -c eth0   # Interrupt coalescing
+ethtool -g eth0   # Ring buffer sizes
+ethtool -S eth0   # Driver statistics (packet counts, coalesce events)
+
+# Total NAPI budget per softirq cycle (default: 300 packets)
+cat /proc/sys/net/core/netdev_budget
+
+# Per-device poll weight (default: 64 packets)
+cat /proc/sys/net/core/dev_weight
+						</pre>
+					</section>
+					<section>
+						<h3 id="interrupt-affinity">Interrupt Affinity</h3>
+						<p>
+							Modern SMP systems can steer interrupts to specific
+							<abbr title="Central Processing Unit">CPU</abbr>
+							cores, isolating
+							interrupt handling from application
+							<abbr title="Central Processing Unit">CPU</abbr>
+							time:
+						</p>
+						<pre class="bash">
+# View current IRQ affinity (bitmask: each bit = one CPU)
+cat /proc/irq/120/smp_affinity
+# 00000000,00000000,00000000,00000000,00000000,0000000f → CPUs 0-3
+
+# Set IRQ 120 to CPU 4 only
+echo 10 | sudo tee /proc/irq/120/smp_affinity
+# 0x10 = bit 4 set
+
+# Use the list-based interface (easier)
+cat /proc/irq/120/smp_affinity_list
+# 0-3
+echo 4 | sudo tee /proc/irq/120/smp_affinity_list
+
+# Spread all NVMe IRQs across CPUs 0-7
+for irq in $(grep nvme /proc/interrupts | awk -F: &#39;{print $1}&#39;); do
+    echo &#34;Setting IRQ $irq to CPU $(($irq % 8))&#34;
+    echo $(($irq % 8)) | sudo tee /proc/irq/$irq/smp_affinity_list
+done
+
+# irqbalance: automatic interrupt distribution daemon
+sudo systemctl status irqbalance
+						</pre>
+					</section>
+					<section>
+						<h3 id="timer-interrupts">Timer Interrupts</h3>
+						<p>
+							The timer interrupt is the heartbeat of the kernel, driving scheduling, timekeeping, and RCU.
+							Linux can use multiple timer sources:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Timer Source</th>
+									<th align="center">Resolution</th>
+									<th align="center">Accuracy</th>
+									<th align="center">Notes</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">PIT (8254)</td>
+									<td align="center">~1 ms</td>
+									<td align="center">Moderate</td>
+									<td align="center">Legacy, 1.193 MHz clock</td>
+								</tr>
+								<tr>
+									<td align="center">HPET</td>
+									<td align="center">~100 ns</td>
+									<td align="center">High</td>
+									<td align="center">High Precision Event Tim.</td>
+								</tr>
+								<tr>
+									<td align="center">ACPI PM Timer</td>
+									<td align="center">~279 ns</td>
+									<td align="center">High</td>
+									<td align="center">Power Management Timer</td>
+								</tr>
+								<tr>
+									<td align="center">LAPIC Timer</td>
+									<td align="center">Per-CPU</td>
+									<td align="center">High</td>
+									<td align="center">One-shot or periodic</td>
+								</tr>
+								<tr>
+									<td align="center">TSC-Deadline</td>
+									<td align="center">~1 ns</td>
+									<td align="center">Very High</td>
+									<td align="center">Posts deadline to LAPIC</td>
+								</tr>
+								<tr>
+									<td align="center">RTC</td>
+									<td align="center">~1 s</td>
+									<td align="center">Low</td>
+									<td align="center">Periodic, wakes from S3</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Check current timer source
+cat /sys/devices/system/clocksource/clocksource0/current_clocksource
+# tsc
+
+# List available clock sources
+cat /sys/devices/system/clocksource/clocksource0/available_clocksource
+
+# Timer interrupt rate (NO_HZ reduces idle ticks)
+cat /proc/interrupts | grep -E &#39;LOC:|local&#39;
+# Compare LOC count across CPUs — indicates tick distribution
+
+# Check timer tick mode
+cat /proc/timer_list | head -20
+# Shows active timers, next expiry
+
+# Check CONFIG_NO_HZ and CONFIG_HZ
+zcat /proc/config.gz 2&gt;/dev/null | grep -E &#39;CONFIG_HZ=|CONFIG_NO_HZ&#39;
+# CONFIG_HZ=300 (or 250, 1000)
+# CONFIG_NO_HZ_IDLE=y  — tickless idle
+# CONFIG_NO_HZ_FULL=y  — tickless for adaptive-ticks CPUs
+						</pre>
+					</section>
+					<section>
+						<h3 id="tracing-interrupts">Tracing Interrupts</h3>
+						<pre class="bash">
+# trace-cmd: record all IRQ events
+sudo trace-cmd record -e irq -e irq_vectors -e sched_switch sleep 5
+sudo trace-cmd report
+
+# perf: top by interrupt event source
+sudo perf top -e &#39;irq:irq_handler_entry&#39;
+
+# perf: record interrupt latency
+sudo perf record -e &#39;irq:irq_handler_entry&#39; -e &#39;irq:irq_handler_exit&#39; \
+    -e &#39;irq:softirq_entry&#39; -e &#39;irq:softirq_exit&#39; -a -- sleep 5
+sudo perf script
+
+# ftrace: function graph of IRQ path
+sudo trace-cmd start -p function_graph -g do_IRQ -g __handle_irq_event_percpu
+
+# bpftrace: one-liner to count IRQs by name
+sudo bpftrace -e &#39;tracepoint:irq:irq_handler_entry { @[str(args-&gt;name)] = count(); }&#39;
+
+# Show interrupt latency distribution
+sudo bpftrace -e &#39;
+tracepoint:irq:irq_handler_entry { @start[args-&gt;irq] = nsecs; }
+tracepoint:irq:irq_handler_exit / @start[args-&gt;irq] / {
+    $delta = nsecs - @start[args-&gt;irq];
+    @lat_us[args-&gt;name] = hist($delta / 1000);
+    delete(@start[args-&gt;irq]);
+}&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="windows-comparison-irql-and-dpcapc">Windows Comparison: IRQL and DPC/APC</h3>
+						<p>
+							Windows uses a fundamentally different model - Interrupt Request Levels (
+							<abbr title="Incident Response">IR</abbr>
+							QLs) - where each processor runs at a specific
+							<abbr title="Incident Response">IR</abbr>
+							QL, and only interrupts
+							at higher
+							<abbr title="Incident Response">IR</abbr>
+							QLs can preempt:
+						</p>
+						<pre class="plaintext">
+x86-64 IRQL Levels (Windows):
+
+  IRQL       Purpose
+  ═══════    ════════════════════════════════════════════════
+  HIGHEST    Machine checks, bus errors (unrecoverable)
+  POWER      Power failure notification
+  IPI        Inter-processor interrupts
+  CLOCK      Clock interrupts
+  PROFILE    Profiling timer
+  DEVICE     Device interrupts (DIRQLs, mapped from IRQ vectors)
+  DISPATCH   DPCs and scheduler (thread dispatching runs here)
+  APC        Asynchronous Procedure Calls
+  PASSIVE    Normal thread execution (user &amp; kernel mode)
+  
+  INTERRUPT_LEVEL = DIRQL through HIGHEST
+						</pre>
+						<p>Windows bottom-half equivalents:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Linux</th>
+									<th align="center">Windows</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Softirq</td>
+									<td align="center">DPC (Deferred Procedure Call) - runs at DISPATCH_LEVEL</td>
+								</tr>
+								<tr>
+									<td align="center">Workqueue</td>
+									<td align="center">Work item queued to system worker thread</td>
+								</tr>
+								<tr>
+									<td align="center">Threaded IRQ</td>
+									<td align="center">ISR at DIRQL, DPC at DISPATCH_LEVEL</td>
+								</tr>
+								<tr>
+									<td align="center">Signal delivery</td>
+									<td align="center">APC (Asynchronous Procedure Call) - runs at APC_LEVEL</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that samples
+							<code>/proc/interrupts</code>
+							twice, one second apart, and prints the per-
+							<abbr title="Central Processing Unit">CPU</abbr>
+							rate for every interrupt source. The first line of
+							<code>/proc/interrupts</code>
+							names the
+							<abbr title="Central Processing Unit">CPU</abbr>
+							s; each following line holds one counter per
+							<abbr title="Central Processing Unit">CPU</abbr>
+							, then the controller type and device name. Run the tool while generating disk or network load
+							and identify which source and which
+							<abbr title="Central Processing Unit">CPU</abbr>
+							carry the most interrupts.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;bufio&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;strconv&#34;
+	&#34;strings&#34;
+	&#34;time&#34;
+)
+
+type sample struct {
+	cpus  []string
+	order []string
+	lines map[string][]uint64
+}
+
+func readCounters(path string) (*sample, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	result := &amp;sample{lines: map[string][]uint64{}}
+	scanner := bufio.NewScanner(file)
+	first := true
+
+	for scanner.Scan() {
+
+		fields := strings.Fields(scanner.Text())
+		if len(fields) == 0 {
+			continue
+		}
+
+		if first {
+			result.cpus = fields
+			first = false
+			continue
+		}
+
+		key := strings.TrimSuffix(fields[0], &#34;:&#34;)
+		counts := make([]uint64, 0, len(result.cpus))
+
+		for _, field := range fields[1:] {
+			value, err := strconv.ParseUint(field, 10, 64)
+			if err != nil {
+				break
+			}
+			counts = append(counts, value)
+		}
+
+		if len(counts) == len(result.cpus) {
+			if _, ok := result.lines[key]; !ok {
+				result.order = append(result.order, key)
+			}
+			result.lines[key] = counts
+		}
+
+	}
+
+	return result, scanner.Err()
+}
+
+func main() {
+	before, err := readCounters(&#34;/proc/interrupts&#34;)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	time.Sleep(time.Second)
+
+	after, err := readCounters(&#34;/proc/interrupts&#34;)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	total := make([]uint64, len(after.cpus))
+
+	fmt.Printf(&#34;%-14s&#34;, &#34;SOURCE&#34;)
+	for _, cpu := range after.cpus {
+		fmt.Printf(&#34;%10s&#34;, cpu)
+	}
+	fmt.Println()
+
+	for _, key := range after.order {
+		a, ok := before.lines[key]
+		if !ok {
+			continue
+		}
+		b := after.lines[key]
+		fmt.Printf(&#34;%-14s&#34;, key)
+		for i := range b {
+			delta := b[i] - a[i]
+			total[i] += delta
+			fmt.Printf(&#34;%10d&#34;, delta)
+		}
+		fmt.Println()
+	}
+
+	fmt.Printf(&#34;%-14s&#34;, &#34;TOTAL&#34;)
+	for _, value := range total {
+		fmt.Printf(&#34;%10d&#34;, value)
+	}
+	fmt.Println(&#34; interrupts/s&#34;)
+}
+						</pre>
+						<p>Build it and compare the output with the raw counters:</p>
+						<pre class="bash">
+go build -o irqrate irqrate.go
+./irqrate
+
+# Generate load in another terminal
+sudo dd if=/dev/zero of=/tmp/irq.bin bs=1M count=500 oflag=direct;
+
+# Watch the same counters directly
+watch -n1 &#39;grep -E &#34;LOC:|nvme|eth|enp&#34; /proc/interrupts&#39;;
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/arch/x86/kernel/irq.c" target="_blank">Linux kernel: arch/x86/kernel/irq.c - interrupt entry</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/arch/x86/kernel/idt.c" target="_blank">Linux kernel: arch/x86/kernel/idt.c - IDT setup</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/kernel/softirq.c" target="_blank">Linux kernel: kernel/softirq.c - softirq subsystem</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/kernel/irq/handle.c" target="_blank">Linux kernel: kernel/irq/handle.c - do_IRQ</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/include/linux/interrupt.h" target="_blank">Linux kernel: include/linux/interrupt.h - softirq_tasklet_workqueue APIs</a></li>
+							<li><a class="icon-website" href="https://www.intel.com/sdm" target="_blank">Intel SDM Vol 3A, Chapter 6: Interrupt and Exception Handling</a></li>
+							<li><a class="icon-website" href="https://www.intel.com/sdm" target="_blank">Intel SDM Vol 3A, Chapter 10: APIC</a></li>
+							<li><a class="icon-website" href="https://lwn.net/Articles/244627/" target="_blank">LWN.net: The design of NAPI</a></li>
+							<li><a class="icon-website" href="https://www.kernel.org/doc/Documentation/filesystems/proc.rst" target="_blank">/proc/interrupts documentation</a></li>
+							<li><a class="icon-website" href="https://trace-cmd.org/" target="_blank">trace-cmd and KernelShark</a></li>
+							<li><a class="icon-github" href="https://github.com/iovisor/bpftrace/blob/master/docs/tutorial_one_liners.md" target="_blank">bpftrace one-liners</a></li>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/sysinternals/resources/windows-internals" target="_blank">Windows Internals Part 1, Chapter 3: System Mechanisms (IRQL/DPC/APC)</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

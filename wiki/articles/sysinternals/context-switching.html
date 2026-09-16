@@ -1,0 +1,1186 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Context Switching | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Context Switching">
+		<meta name="keywords" content="context-switching, fpu, meltdown, pcid, perf, scheduler, sysinternals, tlb, xsave">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Context Switching">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="The CPU's most expensive bookkeeping - saving and restoring execution state between threads, processes, and privilege levels on x86-64 Linux.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/sysinternals/context-switching.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Context Switching">
+		<meta name="twitter:description" itemprop="description" content="The CPU's most expensive bookkeeping - saving and restoring execution state between threads, processes, and privilege levels on x86-64 Linux.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#what-is-a-context-switch">What Is a Context Switch</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#transition-vs-context-switch">Transition vs Context Switch</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#hardware-context">Hardware Context</a></b>
+					<ul>
+						<li><a href="#reading-the-xsave-buffer-size">Reading the XSAVE buffer size</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kernel-stack-switching">Kernel Stack Switching</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-switch-to-macro">The switch_to() Macro</a></b>
+					<ul>
+						<li><a href="#switch-to-macro">switch_to Macro</a></li>
+						<li><a href="#switch-to-asm">__switch_to_asm</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#fpu-state-and-xsavexrstor">FPU State and XSAVE/XRSTOR</a></b>
+					<ul>
+						<li><a href="#xsave-and-xrstor">XSAVE and XRSTOR</a></li>
+						<li><a href="#xsave-area-layout">XSAVE area layout</a></li>
+						<li><a href="#inspecting-fpu-state-on-a-live-system">Inspecting FPU state on a live system</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tlb-invalidation">TLB Invalidation</a></b>
+					<ul>
+						<li><a href="#tlb-flush-cost-during-process-switch">TLB flush cost during process switch</a></li>
+						<li><a href="#pcid-process-context-identifiers">PCID (Process Context Identifiers)</a></li>
+						<li><a href="#meltdown-and-pcid">Meltdown and PCID</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-full-context-switch-flow">The Full context_switch() Flow</a></b>
+					<ul>
+						<li><a href="#kernel-thread-special-case">Kernel thread special case</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#voluntary-vs-involuntary">Voluntary vs Involuntary</a></b>
+					<ul>
+						<li><a href="#system-wide-context-switch-rate">System-wide context switch rate</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#measuring-context-switch-cost">Measuring Context Switch Cost</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#perf-sched-scheduler-profiling">perf sched - Scheduler Profiling</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#cache-pollution-and-tlb-misses">Cache Pollution and TLB Misses</a></b>
+					<ul>
+						<li><a href="#demonstrating-tlb-fallout">Demonstrating TLB fallout</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#preemption">Preemption</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#context-switching-in-containers">Context Switching in Containers</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/sysinternals/index.html">Sysinternals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/sysinternals/context-switching.html">Context Switching</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="context-switching">Context Switching</h2>
+					<p>
+						The
+						<abbr title="Central Processing Unit">CPU</abbr>
+						's most expensive bookkeeping - saving and restoring execution
+						state between threads, processes, and privilege levels on x86-64 Linux.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Every scheduler decision ends in a context switch: the kernel saves the outgoing execution state
+							and restores the incoming one. This article separates a plain ring transition from a full context
+							switch, follows the x86-64 save/restore path through
+							<code>switch_to()</code>
+							and XSAVE, and shows how
+							to measure the cost with
+							<code>perf</code>
+							and
+							<code>/proc</code>
+							. After reading it you can explain why a process
+							switch is far more expensive than a thread switch and how
+							<code>PCID</code>
+							and
+							<code>KPTI</code>
+							change the TLB bill.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - process fundamentals, /proc, fork/exec</li>
+							<li><a href="/wiki/articles/fundamentals/threads.html">Threads</a> - thread creation, clone(2), thread models</li>
+							<li><a href="/wiki/articles/sysinternals/scheduler.html">Scheduler</a> - scheduling classes, runtime vs deadline</li>
+							<li><a href="/wiki/articles/fundamentals/virtual-memory.html">Virtual Memory</a> - page tables, MMU, TLB</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="what-is-a-context-switch">What Is a Context Switch</h3>
+						<p>
+							A context switch is the kernel act of suspending one execution context and resuming another.
+							The
+							<abbr title="Central Processing Unit">CPU</abbr>
+							must save every architectural register that the outgoing
+							context may depend on and restore the saved register state of the incoming context. On x86-64,
+							a context switch saves or restores general-purpose registers, floating-point/SSE/AVX state,
+							control registers, segment registers, instruction pointer, stack pointer, page table root, and
+							a growing collection of model-specific state bits.
+						</p>
+						<pre class="plaintext">
+Time ──────────────────────────────────────────────────────────────────────►
+
+Task A  ████████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░███████████
+                            │                               │
+                            ▼                               ▼
+                    ┌───────────────┐               ┌───────────────┐
+                    │ Save A state  │               │ Restore A     │
+                    │ Pick next task │               │ Resume A      │
+                    │ Restore B     │               │               │
+                    └───────────────┘               └───────────────┘
+                            │                               ▲
+                            ▼                               │
+Task B  ░░░░░░░░░░░░░░░░░░░░████████████████████████████████░░░░░░░░░░░░░░░
+
+                    ◄──────── context switch ────────►
+                            50 ns ─ 5 μs
+						</pre>
+						<p>
+							A context switch is distinct from a user-kernel transition. When a user process invokes
+							<code>write()</code>
+							, the
+							<code>syscall</code>
+							instruction transitions to ring 0, but no context switch occurs - the kernel
+							runs in the context of the calling thread. A true context switch happens only when the scheduler
+							decides to run a different task.
+						</p>
+					</section>
+					<section>
+						<h3 id="transition-vs-context-switch">Transition vs Context Switch</h3>
+						<p>Not every ring transition is a context switch. The kernel distinguishes three levels:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Transition</th>
+									<th align="center">Trigger</th>
+									<th align="center">Cost (approx)</th>
+									<th align="center">State Saved</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Mode switch</td>
+									<td align="center">Syscall, interrupt, exception</td>
+									<td align="center">~100-300 cycles</td>
+									<td align="center">rcx, r11, rip, rflags (by<code>syscall</code>instr.)</td>
+								</tr>
+								<tr>
+									<td align="center">Thread switch</td>
+									<td align="center"><code>schedule()</code>called, same mm</td>
+									<td align="center">~1-3 us</td>
+									<td align="center">GPRs + FPU + kernel stack</td>
+								</tr>
+								<tr>
+									<td align="center">Process switch</td>
+									<td align="center"><code>schedule()</code>called, different mm</td>
+									<td align="center">~2-5 us</td>
+									<td align="center">GPRs + FPU + kernel stack + mm/cr3</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="plaintext">
+Mode switch (no ctx switch):
+  user code → syscall → kernel handler → sysret → user code (same task)
+
+Thread context switch:
+  Task A user → syscall → kernel → schedule() → Task B kernel → sysret → Task B user
+  cr3 unchanged (threads share mm)
+
+Process context switch:
+  Task A user → syscall → kernel → schedule() → switch_mm() → Task B kernel → sysret → Task B user
+  cr3 changed, TLB invalidated (partial with PCID)
+						</pre>
+					</section>
+					<section>
+						<h3 id="hardware-context">Hardware Context</h3>
+						<p>
+							The kernel must preserve every piece of architectural state that user code may depend on. The
+							complete hardware context on x86-64 comprises:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Category</th>
+									<th align="center">Registers / State</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">General</td>
+									<td align="center">rax, rbx, rcx, rdx, rsi, rdi, rsp, rbp, r8-r15</td>
+								</tr>
+								<tr>
+									<td align="center">Segment</td>
+									<td align="center">cs, ds, es, fs, gs, ss</td>
+								</tr>
+								<tr>
+									<td align="center">Control</td>
+									<td align="center">cr0, cr2, cr3, cr4, cr8</td>
+								</tr>
+								<tr>
+									<td align="center">Flags</td>
+									<td align="center">rflags</td>
+								</tr>
+								<tr>
+									<td align="center">Instruction</td>
+									<td align="center">rip</td>
+								</tr>
+								<tr>
+									<td align="center">FPU/MMX/x87</td>
+									<td align="center">st0-st7, fcw, fsw, ftw, fop, fip, fdp, mxcsr</td>
+								</tr>
+								<tr>
+									<td align="center">SSE/AVX</td>
+									<td align="center">xmm0-xmm15 (+ ymm/zmm hi bits if AVX/AVX-512)</td>
+								</tr>
+								<tr>
+									<td align="center">XSAVE area</td>
+									<td align="center">XCR0-controlled state components</td>
+								</tr>
+								<tr>
+									<td align="center">Model-Spec</td>
+									<td align="center">MSRs: FS_BASE, GS_BASE, KERNEL_GS_BASE, TSC_AUX</td>
+								</tr>
+								<tr>
+									<td align="center">Debug</td>
+									<td align="center">dr0-dr7</td>
+								</tr>
+								<tr>
+									<td align="center">PKRU</td>
+									<td align="center">Protection Key Rights for Userspace (if PKS)</td>
+								</tr>
+								<tr>
+									<td align="center">CET</td>
+									<td align="center">Shadow stack pointer, IBT state (if enabled)</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							The size of the XSAVE area alone can reach several kilobytes when AVX-512 is active. On a server
+							<abbr title="Central Processing Unit">CPU</abbr>
+							with AVX-512, the full
+							<code>xsave</code>
+							buffer is~2.5 KB per task.
+						</p>
+						<h4 id="reading-the-xsave-buffer-size">Reading the XSAVE buffer size</h4>
+						<pre class="bash">
+# Check XSAVE area size supported by this CPU
+sudo cat /proc/cpuinfo | grep -E &#39;xsave|avx&#39; | head -5
+cpuid -1 -l 0x0d | grep -i &#39;bytes&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="kernel-stack-switching">Kernel Stack Switching</h3>
+						<p>
+							Every task has two stacks: one user stack (rsp in ring 3) and one kernel stack (used when running
+							in ring 0). During a context switch, the kernel switches to the incoming task's kernel stack.
+							The
+							<code>thread_struct</code>
+							inside
+							<code>task_struct</code>
+							stores the stack pointer:
+						</p>
+						<pre class="plaintext">
+struct task_struct {
+    ...
+    struct thread_struct thread;  // arch-specific thread state
+    ...
+};
+
+// arch/x86/include/asm/processor.h
+struct thread_struct {
+    unsigned long           sp;             // kernel stack pointer
+    unsigned long           sp0;            // top of kernel stack (for syscall)
+    unsigned long           usersp;         // user stack pointer (saved)
+    unsigned long           fsbase;
+    unsigned long           gsbase;
+    struct fpu              fpu;            // FPU/SSE/AVX state
+    unsigned long           cr2;
+    unsigned long           trap_nr;
+    unsigned long           error_code;
+    ...
+};
+						</pre>
+						<p>
+							The
+							<code>current</code>
+							pointer - used in thousands of kernel code paths - does NOT require a lookup.
+							It is derived from the kernel stack pointer directly:
+						</p>
+						<pre class="c">
+// arch/x86/include/asm/current.h
+static __always_inline struct task_struct *get_current(void)
+{
+    // On x86-64, per-CPU variable &#39;current_task&#39; is at a fixed offset
+    // from the GS segment base. A single mov instruction suffices.
+    struct task_struct *cur;
+    asm volatile(&#34;movq %%gs:%c1, %0&#34;
+                 : &#34;=r&#34; (cur)
+                 : &#34;i&#34; (offsetof(struct pcpu_hot, current_task)));
+    return cur;
+}
+						</pre>
+						<p>The kernel stack is 16 KB (four page frames) by default:</p>
+						<pre class="bash">
+# Check kernel stack size
+cat /proc/meminfo | grep KernelStack
+# KernelStack:      18432 kB  (total across all tasks)
+
+# Per-task stack (16 KB default, 8 KB on some configs)
+zcat /proc/config.gz | grep KERNEL_STACK
+# Or: grep CONFIG_THREAD_SIZE_ORDER /boot/config-$(uname -r)
+						</pre>
+					</section>
+					<section>
+						<h3 id="the-switch-to-macro">The switch_to() Macro</h3>
+						<p>
+							The core of x86-64 context switching is the
+							<code>__switch_to()</code>
+							function and the
+							<code>switch_to()</code>
+							macro
+							that wraps it. The actual register save/restore is a concert of inline assembly, C code, and
+							architectural state management.
+						</p>
+						<pre class="plaintext">
+schedule()
+  │
+  ▼
+__schedule()                    // kernel/sched/core.c
+  │
+  ├─ pick_next_task(rq, prev)
+  │
+  ▼
+context_switch(rq, prev, next)  // kernel/sched/core.c
+  │
+  ├─ prepare_task_switch(rq, prev, next)
+  │
+  ├─ switch_mm_irqs_off(prev-&gt;active_mm, next-&gt;mm, next)
+  │   │
+  │   └─ load_new_mm_cr3()      // Set CR3 to next-&gt;mm-&gt;pgd
+  │       └─ mov %rax, %cr3      // CPU invalidates TLB entries (unless PCID)
+  │
+  ├─ switch_to(prev, next, prev)
+  │   │
+  │   └─ __switch_to()           // arch/x86/kernel/process_64.c
+  │       │
+  │       ├─ save_fsgs()          // save prev FS/GS base
+  │       ├─ save_fpregs_to_fpstate(prev-&gt;thread.fpu)
+  │       ├─ switch_to_xtregs()   // handle extended state (XSAVE)
+  │       ├─ this_cpu_write(current_task, next)
+  │       ├─ load_fsgs()          // restore next FS/GS base
+  │       └─ switch_gdt()         // if per-CPU GDT entries differ
+  │
+  └─ finish_task_switch(prev)
+						</pre>
+						<h4 id="switch-to-macro">switch_to Macro</h4>
+						<pre class="c">
+#define switch_to(prev, next, last)                              \
+do {                                                             \
+    /* Save callee-saved regs: rbp, rbx, r12-r15 (ABI covers) */\
+    /* Stack pointer swap happens implicitly via RSP switch */   \
+    ((last) = __switch_to_asm((prev), (next)));                  \
+} while (0)
+						</pre>
+						<h4 id="switch-to-asm">__switch_to_asm</h4>
+						<pre class="x86asm">
+/*
+ * %rdi = pointer to prev task_struct
+ * %rsi = pointer to next task_struct
+ *
+ * Returns: prev task_struct pointer (becomes &#39;last&#39; in the caller)
+ */
+__switch_to_asm:
+    /* Save callee-saved registers onto prev&#39;s kernel stack */
+    pushq   %rbp
+    pushq   %rbx
+    pushq   %r12
+    pushq   %r13
+    pushq   %r14
+    pushq   %r15
+
+    /* Save prev&#39;s kernel stack pointer */
+    movq    %rsp, THREAD_SP(%rdi)       /* prev-&gt;thread.sp = rsp */
+
+    /* Load next&#39;s kernel stack pointer */
+    movq    THREAD_SP(%rsi), %rsp       /* rsp = next-&gt;thread.sp */
+
+    /* Return value: prev (rdi) — will be stored in &#39;last&#39; */
+    movq    %rdi, %rax
+
+    /* Update current_task per-CPU variable */
+    movq    %rsi, PER_CPU_CURRENT_TASK
+
+    /* Restore callee-saved registers from next&#39;s stack */
+    popq    %r15
+    popq    %r14
+    popq    %r13
+    popq    %r12
+    popq    %rbx
+    popq    %rbp
+
+    ret
+						</pre>
+						<p>
+							The stack pointer switch is the key insight: by changing
+							<code>rsp</code>
+							, the
+							<code>pop</code>
+							instructions restore
+							the
+							<em>next</em>
+							task's saved registers, and
+							<code>ret</code>
+							returns to wherever the next task was when it last
+							called
+							<code>__switch_to_asm</code>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="fpu-state-and-xsavexrstor">FPU State and XSAVE/XRSTOR</h3>
+						<p>
+							Floating-point and SIMD state is large and expensive to save. The kernel uses lazy FPU switching
+							with a hardware assist. The
+							<code>TS</code>
+							(Task Switched) flag in CR0 causes any FPU/SSE/AVX instruction
+							to trap with a
+							<code>#NM</code>
+							(No Math / Device Not Available) exception. This allows the kernel to defer
+							saving FPU state until another task actually needs the FPU.
+						</p>
+						<pre class="plaintext">
+Lazy FPU switching flow:
+
+Task A (FPU dirty) → schedule() → Task B
+  │                                    │
+  │  ┌──────────────────────────────────┘
+  │  │
+  │  │  TS flag stays SET in CR0
+  │  │  Task B does NOT yet own the FPU
+  │  │
+  │  │  Task B executes xmm instruction
+  │  │        │
+  │  │        ▼
+  │  │  #NM exception (Device Not Available)
+  │  │        │
+  │  │        ▼
+  │  │  do_device_not_available()
+  │  │        │
+  │  │        ├─ save_fpregs_to_fpstate(&amp;prev-&gt;thread.fpu)  ──► Saves Task A FPU
+  │  │        ├─ clts()  ──► Clear TS flag in CR0
+  │  │        ├─ restore_fpregs_from_fpstate(&amp;next-&gt;thread.fpu) ──► Restore Task B FPU
+  │  │        └─ Set current-&gt;thread.fpu.last_cpu
+  │  │
+  │  │  Return to Task B, retry xmm instruction → succeeds
+						</pre>
+						<h4 id="xsave-and-xrstor">XSAVE and XRSTOR</h4>
+						<pre class="c">
+// arch/x86/kernel/fpu/xstate.c
+
+// Save all extended state to the XSAVE area:
+void copy_fpregs_to_fpstate(struct fpu *fpu)
+{
+    if (likely(use_xsave())) {
+        xsave(fpu-&gt;fpstate, fpu-&gt;fpstate_mask);
+    } else if (use_fxsr()) {
+        fxsave(fpu-&gt;fpstate);
+    } else {
+        fnsave(fpu-&gt;fpstate);  // legacy x87
+    }
+}
+
+// Restore all extended state:
+void copy_fpregs_from_fpstate(struct fpu *fpu)
+{
+    if (likely(use_xsave())) {
+        xrstor(fpu-&gt;fpstate, fpu-&gt;fpstate_mask);
+    } else if (use_fxsr()) {
+        fxrstor(fpu-&gt;fpstate);
+    } else {
+        frstor(fpu-&gt;fpstate);
+    }
+}
+						</pre>
+						<h4 id="xsave-area-layout">XSAVE area layout</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Offset</th>
+									<th align="center">Component</th>
+									<th align="center">Size</th>
+									<th align="center">XCR0 bit</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">0x000</td>
+									<td align="center">x87/MMX state</td>
+									<td align="center">160 bytes</td>
+									<td align="center">0</td>
+								</tr>
+								<tr>
+									<td align="center">0x0A0</td>
+									<td align="center">SSE state (xmm0-15)</td>
+									<td align="center">256 bytes</td>
+									<td align="center">1</td>
+								</tr>
+								<tr>
+									<td align="center">0x200</td>
+									<td align="center">YMM_Hi128 (AVX-256)</td>
+									<td align="center">256 bytes</td>
+									<td align="center">2</td>
+								</tr>
+								<tr>
+									<td align="center">0x300</td>
+									<td align="center">BNDREGS (MPX)</td>
+									<td align="center">64 bytes</td>
+									<td align="center">3</td>
+								</tr>
+								<tr>
+									<td align="center">0x340</td>
+									<td align="center">BNDCSR (MPX)</td>
+									<td align="center">64 bytes</td>
+									<td align="center">4</td>
+								</tr>
+								<tr>
+									<td align="center">0x380</td>
+									<td align="center">Opmask (AVX-512)</td>
+									<td align="center">64 bytes</td>
+									<td align="center">5</td>
+								</tr>
+								<tr>
+									<td align="center">0x3C0</td>
+									<td align="center">ZMM_Hi256 (AVX-512)</td>
+									<td align="center">512 bytes</td>
+									<td align="center">6</td>
+								</tr>
+								<tr>
+									<td align="center">0x5C0</td>
+									<td align="center">Hi16_ZMM (AVX-512)</td>
+									<td align="center">1024 bytes</td>
+									<td align="center">7</td>
+								</tr>
+								<tr>
+									<td align="center">0x9C0</td>
+									<td align="center">PKRU</td>
+									<td align="center">8 bytes</td>
+									<td align="center">9</td>
+								</tr>
+								<tr>
+									<td align="center">0x9C8</td>
+									<td align="center">CET_U / CET_S</td>
+									<td align="center">16 bytes</td>
+									<td align="center">11, 12</td>
+								</tr>
+								<tr>
+									<td align="center">0x9D8</td>
+									<td align="center">HDC (Hardware Duty)</td>
+									<td align="center">8 bytes</td>
+									<td align="center">13</td>
+								</tr>
+								<tr>
+									<td align="center">0x9E0</td>
+									<td align="center">HWP (P-state hint)</td>
+									<td align="center">8 bytes</td>
+									<td align="center">16-18</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>Total XSAVE area size with AVX-512 is about 2696 bytes.</p>
+						<h4 id="inspecting-fpu-state-on-a-live-system">Inspecting FPU state on a live system</h4>
+						<pre class="bash">
+# Check supported XSAVE features
+sudo cat /proc/cpuinfo | grep -E &#39;^flags&#39; | head -1 | tr &#39; &#39; &#39;\n&#39; | grep -E &#39;xsave|avx|fpu&#39;
+
+# Dump CPUID leaf for XSAVE
+cpuid -1 -l 0xd -s 0
+cpuid -1 -l 0xd -s 1
+						</pre>
+					</section>
+					<section>
+						<h3 id="tlb-invalidation">TLB Invalidation</h3>
+						<p>
+							When switching between processes (different
+							<code>mm</code>
+							), the
+							<abbr title="Central Processing Unit">CPU</abbr>
+							must
+							load a different page table root (CR3). Historically, every
+							<code>mov %cr3</code>
+							invalidated the entire
+							TLB (Translation Lookaside Buffer) for non-global pages. This is devastating for performance
+							<ul>
+								<li>the TLB has~1024 entries, and reloading each requires a page walk of 4-5 memory accesses.</li>
+							</ul>
+						</p>
+						<h4 id="tlb-flush-cost-during-process-switch">TLB flush cost during process switch</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Approach</th>
+									<th align="center">TLB state after CR3</th>
+									<th align="center">Cost</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">No PCID (legacy)</td>
+									<td align="center">All entries flushed</td>
+									<td align="center">1000+ cycles to refill hot pages</td>
+								</tr>
+								<tr>
+									<td align="center">PCID (Haswell+)</td>
+									<td align="center">Entries tagged, kept</td>
+									<td align="center">Only new-process misses</td>
+								</tr>
+								<tr>
+									<td align="center">INVPCID (opt.)</td>
+									<td align="center">Selective flush</td>
+									<td align="center">Precision flush of specific PCID</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="pcid-process-context-identifiers">PCID (Process Context Identifiers)</h4>
+						<p>
+							Intel introduced
+							<code>PCID</code>
+							in Haswell (2013). Each process address space gets a unique 12-bit identifier.
+							The TLB tags each entry with the
+							<code>PCID</code>
+							, so entries from multiple processes can coexist in
+							the TLB simultaneously. Switching CR3 no longer flushes entries from other
+							<code>PCIDs</code>
+							.
+						</p>
+						<pre class="plaintext">
+Without PCID:
+  ┌────────────────┐   Task A → Task B   ┌────────────────┐
+  │ TLB: A entries │─────────────────────►│ TLB: (empty)   │
+  └────────────────┘   mov %cr3 flushes   └────────────────┘
+
+With PCID:
+  ┌────────────────┐   Task A → Task B   ┌──────────────────────────┐
+  │ TLB: A entries │─────────────────────►│ TLB: A entries (stale)   │
+  │                │   mov %cr3 (no flush)│       B entries (fresh)  │
+  └────────────────┘                      └──────────────────────────┘
+						</pre>
+						<h4 id="meltdown-and-pcid">Meltdown and PCID</h4>
+						<p>
+							After Meltdown was disclosed in 2018, Linux adopted
+							<code>KPTI</code>
+							(Kernel Page Table Isolation), which
+							gives each process two page tables: one for user mode (minimal kernel mappings) and one for
+							kernel mode. Each CR3 switch now costs more because the
+							<abbr title="Central Processing Unit">CPU</abbr>
+							must
+							manage two address spaces.
+							<code>PCID</code>
+							becomes critical here:
+						</p>
+						<pre class="plaintext">
+Post-KPTI address space switch:
+  Task A user cr3 (PCID=1)  →  Task A kernel cr3 (PCID=2, KPTI trampoline)
+                              →  Task B kernel cr3 (PCID=3)
+                              →  Task B user cr3 (PCID=4)
+
+  Without PCID: 4 full TLB flushes
+  With PCID:    0 TLB flushes (just PCID tag filtering)
+						</pre>
+						<pre class="bash">
+# Check if PCID is available
+grep pcid /proc/cpuinfo | head -1
+
+# Check KPTI status
+dmesg | grep -i &#39;page.*table.*isolation\|KPTI\|PTI&#39;
+cat /sys/devices/system/cpu/vulnerabilities/meltdown
+						</pre>
+					</section>
+					<section>
+						<h3 id="the-full-context-switch-flow">The Full context_switch() Flow</h3>
+						<p>
+							The
+							<code>context_switch()</code>
+							function in
+							<code>kernel/sched/core.c</code>
+							orchestrates the entire transition:
+						</p>
+						<pre class="c">
+// kernel/sched/core.c (conceptually reconstructed)
+
+static __always_inline struct rq *
+context_switch(struct rq *rq, struct task_struct *prev,
+               struct task_struct *next, struct rq_flags *rf)
+{
+    prepare_task_switch(rq, prev, next);
+
+    /*
+     * switch_mm_irqs_off() handles the virtual memory context:
+     *   - If prev-&gt;mm == next-&gt;mm (threads): no op
+     *   - If next-&gt;mm == NULL (kernel thread): borrow prev-&gt;active_mm
+     *   - Otherwise: load next-&gt;mm-&gt;pgd into CR3
+     */
+    arch_start_context_switch(prev);
+
+    if (!next-&gt;mm) {
+        // Kernel thread: it has no own mm, borrow the previous one
+        enter_lazy_tlb(prev-&gt;active_mm, next);
+        next-&gt;active_mm = prev-&gt;active_mm;
+    } else {
+        switch_mm_irqs_off(prev-&gt;active_mm, next-&gt;mm, next);
+
+        if (!prev-&gt;mm) {
+            // Prev is kernel thread leaving borrowed mm
+            prev-&gt;active_mm = NULL;
+            rq-&gt;prev_mm = prev-&gt;active_mm;
+        }
+    }
+
+    switch_to(prev, next, prev);
+    // ---- We no longer execute in prev&#39;s context ----
+    // prev is now the task that switched *out*, preserved in &#39;last&#39;
+
+    barrier();
+
+    return finish_task_switch(prev);
+}
+						</pre>
+						<h4 id="kernel-thread-special-case">Kernel thread special case</h4>
+						<p>
+							Kernel threads (
+							<code>kworker</code>
+							,
+							<code>kthreadd</code>
+							,
+							<code>ksoftirqd/N</code>
+							) have
+							<code>mm == NULL</code>
+							. They don't execute
+							user code, so they don't need their own page tables. When scheduled, they "borrow" the previous
+							task's
+							<code>active_mm</code>
+							, avoiding an expensive CR3 write.
+						</p>
+						<pre class="bash">
+# Find kernel threads (no user memory)
+ps aux | grep &#39;\[.*\]&#39;
+# The square brackets indicate kernel threads
+
+# Check which tasks have mm == NULL (requires debugfs)
+sudo cat /proc/$(pidof kworker/0:0 | cut -d&#39; &#39; -f1)/maps 2&gt;&amp;1 || echo &#34;No userspace maps&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="voluntary-vs-involuntary">Voluntary vs Involuntary</h3>
+						<p>The kernel tracks two categories of context switches for each task:</p>
+						<pre class="plaintext">
+/proc/PID/status field              Meaning
+═══════════════════════              ═══════
+voluntary_ctxt_switches              Task yielded CPU willingly:
+                                     - Called sleep(), wait(), poll()
+                                     - Blocked on I/O, mutex, semaphore
+                                     - Called sched_yield()
+
+nonvoluntary_ctxt_switches           Task was preempted:
+                                     - Time slice expired
+                                     - Higher-priority task woke up
+                                     - Kernel preemption (CONFIG_PREEMPT)
+						</pre>
+						<pre class="bash">
+# Inspect context switch counters for a specific process
+cat /proc/self/status | grep ctxt
+# voluntary_ctxt_switches:        42
+# nonvoluntary_ctxt_switches:     15
+
+# Monitor in real time
+watch -n1 &#39;cat /proc/$(pidof firefox | cut -d&#34; &#34; -f1)/status | grep ctxt&#39;
+						</pre>
+						<h4 id="system-wide-context-switch-rate">System-wide context switch rate</h4>
+						<pre class="bash">
+# /proc/stat: line 1 (cpu aggregate), column:
+#  1=user, 2=nice, 3=system, 4=idle, 5=iowait, 6=irq, 7=softirq
+# ctxt line shows total context switches since boot
+cat /proc/stat | grep ctxt
+# ctxt 1234567890
+
+# Monitor per-second rate
+vmstat 1
+# ───procs─── ──────memory────── ───swap── ────io──── ──system── ────cpu────
+#  r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa
+#  2  0      0 1.2G   450M  3.2G    0    0     5     0  850 3200  5  2 93  0
+#                                              │    │
+#                                              │    └── cs = context switches/sec
+#                                              └── in = interrupts/sec
+						</pre>
+					</section>
+					<section>
+						<h3 id="measuring-context-switch-cost">Measuring Context Switch Cost</h3>
+						<pre class="bash">
+# perf stat — count events during a workload
+sudo perf stat -e context-switches,cpu-migrations,page-faults \
+    -e cycles,instructions,branches,branch-misses \
+    -e L1-dcache-loads,L1-dcache-load-misses,LLC-loads,LLC-load-misses \
+    -e dTLB-loads,dTLB-load-misses \
+    sleep 5
+
+# Isolate context switch events
+sudo perf stat -e context-switches -a sleep 10
+# -a: system-wide
+
+# Profile scheduler functions
+sudo perf top -e &#39;sched:sched_switch&#39;
+# Shows which tasks are being switched and why
+
+# Trace context switches with callchains
+sudo perf record -e sched:sched_switch -a -g -- sleep 5
+sudo perf report
+
+# Count context switches per CPU
+sudo perf stat -e &#39;context-switches&#39; -C 0,1 -a -- sleep 5
+						</pre>
+					</section>
+					<section>
+						<h3 id="perf-sched-scheduler-profiling">perf sched - Scheduler Profiling</h3>
+						<p>
+							The
+							<code>perf sched</code>
+							subcommand records and replays scheduling decisions, letting you analyze context
+							switch patterns:
+						</p>
+						<pre class="bash">
+# Record scheduler events
+sudo perf sched record -- sleep 10
+# Writes perf.data
+
+# Show latency (time to run after wakeup)
+sudo perf sched latency
+
+# Replay scheduling timeline
+sudo perf sched timehist
+#            time    cpu  task name              wait time  sch delay   run time
+#                         [tid/pid]                 (msec)     (msec)     (msec)
+# ---------------  ------  --------------------  ---------  ---------  ---------
+#   12345.678900   [0000]  firefox[54321]           0.000      0.005      0.100
+#   12345.679000   [0000]  swapper[0]               0.000      0.000      0.010
+#   12345.679010   [0000]  Xorg[1234]               0.008      0.002      0.050
+						</pre>
+					</section>
+					<section>
+						<h3 id="cache-pollution-and-tlb-misses">Cache Pollution and TLB Misses</h3>
+						<p>
+							Context switches destroy the microarchitectural state: branch predictors reset, cache lines
+							become cold, TLB entries become useless. The indirect costs often exceed the direct register-save
+							costs.
+						</p>
+						<p>Cost breakdown of a process context switch (approx., modern Intel processor):</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Component</th>
+									<th align="center">Approx. Cost</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Save/restore GPRs</td>
+									<td align="center">~20 cycles</td>
+								</tr>
+								<tr>
+									<td align="center">Save/restore FPU (XSAVE/XRSTOR)</td>
+									<td align="center">~100-300</td>
+								</tr>
+								<tr>
+									<td align="center">CR3 write (process switch only)</td>
+									<td align="center">~500-1000</td>
+								</tr>
+								<tr>
+									<td align="center">TLB refill (cold pages after CR3)</td>
+									<td align="center">~5000-10000</td>
+								</tr>
+								<tr>
+									<td align="center">L1 cache repopulation</td>
+									<td align="center">~1000-5000</td>
+								</tr>
+								<tr>
+									<td align="center">L2/L3 cache pollution</td>
+									<td align="center">~2000-10000</td>
+								</tr>
+								<tr>
+									<td align="center">Branch predictor reset</td>
+									<td align="center">~500-2000</td>
+								</tr>
+								<tr>
+									<td align="center">Kernel entry/exit</td>
+									<td align="center">~100-200</td>
+								</tr>
+								<tr>
+									<td align="center">Scheduler overhead</td>
+									<td align="center">~200-500</td>
+								</tr>
+								<tr>
+									<td align="center">Total (thread switch, same mm)</td>
+									<td align="center">~500-2000</td>
+								</tr>
+								<tr>
+									<td align="center">Total (process switch, diff mm)</td>
+									<td align="center">~3000-20000+</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="demonstrating-tlb-fallout">Demonstrating TLB fallout</h4>
+						<pre class="bash">
+# Benchmark with hwloc — measure TLB pressure
+# Install: pacman -S hwloc
+lstopo --no-io
+
+# perf stat on TLB metrics
+sudo perf stat -e dTLB-load-misses,dTLB-store-misses \
+    -e iTLB-load-misses \
+    -e &#39;context-switches&#39; \
+    -- ./context-switching-bench
+
+# Use cachegrind to simulate cache/TLB behavior
+valgrind --tool=cachegrind --branch-sim=yes ls -lR /usr/share 2&gt;/dev/null
+cg_annotate cachegrind.out.*
+						</pre>
+					</section>
+					<section>
+						<h3 id="preemption">Preemption</h3>
+						<p>
+							Linux can preempt kernel code if
+							<code>CONFIG_PREEMPT</code>
+							or
+							<code>CONFIG_PREEMPT_VOLUNTARY</code>
+							is enabled.
+							The
+							<code>NEED_RESCHED</code>
+							flag in
+							<code>thread_info</code>
+							triggers preemption:
+						</p>
+						<pre class="c">
+// kernel/sched/core.c
+void __sched schedule(void)
+{
+    struct task_struct *tsk = current;
+
+    do {
+        preempt_disable();
+        __schedule(SM_NONE);
+        sched_preempt_enable_no_resched();
+    } while (need_resched());
+}
+
+// Preemption check happens on:
+// 1. Return from interrupt/syscall to user space
+// 2. preempt_enable() in kernel code (CONFIG_PREEMPT)
+// 3. Explicit cond_resched() calls (CONFIG_PREEMPT_VOLUNTARY)
+						</pre>
+						<pre class="bash">
+# Check preemption model
+zcat /proc/config.gz | grep PREEMPT
+# CONFIG_PREEMPT=y          → full preemption (low-latency desktop)
+# CONFIG_PREEMPT_VOLUNTARY=y → voluntary preemption points only
+# CONFIG_PREEMPT_NONE=y      → no kernel preemption
+# CONFIG_PREEMPT_RT=y        → real-time preemption
+
+# Monitor involuntary switches — indicator of preemption pressure
+sudo perf top -e &#39;sched:sched_switch&#39; -e &#39;sched:sched_wakeup&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="context-switching-in-containers">Context Switching in Containers</h3>
+						<p>
+							Container runtimes (podman) do not add extra context switch overhead for the workload itself
+							<ul>
+								<li>containers are just processes with namespaced views. However, the overhead of podman's <code>conmon</code></li>
+							</ul>
+						</p>
+						<p>
+							monitor process and
+							<code>runc</code>
+							can add marginal switches during container lifecycle events.
+						</p>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Build the context-switching lab and measure the workload inside it. The container compiles a
+							small multithreaded burner and samples it with
+							<code>perf stat</code>
+							, then prints the voluntary versus
+							involuntary switch counters, the system-wide rate from
+							<code>vmstat</code>
+							, and the XSAVE and
+							<code>PCID</code>
+							features
+							reported by the
+							<abbr title="Central Processing Unit">CPU</abbr>
+							.
+						</p>
+						<p><a href="/wiki/articles/sysinternals/context-switching.Containerfile">context-switching.Containerfile</a></p>
+						<pre class="bash">
+podman build -t ctx-switch -f context-switching.Containerfile .
+podman run --rm ctx-switch
+						</pre>
+						<p>The same observations can be made directly on the host:</p>
+						<pre class="bash">
+# 1. Check your current context switch counters
+cat /proc/self/status | grep ctxt
+cat /proc/stat | grep ctxt
+
+# 2. Monitor system-wide context switch rate
+vmstat 1 10
+
+# 3. Count context switches for a stress workload
+sudo perf stat -e context-switches -a -- stress -c 4 -t 5 2&gt;/dev/null
+
+# 4. Profile scheduler events live
+sudo perf top -e &#39;sched:sched_switch&#39;
+
+# 5. Record and inspect scheduler timeline
+sudo perf sched record -- sleep 3 &amp;&amp; sudo perf sched timehist
+
+# 6. Check voluntary vs involuntary ratio for a UI process
+pid=$(pidof Xorg 2&gt;/dev/null || pidof gnome-shell 2&gt;/dev/null || echo $$)
+echo &#34;PID: $pid&#34;
+cat /proc/$pid/status | grep ctxt
+
+# 7. Inspect FPU state support
+grep -E &#39;^flags&#39; /proc/cpuinfo | head -1 | tr &#39; &#39; &#39;\n&#39; | grep -E &#39;xsave|avx|fpu|xmm|ymm|zmm&#39;
+
+# 8. Check KPTI/Meltdown mitigations
+cat /sys/devices/system/cpu/vulnerabilities/meltdown
+cat /sys/devices/system/cpu/vulnerabilities/spectre_v1
+cat /sys/devices/system/cpu/vulnerabilities/spectre_v2
+
+# 9. PCID availability
+grep pcid /proc/cpuinfo &gt; /dev/null &amp;&amp; echo &#34;PCID supported&#34; || echo &#34;No PCID (pre-Haswell CPU)&#34;
+
+# 10. Kernel preemption model
+zcat /proc/config.gz 2&gt;/dev/null | grep PREEMPT || \
+  grep PREEMPT /boot/config-$(uname -r) 2&gt;/dev/null
+
+# 11. Per-task kernel stack usage
+sudo cat /proc/$(pidof kworker/0:0 | cut -d&#39; &#39; -f1)/stack
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/arch/x86/kernel/process_64.c" target="_blank">Linux kernel: arch/x86/kernel/process_64.c - __switch_to()</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/arch/x86/include/asm/switch_to.h" target="_blank">Linux kernel: arch/x86/include/asm/switch_to.h</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/arch/x86/kernel/fpu/xstate.c" target="_blank">Linux kernel: arch/x86/kernel/fpu/xstate.c - XSAVE/XRSTOR</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/kernel/sched/core.c" target="_blank">Linux kernel: kernel/sched/core.c - context_switch()</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/arch/x86/mm/tlb.c" target="_blank">Linux kernel: arch/x86/mm/tlb.c - TLB flush logic</a></li>
+							<li><a class="icon-website" href="https://www.intel.com/sdm" target="_blank">Intel SDM Vol 3A, Chapter 13: XSAVE/XRSTOR</a></li>
+							<li><a class="icon-website" href="https://www.intel.com/sdm" target="_blank">Intel SDM Vol 3A, Chapter 4.10: PCID and TLB Management</a></li>
+							<li><a class="icon-website" href="https://lwn.net/Articles/709312/" target="_blank">LWN.net: PCID support in Linux</a></li>
+							<li><a class="icon-website" href="https://lwn.net/Articles/738975/" target="_blank">LWN.net: KAISER/KPTI and Meltdown</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/perf-sched.1" target="_blank">perf-sched(1) - scheduler profiling</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/vmstat.8" target="_blank">vmstat(8) - system statistics</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

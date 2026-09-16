@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Stack | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Stack">
+		<meta name="keywords" content="calling-conventions, gdb, overflow, stack, stack-canary, stack-frame, techniques, x86-64">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Stack">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="The call stack - frame structure, prologue/epilogue, System V AMD64 ABI, stack canaries, alignment, GDB inspection, and stack overflow.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/fundamentals/stack.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Stack">
+		<meta name="twitter:description" itemprop="description" content="The call stack - frame structure, prologue/epilogue, System V AMD64 ABI, stack canaries, alignment, GDB inspection, and stack overflow.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#what-the-stack-is">What the Stack Is</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#x86-64-stack-frame-anatomy">x86-64 Stack Frame Anatomy</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#stack-operations-push-pop-call-ret">Stack Operations: push, pop, call, ret</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#function-prologue-and-epilogue">Function Prologue and Epilogue</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#rsp-vs-rbp">rsp vs rbp</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#system-v-amd64-abi-calling-convention">System V AMD64 ABI - Calling Convention</a></b>
+					<ul>
+						<li><a href="#integerpointer-arguments-in-order">Integer/Pointer Arguments (in order)</a></li>
+						<li><a href="#floating-point-arguments">Floating-point Arguments</a></li>
+						<li><a href="#return-value">Return Value</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#stack-alignment">Stack Alignment</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-red-zone">The Red Zone</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#stack-canaries">Stack Canaries</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#stack-growth-direction">Stack Growth Direction</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#stack-size-limit">Stack Size Limit</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#alloca-dynamic-stack-allocation">alloca() - Dynamic Stack Allocation</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#stack-overflow">Stack Overflow</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#sigaltstack-custom-signal-stack">sigaltstack - Custom Signal Stack</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#inspecting-the-stack-with-gdb">Inspecting the Stack with GDB</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification-checklist">Verification Checklist</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/fundamentals/index.html">Fundamentals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/fundamentals/stack.html">Stack</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="stack">Stack</h2>
+					<p>
+						The call stack - frame structure, prologue/epilogue, System V AMD64 ABI, stack canaries, alignment,
+						GDB inspection, and stack overflow.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							The stack is the LIFO (Last In, First Out) memory region where a process keeps function call
+							frames, return addresses, and local variables. This article covers the x86-64 frame layout,
+							the System V AMD64 calling convention, stack alignment and the red zone, stack canaries, and
+							how the kernel grows and guards the stack. By the end you can read a frame in GDB, name what
+							each register holds, and explain how a stack overflow escapes the frame.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/virtual-memory.html">Virtual Memory</a> - page tables, mmap, virtual address space</li>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - process memory layout, /proc</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="what-the-stack-is">What the Stack Is</h3>
+						<p>
+							The stack is a LIFO (Last In, First Out) memory region that manages function execution. Every
+							function call pushes a new stack frame; every return pops it. The
+							<abbr title="Central Processing Unit">CPU</abbr>
+							's
+							<code>rsp</code>
+							register points to the current top of the stack. The stack grows downward on x86, x86-64,
+							and ARM - meaning
+							<code>rsp</code>
+							decreases when data is pushed.
+						</p>
+						<pre class="plaintext">
+High addresses (e.g., 0x7ffffffff000)
+┌──────────────────────┐
+│  Environment strings │
+│  Argument strings    │
+│  Auxiliary vectors   │
+├──────────────────────┤
+│  argv[] pointers     │
+│  argc                │
+├──────────────────────┤ &lt;- Initial rsp at _start
+│                      │
+│  ┌────────────────┐  │
+│  │ main()&#39;s frame │  │ &lt;- Frame 0 (highest)
+│  │  saved rbp     │  │
+│  │  return addr   │  │
+│  │  local vars    │  │
+│  ├────────────────┤  │
+│  │ func1() frame  │  │ &lt;- Frame 1
+│  │  saved rbp     │  │   rbp -&gt; caller&#39;s rbp
+│  │  return addr   │  │
+│  │  local vars    │  │
+│  ├────────────────┤  │
+│  │ func2() frame  │  │ &lt;- Frame 2 (current)
+│  │  saved rbp     │  │   rbp -&gt; func1&#39;s rbp
+│  │  return addr   │  │
+│  │  local vars    │  │
+│  ├────────────────┤  │
+│  │  ...           │  │
+│  ▼  grows down    │  │
+│                      │
+│     ◄── rsp         │
+│                      │
+│  [guard page]        │ &lt;- Unmapped page; SEGV on access
+└──────────────────────┘
+Low addresses (e.g., 0x7ffffffe0000)
+						</pre>
+					</section>
+					<section>
+						<h3 id="x86-64-stack-frame-anatomy">x86-64 Stack Frame Anatomy</h3>
+						<p>A standard stack frame (without optimizations) has this structure:</p>
+						<pre class="plaintext">
+        ┌──────────────────────┐
+        │  Caller&#39;s rbp        │ &lt;- Saved base pointer (+8 from callee rbp)
+        ├──────────────────────┤
+        │  Return address      │ &lt;- Pushed by `call` instruction (+16 from callee rbp)
+        ├──────────────────────┤
+rbp -&gt;   │  Saved rbp           │ &lt;- Pushed by `push rbp` in prologue
+        ├──────────────────────┤
+        │  Local variable 1    │ &lt;- At negative offset from rbp
+        │  Local variable 2    │
+        ├──────────────────────┤
+        │  ...                 │
+        ├──────────────────────┤
+        │  Callee-saved regs   │ &lt;- rbx, r12-r15 if modified
+        ├──────────────────────┤
+        │  Argument 7+ (stack) │ &lt;- Beyond 6 register args
+        ├──────────────────────┤
+rsp -&gt;   │  Red zone (128 B)   │ &lt;- Scratch space below rsp
+        └──────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="stack-operations-push-pop-call-ret">Stack Operations: push, pop, call, ret</h3>
+						<pre class="x86asm">
+; push - decrement rsp, write value
+push rax          ; rsp = rsp - 8; *(uint64_t*)rsp = rax
+
+; pop - read value, increment rsp
+pop rax           ; rax = *(uint64_t*)rsp; rsp = rsp + 8
+
+; call - push return address, jump
+call func         ; push rip_of_next_instruction; jmp func
+
+; ret - pop return address, jump
+ret               ; pop rip
+
+; leave - restore frame (equivalent to)
+mov rsp, rbp      ; Restore stack pointer
+pop rbp           ; Restore base pointer
+
+; enter - create frame (rarely used; slow)
+enter N, 0        ; push rbp; mov rbp, rsp; sub rsp, N
+						</pre>
+					</section>
+					<section>
+						<h3 id="function-prologue-and-epilogue">Function Prologue and Epilogue</h3>
+						<p>Consider this simple C function:</p>
+						<pre class="c">
+long add(long a, long b) {
+    long result = a + b;
+    return result;
+}
+						</pre>
+						<p>The compiled assembly (without optimization):</p>
+						<pre class="x86asm">
+add:
+    ; ── PROLOGUE ──
+    push   rbp              ; Save caller&#39;s base pointer
+    mov    rbp, rsp         ; Set new frame base
+    ; If local vars need space:
+    ; sub    rsp, 16        ; Allocate stack for locals
+
+    ; ── FUNCTION BODY ──
+    mov    QWORD PTR [rbp-0x18], rdi   ; a -&gt; local
+    mov    QWORD PTR [rbp-0x20], rsi   ; b -&gt; local
+    mov    rax, QWORD PTR [rbp-0x18]   ; load a
+    add    rax, QWORD PTR [rbp-0x20]   ; add b
+    mov    QWORD PTR [rbp-0x8], rax    ; result -&gt; local
+    mov    rax, QWORD PTR [rbp-0x8]    ; return result
+
+    ; ── EPILOGUE ──
+    pop    rbp              ; Restore caller&#39;s base pointer
+    ret                     ; Return (pop rip)
+						</pre>
+						<p>
+							With optimization (
+							<code>-O2</code>
+							):
+						</p>
+						<pre class="x86asm">
+add:
+    lea    rax, [rdi + rsi]  ; a + b -&gt; rax in one instruction
+    ret                      ; No frame at all - leaf function optimization
+						</pre>
+						<pre class="bash">
+# Disassemble to see the frame
+gcc -O0 -c -o /tmp/func.o -xc - &lt;&lt;&lt;&#39;long add(long a,long b){return a+b;}&#39;
+objdump -d -M intel /tmp/func.o
+
+# With full optimization
+gcc -O2 -c -o /tmp/func.o2 -xc - &lt;&lt;&lt;&#39;long add(long a,long b){return a+b;}&#39;
+objdump -d -M intel /tmp/func.o2
+						</pre>
+					</section>
+					<section>
+						<h3 id="rsp-vs-rbp">rsp vs rbp</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Register</th>
+									<th align="center">Purpose</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">rsp</td>
+									<td align="center">Stack pointer - always points to the top of the stack (lowest address in use)</td>
+								</tr>
+								<tr>
+									<td align="center">rbp</td>
+									<td align="center">Base pointer - points to the base of the current stack frame (optional, can be used as general-purpose register with<code>-fomit-frame-pointer</code>)</td>
+								</tr>
+								<tr>
+									<td align="center">rip</td>
+									<td align="center">Instruction pointer - next instruction to execute</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							With
+							<code>-fomit-frame-pointer</code>
+							(default in
+							<code>-O1</code>
+							and above on modern GCC),
+							<code>rbp</code>
+							is freed up as
+							a general-purpose register. Stack variables are accessed relative to
+							<code>rsp</code>
+							instead, which the
+							compiler tracks via frame size accounting.
+						</p>
+						<pre class="bash">
+# Check if a binary uses frame pointers
+readelf -S /usr/bin/ls | grep eh_frame
+objdump -d /usr/bin/ls | grep -c &#39;push.*rbp&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="system-v-amd64-abi-calling-convention">System V AMD64 ABI - Calling Convention</h3>
+						<p>
+							The System V ABI specifies how function arguments are passed and the stack is managed on x86-64
+							Linux:
+						</p>
+						<h4 id="integerpointer-arguments-in-order">Integer/Pointer Arguments (in order)</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Position</th>
+									<th align="center">Register</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">1st arg</td>
+									<td align="center">rdi</td>
+								</tr>
+								<tr>
+									<td align="center">2nd arg</td>
+									<td align="center">rsi</td>
+								</tr>
+								<tr>
+									<td align="center">3rd arg</td>
+									<td align="center">rdx</td>
+								</tr>
+								<tr>
+									<td align="center">4th arg</td>
+									<td align="center">rcx</td>
+								</tr>
+								<tr>
+									<td align="center">5th arg</td>
+									<td align="center">r8</td>
+								</tr>
+								<tr>
+									<td align="center">6th arg</td>
+									<td align="center">r9</td>
+								</tr>
+								<tr>
+									<td align="center">7th+ arg</td>
+									<td align="center">On stack (right-to-left push order)</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="floating-point-arguments">Floating-point Arguments</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Position</th>
+									<th align="center">Register</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">1st-8th</td>
+									<td align="center">xmm0 - xmm7</td>
+								</tr>
+								<tr>
+									<td align="center">9th+</td>
+									<td align="center">On stack</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="return-value">Return Value</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Type</th>
+									<th align="center">Register(s)</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Integer/Pointer (<=64 bits)</td>
+									<td align="center">rax</td>
+								</tr>
+								<tr>
+									<td align="center">Integer (<=128 bits)</td>
+									<td align="center">rax (low) + rdx (high)</td>
+								</tr>
+								<tr>
+									<td align="center">Float/Double</td>
+									<td align="center">xmm0</td>
+								</tr>
+								<tr>
+									<td align="center">Float complex</td>
+									<td align="center">xmm0 + xmm1</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							<b>Caller-saved (volatile) registers</b>
+							- the caller must save these before a call if their values
+							are needed after:
+							<code>rax, rcx, rdx, rsi, rdi, r8-r11</code>
+						</p>
+						<p>
+							<b>Callee-saved (nonvolatile) registers</b>
+							- the callee must preserve these:
+							<code>rbx, rbp, r12-r15, rsp</code>
+						</p>
+						<pre class="plaintext">
+Caller before call:             Callee prologue:
+  save volatile regs              push rbp
+  put args in registers           mov rbp, rsp
+  call func                       sub rsp, N          &lt;- allocate locals
+  ...                             ...
+                                Callee epilogue:
+  after return:                   leave / pop rbp
+  restore volatile regs           ret
+						</pre>
+					</section>
+					<section>
+						<h3 id="stack-alignment">Stack Alignment</h3>
+						<p>
+							The x86-64 ABI requires the stack to be
+							<b>16-byte aligned</b>
+							immediately before the
+							<code>call</code>
+							instruction
+							executes. This means
+							<code>rsp</code>
+							% 16 == 0 when
+							<code>call</code>
+							pushes the 8-byte return address, making
+							<code>rsp</code>
+							% 16 == 8 at function entry. The prologue must adjust
+							<code>rsp</code>
+							to realign if needed.
+						</p>
+						<pre class="x86asm">
+; Function that needs to call another function
+; rsp % 16 == 8 at entry (due to return address)
+sub rsp, 8        ; Now rsp % 16 == 0 - aligned for call
+call other_func
+add rsp, 8        ; Restore
+						</pre>
+						<p>
+							Alignment matters because SSE/AVX instructions (
+							<code>movaps</code>
+							,
+							<code>movdqa</code>
+							) fault on unaligned addresses.
+							The compiler handles this automatically; you only need to worry when writing raw assembly that
+							calls C functions.
+						</p>
+					</section>
+					<section>
+						<h3 id="the-red-zone">The Red Zone</h3>
+						<p>
+							The System V AMD64 ABI defines a
+							<b>128-byte red zone</b>
+							below
+							<code>rsp</code>
+							- memory the function can
+							use without adjusting
+							<code>rsp</code>
+							. This is valid because signals are delivered on a separate stack
+							(or above
+							<code>rsp</code>
+							). The kernel guarantees it won't touch the red zone.
+						</p>
+						<p>
+							The Windows x64 ABI has
+							<b>no red zone</b>
+							- the equivalent region can be clobbered by interrupts
+							at any time.
+						</p>
+						<pre class="x86asm">
+; Linux: valid use of red zone
+mov [rsp - 8], rax     ; Store in red zone - rsp unchanged
+mov rax, [rsp - 8]     ; Load from red zone
+ret
+
+; Windows/other kernel: NOT safe - must adjust rsp first
+sub rsp, 8
+mov [rsp], rax
+...
+add rsp, 8
+ret
+						</pre>
+					</section>
+					<section>
+						<h3 id="stack-canaries">Stack Canaries</h3>
+						<p>
+							GCC's
+							<code>-fstack-protector</code>
+							(enabled by default on ArchLinux) inserts a guard value (canary) between
+							the stack frame's local variables and the saved return address. Before the function returns,
+							it checks the canary. If a buffer overflow corrupts the canary, the program aborts.
+						</p>
+						<pre class="plaintext">
+Without canary:                With canary:
+┌──────────────────┐          ┌──────────────────┐
+│  Local buffer    │          │  Local buffer    │
+│  (vulnerable)    │          │  (vulnerable)    │
+│  ...             │          ├──────────────────┤
+├──────────────────┤          │  Canary (random) │ &lt;- __stack_chk_guard
+│  Saved rbp       │          ├──────────────────┤
+│  Return address  │          │  Saved rbp       │
+└──────────────────┘          │  Return address  │
+                              └──────────────────┘
+						</pre>
+						<pre class="c">
+// Compile with and without canary; observe the difference
+// gcc -fstack-protector -S -o canary.s canary.c
+// gcc -fno-stack-protector -S -o no-canary.s canary.c
+void vuln(char* input) {
+    char buf[16];
+    // ... copy input to buf ...
+}
+						</pre>
+						<pre class="bash">
+# Check stack protection defaults
+gcc -Q --help=common | grep stack-protector
+# -fstack-protector-strong  &lt;- default on ArchLinux
+
+# Inspect canary setup in a binary:
+objdump -d /usr/bin/bash | grep -A10 &#39;__stack_chk_fail&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="stack-growth-direction">Stack Growth Direction</h3>
+						<p>Most architectures use a downward-growing stack:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Architecture</th>
+									<th align="center">Direction</th>
+									<th align="center">Why</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">x86 / x86-64</td>
+									<td align="center">Down (decreasing addresses)</td>
+									<td align="center">Historical: early x86, efficient addressing</td>
+								</tr>
+								<tr>
+									<td align="center">ARM (AArch32/64)</td>
+									<td align="center">Down</td>
+									<td align="center">Convention</td>
+								</tr>
+								<tr>
+									<td align="center">MIPS</td>
+									<td align="center">Down</td>
+									<td align="center">Convention</td>
+								</tr>
+								<tr>
+									<td align="center">PA-RISC</td>
+									<td align="center">Up (increasing addresses)</td>
+									<td align="center">Historical design choice</td>
+								</tr>
+								<tr>
+									<td align="center">SPARC</td>
+									<td align="center">Down</td>
+									<td align="center">Convention</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							On Linux, the stack sits at the high end of the user address space and grows downward toward
+							the heap. Between stack and heap lies mmap territory (shared libraries, anonymous mappings).
+							This layout is enforced by the kernel's ELF loader.
+						</p>
+					</section>
+					<section>
+						<h3 id="stack-size-limit">Stack Size Limit</h3>
+						<pre class="bash">
+# Soft limit (can be increased by user)
+ulimit -s
+# Default: 8192 kB (8 MiB) on ArchLinux
+
+# Hard limit
+ulimit -Hs
+
+# Set new limit
+ulimit -s 16384  # 16 MiB
+
+# Kernel-managed stack growth:
+# The kernel automatically extends the stack on page faults
+# within the &#34;stack expansion gap&#34; (usually 1 MiB below current rsp)
+cat /proc/$$/maps | grep stack
+# Stack segment grows on-demand, up to ulimit -s
+						</pre>
+						<p>
+							<b>Thread stacks:</b>
+							Threads created with
+							<code>pthread_create()</code>
+							get their own stack. The default
+							size is set by
+							<code>pthread_attr_setstacksize()</code>
+							. If not specified, glibc uses
+							<code>ulimit -s</code>
+							(typically
+							8 MiB).
+						</p>
+					</section>
+					<section>
+						<h3 id="alloca-dynamic-stack-allocation">alloca() - Dynamic Stack Allocation</h3>
+						<p>
+							<code>alloca()</code>
+							allocates memory on the stack that is automatically freed when the function returns.
+							It's faster than
+							<code>malloc()</code>
+							(no heap bookkeeping) but dangerous for large/variable sizes.
+						</p>
+						<pre class="c">
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;alloca.h&gt;
+
+void dynamic_stack(int n) {
+    // Allocate n ints on the stack
+    int* arr = alloca(n * sizeof(int));
+
+    for (int i = 0; i &lt; n; i++)
+        arr[i] = i * i;
+
+    printf(&#34;Stack-allocated %zu bytes, array[%d] = %d\n&#34;,
+           n * sizeof(int), n-1, arr[n-1]);
+    // arr is automatically freed when this function returns
+}
+
+int main() {
+    dynamic_stack(10);
+    dynamic_stack(100);
+    return 0;
+}
+						</pre>
+						<p>
+							<code>alloca()</code>
+							is not part of the C standard; it's a platform extension. GCC implements it inline
+							<ul>
+								<li>it simply adjusts <code>rsp</code> by the requested amount. There's no <code>freealloca()</code> - memory is</li>
+							</ul>
+							reclaimed
+							when the function's epilogue restores
+							<code>rsp</code>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="stack-overflow">Stack Overflow</h3>
+						<p>
+							A stack overflow occurs when the stack grows past its allocated region. On Linux, this is detected
+							by the guard page mechanism:
+						</p>
+						<pre class="plaintext">
+┌────────────────────┐
+│  Stack region      │ (e.g., 8 MiB, r/w)
+│  ...               │
+│  rsp -&gt;             │
+│  ...               │
+├────────────────────┤
+│  Guard region      │ (typically 1 MiB, no access)
+│                    │ &lt;- Kernel extends stack into this on page fault
+├────────────────────┤
+│  Guard page        │ (1 page = 4 KiB, no access, no growth)
+│                    │ &lt;- SEGV if rsp enters this page
+├────────────────────┤
+│  Other mappings    │
+└────────────────────┘
+						</pre>
+						<p>
+							When
+							<code>rsp</code>
+							decrements into the guard region, a page fault occurs. The kernel checks if this
+							is a legitimate stack expansion (within 1 MiB of the current stack boundary) and extends the
+							mapping. If the access is past the guard page (into other mappings), the kernel sends SIGSEGV.
+						</p>
+						<pre class="c">
+// Exploding the stack - infinite recursion
+void recurse(int n) {
+    char bigbuf[1024*64];  // 64 KiB per frame
+    printf(&#34;Depth: %d, rsp approx: %p\n&#34;, n, &amp;bigbuf[0]);
+    recurse(n + 1);
+}
+
+int main() {
+    recurse(1);
+    return 0;  // Never reached - SEGV
+}
+						</pre>
+						<pre class="bash">
+gcc -o stack-overflow stack-overflow.c &amp;&amp; ./stack-overflow
+# Observe: ~130 frames before SEGV (8 MiB / 64 KiB)
+						</pre>
+					</section>
+					<section>
+						<h3 id="sigaltstack-custom-signal-stack">sigaltstack - Custom Signal Stack</h3>
+						<p>
+							Signals can be delivered on a separate stack to handle stack overflow scenarios or to avoid
+							corrupting the normal stack when handling a SEGV caused by stack exhaustion:
+						</p>
+						<pre class="c">
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;signal.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+
+void segv_handler(int sig, siginfo_t* info, void* ctx) {
+    const char* msg = &#34;SIGSEGV caught on alternate stack\n&#34;;
+    write(STDERR_FILENO, msg, strlen(msg));
+    _exit(1);
+}
+
+int main() {
+    stack_t ss;
+    ss.ss_sp = malloc(SIGSTKSZ);   // Recommended size
+    ss.ss_size = SIGSTKSZ;
+    ss.ss_flags = 0;
+
+    if (sigaltstack(&amp;ss, NULL) == -1) {
+        perror(&#34;sigaltstack&#34;);
+        return 1;
+    }
+
+    struct sigaction sa = {0};
+    sa.sa_sigaction = segv_handler;
+    sa.sa_flags = SA_SIGINFO | SA_ONSTACK;  // Use alternate stack
+    sigaction(SIGSEGV, &amp;sa, NULL);
+
+    // Trigger SEGV intentionally
+    *(volatile int*)NULL = 0;
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+gcc -o sigaltstack-demo sigaltstack-demo.c &amp;&amp; ./sigaltstack-demo
+						</pre>
+					</section>
+					<section>
+						<h3 id="inspecting-the-stack-with-gdb">Inspecting the Stack with GDB</h3>
+						<pre class="bash">
+gcc -g -O0 -o gdb-stack gdb-stack.c
+gdb ./gdb-stack
+						</pre>
+						<pre class="plaintext">
+(gdb) break main
+(gdb) run
+(gdb) info registers rsp rbp rip
+# rsp            0x7fffffffe538
+# rbp            0x7fffffffe550
+# rip            0x5555555551a9
+
+(gdb) info frame
+# Stack level 0, frame at 0x7fffffffe560:
+#  rip = 0x5555555551a9 in main
+#  saved rip = 0x7ffff7dd4005
+#  called by frame at 0x7fffffffe590
+#  Arglist at 0x7fffffffe4b8, args: argc=1, argv=0x7fffffffe5a8
+#  Locals at 0x7fffffffe4b8
+
+(gdb) x/32gx $rsp
+# Examine 32 × 8 bytes (256 bytes) of stack memory as hex quadwords
+
+(gdb) backtrace
+(gdb) backtrace full   # With local variable values
+
+(gdb) stepi             # Step one machine instruction
+(gdb) disassemble main  # Show surrounding assembly
+						</pre>
+					</section>
+					<section>
+						<h3 id="verification-checklist">Verification Checklist</h3>
+						<pre class="bash">
+# 1. Check stack size limit
+ulimit -s
+
+# 2. Find the stack in your process memory map
+cat /proc/$$/maps | grep stack
+
+# 3. Dump the beginning of your stack
+hexdump -C /proc/$$/mem -s 0x7ffffffe0000 -n 256 2&gt;/dev/null || echo &#34;Use gdb instead&#34;
+
+# 4. Check if binary uses stack canaries
+readelf -s /usr/bin/ls | grep stack_chk_fail
+# Or: checksec --file=/usr/bin/ls
+
+# 5. Disassemble a function to see prologue/epilogue
+gcc -O0 -g -o /tmp/disassemble -xc - &lt;&lt;&lt;&#39;int f(int x){return x*2;}&#39;
+objdump -d -M intel /tmp/disassemble | grep -A20 &#39;&lt;f&gt;:&#39;
+
+# 6. Count stack-based locals in a binary (rough)
+objdump -d /tmp/disassemble | grep -c &#39;sub.*rsp&#39;
+
+# 7. Verify stack alignment at function entry
+python3 -c &#34;
+import os
+pid = os.getpid()
+# Read /proc/pid/stat for kstkesp (kernel stack pointer)
+with open(f&#39;/proc/{pid}/stat&#39;) as f:
+    fields = f.read().split()
+    print(f&#39;kstkesp: {fields[28]}&#39;)
+&#34;
+
+# 8. Inspect frame pointer usage
+readelf -h /usr/bin/ls | grep -i &#39;frame&#39;
+
+# 9. Monitor stack growth in real time with perf
+perf stat -e faults -e minor-faults ls /usr/share &gt;/dev/null
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that reports the mapped stack region and the kernel limit that bounds it. Read
+							<code>/proc/self/maps</code>
+							, find the
+							<code>[stack]</code>
+							mapping, and print its low address, high address, and
+							size in KiB. Then read
+							<code>RLIMIT_STACK</code>
+							with
+							<code>syscall.Getrlimit</code>
+							and compare the soft limit with
+							the mapping. Run it again after
+							<code>ulimit -s 1024</code>
+							and after spawning a goroutine, and explain
+							why the mapped main-thread stack can be smaller than the limit and why goroutine stacks are
+							separate.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;bufio&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;strconv&#34;
+	&#34;strings&#34;
+	&#34;syscall&#34;
+)
+
+func main() {
+	file, err := os.Open(&#34;/proc/self/maps&#34;)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.Contains(line, &#34;[stack]&#34;) == false {
+			continue
+		}
+		fields := strings.Fields(line)
+		bounds := strings.Split(fields[0], &#34;-&#34;)
+		low, _ := strconv.ParseUint(bounds[0], 16, 64)
+		high, _ := strconv.ParseUint(bounds[1], 16, 64)
+		fmt.Printf(&#34;stack: 0x%x - 0x%x (%d KiB)\n&#34;, low, high, (high-low)/1024)
+	}
+
+	var limit syscall.Rlimit
+	if err := syscall.Getrlimit(syscall.RLIMIT_STACK, &amp;limit); err == nil {
+		fmt.Printf(&#34;RLIMIT_STACK: soft=%d bytes hard=%d bytes\n&#34;, limit.Cur, limit.Max)
+	} else {
+		fmt.Fprintln(os.Stderr, err)
+	}
+}
+						</pre>
+						<pre class="bash">
+go build -o stackmap stackmap.go
+./stackmap
+
+# Shrink the limit and observe the reported mapping
+ulimit -s 1024
+./stackmap
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/calling-conventions.html">Calling Conventions</a> - full ABI specification, x86-32 vs x86-64 vs ARM64</li>
+							<li><a href="/wiki/articles/fundamentals/heap.html">Heap</a> - heap allocation, contrast with stack</li>
+							<li><a class="icon-gitlab" href="https://gitlab.com/x86-psABIs/x86-64-ABI" target="_blank">System V AMD64 ABI</a></li>
+							<li><a class="icon-website" href="https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html" target="_blank">GCC Manual - Stack Checking</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/mm/mmap.c" target="_blank">Linux Kernel - Stack expansion (mm/mmap.c:expand_stack)</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/sigaltstack.2" target="_blank">sigaltstack(2) - set/get signal stack context</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

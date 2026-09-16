@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Symbolic Execution | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Symbolic Execution">
+		<meta name="keywords" content="angr, reverse-engineering, smt-solving, symbolic-execution, vulnerability-research">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Symbolic Execution">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Automatically explore program paths with angr to solve license keys, find vulnerabilities, deobfuscate code, and trigger hidden behavior.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/reverse-engineering/symbolic-execution.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Symbolic Execution">
+		<meta name="twitter:description" itemprop="description" content="Automatically explore program paths with angr to solve license keys, find vulnerabilities, deobfuscate code, and trigger hidden behavior.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#what-symbolic-execution-is">What Symbolic Execution Is</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#smt-solvers">SMT Solvers</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#installing-angr">Installing angr</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#core-angr-workflow">Core angr Workflow</a></b>
+					<ul>
+						<li><a href="#loading-the-binary">Loading the Binary</a></li>
+						<li><a href="#the-state-object">The State Object</a></li>
+						<li><a href="#the-simulation-manager">The Simulation Manager</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#solving-a-license-key-checker">Solving a License Key Checker</a></b>
+					<ul>
+						<li><a href="#the-target-program">The Target Program</a></li>
+						<li><a href="#the-angr-solver">The angr Solver</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#understanding-constraints">Understanding Constraints</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#finding-vulnerabilities">Finding Vulnerabilities</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#malware-analysis-use-cases">Malware Analysis Use Cases</a></b>
+					<ul>
+						<li><a href="#decoding-obfuscated-strings">Decoding Obfuscated Strings</a></li>
+						<li><a href="#triggering-time-bombs">2. Triggering Time-Bombs</a></li>
+						<li><a href="#recovering-protocol-structure">3. Recovering Protocol Structure</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#path-explosion-and-mitigations">Path Explosion and Mitigations</a></b>
+					<ul>
+						<li><a href="#veritesting">Veritesting</a></li>
+						<li><a href="#exploration-strategies">2. Exploration Strategies</a></li>
+						<li><a href="#manual-steering">3. Manual Steering</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#limitations-of-symbolic-execution">Limitations of Symbolic Execution</a></b>
+					<ul>
+						<li><a href="#environment-dependencies">Environment Dependencies</a></li>
+						<li><a href="#anti-symbolic-execution">Anti-Symbolic Execution</a></li>
+						<li><a href="#memory-model">Memory Model</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#practical-symbolic-execution-scripts">Practical Symbolic Execution Scripts</a></b>
+					<ul>
+						<li><a href="#finding-all-magic-numbers">Finding All Magic Numbers</a></li>
+						<li><a href="#forcing-conditional-branches">Forcing Conditional Branches</a></li>
+						<li><a href="#deobfuscating-opaque-predicates">Deobfuscating Opaque Predicates</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#symbolic-execution-for-cryptanalysis">Symbolic Execution for Cryptanalysis</a></b>
+					<ul>
+						<li><a href="#finding-weak-key-material">Finding Weak Key Material</a></li>
+						<li><a href="#identifying-crypto">Identifying Crypto</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#from-binary-to-decoded-payload">From Binary To Decoded Payload</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#when-not-to-use-symbolic-execution">When NOT to Use Symbolic Execution</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/reverse-engineering/index.html">Reverse Engineering</a></li>
+						<li aria-current="page"><a href="/wiki/articles/reverse-engineering/symbolic-execution.html">Symbolic Execution</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="symbolic-execution">Symbolic Execution</h2>
+					<p>
+						Automatically explore program paths with angr to solve license keys, find vulnerabilities, deobfuscate
+						code, and trigger hidden behavior.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Traditional testing runs a program with one input. Symbolic execution runs it with unknown inputs
+							and asks a solver which values drive execution down each branch. This article introduces the
+							technique through angr, solves a license check and locates a parser crash, and explains where
+							the approach breaks down.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/reverse-engineering/control-flow.html">Control Flow</a> - CFG construction, dominator trees, loop detection</li>
+							<li><a href="/wiki/articles/reverse-engineering/reading-assembly.html">Reading x86-64 Assembly</a> - register conventions, calling conventions, condition codes</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="what-symbolic-execution-is">What Symbolic Execution Is</h3>
+						<p>
+							Traditional execution runs a program with concrete values:
+							<code>x = 42</code>
+							. Symbolic execution runs
+							it with symbolic values:
+							<code>x = lambda</code>
+							(lambda, "could be anything"). When execution encounters
+							a branch on a symbolic value, the executor forks into two states - one for each branch - accumulating
+							constraints along each path.
+						</p>
+						<pre class="plaintext">
+CONCRETE EXECUTION                    SYMBOLIC EXECUTION
+
+x = 42                                x = λ (symbolic)
+if x &gt; 10:                            if x &gt; 10:
+    // Always enters here                 ┌─ Path A: assume λ &gt; 10
+    print(&#34;big&#34;)                          │  constraint: x &gt; 10
+                                          │
+                                          └─ Path B: assume λ ≤ 10
+                                             constraint: x ≤ 10
+						</pre>
+						<p>
+							At any point on a path, the SMT solver can answer: "What value of x reaches this instruction?"
+							From Path A, the solver returns
+							<code>x = 11</code>
+							(the smallest satisfying integer). From Path B,
+							<code>x = 10</code>
+							. This is the core power of symbolic execution: it automatically finds inputs that drive execution
+							to any reachable program point.
+						</p>
+					</section>
+					<section>
+						<h3 id="smt-solvers">SMT Solvers</h3>
+						<p>
+							SMT (Satisfiability Modulo Theories) solvers decide whether a formula is satisfiable given background
+							theories (bit-vectors, arrays, arithmetic). Z3 (Microsoft Research) is the dominant solver used
+							by angr.
+						</p>
+						<pre class="python">
+from z3 import *
+
+# Example: Find x such that x * 2 + 3 == 11 AND x &gt; 0
+x = BitVec(&#39;x&#39;, 32)
+s = Solver()
+s.add(x * 2 + 3 == 11)
+s.add(x &gt; 0)
+
+if s.check() == sat:
+    print(f&#34;x = {s.model()[x]}&#34;)  # x = 4
+						</pre>
+						<p>
+							Z3 operates on bit-vectors (fixed-width integers with modular arithmetic) and supports constraints
+							like
+							<code>x &lt; y</code>
+							,
+							<code>x &amp; y == 0</code>
+							,
+							<code>x &lt;&lt; 2 == y</code>
+							. The solver can handle thousands of constraints
+							on hundreds of variables - which is what symbolic execution generates.
+						</p>
+					</section>
+					<section>
+						<h3 id="installing-angr">Installing angr</h3>
+						<p>
+							angr is a Python framework for binary analysis with symbolic execution at its core. It abstracts
+							over the SMT solver (Z3), providing a high-level
+							<abbr title="Application Programming Interface">API</abbr>
+							.
+						</p>
+						<pre class="bash">
+# On ArchLinux
+$ sudo pacman -S python python-pip python-virtualenv
+$ python -m venv angr_env
+$ source angr_env/bin/activate
+(angr_env) $ pip install angr
+						</pre>
+						<p>Verify:</p>
+						<pre class="bash">
+(angr_env) $ python -c &#34;import angr; print(angr.__version__)&#34;
+9.2.101
+						</pre>
+					</section>
+					<section>
+						<h3 id="core-angr-workflow">Core angr Workflow</h3>
+						<p>Every angr analysis follows this pattern:</p>
+						<pre class="python">
+import angr
+
+# 1. Load the binary
+proj = angr.Project(&#39;./target.elf&#39;, auto_load_libs=False)
+
+# 2. Create a state (snapshot of registers, memory, constraints)
+state = proj.factory.entry_state()
+
+# 3. Create a simulation manager (manages forking/exploration)
+simgr = proj.factory.simulation_manager(state)
+
+# 4. Explore paths
+simgr.explore(find=0x4013c0, avoid=0x4014a0)
+
+# 5. Examine results
+if simgr.found:
+    found_state = simgr.found[0]
+    print(f&#34;Found path! Input: {found_state.posix.dumps(0)}&#34;)
+						</pre>
+						<h4 id="loading-the-binary">Loading the Binary</h4>
+						<pre class="python">
+proj = angr.Project(&#39;./binary&#39;, auto_load_libs=False)
+						</pre>
+						<p>
+							<code>auto_load_libs=False</code>
+							prevents angr from loading shared libraries (glibc, etc.), which speeds
+							things up. For binaries that depend on specific library behavior, you'd load them - but for
+							most RE tasks, library calls are handled by angr's SimProcedures (simulated replacements for
+							common functions).
+						</p>
+						<h4 id="the-state-object">The State Object</h4>
+						<p>
+							A state represents a snapshot of the program at a specific point: - Registers (RAX, RBX,
+							<abbr title="Routing Information Protocol">RIP</abbr>
+							, etc.) - Memory (all mapped regions) - Constraints (SMT solver state - conditions accumulated
+							along this path) - P
+							<abbr title="Open Systems Interconnection">OSI</abbr>
+							X environment (stdin, stdout, filesystem, argv, envp)
+						</p>
+						<pre class="python">
+state = proj.factory.entry_state()
+print(state.regs.rip)           # Address of entry point
+print(state.regs.rsp)           # Stack pointer
+print(state.mem[state.regs.rsp].uint64_t)  # Value at top of stack
+						</pre>
+						<h4 id="the-simulation-manager">The Simulation Manager</h4>
+						<p>
+							<code>simgr</code>
+							manages the set of active states. When a state encounters a conditional branch, the
+							simulation manager forks it. Key
+							<code>simgr</code>
+							attributes:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Stash</th>
+									<th align="center">Contains</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>simgr.active</code></td>
+									<td align="center">States still being explored</td>
+								</tr>
+								<tr>
+									<td align="center"><code>simgr.found</code></td>
+									<td align="center">States that reached the find address</td>
+								</tr>
+								<tr>
+									<td align="center"><code>simgr.avoided</code></td>
+									<td align="center">States that reached an avoid address</td>
+								</tr>
+								<tr>
+									<td align="center"><code>simgr.deadended</code></td>
+									<td align="center">States that terminated (no valid successor)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>simgr.errored</code></td>
+									<td align="center">States that caused an unhandled error</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="python">
+simgr = proj.factory.simulation_manager(state)
+
+# Step one instruction
+simgr.step()
+print(len(simgr.active))  # Number of active states
+
+# Run until find or avoid is reached
+simgr.explore(find=0x401234, avoid=0x401567)
+						</pre>
+					</section>
+					<section>
+						<h3 id="solving-a-license-key-checker">Solving a License Key Checker</h3>
+						<p>
+							The canonical angr use case: a program checks a license key against a hardcoded value. angr
+							finds the key without you ever knowing it.
+						</p>
+						<h4 id="the-target-program">The Target Program</h4>
+						<pre class="c">
+/* license_check.c */
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+int check_license(const char *key) {
+    if (strlen(key) != 16) return 0;
+
+    unsigned int sum = 0;
+    for (int i = 0; i &lt; 16; i++) {
+        sum = (sum &lt;&lt; 1) ^ (key[i] * 0x41) ^ (sum &gt;&gt; 31);
+    }
+    return sum == 0xDEADBEEF;
+}
+
+int main(int argc, char **argv) {
+    if (argc != 2) {
+        printf(&#34;Usage: %s &lt;key&gt;\n&#34;, argv[0]);
+        return 1;
+    }
+    if (check_license(argv[1])) {
+        printf(&#34;License valid!\n&#34;);
+        return 0;
+    } else {
+        printf(&#34;Invalid license.\n&#34;);
+        return 1;
+    }
+}
+						</pre>
+						<p>Compile:</p>
+						<pre class="bash">
+$ gcc -O0 -o license_check license.c
+						</pre>
+						<h4 id="the-angr-solver">The angr Solver</h4>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;crack_license.py - Use angr to find a valid license key&#34;&#34;&#34;
+
+import angr
+import claripy
+
+def find_license_key():
+    proj = angr.Project(&#39;./license_check&#39;, auto_load_libs=False)
+    cfg = proj.analyses.CFGFast()
+
+    # Locate the &#34;License valid!&#34; and &#34;Invalid license.&#34; addresses
+    # These are the puts() calls in main
+    # (find them with: objdump -d license_check | grep -A2 puts)
+    find_addr    = 0x401234   # Address after &#34;License valid!&#34; puts
+    avoid_addr   = 0x401256   # Address after &#34;Invalid license.&#34; puts
+
+    # Create entry state with symbolic argv
+    # We need a 16-byte symbolic buffer (angr appends the null terminator)
+    symbolic_key = claripy.BVS(&#39;license_key&#39;, 16 * 8)  # 128 bits symbolic
+
+    state = proj.factory.entry_state(
+        args=[&#39;./license_check&#39;, symbolic_key],
+        add_options={angr.options.ZERO_FILL_UNCONSTRAINED_REGISTERS}
+    )
+
+    # Constrain: the key must be printable ASCII
+    for i in range(16):
+        byte = symbolic_key.get_byte(i)
+        state.solver.add(byte &gt;= 0x20)  # Space
+        state.solver.add(byte &lt;= 0x7e)  # Tilde
+
+    # Explore
+    simgr = proj.factory.simulation_manager(state)
+    simgr.explore(find=find_addr, avoid=avoid_addr)
+
+    if simgr.found:
+        found_state = simgr.found[0]
+        key = found_state.solver.eval(symbolic_key, cast_to=bytes)
+        print(f&#34;[+] License key found: {key.decode()}&#34;)
+        return key
+    else:
+        print(&#34;[-] No valid license key found&#34;)
+        return None
+
+if __name__ == &#39;__main__&#39;:
+    find_license_key()
+						</pre>
+						<p>Run it:</p>
+						<pre class="bash">
+(angr_env) $ python3 crack_license.py
+[+] License key found: ............
+						</pre>
+					</section>
+					<section>
+						<h3 id="understanding-constraints">Understanding Constraints</h3>
+						<p>The solver accumulates constraints as the program executes. To inspect the solver state:</p>
+						<pre class="python">
+found_state = simgr.found[0]
+
+# Print all accumulated constraints
+print(found_state.solver.constraints)
+
+# Get a concrete evaluation
+key = found_state.solver.eval(symbolic_key, cast_to=bytes)
+
+# Get all possible solutions (if bounded)
+solutions = found_state.solver.eval_upto(symbolic_key, 10, cast_to=bytes)
+
+# Test if a condition is possible given the constraints
+if found_state.solver.satisfiable(extra_constraints=[symbolic_key == b&#39;AAAA&#39;]):
+    print(&#34;This key could be valid&#34;)
+						</pre>
+					</section>
+					<section>
+						<h3 id="finding-vulnerabilities">Finding Vulnerabilities</h3>
+						<p>Rather than finding a specific address, explore toward a crash state:</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;find_crash.py - Symbolically find inputs that crash a parser&#34;&#34;&#34;
+
+import angr
+import claripy
+
+def find_crashing_input(binary_path, max_size=256):
+    proj = angr.Project(binary_path, auto_load_libs=False)
+
+    # Symbolic stdin of max_size bytes
+    symbolic_input = claripy.BVS(&#39;input&#39;, max_size * 8)
+    state = proj.factory.entry_state(
+        stdin=angr.SimFile(&#39;/dev/stdin&#39;, content=symbolic_input),
+        add_options={angr.options.ZERO_FILL_UNCONSTRAINED_REGISTERS}
+    )
+
+    simgr = proj.factory.simulation_manager(state)
+
+    # Explore: look for states that crash (SIGSEGV, SIGILL, SIGABRT)
+    # angr detects these as &#39;errored&#39; states
+    while simgr.active:
+        simgr.step()
+
+        if simgr.errored:
+            for err_state in simgr.errored:
+                error = err_state.error
+                addr  = err_state.state.addr if hasattr(err_state.state, &#39;addr&#39;) else err_state.addr
+                print(f&#34;[!] Crash at 0x{addr:x}: {error}&#34;)
+
+                # Get the input that caused the crash
+                crash_input = err_state.state.solver.eval(
+                    symbolic_input, cast_to=bytes
+                )
+                # Trim to actual length (strip trailing zeros)
+                crash_input = crash_input.rstrip(b&#39;\x00&#39;)
+                print(f&#34;    Input ({len(crash_input)} bytes): {crash_input[:64]}&#34;)
+                return crash_input
+
+        if len(simgr.active) == 0:
+            break
+						</pre>
+					</section>
+					<section>
+						<h3 id="malware-analysis-use-cases">Malware Analysis Use Cases</h3>
+						<h4 id="decoding-obfuscated-strings">Decoding Obfuscated Strings</h4>
+						<p>
+							Malware often has a function like
+							<code>decode_string(char *buf, int len, char key)</code>
+							. Instead of
+							running malware, emulate just that function symbolically:
+						</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;decode_symbolic.py - Symbolically execute a string decode function&#34;&#34;&#34;
+
+import angr
+import claripy
+
+def decode_string_symbolically(binary_path, func_addr, encoded_data, key=None):
+    &#34;&#34;&#34;
+    Call a decode function symbolically.
+    
+    Args:
+        binary_path: Path to malware ELF
+        func_addr: Address of decode function (e.g., 0x4023a0)
+        encoded_data: The encoded blob (bytes)
+        key: If known, concretize; if None, make symbolic
+    &#34;&#34;&#34;
+    proj = angr.Project(binary_path, auto_load_libs=False)
+
+    # Create a blank state (no OS, no libs - just registers and stack)
+    state = proj.factory.blank_state(addr=func_addr)
+
+    # Set up the calling convention (x86-64 System V: RDI, RSI, RDX)
+    # decode_string(char *buf, int len, char key)
+    data_addr = 0x1000000  # Arbitrary mapped address
+    state.memory.store(data_addr, encoded_data)
+
+    state.regs.rdi = data_addr
+    state.regs.rsi = len(encoded_data)
+
+    if key is not None:
+        state.regs.rdx = key
+    else:
+        symbolic_key = claripy.BVS(&#39;key&#39;, 8)
+        state.regs.rdx = symbolic_key
+
+    # Run until the function returns
+    simgr = proj.factory.simulation_manager(state)
+    simgr.run()
+
+    if simgr.deadended:
+        result_state = simgr.deadended[0]
+        # Read the decoded buffer from memory
+        decoded = result_state.memory.load(data_addr, len(encoded_data))
+        concrete_decoded = result_state.solver.eval(decoded, cast_to=bytes)
+
+        # If key was symbolic, get the concrete key too
+        if key is None:
+            concrete_key = result_state.solver.eval(symbolic_key)
+            print(f&#34;[+] Recovered key: 0x{concrete_key:02x}&#34;)
+        print(f&#34;[+] Decoded: {concrete_decoded}&#34;)
+        return concrete_decoded
+
+    return None
+						</pre>
+						<h4 id="triggering-time-bombs">2. Triggering Time-Bombs</h4>
+						<p>
+							Malware that checks
+							<code>if (current_time &gt; deadline) { deploy_payload(); }</code>
+							can be analyzed by
+							making the time value symbolic:
+						</p>
+						<pre class="python">
+# Force malware past a time check without waiting
+# Replace the concrete time with a symbolic one
+symbolic_time = claripy.BVS(&#39;time&#39;, 64)
+state.memory.store(time_addr, symbolic_time)
+state.solver.add(symbolic_time &gt; deadline_value)  # Force branch
+						</pre>
+						<h4 id="recovering-protocol-structure">3. Recovering Protocol Structure</h4>
+						<p>
+							For unknown binary protocols, make the entire input symbolic and explore states. Each state's
+							constraints describe the protocol structure:
+						</p>
+						<pre class="python">
+# Protocol reversing via symbolic execution
+symbolic_packet = claripy.BVS(&#39;packet&#39;, MAX_PACKET * 8)
+state = proj.factory.entry_state(
+    stdin=angr.SimFile(&#39;/dev/stdin&#39;, content=symbolic_packet)
+)
+
+simgr = proj.factory.simulation_manager(state)
+simgr.explore(find=VALID_PACKET_HANDLER, avoid=ERROR_HANDLER)
+
+if simgr.found:
+    constraints = simgr.found[0].solver.constraints
+    # Each constraint reveals a protocol requirement
+    # e.g., buf[0] == 0xAA, buf[2] + buf[3] == checksum(buf[4:])
+    for c in constraints:
+        print(f&#34;  Constraint: {c}&#34;)
+						</pre>
+					</section>
+					<section>
+						<h3 id="path-explosion-and-mitigations">Path Explosion and Mitigations</h3>
+						<p>
+							The fundamental problem of symbolic execution: a program with
+							<code>n</code>
+							conditional branches can produce
+							<code>2^n</code>
+							paths. Even a simple loop of 32 iterations creates 4 billion states. angr uses heuristics
+							to manage this:
+						</p>
+						<h4 id="veritesting">Veritesting</h4>
+						<p>Instead of forking at every branch, veritesting merges states when they reconverge:</p>
+						<pre class="python">
+simulation = proj.factory.simulation_manager(
+    state,
+    veritesting=True  # Enable veritesting
+)
+						</pre>
+						<p>
+							Veritesting works by identifying "micro-loops" and analyzing them statically before dynamically
+							exploring, significantly reducing path explosion in simple patterns.
+						</p>
+						<h4 id="exploration-strategies">2. Exploration Strategies</h4>
+						<p>The simulation manager uses strategies to prioritize states:</p>
+						<pre class="python">
+# Depth-first: follow one path to its end before the next
+simgr.use_technique(angr.exploration_techniques.DFS())
+
+# Length-limited: give up on states that exceed N instructions
+simgr.use_technique(angr.exploration_techniques.LengthLimiter(10000))
+
+# Loop seer: detect and limit loop iterations
+simgr.use_technique(angr.exploration_techniques.LoopSeer(bound=5))
+						</pre>
+						<h4 id="manual-steering">3. Manual Steering</h4>
+						<p>Guide the exploration toward relevant code by avoiding irrelevant paths:</p>
+						<pre class="python">
+# Avoid library initialization code
+simgr.explore(
+    find=0x403000,
+    avoid=[0x401000, 0x401100, 0x401200]  # Skip CRT init
+)
+						</pre>
+					</section>
+					<section>
+						<h3 id="limitations-of-symbolic-execution">Limitations of Symbolic Execution</h3>
+						<h4 id="environment-dependencies">Environment Dependencies</h4>
+						<p>
+							angr cannot execute real syscalls. When the binary calls
+							<code>open()</code>
+							,
+							<code>read()</code>
+							,
+							<code>socket()</code>
+							,
+							angr must model these with SimProcedures. If the malware's behavior depends on a specific syscall
+							response that isn't modeled, angr may dead-end.
+						</p>
+						<p>Workaround: hybrid execution - run concretely through syscalls, symbolically through computation.</p>
+						<pre class="python">
+# Hybrid: concrete for I/O, symbolic for logic
+state = proj.factory.entry_state(
+    add_options={angr.options.SYMBOLIC_WRITE_ADDRESSES}
+)
+# When visiting a syscall, switch to concrete mode briefly
+						</pre>
+						<h4 id="anti-symbolic-execution">Anti-Symbolic Execution</h4>
+						<p>Obfuscators specifically target symbolic executors:</p>
+						<ul>
+							<li>Opaque predicates that create infinite symbolic branches (but are always concrete)</li>
+							<li>Hash functions used as opaque predicates - SMT solvers can't invert SHA256</li>
+							<li>Input-dependent loops (loop count = hash(input) % N) - explode path count</li>
+						</ul>
+						<p>
+							Defense: use concretization - when a hash result is needed, plug in a concrete value and continue
+							symbolically.
+						</p>
+						<pre class="python">
+# Concretize after hash operations
+state.solver.add(symbolic_input.get_byte(0) == 0x41)  # Force first byte
+						</pre>
+						<h4 id="memory-model">Memory Model</h4>
+						<p>
+							angr's memory model is symbolic at the byte level. Reading a symbolic address (e.g., a jump
+							table indexed by symbolic input) causes the memory to fork into many states - one per possible
+							address. This is expensive.
+						</p>
+					</section>
+					<section>
+						<h3 id="practical-symbolic-execution-scripts">Practical Symbolic Execution Scripts</h3>
+						<h4 id="finding-all-magic-numbers">Finding All Magic Numbers</h4>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;find_magic.py - Use angr to enumerate all magic constants in a binary&#34;&#34;&#34;
+
+import angr
+
+def find_all_magic_numbers(binary_path: str) -&gt; dict:
+    &#34;&#34;&#34;
+    For each comparison against a constant, determine if the constant
+    could be derived from symbolic input. Useful for finding &#34;magic bytes.&#34;
+    &#34;&#34;&#34;
+    proj = angr.Project(binary_path, auto_load_libs=False)
+
+    magic_constants = {}
+    cfg = proj.analyses.CFGFast()
+
+    for node_addr, node in cfg.get_all_nodes().items():
+        if node.is_simprocedure:
+            continue
+
+        try:
+            block = proj.factory.block(node_addr)
+            for insn in block.capstone.insns:
+                # Look for CMP with immediate
+                if insn.mnemonic == &#39;cmp&#39; and insn.operands:
+                    for op in insn.operands:
+                        if op.type == 2:  # Immediate
+                            imm = op.value.imm
+                            if 0x10000000 &lt;= imm &lt;= 0xFFFFFFFF:
+                                magic_constants[insn.address] = hex(imm)
+        except:
+            continue
+
+    return magic_constants
+						</pre>
+						<h4 id="forcing-conditional-branches">Forcing Conditional Branches</h4>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;force_branch.py - Force execution down a specific branch&#34;&#34;&#34;
+
+import angr
+import claripy
+
+def force_path_to_address(proj, start_addr, target_addr, avoid_nop=0):
+    &#34;&#34;&#34;
+    Force angr to find the path from start_addr to target_addr.
+    Useful for &#34;I want to reach this code, what input gets me there?&#34;
+    &#34;&#34;&#34;
+    state = proj.factory.blank_state(addr=start_addr)
+
+    # Make RDI (first argument) symbolic if function takes an argument
+    symbolic_arg = claripy.BVS(&#39;arg&#39;, 64)
+    state.regs.rdi = symbolic_arg
+
+    # Add: the argument should be non-zero (if looking for interesting paths)
+    state.solver.add(symbolic_arg != 0)
+
+    simgr = proj.factory.simulation_manager(state)
+    simgr.explore(find=target_addr)
+
+    if simgr.found:
+        solution = simgr.found[0].solver.eval(symbolic_arg)
+        print(f&#34;[+] To reach 0x{target_addr:x}, argument must be: &#34;
+              f&#34;0x{solution:x}&#34;)
+        return solution
+    else:
+        print(f&#34;[-] 0x{target_addr:x} is unreachable from 0x{start_addr:x}&#34;)
+        return None
+						</pre>
+						<h4 id="deobfuscating-opaque-predicates">Deobfuscating Opaque Predicates</h4>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;deobf_opaque.py - Find and resolve opaque predicates with angr&#34;&#34;&#34;
+
+import angr
+
+def resolve_opaque_predicates(binary_path: str, func_addr: int):
+    &#34;&#34;&#34;
+    For each conditional branch in the target function, use angr
+    to determine if it&#39;s always taken, never taken, or truly conditional.
+    &#34;&#34;&#34;
+    proj = angr.Project(binary_path, auto_load_libs=False)
+
+    # Create a state at the function entry
+    state = proj.factory.blank_state(addr=func_addr)
+
+    # Get the function&#39;s CFG
+    cfg = proj.analyses.CFGFast(
+        regions=[(func_addr, func_addr + 0x10000)],
+        function_starts=[func_addr]
+    )
+
+    opaque_results = {}
+
+    for node_addr, node in cfg.get_all_nodes().items():
+        # Check if this node has multiple successors (conditional branch)
+        successors = list(cfg.get_successors(node))
+        if len(successors) == 2:
+            # Try to find a path from func entry to each successor
+            for succ in successors:
+                simgr = proj.factory.simulation_manager(state.copy())
+                simgr.explore(find=succ.addr)
+
+                if not simgr.found:
+                    opaque_results[node_addr] = {
+                        &#39;type&#39;: &#39;never-taken branch&#39;,
+                        &#39;dead_target&#39;: hex(succ.addr)
+                    }
+                elif not any(s for s in simgr.active):
+                    opaque_results[node_addr] = {
+                        &#39;type&#39;: &#39;always-taken branch&#39;,
+                        &#39;always_target&#39;: hex(succ.addr)
+                    }
+
+    return opaque_results
+						</pre>
+					</section>
+					<section>
+						<h3 id="symbolic-execution-for-cryptanalysis">Symbolic Execution for Cryptanalysis</h3>
+						<p>
+							When the target uses a cryptographic algorithm, symbolic execution can't directly invert it
+							(Z3 doesn't do SHA256 inversion). However, it helps in other ways:
+						</p>
+						<h4 id="finding-weak-key-material">Finding Weak Key Material</h4>
+						<p>
+							If the key derivation involves predictable operations (bit shifts, XORs, additions), angr can
+							solve for the key:
+						</p>
+						<pre class="python">
+# Key derivation: derived = (input * 0x41 + 0x7F) ^ 0xAA
+# Given derived = 0xDEADBEEF, what is input?
+import claripy
+
+derived = claripy.BVS(&#39;derived&#39;, 32)
+input_sym = claripy.BVS(&#39;input&#39;, 32)
+solver = claripy.Solver()
+
+solver.add(derived == 0xDEADBEEF)
+solver.add(derived == ((input_sym * 0x41 + 0x7F) ^ 0xAA))
+
+if solver.satisfiable():
+    print(f&#34;input = {solver.eval(input_sym, 1)[0]:#x}&#34;)
+						</pre>
+						<h4 id="identifying-crypto">Identifying Crypto</h4>
+						<p>
+							When a symbolic state's constraints suddenly include non-linear operations (bitwise XORs, rotations,
+							modular arithmetic), the code has likely entered cryptographic territory. This can be used to
+							automatically locate crypto routines in malware.
+						</p>
+					</section>
+					<section>
+						<h3 id="from-binary-to-decoded-payload">From Binary To Decoded Payload</h3>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;full_deobf.py - Combine angr analysis to deobfuscate malware&#34;&#34;&#34;
+
+import angr
+import claripy
+
+def deobfuscate_malware(binary_path: str) -&gt; dict:
+    &#34;&#34;&#34;
+    Full deobfuscation workflow:
+    1. Find decode functions (XOR loops, crypto constants)
+    2. Symbolically execute decode functions
+    3. Extract decoded data
+    &#34;&#34;&#34;
+    results = {
+        &#39;binary&#39;: binary_path,
+        &#39;decode_functions&#39;: [],
+        &#39;decoded_strings&#39;: [],
+        &#39;crypto_detected&#39;: [],
+    }
+
+    proj = angr.Project(binary_path, auto_load_libs=False)
+    cfg = proj.analyses.CFGFast()
+
+    # Step 1: Find decode functions by pattern
+    # Decode functions typically: small (&lt;100 instructions), single loop,
+    # XOR operation, access to .data or .rodata
+    for func_addr, func in cfg.functions.items():
+        # Heuristic: function between 5-100 basic blocks
+        if not (5 &lt;= len(list(func.blocks)) &lt;= 100):
+            continue
+
+        # Has the function been auto-named (no symbol)?
+        if func.name.startswith(&#39;sub_&#39;):
+            # Check for XOR pattern in this function
+            try:
+                func_cfg = proj.analyses.CFGFast(
+                    regions=[(func.addr, func.addr + func.size)]
+                )
+                # If the function loops over memory with XOR... (simplified)
+                results[&#39;decode_functions&#39;].append({
+                    &#39;addr&#39;: func.addr,
+                    &#39;name&#39;: func.name,
+                    &#39;size&#39;: func.size
+                })
+            except:
+                continue
+
+    # Step 2: For each decode function, emulate symbolically
+    for func_info in results[&#39;decode_functions&#39;]:
+        addr = func_info[&#39;addr&#39;]
+
+        # Create state at function entry
+        state = proj.factory.blank_state(addr=addr)
+
+        # Make the buffer argument symbolic
+        sym_buf = claripy.BVS(&#39;buf&#39;, 1024 * 8)  # Up to 1024 bytes
+        state.memory.store(state.regs.rdi, sym_buf)
+
+        # Set reasonable length
+        state.regs.rsi = 1024
+
+        # Run until return
+        simgr = proj.factory.simulation_manager(state)
+        simgr.run()
+
+        if simgr.deadended:
+            # Check if the buffer changed
+            final = simgr.deadended[0]
+            decoded = final.memory.load(final.regs.rdi, 1024)
+            try:
+                concrete = final.solver.eval(decoded, cast_to=bytes)
+                # Filter out all-null results
+                if concrete.rstrip(b&#39;\x00&#39;):
+                    results[&#39;decoded_strings&#39;].append({
+                        &#39;decoder_addr&#39;: addr,
+                        &#39;decoded&#39;: concrete.rstrip(b&#39;\x00&#39;).decode(
+                            &#39;ascii&#39;, errors=&#39;replace&#39;)
+                    })
+            except:
+                pass
+
+    return results
+						</pre>
+					</section>
+					<section>
+						<h3 id="when-not-to-use-symbolic-execution">When NOT to Use Symbolic Execution</h3>
+						<p>Symbolic execution is not a universal solution. Use it when:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Use Case</th>
+									<th align="center">Suitable?</th>
+									<th align="center">Alternative if Not</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">"Find the password" for simple crackme</td>
+									<td align="center">Yes</td>
+									<td align="center">N/A</td>
+								</tr>
+								<tr>
+									<td align="center">Inverting a hash function (SHA256, MD5)</td>
+									<td align="center">No</td>
+									<td align="center">Brute force / rainbow tables</td>
+								</tr>
+								<tr>
+									<td align="center">Path exploration for >1000 branches</td>
+									<td align="center">Limited</td>
+									<td align="center">Concolic execution, fuzzing</td>
+								</tr>
+								<tr>
+									<td align="center">Analyzing 100MB binary</td>
+									<td align="center">No</td>
+									<td align="center">Static analysis first, then targeted SE</td>
+								</tr>
+								<tr>
+									<td align="center">Real-time malware interaction (C2)</td>
+									<td align="center">No</td>
+									<td align="center">Dynamic sandbox analysis</td>
+								</tr>
+								<tr>
+									<td align="center">Code that uses hardware (GPU, IO ports)</td>
+									<td align="center">No</td>
+									<td align="center">Hardware emulation</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go program that plays the role of a small constraint solver. Reproduce the checksum
+							loop from the target program over a four-byte key, then enumerate the printable keyspace and
+							print every key whose checksum equals
+							<code>0xDEADBEEF</code>
+							. Add a branch constraint such as
+							<code>key[0] == &#39;A&#39;</code>
+							and count how many candidates remain.
+						</p>
+						<pre class="go">
+package main
+
+import &#34;fmt&#34;
+
+func checksum(key []byte) uint32 {
+	var sum uint32
+	for _, b := range key {
+		sum = (sum &lt;&lt; 1) ^ (uint32(b) * 0x41) ^ (sum &gt;&gt; 31)
+	}
+	return sum
+}
+
+func main() {
+	const target = uint32(0xdeadbeef)
+
+	var found int
+
+	for a := byte(0x20); a &lt; 0x7f; a++ {
+		for b := byte(0x20); b &lt; 0x7f; b++ {
+			for c := byte(0x20); c &lt; 0x7f; c++ {
+				for d := byte(0x20); d &lt; 0x7f; d++ {
+					key := []byte{a, b, c, d}
+					if checksum(key) == target {
+						fmt.Printf(&#34;%q -&gt; 0x%08x\n&#34;, key, checksum(key))
+						found++
+					}
+				}
+			}
+		}
+	}
+
+	fmt.Printf(&#34;%d keys satisfy the constraint\n&#34;, found)
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://docs.angr.io/" target="_blank">angr documentation</a> - the analysis framework used throughout this article</li>
+							<li><a class="icon-github" href="https://github.com/Z3Prover/z3" target="_blank">Z3 SMT Solver</a> - the solver angr delegates constraint solving to</li>
+							<li><a class="icon-github" href="https://github.com/angr/claripy" target="_blank">Claripy</a> - angr's symbolic expression library</li>
+							<li><a href="/wiki/articles/reverse-engineering/binary-emulation.html">Binary Emulation</a> - Unicorn for when you need concrete emulation instead</li>
+							<li><a href="/wiki/articles/reverse-engineering/obfuscation.html">Obfuscation</a> - the techniques angr helps defeat</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

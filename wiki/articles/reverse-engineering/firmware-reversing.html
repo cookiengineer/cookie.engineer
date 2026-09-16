@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Firmware Reversing | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Firmware Reversing">
+		<meta name="keywords" content="binwalk, embedded, firmware, iot, reverse-engineering, vulnerability-research">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Firmware Reversing">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Extracting and analyzing embedded device firmware from image extraction to cross-architecture binary analysis and vulnerability discovery.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/reverse-engineering/firmware-reversing.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Firmware Reversing">
+		<meta name="twitter:description" itemprop="description" content="Extracting and analyzing embedded device firmware from image extraction to cross-architecture binary analysis and vulnerability discovery.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#what-firmware-is">What Firmware Is</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#acquiring-firmware">Acquiring Firmware</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#firmware-identification">Firmware Identification</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#binwalk-deep-dive">binwalk Deep Dive</a></b>
+					<ul>
+						<li><a href="#common-binwalk-signatures">Common binwalk Signatures</a></li>
+						<li><a href="#when-binwalk-misses">When binwalk Misses</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#filesystem-extraction-reference">Filesystem Extraction Reference</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#post-extraction-analysis">Post-Extraction Analysis</a></b>
+					<ul>
+						<li><a href="#step-1-identify-architecture">Step 1: Identify Architecture</a></li>
+						<li><a href="#step-2-analyze-busybox">Step 2: Analyze BusyBox</a></li>
+						<li><a href="#step-3-find-startup-scripts">Step 3: Find Startup Scripts</a></li>
+						<li><a href="#step-4-identify-running-services">Step 4: Identify Running Services</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#finding-hardcoded-credentials">Finding Hardcoded Credentials</a></b>
+					<ul>
+						<li><a href="#automated-credential-scan">Automated Credential Scan</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#backdoor-discovery">Backdoor Discovery</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#cross-architecture-binary-analysis">Cross-Architecture Binary Analysis</a></b>
+					<ul>
+						<li><a href="#import-into-ghidra">Import into Ghidra</a></li>
+						<li><a href="#find-the-authentication-function">Find the Authentication Function</a></li>
+						<li><a href="#tracing-password-validation">Tracing Password Validation</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#emulating-firmware-binaries">Emulating Firmware Binaries</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#full-system-emulation-with-qemu">Full System Emulation with QEMU</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#common-firmware-vulnerabilities">Common Firmware Vulnerabilities</a></b>
+					<ul>
+						<li><a href="#command-injection-example">Command Injection Example</a></li>
+						<li><a href="#binary-level-identification">Binary-level Identification</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#firmware-extraction-pipeline">Firmware Extraction Pipeline</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tp-link-firmware-walkthrough">TP-Link Firmware Walkthrough</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/reverse-engineering/index.html">Reverse Engineering</a></li>
+						<li aria-current="page"><a href="/wiki/articles/reverse-engineering/firmware-reversing.html">Firmware Reversing</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="firmware-reversing">Firmware Reversing</h2>
+					<p>
+						Extracting and analyzing embedded device firmware from image extraction to cross-architecture
+						binary analysis and vulnerability discovery.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Firmware reversing extracts and analyzes the software inside embedded devices such as
+							<abbr title="Internet of Things">IoT</abbr>
+							gear, routers, and cameras. A firmware image bundles a bootloader, kernel, and root filesystem,
+							and its extracted binaries expose the device's attack surface. After reading, you can identify
+							and extract a firmware image, explore its root filesystem, find hardcoded credentials and backdoors,
+							and audit cross-architecture binaries in Ghidra.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/filesystems.html">/wiki/articles/fundamentals/filesystems.html</a> - filesystem types, magic bytes, extraction techniques</li>
+							<li><a href="/wiki/articles/reverse-engineering/elf-reversing.html">articles/reverse-engineering/elf-reversing.html</a> - ELF structure, sections, dynamic linking, PLT/GOT</li>
+							<li><a href="/wiki/articles/reverse-engineering/binary-emulation.html">/wiki/articles/reverse-engineering/binary-emulation.html</a> - QEMU user-mode, Unicorn, cross-architecture emulation</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="what-firmware-is">What Firmware Is</h3>
+						<p>
+							Firmware is a monolithic blob containing everything an embedded device needs to boot and operate.
+							Unlike a desktop OS where the bootloader, kernel, and root filesystem reside on separate partitions,
+							firmware often combines all these into a single image. The typical layout:
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────┐
+│                  FIRMWARE IMAGE           │
+├──────────+──────────+────────────────────┤
+│Bootloader│  Kernel  │   Root Filesystem   │
+│ (U-Boot) │ (Linux)  │  (SquashFS/JFFS2)  │
+├──────────+──────────+────────────────────┤
+│ Configuration partition, persistent data │
+└──────────────────────────────────────────┘
+						</pre>
+						<p>
+							The bootloader initializes hardware, loads the kernel. The kernel mounts the root filesystem
+							(often read-only compressed - SquashFS) and executes
+							<code>/sbin/init</code>
+							. The entire device stack
+							runs from this filesystem: BusyBox, web server,
+							<abbr title="Universal Plug and Play">UPnP</abbr>
+							daemon, configuration
+							scripts.
+						</p>
+					</section>
+					<section>
+						<h3 id="acquiring-firmware">Acquiring Firmware</h3>
+						<p>Before analysis begins, you need the firmware image:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Source</th>
+									<th align="center">Method</th>
+									<th align="center">Notes</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Manufacturer website</td>
+									<td align="center">Download support page</td>
+									<td align="center">Most direct, often outdated</td>
+								</tr>
+								<tr>
+									<td align="center">Device update mechanism</td>
+									<td align="center">Intercept OTA update URL</td>
+									<td align="center">MITM or packet capture</td>
+								</tr>
+								<tr>
+									<td align="center">Device flash dump</td>
+									<td align="center">Desolder flash chip, read with SPI programmer</td>
+									<td align="center">Destructive but guaranteed</td>
+								</tr>
+								<tr>
+									<td align="center">UART/JTAG</td>
+									<td align="center">Read flash through debug interface</td>
+									<td align="center">Requires hardware access</td>
+								</tr>
+								<tr>
+									<td align="center">FCC filings</td>
+									<td align="center">Search FCC ID database</td>
+									<td align="center">Some devices include images</td>
+								</tr>
+								<tr>
+									<td align="center">Community mirrors</td>
+									<td align="center">OpenWrt/DD-WRT wiki, router databases</td>
+									<td align="center">Not always available</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Common firmware download pattern (open URL, find .bin/.img)
+$ curl -L &#34;https://example.com/support/device-v2.3.4.bin&#34; -o firmware.bin
+
+# Or extract from OTA update capture
+$ tcpdump -i eth0 -w ota_capture.pcap
+# Later: filter HTTP/FTP/HTTP2 traffic, extract firmware binary
+$ tshark -r ota_capture.pcap -Y &#34;http.response&#34; -T fields \
+    -e http.content_type -e http.content_length
+						</pre>
+					</section>
+					<section>
+						<h3 id="firmware-identification">Firmware Identification</h3>
+						<p>Before extraction, identify what you have:</p>
+						<pre class="bash">
+$ file firmware.bin
+firmware.bin: u-boot legacy uImage, Linux-3.18.84, Linux/ARM, OS Kernel Image
+
+$ binwalk firmware.bin
+
+DECIMAL     HEXADECIMAL     DESCRIPTION
+───────────────────────────────────────────────────────────────
+0           0x0             uImage header, header size: 64 bytes
+64          0x40            LZMA compressed data
+1048576     0x100000        Squashfs filesystem, little endian,
+                            version 4.0, compression: xz,
+                            size: 8572313 bytes, 1847 inodes
+1048580     0x100004        Squashfs filesystem signature found
+						</pre>
+						<p>
+							The
+							<code>file</code>
+							command identifies the top-level format.
+							<code>binwalk</code>
+							recursively scans for embedded
+							file signatures - magic bytes at known offsets - revealing the firmware's internal structure.
+						</p>
+					</section>
+					<section>
+						<h3 id="binwalk-deep-dive">binwalk Deep Dive</h3>
+						<p>
+							binwalk is the standard firmware analysis tool. It matches known magic byte sequences at any
+							offset in the binary:
+						</p>
+						<pre class="bash">
+# Analyze (no extraction)
+$ binwalk firmware.bin
+
+# Extract all recognizable components (-e: extract, -M: recursively)
+$ binwalk -Me firmware.bin
+
+# Results go to _firmware.bin.extracted/
+$ ls _firmware.bin.extracted/
+100000.squashfs    squashfs-root/
+						</pre>
+						<h4 id="common-binwalk-signatures">Common binwalk Signatures</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Magic Bytes</th>
+									<th align="center">Format</th>
+									<th align="center">Extraction Tool</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>2705 1956</code></td>
+									<td align="center">uImage (U-Boot)</td>
+									<td align="center"><code>dd</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>hsqs</code>/<code>sqsh</code></td>
+									<td align="center">SquashFS</td>
+									<td align="center"><code>unsquashfs</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>1f8b 08</code></td>
+									<td align="center">gzip</td>
+									<td align="center"><code>gunzip</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>5d00 0000</code></td>
+									<td align="center">LZMA</td>
+									<td align="center"><code>xz -d</code>/<code>lzma -d</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>894c 5a4f</code></td>
+									<td align="center">LZO</td>
+									<td align="center"><code>lzop -d</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>1f9d</code></td>
+									<td align="center">LZW (compress)</td>
+									<td align="center"><code>uncompress</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>070701</code>/<code>070702</code></td>
+									<td align="center">CPIO archive</td>
+									<td align="center"><code>cpio -idmv</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>BZh</code></td>
+									<td align="center">bzip2</td>
+									<td align="center"><code>bunzip2</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>\xfd7zXZ</code></td>
+									<td align="center">XZ</td>
+									<td align="center"><code>xz -d</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>0000 001c 6673 73f1 0000 0000</code></td>
+									<td align="center">YAFFS</td>
+									<td align="center"><code>unyaffs</code></td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="when-binwalk-misses">When binwalk Misses</h4>
+						<p>
+							Sometimes binwalk fails because the firmware uses custom headers or non-standard alignment.
+							Manual carving:
+						</p>
+						<pre class="bash">
+# Search for SquashFS magic bytes manually
+$ xxd firmware.bin | grep &#34;6873 7173&#34;   # &#34;hsqs&#34;
+# Found at offset 0x100000
+
+# Extract manually
+$ dd if=firmware.bin of=rootfs.squashfs bs=1 skip=1048576
+$ unsquashfs rootfs.squashfs
+						</pre>
+					</section>
+					<section>
+						<h3 id="filesystem-extraction-reference">Filesystem Extraction Reference</h3>
+						<p>Each filesystem has a specific extraction tool:</p>
+						<pre class="bash">
+# SquashFS (most common in embedded Linux)
+$ unsquashfs rootfs.squashfs          # Creates squashfs-root/
+$ unsquashfs -l rootfs.squashfs       # List contents without extracting
+
+# JFFS2 (journaling flash filesystem - older routers)
+$ pip install jefferson
+$ jefferson jffs2_dump.bin -d jffs2-root/
+
+# YAFFS (common in Android devices, cameras)
+$ pip install yaffshiv
+$ yaffshiv -f yaffs_dump.bin -d yaffs-root/
+
+# CPIO archive
+$ cpio -idmv &lt; cpio_archive.bin
+$ # Or if gzip-compressed: zcat archive.cpio.gz | cpio -idmv
+
+# CramFS (older Linux, some routers)
+$ sudo mount -t cramfs -o loop rootfs.cramfs /mnt/cramfs/
+$ cp -a /mnt/cramfs/ cramfs-root/
+$ sudo umount /mnt/cramfs/
+
+# UBIFS (UBI volumes - newer routers, NAND flash)
+$ # First extract UBI volume
+$ modprobe nandsim first_id_byte=0xec second_id_byte=0xa1
+$ ubiformat /dev/mtd0 -f ubi_image.bin
+$ ubiattach -p /dev/mtd0
+$ mount -t ubifs /dev/ubi0_0 /mnt/ubifs/
+$ cp -a /mnt/ubifs/ ubifs-root/
+						</pre>
+					</section>
+					<section>
+						<h3 id="post-extraction-analysis">Post-Extraction Analysis</h3>
+						<p>
+							Once the root filesystem is extracted, the real analysis begins. The directory structure follows
+							the FHS (Filesystem Hierarchy Standard):
+						</p>
+						<pre class="bash">
+$ ls -la squashfs-root/
+bin/       # -&gt; BusyBox symlinks (usually)
+sbin/      # System binaries (init, networking daemons)
+lib/       # Shared libraries (libc, libssl, libpthread)
+usr/       # User-space programs, web server files
+etc/       # Configuration files, init scripts, passwords
+www/       # Web server root (router admin panels)
+tmp/       # Temporary files
+var/       # Runtime data, logs
+						</pre>
+						<h4 id="step-1-identify-architecture">Step 1: Identify Architecture</h4>
+						<p>
+							All binaries in
+							<code>/bin</code>
+							and
+							<code>/sbin</code>
+							share one architecture:
+						</p>
+						<pre class="bash">
+$ file squashfs-root/bin/busybox
+squashfs-root/bin/busybox: ELF 32-bit LSB executable, ARM, EABI5 version 1 (SYSV),
+dynamically linked, interpreter /lib/ld-linux-armhf.so.3, stripped
+
+$ readelf -h squashfs-root/bin/busybox | grep -E &#34;Class:|Machine:&#34;
+  Class:                             ELF32
+  Machine:                           ARM
+						</pre>
+						<p>Key machine types:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Value</th>
+									<th align="center">Architecture</th>
+									<th align="center">Common In</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">0x03</td>
+									<td align="center">i386</td>
+									<td align="center">Older NAS, x86 routers</td>
+								</tr>
+								<tr>
+									<td align="center">0x3E</td>
+									<td align="center">x86-64</td>
+									<td align="center">Modern embedded PCs</td>
+								</tr>
+								<tr>
+									<td align="center">0x28</td>
+									<td align="center">ARM (32-bit)</td>
+									<td align="center">Routers, IoT, cameras</td>
+								</tr>
+								<tr>
+									<td align="center">0xB7</td>
+									<td align="center">AArch64 (ARM64)</td>
+									<td align="center">Newer SBCs, phones</td>
+								</tr>
+								<tr>
+									<td align="center">0x08</td>
+									<td align="center">MIPS (32-bit)</td>
+									<td align="center">Older routers, switches</td>
+								</tr>
+								<tr>
+									<td align="center">0x0A</td>
+									<td align="center">MIPS64</td>
+									<td align="center">High-end networking</td>
+								</tr>
+								<tr>
+									<td align="center">0x14</td>
+									<td align="center">PowerPC</td>
+									<td align="center">Automotive, older Apple</td>
+								</tr>
+								<tr>
+									<td align="center">0xF3</td>
+									<td align="center">RISC-V</td>
+									<td align="center">Emerging embedded</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="step-2-analyze-busybox">Step 2: Analyze BusyBox</h4>
+						<p>
+							BusyBox is a single binary that implements dozens of Unix utilities (
+							<code>ls</code>
+							,
+							<code>cp</code>
+							,
+							<code>sh</code>
+							,
+							<code>wget</code>
+							,
+							<code>httpd</code>
+							). In firmware,
+							<code>/bin/ls</code>
+							is often a symlink to
+							<code>/bin/busybox</code>
+							. The set of compiled-in
+							applets reveals device capabilities:
+						</p>
+						<pre class="bash">
+$ strings squashfs-root/bin/busybox | grep &#34;Currently defined&#34;
+[, [[, ash, awk, base64, cat, chmod, cp, crond, dd, df, dhcprelay,
+dmesg, dnsdomainname, echo, egrep, fgrep, getty, grep, gunzip,
+gzip, hostname, httpd, ifconfig, init, insmod, iptables, kill,
+killall, ln, login, ls, lsmod, md5sum, mdev, mkdir, mknod, mktemp,
+mount, nc, netstat, nslookup, passwd, ping, ping6, ps, pwd, rm,
+rmmod, route, sed, sh, sha256sum, sleep, syslogd, telnet, telnetd,
+tftp, top, traceroute, udhcpc, umount, uptime, vi, wget, zcat
+						</pre>
+						<p>
+							Note
+							<code>httpd</code>
+							,
+							<code>telnetd</code>
+							,
+							<code>tftp</code>
+							- these indicate network services.
+							<code>iptables</code>
+							,
+							<code>route</code>
+							-
+							firewall/routing capabilities.
+						</p>
+						<h4 id="step-3-find-startup-scripts">Step 3: Find Startup Scripts</h4>
+						<p>Embedded Linux uses one of these init systems:</p>
+						<pre class="bash">
+# BusyBox init (most common): /etc/inittab -&gt; /etc/init.d/rcS
+$ cat squashfs-root/etc/inittab
+::sysinit:/etc/init.d/rcS
+::respawn:/sbin/getty -L ttyS0 115200 vt100
+
+# rcS runs all scripts in /etc/init.d/
+$ ls squashfs-root/etc/init.d/
+rcS    network    firewall    httpd    telnetd    upnp
+
+# Systemd (newer devices):
+$ ls squashfs-root/etc/systemd/system/multi-user.target.wants/
+
+# OpenRC:
+$ ls squashfs-root/etc/runlevels/default/
+						</pre>
+						<p>
+							Read
+							<code>rcS</code>
+							to understand the boot sequence:
+						</p>
+						<pre class="bash">
+$ cat squashfs-root/etc/init.d/rcS
+#!/bin/sh
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t tmpfs tmpfs /tmp
+mkdir -p /var/log /var/run
+
+# Start services from /etc/init.d/
+for script in /etc/init.d/S*; do
+    [ -x &#34;$script&#34; ] &amp;&amp; &#34;$script&#34; start
+done
+						</pre>
+						<h4 id="step-4-identify-running-services">Step 4: Identify Running Services</h4>
+						<p>Services expose the attack surface. Find them:</p>
+						<pre class="bash">
+# Check inetd-style services
+$ cat squashfs-root/etc/inetd.conf 2&gt;/dev/null
+telnet  stream  tcp  nowait  root  /usr/sbin/telnetd  telnetd
+http    stream  tcp  nowait  root  /usr/sbin/httpd     httpd -i
+
+# Check listening binaries (search for bind/listen socket creation)
+$ for bin in squashfs-root/bin/* squashfs-root/sbin/* squashfs-root/usr/sbin/*; do
+    [ -f &#34;$bin&#34; ] &amp;&amp; strings &#34;$bin&#34; 2&gt;/dev/null | grep -q &#34;0.0.0.0&#34; &amp;&amp; echo &#34;$bin&#34;
+  done
+
+# Check for CGI scripts (web server integration)
+$ ls squashfs-root/www/cgi-bin/ 2&gt;/dev/null
+						</pre>
+					</section>
+					<section>
+						<h3 id="finding-hardcoded-credentials">Finding Hardcoded Credentials</h3>
+						<p>This is the most common firmware vulnerability. Grep for password-related patterns:</p>
+						<pre class="bash">
+# Search for password strings in entire filesystem
+$ grep -rI &#34;password\|passwd\|pass\b&#34; squashfs-root/etc/ 2&gt;/dev/null | \
+    grep -v &#34;^#&#34; | grep -v &#34;^//&#34;
+
+# Check /etc/passwd and /etc/shadow
+$ cat squashfs-root/etc/passwd
+root:$1$salt$hash:0:0:root:/root:/bin/sh
+admin:$1$salt$hash:0:0:admin:/admin:/bin/sh
+# No service accounts? Good sign.
+
+$ cat squashfs-root/etc/shadow
+root:$1$rounds=5000$salt$encrypted_pw:18000:0:99999:7:::
+
+# Search in configuration files
+$ grep -rI &#34;admin\|root\|user&#34; squashfs-root/etc/ --include=&#34;*.conf&#34; \
+    --include=&#34;*.cfg&#34; --include=&#34;*.ini&#34; 2&gt;/dev/null | head -20
+
+# Check web server configuration
+$ cat squashfs-root/etc/httpd.conf 2&gt;/dev/null
+A:172.16.0.0/255.255.0.0     # Allowed client IP range
+/admin:admin:password123      # &lt;- Hardcoded web admin credentials
+						</pre>
+						<p>Common patterns in vendor firmware:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Pattern</th>
+									<th align="center">Example</th>
+									<th align="center">Where Found</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>printf(&#34;password=%s&#34;, p)</code></td>
+									<td align="center">Debug logging leaks credentials</td>
+									<td align="center"><code>/usr/sbin/httpd</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>strcmp(pass, &#34;admin&#34;)</code></td>
+									<td align="center">Hardcoded comparison</td>
+									<td align="center">Init scripts, binaries</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/etc/default_passwd</code></td>
+									<td align="center">File with plaintext password</td>
+									<td align="center"><code>$ cat squashfs-root/etc/default_passwd</code></td>
+								</tr>
+								<tr>
+									<td align="center">Telnet backdoor</td>
+									<td align="center">Hidden debug service</td>
+									<td align="center"><code>/etc/init.d/S99debug</code></td>
+								</tr>
+								<tr>
+									<td align="center">Default password in binary</td>
+									<td align="center"><code>strings</code>shows "admin:admin"</td>
+									<td align="center">Web server binary</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="automated-credential-scan">Automated Credential Scan</h4>
+						<pre class="bash">
+#!/bin/bash
+# scan_creds.sh - Find hardcoded credentials in extracted firmware
+DIR=&#34;$1&#34;
+
+echo &#34;=== Hardcoded credentials scan ===&#34;
+
+# Passwords in config files
+echo &#34;--- Config files ---&#34;
+grep -rI -E &#34;(password|passwd|secret|key)\s*[:=]\s*\S+&#34; \
+    &#34;$DIR/etc&#34; &#34;$DIR/www&#34; 2&gt;/dev/null | \
+    grep -v &#34;^#&#34; | grep -v &#34;^//&#34; | grep -v &#34;^$&#34;
+
+# Passwords in shadow
+echo &#34;--- Shadow file ---&#34;
+cat &#34;$DIR/etc/shadow&#34; 2&gt;/dev/null
+
+# Default credentials in binaries
+echo &#34;--- Binaries (strings search) ---&#34;
+for bin in &#34;$DIR/bin/&#34;* &#34;$DIR/sbin/&#34;* &#34;$DIR/usr/sbin/&#34;*; do
+    if [ -f &#34;$bin&#34; ] &amp;&amp; [ -x &#34;$bin&#34; ]; then
+        matches=$(strings &#34;$bin&#34; 2&gt;/dev/null | \
+            grep -iE &#34;admin|root|password|backdoor|debug&#34; | \
+            grep -v &#34;^$\|^\.\|\%s\|copyright&#34;)
+        if [ -n &#34;$matches&#34; ]; then
+            echo &#34;  $(basename &#34;$bin&#34;):&#34;
+            echo &#34;$matches&#34; | while read line; do
+                echo &#34;    $line&#34;
+            done
+        fi
+    fi
+done
+						</pre>
+					</section>
+					<section>
+						<h3 id="backdoor-discovery">Backdoor Discovery</h3>
+						<p>Manufacturers and developers occasionally leave debug backdoors in production firmware:</p>
+						<pre class="bash">
+# Search for hidden command handlers in binaries
+$ strings squashfs-root/usr/sbin/httpd | grep -E &#34;^/[a-z]&#34; | sort -u
+/admin/
+/cgi-bin/
+/debug/         # &lt;- Not listed in documentation
+/debug/ifconfig
+/debug/shell    # &lt;- Remote command execution backdoor
+/help/
+/login.cgi
+
+# Search for command injection patterns
+$ strings squashfs-root/usr/sbin/* | grep -E &#34;system\(|popen\(|execve\(|exec\(&#34;
+# Look for user-controlled input flowing into these calls
+
+# Check for open ports not listed in documentation
+# (requires emulation - see below)
+						</pre>
+					</section>
+					<section>
+						<h3 id="cross-architecture-binary-analysis">Cross-Architecture Binary Analysis</h3>
+						<p>
+							Firmware binaries are rarely x86 - they're ARM, M
+							<abbr title="Intrusion Prevention System">IPS</abbr>
+							, or PowerPC.
+							Ghidra handles all of these natively:
+						</p>
+						<h4 id="import-into-ghidra">Import into Ghidra</h4>
+						<ol>
+							<li>File -> Import File -> select the binary ( <code>squashfs-root/usr/sbin/httpd</code> )</li>
+							<li>Language: auto-detected (ARM32:v7, M <abbr title="Intrusion Prevention System">IPS</abbr> 32:default, etc.)</li>
+							<li>Options: enable "Load External Libraries" if the firmware's <code>/lib</code> is accessible</li>
+						</ol>
+						<h4 id="find-the-authentication-function">Find the Authentication Function</h4>
+						<pre class="java">
+/* Ghidra Java script: find authentication-related functions */
+// Run in Ghidra Script Manager (Java)
+
+import ghidra.app.script.GhidraScript;
+import ghidra.program.model.listing.*;
+import ghidra.program.model.symbol.*;
+
+public class FindAuthFunctions extends GhidraScript {
+    @Override
+    public void run() throws Exception {
+        Listing listing = currentProgram.getListing();
+        FunctionIterator funcs = listing.getFunctions(true);
+
+        String[] auth_keywords = {
+            &#34;login&#34;, &#34;auth&#34;, &#34;password&#34;, &#34;verify&#34;, &#34;check&#34;,
+            &#34;authenticate&#34;, &#34;validate&#34;, &#34;admin&#34;, &#34;credential&#34;
+        };
+
+        for (Function func : funcs) {
+            String name = func.getName().toLowerCase();
+
+            for (String keyword : auth_keywords) {
+                if (name.contains(keyword)) {
+                    printf(&#34;Potential auth function: %s @ 0x%x\n&#34;,
+                           func.getName(), func.getEntryPoint().getOffset());
+
+                    // Look for string comparisons in this function
+                    InstructionIterator iter =
+                        listing.getInstructions(func.getBody(), true);
+                    while (iter.hasNext()) {
+                        Instruction inst = iter.next();
+                        // Check for calls to strcmp, strncmp, memcmp
+                        if (inst.getMnemonicString().equals(&#34;BL&#34;) ||
+                            inst.getMnemonicString().equals(&#34;CALL&#34;)) {
+                            Reference[] refs = inst.getReferencesFrom();
+                            for (Reference ref : refs) {
+                                String target = ref.getToAddress().toString();
+                                if (target.contains(&#34;strcmp&#34;) ||
+                                    target.contains(&#34;strncmp&#34;)) {
+                                    printf(&#34;  -&gt; String comparison at 0x%x\n&#34;,
+                                           inst.getAddress().getOffset());
+                                }
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+    }
+}
+						</pre>
+						<h4 id="tracing-password-validation">Tracing Password Validation</h4>
+						<ol>
+							<li>Find the login page handler (search for string "login" in strings)</li>
+							<li>Cross-reference to the function that uses it</li>
+							<li>Follow the function's control flow to the <code>strcmp</code> or hash comparison</li>
+							<li>Back-trace to find how the expected password is computed or stored</li>
+						</ol>
+						<p>Example: a common ARM router pattern:</p>
+						<pre class="asm">
+; ARM disassembly (Ghidra) - typical password check
+ldr    r0, [input_buffer]    ; User-supplied password
+ldr    r1, =0x00012345       ; Pointer to hardcoded password
+bl     strcmp
+cmp    r0, #0x0
+beq    auth_success
+
+; At 0x12345: &#34;admin123&#34;     &lt;- Hardcoded password string
+						</pre>
+					</section>
+					<section>
+						<h3 id="emulating-firmware-binaries">Emulating Firmware Binaries</h3>
+						<p>Use QEMU user-mode to test individual binaries from the firmware:</p>
+						<pre class="bash">
+# Prerequisite: the binary must match host architecture, or use qemu-arch
+$ qemu-arm -L squashfs-root/ squashfs-root/usr/sbin/httpd
+# -L points to the firmware root so the dynamic linker and libs are found
+
+# For statically linked binaries (no -L needed):
+$ qemu-arm squashfs-root/bin/busybox ls
+
+# Test a web server in isolation:
+$ sudo cp squashfs-root/usr/sbin/httpd /tmp/test_httpd
+$ cp -r squashfs-root/www /tmp/
+$ qemu-arm -L squashfs-root/ -E LD_LIBRARY_PATH=/lib:/usr/lib \
+    /tmp/test_httpd -p 8080 -h /tmp/www
+						</pre>
+					</section>
+					<section>
+						<h3 id="full-system-emulation-with-qemu">Full System Emulation with QEMU</h3>
+						<p>For complete firmware behavior (network services, init scripts), emulate the entire device:</p>
+						<pre class="bash">
+# Step 1: Identify the kernel
+$ binwalk firmware.bin | grep &#34;uImage&#34;
+0    0x0    uImage header, ... Linux-3.18.84, Linux/ARM
+
+# Step 2: Extract the kernel payload (strip the 64-byte uImage header)
+$ dd if=firmware.bin of=kernel.bin bs=64 skip=1
+$ file kernel.bin
+kernel.bin: Linux kernel ARM boot executable zImage (little-endian)
+
+# Step 3: Determine the machine type from the bootloader environment or
+# the device tree; a generic &#34;-M virt&#34; will not run a vendor kernel.
+$ strings kernel.bin | grep -i &#34;machine\|compatible&#34;
+
+# Step 4: Boot the raw kernel with QEMU system emulation. The machine type
+# and load address must match the vendor kernel.
+$ qemu-system-arm \
+    -M virt \
+    -cpu cortex-a15 \
+    -m 256M \
+    -kernel kernel.bin \
+    -drive file=rootfs.squashfs,if=none,format=raw,id=drive0 \
+    -device virtio-blk-device,drive=drive0 \
+    -netdev user,id=net0 \
+    -device virtio-net-device,netdev=net0 \
+    -append &#34;console=ttyAMA0 root=/dev/vda rw&#34; \
+    -nographic
+						</pre>
+						<p>
+							This is complex - the machine type, device tree, and load address must all match the kernel's
+							expectations, which is why a vendor kernel rarely boots on
+							<code>-M virt</code>
+							. A simpler approach uses
+							<code>firmadyne</code>
+							or
+							<code>FirmAE</code>
+							for automated firmware emulation.
+						</p>
+					</section>
+					<section>
+						<h3 id="common-firmware-vulnerabilities">Common Firmware Vulnerabilities</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Vulnerability</th>
+									<th align="center">How to Find</th>
+									<th align="center">Severity</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Hardcoded credentials</td>
+									<td align="center"><code>grep -r password /etc/</code>on rootfs</td>
+									<td align="center">Critical</td>
+								</tr>
+								<tr>
+									<td align="center">Command injection in CGI</td>
+									<td align="center">Trace<code>system()</code>calls in CGI binaries</td>
+									<td align="center">Critical</td>
+								</tr>
+								<tr>
+									<td align="center">Backdoor listener</td>
+									<td align="center">Search for<code>0.0.0.0</code>binding on debug ports</td>
+									<td align="center">Critical</td>
+								</tr>
+								<tr>
+									<td align="center">Buffer overflow in network service</td>
+									<td align="center"><code>readelf -a</code>+ manual audit of<code>recv()</code>/<code>read()</code></td>
+									<td align="center">High</td>
+								</tr>
+								<tr>
+									<td align="center">Missing authentication on endpoints</td>
+									<td align="center">Compare web server route config vs handlers</td>
+									<td align="center">High</td>
+								</tr>
+								<tr>
+									<td align="center">Outdated OpenSSL/dropbear</td>
+									<td align="center"><code>strings libssl.so.1.0.0</code>- dates from 2014</td>
+									<td align="center">Medium</td>
+								</tr>
+								<tr>
+									<td align="center">Weak crypto (static key, no IV)</td>
+									<td align="center">Find<code>AES_set_encrypt_key</code>with constant arg</td>
+									<td align="center">Medium</td>
+								</tr>
+								<tr>
+									<td align="center">Information disclosure (debug endpoints)</td>
+									<td align="center"><code>/debug/</code>,<code>/cgi-bin/test</code>,<code>/cgi-bin/status</code></td>
+									<td align="center">Medium</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="command-injection-example">Command Injection Example</h4>
+						<pre class="c">
+/* CGI handler in httpd - typical vulnerable pattern */
+void handle_ping(FILE *client, char *query_string) {
+    char target[64];
+    cgi_get_param(query_string, &#34;target&#34;, target, sizeof(target));
+
+    char cmd[128];
+    snprintf(cmd, sizeof(cmd), &#34;ping -c 4 %s&#34;, target);  // &lt;- NO SANITIZATION
+
+    FILE *fp = popen(cmd, &#34;r&#34;);  // Command injection via target parameter
+    // ... output to client ...
+}
+
+/* Exploit: GET /cgi-bin/ping?target=8.8.8.8;cat+/etc/shadow HTTP/1.0 */
+						</pre>
+						<h4 id="binary-level-identification">Binary-level Identification</h4>
+						<pre class="python">
+# Search for popen() with user-controllable format strings
+# In Ghidra: look at cross-references to popen/system,
+# then trace the format argument back to HTTP parameter parsing
+						</pre>
+					</section>
+					<section>
+						<h3 id="firmware-extraction-pipeline">Firmware Extraction Pipeline</h3>
+						<pre class="bash">
+#!/bin/bash
+# firmware_pipeline.sh - Automated firmware extraction and analysis
+FIRMWARE=&#34;$1&#34;
+OUTDIR=&#34;analysis_$(basename &#34;$FIRMWARE&#34; | sed &#39;s/\.[^.]*$//&#39;)&#34;
+
+mkdir -p &#34;$OUTDIR&#34;
+echo &#34;[+] Analyzing $FIRMWARE -&gt; $OUTDIR/&#34;
+
+# Phase 1: Extract with binwalk
+echo &#34;[1/5] binwalk extraction...&#34;
+binwalk -Me &#34;$FIRMWARE&#34; --directory &#34;$OUTDIR&#34; 2&gt;&amp;1 | tee &#34;$OUTDIR/binwalk.log&#34;
+
+# Phase 2: Find the root filesystem
+ROOTFS=$(find &#34;$OUTDIR&#34; -name &#34;squashfs-root&#34; -type d 2&gt;/dev/null | head -1)
+if [ -z &#34;$ROOTFS&#34; ]; then
+    ROOTFS=$(find &#34;$OUTDIR&#34; -maxdepth 3 -type d -name &#34;bin&#34; 2&gt;/dev/null | \
+        head -1 | xargs dirname)
+fi
+
+if [ -z &#34;$ROOTFS&#34; ] || [ ! -d &#34;$ROOTFS/bin&#34; ]; then
+    echo &#34;[-] Could not find root filesystem in extracted data&#34;
+    # Try manual carving
+    echo &#34;[*] Attempting manual SquashFS carving...&#34;
+    for offset in $(grep -boa &#34;hsqs&#34; &#34;$FIRMWARE&#34; | cut -d: -f1); do
+        echo &#34;  Found SquashFS at offset $offset&#34;
+        dd if=&#34;$FIRMWARE&#34; of=&#34;$OUTDIR/rootfs_$offset.squashfs&#34; \
+            bs=1 skip=$offset 2&gt;/dev/null
+        unsquashfs -d &#34;$OUTDIR/squashfs-root_$offset&#34; \
+            &#34;$OUTDIR/rootfs_$offset.squashfs&#34; 2&gt;/dev/null &amp;&amp; \
+            ROOTFS=&#34;$OUTDIR/squashfs-root_$offset&#34; &amp;&amp; break
+    done
+fi
+
+echo &#34;[2/5] Root filesystem: $ROOTFS&#34;
+
+# Phase 3: Architecture detection
+echo &#34;[3/5] Architecture analysis...&#34;
+BUSYBOX=$(find &#34;$ROOTFS&#34; -name &#34;busybox&#34; -type f 2&gt;/dev/null | head -1)
+if [ -f &#34;$BUSYBOX&#34; ]; then
+    file &#34;$BUSYBOX&#34; | tee &#34;$OUTDIR/architecture.txt&#34;
+    readelf -h &#34;$BUSYBOX&#34; 2&gt;/dev/null | grep -E &#34;Class:|Machine:&#34; | \
+        tee -a &#34;$OUTDIR/architecture.txt&#34;
+    echo &#34;Architecture recorded: $OUTDIR/architecture.txt&#34;
+fi
+
+# Phase 4: Vulnerability scan
+echo &#34;[4/5] Vulnerability scanning...&#34;
+
+# Hardcoded credentials
+grep -rI -E &#34;(password|passwd|secret)\s*=&#34; \
+    &#34;$ROOTFS/etc&#34; &#34;$ROOTFS/www&#34; 2&gt;/dev/null | \
+    grep -v &#34;^#&#34; | grep -v &#34;^//&#34; &gt; &#34;$OUTDIR/hardcoded_creds.txt&#34;
+echo &#34;  Credentials: $(wc -l &lt; &#34;$OUTDIR/hardcoded_creds.txt&#34;) potential findings&#34;
+
+# Services
+find &#34;$ROOTFS&#34; -path &#34;*/init.d/*&#34; -type f 2&gt;/dev/null &gt; &#34;$OUTDIR/services.txt&#34;
+echo &#34;  Services: $(wc -l &lt; &#34;$OUTDIR/services.txt&#34;) init scripts&#34;
+
+# Interesting binaries
+find &#34;$ROOTFS&#34; \( -path &#34;*/sbin/*&#34; -o -path &#34;*/bin/*&#34; \) -type f -executable \
+    2&gt;/dev/null &gt; &#34;$OUTDIR/binaries.txt&#34;
+
+# Phase 5: Report
+echo &#34;[5/5] Generating report...&#34;
+{
+    echo &#34;# Firmware Analysis Report&#34;
+    echo &#34;## Target: $FIRMWARE&#34;
+    echo &#34;## Date: $(date)&#34;
+    echo &#34;&#34;
+    echo &#34;## Architecture&#34;
+    cat &#34;$OUTDIR/architecture.txt&#34; 2&gt;/dev/null
+    echo &#34;&#34;
+    echo &#34;## Services&#34;
+    cat &#34;$OUTDIR/services.txt&#34; 2&gt;/dev/null
+    echo &#34;&#34;
+    echo &#34;## Hardcoded Credentials&#34;
+    cat &#34;$OUTDIR/hardcoded_creds.txt&#34; 2&gt;/dev/null
+} &gt; &#34;$OUTDIR/report.md&#34;
+
+echo &#34;&#34;
+echo &#34;[+] Analysis complete: $OUTDIR/report.md&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="tp-link-firmware-walkthrough">TP-Link Firmware Walkthrough</h3>
+						<p>A complete walkthrough of real firmware analysis:</p>
+						<pre class="bash">
+# 1. Download firmware
+$ wget &#34;https://static.tp-link.com/upload/firmware/2024/Archer-C7-v5.bin&#34; \
+    -O archer_c7.bin
+
+# 2. Identify
+$ file archer_c7.bin
+archer_c7.bin: data
+$ binwalk archer_c7.bin
+0             0x0             uImage header ...
+131072        0x20000         LZMA compressed data ...
+1441792       0x160000        Squashfs filesystem ...
+
+# 3. Extract
+$ binwalk -Me archer_c7.bin
+$ cd _archer_c7.bin.extracted/squashfs-root/
+
+# 4. Architecture
+$ file bin/busybox
+ARM, MIPS, or something else - record it
+
+# 5. Find web server
+$ ls usr/sbin/ | grep http
+httpd
+$ strings usr/sbin/httpd | grep -i &#34;password\|admin\|root\|login&#34;
+
+# 6. Trace login handler in Ghidra
+# Import usr/sbin/httpd -&gt; find function handling /login.cgi
+# -&gt; find strcmp -&gt; find &#34;admin&#34; as hardcoded password
+# -&gt; cross-reference: login_check(&#34;admin&#34;, user_input) validate with strcmp
+
+# 7. Document findings
+# Hardcoded password found: &#34;admin123&#34; in httpd binary
+# Backdoor CGI: /cgi-bin/tmp - allows arbitrary file read
+# Outdated OpenSSL: 1.0.2 (EOL, with Heartbleed)
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that parses a U-Boot legacy
+							<code>uImage</code>
+							header, reports the kernel load address
+							and entry point, and carves the embedded filesystem. Scan the image for the SquashFS magic
+							<code>hsqs</code>
+							, print each offset, and write each region to a separate file for
+							<code>unsquashfs</code>
+							.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;bytes&#34;
+	&#34;encoding/binary&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+)
+
+func main() {
+	if len(os.Args) != 2 {
+		fmt.Fprintf(os.Stderr, &#34;usage: %s &lt;firmware.img&gt;\n&#34;, os.Args[0])
+		os.Exit(1)
+	}
+	data, err := os.ReadFile(os.Args[1])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if len(data) &gt;= 64 &amp;&amp; binary.BigEndian.Uint32(data[0:4]) == 0x27051956 {
+		name := string(bytes.TrimRight(data[32:64], &#34;\x00&#34;))
+		load := binary.BigEndian.Uint32(data[16:20])
+		entry := binary.BigEndian.Uint32(data[20:24])
+		size := binary.BigEndian.Uint32(data[12:16])
+		fmt.Printf(&#34;uImage: name=%q type=%d load=0x%x entry=0x%x size=%d\n&#34;,
+			name, data[30], load, entry, size)
+		if int(size)+64 &lt;= len(data) {
+			os.WriteFile(&#34;kernel.bin&#34;, data[64:64+size], 0o644)
+			fmt.Println(&#34;wrote kernel.bin&#34;)
+		}
+	} else {
+		fmt.Println(&#34;no uImage header; treating as raw image&#34;)
+	}
+	magic := []byte(&#34;hsqs&#34;)
+	from := 0
+	found := 0
+	for {
+		idx := bytes.Index(data[from:], magic)
+		if idx &lt; 0 {
+			break
+		}
+		offset := from + idx
+		fmt.Printf(&#34;SquashFS magic at offset 0x%x (%d)\n&#34;, offset, offset)
+		out := fmt.Sprintf(&#34;rootfs_%d.squashfs&#34;, offset)
+		if err := os.WriteFile(out, data[offset:], 0o644); err == nil {
+			fmt.Printf(&#34;wrote %s\n&#34;, out)
+		}
+		found++
+		from = offset + len(magic)
+	}
+	if found == 0 {
+		fmt.Println(&#34;no SquashFS magic found&#34;)
+	}
+}
+						</pre>
+						<p>
+							Build it, run it against a real firmware download, then unpack each carved filesystem with
+							<code>unsquashfs</code>
+							and grep the result for hardcoded credentials.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-github" href="https://github.com/ReFirmLabs/binwalk" target="_blank">binwalk</a> - firmware signature scanning and extraction</li>
+							<li><a class="icon-github" href="https://github.com/e-m-b-a/embark" target="_blank">EMBArk</a> - firmware analysis and comparison platform</li>
+							<li><a class="icon-github" href="https://github.com/pr0v3rbs/FirmAE" target="_blank">FirmAE</a> - automated full-system firmware emulation</li>
+							<li><a class="icon-website" href="https://openwrt.org/" target="_blank">OpenWrt</a> - community firmware with extensive device documentation</li>
+							<li><a class="icon-github" href="https://github.com/plougher/squashfs-tools" target="_blank">SquashFS</a> - the compressed read-only filesystem common in firmware</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

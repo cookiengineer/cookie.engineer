@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Banner Grabbing | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Banner Grabbing">
+		<meta name="keywords" content="banner-grabbing, netcat, openssl, redteam, service-fingerprinting, tcp, tls">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Banner Grabbing">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Manual and automated banner grabbing across TCP, TLS, and application-layer protocols including HTTP, SSH, FTP, SMTP, MySQL, Redis, Elasticsearch, and Kafka.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/redteam/banner-grabbing.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Banner Grabbing">
+		<meta name="twitter:description" itemprop="description" content="Manual and automated banner grabbing across TCP, TLS, and application-layer protocols including HTTP, SSH, FTP, SMTP, MySQL, Redis, Elasticsearch, and Kafka.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-banner-principle">The Banner Principle</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#banner-grabbing-vs-service-detection">Banner Grabbing vs Service Detection</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#raw-tcp-banner-grabbing">Raw TCP Banner Grabbing</a></b>
+					<ul>
+						<li><a href="#banner-grabbing-with-python-sockets">Banner Grabbing With Python Sockets</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#protocol-by-protocol-banner-grabbing">Protocol-by-Protocol Banner Grabbing</a></b>
+					<ul>
+						<li><a href="#http-headers-and-responses">HTTP - Headers and Responses</a></li>
+						<li><a href="#https-tls-handshake-enumeration">HTTPS - TLS Handshake Enumeration</a></li>
+						<li><a href="#ssh-version-string">SSH - Version String</a></li>
+						<li><a href="#ftp-the-220-greeting">FTP - The 220 Greeting</a></li>
+						<li><a href="#smtp-220-greeting-and-ehlo-response">SMTP - 220 Greeting and EHLO Response</a></li>
+						<li><a href="#mysql-protocol-handshake-packet">MySQL - Protocol Handshake Packet</a></li>
+						<li><a href="#redis-ping-and-info">Redis - PING and INFO</a></li>
+						<li><a href="#docker-api-tcp-23752376">Docker API (TCP 2375/2376)</a></li>
+						<li><a href="#elasticsearch-tcp-9200">Elasticsearch (TCP 9200)</a></li>
+						<li><a href="#apache-kafka-tcp-9092">Apache Kafka (TCP 9092)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tls-banner-grabbing-in-depth">TLS Banner Grabbing in Depth</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#banner-deception-and-spoofing">Banner Deception and Spoofing</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#batch-banner-grabbing">Batch Banner Grabbing</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification-and-troubleshooting">Verification and Troubleshooting</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/redteam/index.html">Redteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/redteam/banner-grabbing.html">Banner Grabbing</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="banner-grabbing">Banner Grabbing</h2>
+					<p>
+						Manual and automated banner grabbing across
+						<abbr title="Transmission Control Protocol">TCP</abbr>
+						,
+						<abbr title="Transport Layer Security">TLS</abbr>
+						, and application-layer protocols including
+						<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+						,
+						<abbr title="Secure Shell">SSH</abbr>
+						,
+						<abbr title="File Transfer Protocol">FTP</abbr>
+						,
+						<abbr title="Simple Mail Transfer Protocol">SMTP</abbr>
+						,
+						<code>MySQL</code>
+						, Redis, Elasticsearch,
+						and Kafka.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Services announce themselves before authentication. Many protocols send a greeting, a version
+							string, or a capability list as soon as a connection opens. This article shows how to capture
+							those banners over
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							,
+							<abbr title="Transport Layer Security">TLS</abbr>
+							,
+							and common application protocols, how to verify a banner against real service behavior, and
+							how to recognize a server that deliberately lies.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/tcp.html">TCP</a> - connection establishment and the three-way handshake</li>
+							<li><a href="/wiki/articles/fundamentals/http.html">HTTP</a> - request/response structure, headers, cookies</li>
+							<li><a href="/wiki/articles/fundamentals/tls.html">TLS</a> - ClientHello, ServerHello, and certificate exchange</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-banner-principle">The Banner Principle</h3>
+						<p>
+							A banner is any data a service sends before authentication. It exists because protocols use
+							human-readable greeting strings, version identifiers, or capability advertisements. The banner
+							is the first piece of intelligence you collect after discovering an open port.
+						</p>
+						<p>
+							Banners are not reliable. Any service can be configured to report any version string. They are
+							a starting point - a hypothesis to be verified through behavior-based techniques. But they are
+							fast, cheap, and often accurate enough to guide your next step.
+						</p>
+					</section>
+					<section>
+						<h3 id="banner-grabbing-vs-service-detection">Banner Grabbing vs Service Detection</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Method</th>
+									<th align="center">Mechanism</th>
+									<th align="center">Relies on</th>
+									<th align="center">Bypassable</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><b>Banner Grabbing</b></td>
+									<td align="center">Read whatever the server sends on connect</td>
+									<td align="center">Server's greeting string</td>
+									<td align="center">Yes (ServerTokens, ServerSignature)</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Service Detection</b></td>
+									<td align="center">Send protocol-specific probes, analyze behavior</td>
+									<td align="center">Protocol fingerprint, timing, quirks</td>
+									<td align="center">Harder (must emulate another server's exact TCP behavior)</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							nmap
+							<code>-sV</code>
+							does both. It grabs the banner AND sends probes. Manual banner grabbing teaches you
+							what the tool does under the hood.
+						</p>
+					</section>
+					<section>
+						<h3 id="raw-tcp-banner-grabbing">Raw TCP Banner Grabbing</h3>
+						<p>
+							Every
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							service that speaks a text protocol sends something
+							on connect. The simplest banner grab is a
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							connect + read.
+						</p>
+						<pre class="bash">
+# netcat — the universal banner grabber
+nc 10.10.0.5 22
+# SSH-2.0-OpenSSH_7.4
+# ^C
+
+nc 10.10.0.5 25
+# 220 mail.target.com ESMTP Postfix (Ubuntu)
+# ^C
+
+nc 10.10.0.5 21
+# 220 (vsFTPd 3.0.3)
+# ^C
+
+# Bash /dev/tcp — no external tools required
+exec 3&lt;&gt;/dev/tcp/10.10.0.5/22
+cat &lt;&amp;3
+# SSH-2.0-OpenSSH_7.4
+exec 3&gt;&amp;-
+
+# Timeout wrapper — nc with explicit timeout prevents hanging
+nc -w 3 10.10.0.5 22
+# -w: timeout in seconds. nc exits after 3 seconds of inactivity.
+
+# Read all data available, then close
+echo &#39;&#39; | nc -w 3 10.10.0.5 22
+# Sends empty line (harmless), receives banner, exits after timeout.
+						</pre>
+						<pre class="bash">
+# telnet — works for text-based protocols
+telnet 10.10.0.5 80
+Trying 10.10.0.5...
+Connected to 10.10.0.5.
+Escape character is &#39;^]&#39;.
+GET / HTTP/1.0
+Host: 10.10.0.5
+                           # ← blank line signals end of request headers
+HTTP/1.1 200 OK
+Server: nginx/1.22.1
+						</pre>
+						<h4 id="banner-grabbing-with-python-sockets">Banner Grabbing With Python Sockets</h4>
+						<p>
+							A reusable banner grabbing script handles timeouts, retries, and both plain
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							and
+							<abbr title="Transport Layer Security">TLS</abbr>
+							:
+						</p>
+						<pre class="python">
+#!/usr/bin/env python3
+# banner-grabber.py — grab banners from plain TCP and TLS services
+
+import socket
+import ssl
+import sys
+import argparse
+
+DEFAULT_TIMEOUT = 3
+
+def grab_tcp(host, port, timeout=DEFAULT_TIMEOUT):
+    &#34;&#34;&#34;Grab banner from a plain TCP service.&#34;&#34;&#34;
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(timeout)
+    try:
+        sock.connect((host, port))
+        # Send a protocol-appropriate empty/newline probe
+        if port in (80, 443, 8080, 8443):
+            # HTTP: send a basic request to trigger response
+            sock.send(b&#39;GET / HTTP/1.0\r\nHost: %b\r\n\r\n&#39; % host.encode())
+        else:
+            # Non-HTTP: services typically send banner on connect
+            pass
+        data = b&#39;&#39;
+        while True:
+            try:
+                chunk = sock.recv(4096)
+                if not chunk:
+                    break
+                data += chunk
+                # Stop after a reasonable amount of data
+                if len(data) &gt; 16384:
+                    break
+            except socket.timeout:
+                break
+        return data.decode(errors=&#39;replace&#39;)
+    except (socket.error, socket.timeout) as e:
+        return f&#34;ERROR: {e}&#34;
+    finally:
+        sock.close()
+
+def grab_tls(host, port, timeout=DEFAULT_TIMEOUT):
+    &#34;&#34;&#34;Grab banner from a TLS-wrapped service.&#34;&#34;&#34;
+    context = ssl.create_default_context()
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    # Allow older TLS versions for enumeration purposes
+    context.minimum_version = ssl.TLSVersion.TLSv1
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(timeout)
+    try:
+        sock.connect((host, port))
+        tls_sock = context.wrap_socket(sock, server_hostname=host)
+        tls_sock.settimeout(timeout)
+        # After TLS handshake, send HTTP request
+        tls_sock.send(b&#39;GET / HTTP/1.0\r\nHost: %b\r\n\r\n&#39; % host.encode())
+        data = b&#39;&#39;
+        while True:
+            try:
+                chunk = tls_sock.recv(4096)
+                if not chunk:
+                    break
+                data += chunk
+                if len(data) &gt; 16384:
+                    break
+            except socket.timeout:
+                break
+        return data.decode(errors=&#39;replace&#39;)
+    except (socket.error, ssl.SSLError, socket.timeout) as e:
+        return f&#34;ERROR: {e}&#34;
+    finally:
+        try:
+            sock.close()
+        except:
+            pass
+
+if __name__ == &#39;__main__&#39;:
+    parser = argparse.ArgumentParser(description=&#39;TCP/TLS Banner Grabber&#39;)
+    parser.add_argument(&#39;host&#39;, help=&#39;Target host&#39;)
+    parser.add_argument(&#39;port&#39;, type=int, help=&#39;Target port&#39;)
+    parser.add_argument(&#39;--tls&#39;, action=&#39;store_true&#39;, help=&#39;Use TLS&#39;)
+    parser.add_argument(&#39;--timeout&#39;, type=float, default=DEFAULT_TIMEOUT)
+    args = parser.parse_args()
+
+    if args.tls:
+        print(grab_tls(args.host, args.port, args.timeout))
+    else:
+        print(grab_tcp(args.host, args.port, args.timeout))
+						</pre>
+						<p>Usage:</p>
+						<pre class="bash">
+python3 banner-grabber.py 10.10.0.5 22
+python3 banner-grabber.py 10.10.0.5 443 --tls
+python3 banner-grabber.py 10.10.0.5 80 --timeout 5
+						</pre>
+					</section>
+					<section>
+						<h3 id="protocol-by-protocol-banner-grabbing">Protocol-by-Protocol Banner Grabbing</h3>
+						<h4 id="http-headers-and-responses">HTTP - Headers and Responses</h4>
+						<p>
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							banners live in response headers:
+							<code>Server</code>
+							,
+							<code>X-Powered-By</code>
+							,
+							<code>X-Generator</code>
+							,
+							<code>X-AspNet-Version</code>
+							,
+							<code>Set-Cookie</code>
+							, and custom headers.
+						</p>
+						<pre class="bash">
+# Minimal HEAD request — get headers without body
+curl -sI http://10.10.0.5 | grep -iE &#39;server|x-powered|x-generator|x-aspnet|set-cookie&#39;
+
+# GET request with full response analysis
+curl -sIL http://10.10.0.5 2&gt;/dev/null | tee http-full-response.txt
+
+# Force HTTP/1.0 (avoids chunked encoding, simplifies parsing)
+curl -sI --http1.0 http://10.10.0.5
+
+# Manual HTTP/1.0 request via netcat (most portable)
+printf &#39;GET / HTTP/1.0\r\nHost: 10.10.0.5\r\n\r\n&#39; | nc -w 3 10.10.0.5 80
+
+# Manual HTTP/1.1 request — requires Host header
+printf &#39;GET / HTTP/1.1\r\nHost: 10.10.0.5\r\nConnection: close\r\n\r\n&#39; | nc -w 3 10.10.0.5 80
+
+# HEAD request via netcat
+printf &#39;HEAD / HTTP/1.0\r\nHost: 10.10.0.5\r\n\r\n&#39; | nc -w 3 10.10.0.5 80
+
+# OPTIONS request — methods supported, often includes Server header
+printf &#39;OPTIONS / HTTP/1.1\r\nHost: 10.10.0.5\r\nConnection: close\r\n\r\n&#39; | nc -w 3 10.10.0.5 80
+						</pre>
+						<pre class="bash">
+# Non-standard HTTP responses that leak information
+curl -sI http://10.10.0.5/nonexistent-page-12345
+# Look at:
+#   - Custom 404 page content (may include paths, stack traces)
+#   - X-Debug-Token headers (Symfony debug mode)
+#   - X-Runtime headers (Rails performance data)
+#   - X-Request-ID / X-Trace-ID (often base64-encoded internal data)
+
+# Error page fingerprinting — trigger errors to see server default pages
+curl -s http://10.10.0.5/%00         # null byte → 400 error
+curl -s http://10.10.0.5/..%255c..   # double encoding
+curl -s -X INVALID http://10.10.0.5/ # invalid method
+# The error page format reveals the web server and sometimes the framework
+						</pre>
+						<h4 id="https-tls-handshake-enumeration">HTTPS - TLS Handshake Enumeration</h4>
+						<p>
+							<abbr title="Transport Layer Security">TLS</abbr>
+							services require a handshake before any application data flows.
+							The handshake itself leaks server information: supported versions, cipher suites, certificate
+							chain, and Server Name Indication (SNI) response.
+						</p>
+						<pre class="bash">
+# openssl s_client — the standard TLS banner tool
+openssl s_client -connect 10.10.0.5:443 -servername 10.10.0.5 &lt;/dev/null 2&gt;/dev/null | \
+  head -40
+# CONNECTED(00000003)
+# ---
+# Certificate chain
+#  0 s:CN = *.target.com
+#     i:C = US, O = Let&#39;s Encrypt, CN = R3
+# ---
+# Server certificate
+# -----BEGIN CERTIFICATE-----
+# ...
+# -----END CERTIFICATE-----
+# SSL-Session:
+#     Protocol  : TLSv1.3
+#     Cipher    : TLS_AES_256_GCM_SHA384
+#     Server Temp Key: X25519 253 bits
+
+# Extract the HTTP banner from HTTPS
+openssl s_client -connect 10.10.0.5:443 -servername 10.10.0.5 -quiet &lt;&lt;&lt; $&#39;GET / HTTP/1.0\r\nHost: 10.10.0.5\r\n\r\n&#39; 2&gt;/dev/null
+
+# SNI testing — what certificate does the server return for this hostname?
+openssl s_client -connect 10.10.0.5:443 -servername admin.target.com &lt;/dev/null 2&gt;/dev/null | \
+  openssl x509 -noout -subject
+
+# ALPN negotiation — what protocols does the server support?
+openssl s_client -connect 10.10.0.5:443 -alpn h2,http/1.1 &lt;/dev/null 2&gt;/dev/null | \
+  grep &#39;ALPN protocol&#39;
+# ALPN protocol: h2  → HTTP/2 supported
+# ALPN protocol: http/1.1  → HTTP/1.1 only
+						</pre>
+						<pre class="bash">
+# nmap TLS enumeration — cipher suite analysis
+nmap -p 443 --script ssl-enum-ciphers 10.10.0.5
+
+# sslscan — dedicated TLS scanner
+sslscan --show-certificate 10.10.0.5:443
+
+# testssl.sh — comprehensive TLS testing
+git clone https://github.com/drwetter/testssl.sh.git /opt/testssl
+/opt/testssl/testssl.sh --server-defaults 10.10.0.5:443
+/opt/testssl/testssl.sh --headers 10.10.0.5:443
+						</pre>
+						<h4 id="ssh-version-string">SSH - Version String</h4>
+						<p>
+							<abbr title="Secure Shell">SSH</abbr>
+							servers send a single line with the protocol version and software identifier
+							before any key exchange. This is mandatory per RFC 4253.
+						</p>
+						<pre class="bash">
+# SSH banner
+nc 10.10.0.5 22 &lt;&lt;&lt; &#39;&#39;
+# SSH-2.0-OpenSSH_7.4
+
+# Common SSH banners and their meaning:
+# SSH-2.0-OpenSSH_7.4          → Linux server, likely CentOS/RHEL 7
+# SSH-2.0-OpenSSH_8.9p1        → Ubuntu 22.04
+# SSH-2.0-dropbear_2022.83     → Dropbear (embedded/IoT devices)
+# SSH-2.0-ROSSSH               → RouterOS (MikroTik)
+# SSH-2.0-Cisco-1.25           → Cisco IOS
+# SSH-2.0-OpenSSH_for_Windows_8.1  → Windows with OpenSSH server
+
+# nmap SSH enumeration combines banner + algorithm analysis
+nmap -p 22 --script ssh2-enum-algos,ssh-hostkey 10.10.0.5
+						</pre>
+						<h4 id="ftp-the-220-greeting">FTP - The 220 Greeting</h4>
+						<p>
+							<abbr title="File Transfer Protocol">FTP</abbr>
+							servers send a 220 greeting immediately after the
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							handshake completes. The format is loosely standardized, making banner parsing reliable.
+						</p>
+						<pre class="bash">
+# FTP banner
+nc 10.10.0.5 21 &lt;&lt;&lt; &#39;&#39;
+# 220 (vsFTPd 3.0.3)
+
+# Common FTP banners:
+# 220 (vsFTPd X.Y.Z)              → vsFTPd (Linux)
+# 220 ProFTPD X.Y.Z Server        → ProFTPD (Linux/Unix)
+# 220 Microsoft FTP Service        → IIS FTP (Windows)
+# 220 Serv-U FTP Server vX.Y       → Serv-U (Windows, commercial)
+# 220 Pure-FTPd                    → Pure-FTPd
+# 220 FileZilla Server             → FileZilla Server (Windows/Linux)
+
+# FTP FEAT command — capability enumeration
+printf &#39;FEAT\r\n&#39; | nc -w 3 10.10.0.5 21
+
+# FTP SYST command — system type
+printf &#39;SYST\r\n&#39; | nc -w 3 10.10.0.5 21
+# 215 UNIX Type: L8
+
+# FTP HELP command — available commands
+printf &#39;HELP\r\n&#39; | nc -w 3 10.10.0.5 21
+						</pre>
+						<h4 id="smtp-220-greeting-and-ehlo-response">SMTP - 220 Greeting and EHLO Response</h4>
+						<p>
+							<abbr title="Simple Mail Transfer Protocol">SMTP</abbr>
+							servers send a 220 greeting and respond to EHLO with a
+							list of supported extensions.
+						</p>
+						<pre class="bash">
+# SMTP banner
+nc 10.10.0.5 25 &lt;&lt;&lt; &#39;&#39;
+# 220 mail.target.com ESMTP Postfix (Ubuntu)
+
+# EHLO — extended capabilities
+printf &#39;EHLO test.local\r\n&#39; | nc -w 3 10.10.0.5 25
+
+# Common SMTP service identifiers:
+# Postfix, Exim, Sendmail, Microsoft ESMTP, Exchange
+# The OS/distribution is often present: &#34;Postfix (Ubuntu)&#34;, &#34;Exim 4.94 (Debian)&#34;
+
+# POP3 banner (TCP 110)
+nc 10.10.0.5 110 &lt;&lt;&lt; &#39;&#39;
+# +OK Dovecot ready.
+
+# IMAP banner (TCP 143)
+nc 10.10.0.5 143 &lt;&lt;&lt; &#39;&#39;
+# * OK [CAPABILITY IMAP4rev1 SASL-IR LOGIN-REFERRALS ID ENABLE IDLE ...] Dovecot ready.
+						</pre>
+						<h4 id="mysql-protocol-handshake-packet">MySQL - Protocol Handshake Packet</h4>
+						<p>
+							<code>MySQL</code>
+							does not send a text banner. The handshake is a binary packet that contains the server
+							version, protocol version, capabilities flags, and authentication seed.
+						</p>
+						<pre class="plaintext">
+MySQL HandshakeV10 packet structure:
+ 1 byte   protocol_version (0x0a = MySQL 5.x+, 0x09 = MySQL 4.1)
+ N bytes  server_version (null-terminated string)
+ 4 bytes  connection_id (thread ID)
+ 8 bytes  auth-plugin-data-part-1 (scramble/salt)
+ 1 byte   filler (0x00)
+ 2 bytes  capability_flags (lower 2 bytes)
+ 1 byte   character_set
+ 2 bytes  status_flags
+ 2 bytes  capability_flags (upper 2 bytes)
+ 1 byte   auth_plugin_data_len
+ 10 bytes reserved (zeros)
+ N bytes  auth-plugin-data-part-2 (rest of salt, length from auth_plugin_data_len)
+ N bytes  auth_plugin_name (null-terminated, if capabilities indicate it)
+						</pre>
+						<pre class="bash">
+# MySQL banner via Python hex dump
+python3 &lt;&lt; &#39;EOF&#39;
+import socket
+s = socket.socket()
+s.settimeout(5)
+s.connect((&#39;10.10.0.5&#39;, 3306))
+data = s.recv(1024)
+protocol = data[4]
+end = data.index(b&#39;\x00&#39;, 5)
+version = data[5:end].decode()
+conn_id = int.from_bytes(data[end+1:end+5], &#39;little&#39;)
+caps_low = int.from_bytes(data[end+10:end+12], &#39;little&#39;)
+caps_high = int.from_bytes(data[end+19:end+21], &#39;little&#39;)
+capabilities = (caps_high &lt;&lt; 16) | caps_low
+print(f&#39;Protocol Version: {protocol}&#39;)
+print(f&#39;Server Version: {version}&#39;)
+print(f&#39;Connection ID: {conn_id}&#39;)
+print(f&#39;Capabilities: 0x{capabilities:08x}&#39;)
+# Key capability flags:
+# CLIENT_LONG_PASSWORD (0x00000001)
+# CLIENT_PROTOCOL_41 (0x00000200) — always set for modern MySQL
+# CLIENT_SECURE_CONNECTION (0x00008000)
+# CLIENT_PLUGIN_AUTH (0x00080000) — if set, auth_plugin_name present
+EOF
+
+# nmap MySQL info
+nmap -p 3306 --script mysql-info 10.10.0.5
+						</pre>
+						<h4 id="redis-ping-and-info">Redis - PING and INFO</h4>
+						<p>
+							Redis is plain-text and extremely verbose. Commands return structured data with type prefixes
+							(
+							<code>+</code>
+							for simple string,
+							<code>$</code>
+							for bulk string,
+							<code>*</code>
+							for array).
+						</p>
+						<pre class="bash">
+# Redis PING
+printf &#39;PING\r\n&#39; | nc -w 2 10.10.0.5 6379
+# +PONG
+
+# Redis INFO — comprehensive server status
+printf &#39;INFO\r\n&#39; | nc -w 2 10.10.0.5 6379
+# redis_version:6.0.16
+# redis_git_sha1:00000000
+# os:Linux 5.15.0-91-generic x86_64
+# arch_bits:64
+# gcc_version:11.4.0
+# process_id:12345
+# tcp_port:6379
+# uptime_in_seconds:1234567
+# connected_clients:5
+# maxmemory_human:0B (no limit)
+# redis_mode:standalone
+
+# Redis CLIENT LIST — connected clients
+printf &#39;CLIENT LIST\r\n&#39; | nc -w 2 10.10.0.5 6379
+# id=3 addr=10.0.0.100:54321 fd=9 name= age=300 idle=0 ...
+
+# Redis CONFIG — dangerous if accessible
+printf &#39;CONFIG GET dir\r\n&#39; | nc -w 2 10.10.0.5 6379
+# *2
+# $3
+# dir
+# $16
+# /var/lib/redis
+
+# nmap Redis
+nmap -p 6379 --script redis-info 10.10.0.5
+						</pre>
+						<h4 id="docker-api-tcp-23752376">Docker API (TCP 2375/2376)</h4>
+						<p>
+							Docker's
+							<abbr title="Application Programming Interface">API</abbr>
+							is
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							-based.
+							An unauthenticated Docker
+							<abbr title="Application Programming Interface">API</abbr>
+							is equivalent to root access
+							on the host.
+						</p>
+						<pre class="bash">
+# Docker API version endpoint
+curl -s http://10.10.0.5:2375/version 2&gt;/dev/null | jq .
+{
+  &#34;Platform&#34;: {&#34;Name&#34;: &#34;Docker Engine - Community&#34;},
+  &#34;Version&#34;: &#34;24.0.7&#34;,
+  &#34;ApiVersion&#34;: &#34;1.43&#34;,
+  &#34;Os&#34;: &#34;linux&#34;,
+  &#34;Arch&#34;: &#34;amd64&#34;,
+  &#34;KernelVersion&#34;: &#34;5.15.0-91-generic&#34;
+}
+
+# Docker API — list containers
+curl -s http://10.10.0.5:2375/containers/json 2&gt;/dev/null | jq &#39;.[].Names&#39;
+
+# Docker API — list images
+curl -s http://10.10.0.5:2375/images/json 2&gt;/dev/null | jq &#39;.[].RepoTags&#39;
+
+# nmap Docker API
+nmap -p 2375,2376 --script docker-version 10.10.0.5
+						</pre>
+						<h4 id="elasticsearch-tcp-9200">Elasticsearch (TCP 9200)</h4>
+						<p>
+							Elasticsearch returns
+							<abbr title="JavaScript Object Notation">JSON</abbr>
+							on all endpoints. The root endpoint
+							is the richest banner source.
+						</p>
+						<pre class="bash">
+# Elasticsearch root endpoint
+curl -s http://10.10.0.5:9200/ | jq .
+{
+  &#34;name&#34;: &#34;node-1&#34;,
+  &#34;cluster_name&#34;: &#34;elasticsearch&#34;,
+  &#34;cluster_uuid&#34;: &#34;abc123...&#34;,
+  &#34;version&#34;: {
+    &#34;number&#34;: &#34;7.17.15&#34;,
+    &#34;build_type&#34;: &#34;deb&#34;,
+    &#34;lucene_version&#34;: &#34;8.11.1&#34;
+  }
+}
+
+# Elasticsearch node stats — leaks filesystem paths, memory, JVM version
+curl -s http://10.10.0.5:9200/_nodes/stats 2&gt;/dev/null | jq &#39;.nodes[].os&#39;
+
+# Elasticsearch indices — what data is stored?
+curl -s http://10.10.0.5:9200/_cat/indices?v
+						</pre>
+						<h4 id="apache-kafka-tcp-9092">Apache Kafka (TCP 9092)</h4>
+						<p>
+							Kafka uses a binary protocol. The ApiVersions request (
+							<abbr title="Application Programming Interface">API</abbr>
+							key 18) returns the broker's supported
+							<abbr title="Application Programming Interface">API</abbr>
+							versions, which
+							directly maps to the broker version.
+						</p>
+						<pre class="bash">
+# Kafka ApiVersions request via Python
+python3 &lt;&lt; &#39;EOF&#39;
+import socket, struct
+
+def send_kafka_request(host, port, api_key, api_version, correlation_id=0):
+    &#34;&#34;&#34;Send a Kafka protocol request and return the response.&#34;&#34;&#34;
+    client_id = &#39;banner-grabber&#39;
+    request_body = b&#39;&#39;
+    # Request header v2: api_key(2) + api_version(2) + correlation_id(4) + client_id(str) + tagged_fields(1)
+    client_id_bytes = client_id.encode()
+    header = struct.pack(&#39;&gt;hhih&#39;, api_key, api_version, correlation_id, len(client_id_bytes))
+    header += client_id_bytes + b&#39;\x00&#39;  # tagged fields
+    message = struct.pack(&#39;&gt;i&#39;, len(header) + len(request_body)) + header + request_body
+    sock = socket.socket()
+    sock.settimeout(5)
+    sock.connect((host, port))
+    sock.send(message)
+    response_size = struct.unpack(&#39;&gt;i&#39;, sock.recv(4))[0]
+    response = sock.recv(response_size)
+    sock.close()
+    return response
+
+# ApiVersions request v3
+# Minimal body: client_software_name (string) + client_software_version (string) + tagged_fields (1 byte)
+body = b&#39;\x00\x00\x00\x00&#39;  # empty client_software_name, empty client_software_version, no tagged fields
+sock = socket.socket()
+sock.settimeout(5)
+sock.connect((&#39;10.10.0.5&#39;, 9092))
+# Send with header v2 (ApiVersions API key=18)
+client_id = &#39;banner-grabber&#39;.encode()
+header = struct.pack(&#39;&gt;hhih&#39;, 18, 3, 0, len(client_id)) + client_id + b&#39;\x00&#39;
+message = struct.pack(&#39;&gt;i&#39;, len(header) + len(body)) + header + body
+sock.send(message)
+size = struct.unpack(&#39;&gt;i&#39;, sock.recv(4))[0]
+response = sock.recv(size)
+sock.close()
+
+correlation_id = struct.unpack(&#39;&gt;i&#39;, response[:4])[0]
+error_code = struct.unpack(&#39;&gt;h&#39;, response[4:6])[0]
+print(f&#39;Auto offset: {response[6:6+response[5]]}&#39;)
+if error_code == 0:
+    print(&#39;Kafka broker responded successfully&#39;)
+else:
+    print(f&#39;Kafka error code: {error_code}&#39;)
+EOF
+						</pre>
+					</section>
+					<section>
+						<h3 id="tls-banner-grabbing-in-depth">TLS Banner Grabbing in Depth</h3>
+						<p>
+							Many services wrap plain-text banners in
+							<abbr title="Transport Layer Security">TLS</abbr>
+							. The encrypted channel
+							does not prevent banner grabbing - it prevents passive sniffing, but active
+							<abbr title="Transport Layer Security">TLS</abbr>
+							connections still receive the banner.
+						</p>
+						<pre class="bash">
+# HTTPS banner via openssl — one-liner
+echo -e &#39;GET / HTTP/1.0\r\nHost: 10.10.0.5\r\n\r\n&#39; | \
+  openssl s_client -connect 10.10.0.5:443 -quiet 2&gt;/dev/null
+
+# SMTPS (465) — SMTP over TLS
+openssl s_client -connect 10.10.0.5:465 -quiet 2&gt;/dev/null &lt;&lt;&lt; &#39;&#39;
+# 220 mail.target.com ESMTP Postfix
+
+# IMAPS (993) — IMAP over TLS
+openssl s_client -connect 10.10.0.5:993 -quiet 2&gt;/dev/null &lt;&lt;&lt; &#39;&#39;
+# * OK [CAPABILITY ...] Dovecot ready.
+
+# POP3S (995) — POP3 over TLS
+openssl s_client -connect 10.10.0.5:995 -quiet 2&gt;/dev/null &lt;&lt;&lt; &#39;&#39;
+# +OK Dovecot ready.
+
+# FTPS (990) — FTP over TLS (implicit)
+openssl s_client -connect 10.10.0.5:990 -quiet 2&gt;/dev/null &lt;&lt;&lt; &#39;&#39;
+# 220 (vsFTPd 3.0.3)
+
+# LDAPS (636) — LDAP over TLS
+openssl s_client -connect 10.10.0.5:636 -quiet 2&gt;/dev/null &lt;&lt;&lt; &#39;&#39; | head -1
+						</pre>
+						<pre class="bash">
+# STARTTLS — negotiation within plain-text protocol
+# SMTP STARTTLS
+printf &#39;EHLO test\r\nSTARTTLS\r\n&#39; | nc -w 3 10.10.0.5 25
+# 220 2.0.0 Ready to start TLS
+
+# After STARTTLS, you need an openssl client that supports STARTTLS:
+openssl s_client -connect 10.10.0.5:25 -starttls smtp -quiet &lt;/dev/null 2&gt;/dev/null
+
+# FTP AUTH TLS
+printf &#39;AUTH TLS\r\n&#39; | nc -w 3 10.10.0.5 21
+# 234 Proceed with negotiation.
+openssl s_client -connect 10.10.0.5:21 -starttls ftp -quiet &lt;/dev/null 2&gt;/dev/null
+						</pre>
+					</section>
+					<section>
+						<h3 id="banner-deception-and-spoofing">Banner Deception and Spoofing</h3>
+						<p>
+							Services can be configured to hide or falsify their banners. Understanding these techniques
+							prevents false conclusions.
+						</p>
+						<pre class="bash">
+# Apache — control banner verbosity
+# ServerTokens Prod        → Server: Apache
+# ServerTokens Major       → Server: Apache/2
+# ServerTokens Minor       → Server: Apache/2.4
+# ServerTokens Min         → Server: Apache/2.4.41
+# ServerTokens OS          → Server: Apache/2.4.41 (Ubuntu)
+# ServerTokens Full        → Server: Apache/2.4.41 (Ubuntu) OpenSSL/1.1.1f
+# ServerSignature Off      → removes version from error pages, directory listings
+
+# nginx — control banner
+# server_tokens off;        → Server: nginx
+# server_tokens on;         → Server: nginx/1.22.1
+# server_tokens build;      → Server: nginx/1.22.1 (Ubuntu)
+
+# Custom Server header via nginx:
+# more_set_headers &#39;Server: Microsoft-IIS/10.0&#39;;  (with headers-more module)
+# add_header Server &#34;Apache/2.4.6 (CentOS)&#34;;      (standard: only appends, not replaces)
+
+# SSH — change banner via /etc/ssh/sshd_config
+# Banner /etc/ssh/banner.txt
+# But the version string (SSH-2.0-OpenSSH_X.Y) is hardcoded in the binary.
+# To change it: recompile OpenSSH with modified version.h
+# Or: use a proxy that rewrites the version string
+						</pre>
+						<pre class="bash">
+# Detecting false banners — the consistency check
+# If Apache is reporting but the error page format is nginx → banner is fake
+# If Server: nginx but Set-Cookie: JSESSIONID → backend is Java (Tomcat/JBoss), nginx is reverse proxy
+
+# Cross-reference methods:
+# 1. Banner says Apache → try /server-status, /icons/apache_pb.gif (Apache-specific)
+# 2. Banner says IIS → try /iisstart.htm, /_aspmvc/ (IIS-specific)
+# 3. Check HTML comments: &lt;!-- This is Apache --&gt; vs &lt;!-- nginx --&gt;
+# 4. Check the default 404 page — each web server has a distinctive format
+# 5. Check TLS fingerprint: Apache uses OpenSSL, IIS uses SChannel, nginx uses OpenSSL/BoringSSL
+
+# nmap can sometimes detect the real server behind a false banner
+nmap -sV -p 80,443 --script http-server-header 10.10.0.5
+						</pre>
+					</section>
+					<section>
+						<h3 id="batch-banner-grabbing">Batch Banner Grabbing</h3>
+						<p>When you have a list of open ports from a port scan, run banner grabbing across all of them.</p>
+						<pre class="bash">
+#!/bin/bash
+# batch-banner-grab.sh — grab banners from all open TCP ports on a host
+HOST=&#34;$1&#34;
+TLS_PORTS=&#34;443,8443,993,995,465,636,989,990&#34;
+TIMEOUT=3
+
+# Phase 1: find open TCP ports
+OPEN_PORTS=$(nmap -sT -T4 -p- --open &#34;$HOST&#34; -oG - 2&gt;/dev/null | \
+  grep &#39;/open/&#39; | awk -F&#39;[/ ]&#39; &#39;{print $2}&#39; | sort -nu)
+echo &#34;[*] Open ports: $(echo $OPEN_PORTS | wc -w)&#34;
+
+# Phase 2: grab banner from each port
+for PORT in $OPEN_PORTS; do
+  echo &#34;=== Port $PORT ===&#34;
+  if echo &#34;$TLS_PORTS&#34; | grep -q &#34;$PORT&#34;; then
+    # TLS port
+    echo -e &#39;\n&#39; | openssl s_client -connect &#34;$HOST:$PORT&#34; -quiet 2&gt;/dev/null | \
+      head -5
+  else
+    # Plain TCP — send appropriate probe
+    if [ &#34;$PORT&#34; -eq 80 ] || [ &#34;$PORT&#34; -eq 8080 ]; then
+      printf &#34;GET / HTTP/1.0\r\nHost: %s\r\n\r\n&#34; &#34;$HOST&#34; | nc -w &#34;$TIMEOUT&#34; &#34;$HOST&#34; &#34;$PORT&#34; 2&gt;/dev/null | head -20
+    else
+      nc -w &#34;$TIMEOUT&#34; &#34;$HOST&#34; &#34;$PORT&#34; &lt; /dev/null 2&gt;/dev/null | head -5
+    fi
+  fi
+  echo
+done
+						</pre>
+					</section>
+					<section>
+						<h3 id="verification-and-troubleshooting">Verification and Troubleshooting</h3>
+						<pre class="bash">
+# Verify: banner matches nmap -sV output
+nc -w 3 10.10.0.5 22 &lt;&lt;&lt; &#39;&#39; &gt; manual-banner.txt
+nmap -sV -p 22 10.10.0.5 -oG nmap-banner.txt
+diff &lt;(cat manual-banner.txt) &lt;(grep -oP &#39;OpenSSH[^\n]*&#39; nmap-banner.txt)
+
+# Verify: check for WAF/CDN stripping headers
+# If your curl shows no Server header but nmap shows one, a WAF/CDN removed it
+# WAFs like Cloudflare strip Server headers by default
+curl -sI https://target.com | grep -i server
+# If empty → CDN/WAF in front, banner-grab the origin IP instead
+
+# Verify: TLS version affects the response
+# Some servers return different HTTP headers depending on TLS version negotiated
+openssl s_client -connect 10.10.0.5:443 -tls1_2 -quiet \
+  &lt;&lt;&lt; $&#39;GET / HTTP/1.0\r\n\r\n&#39; 2&gt;/dev/null | grep -i &#39;^Server:&#39;
+
+# Troubleshooting: connection timeout
+# 1. Is the port actually open? Run: nmap -p PORT HOST first
+# 2. Is there a firewall? Try from a different source IP (VPN, jump box)
+# 3. Does the service require a protocol-specific init? Some services wait for the client.
+#    e.g., RDP (3389) requires an X.224 Connection Request before any data exchange.
+
+# Troubleshooting: empty response
+# 1. Service may be binary-protocol (RDP, SMB, MySQL without init)
+# 2. Service may require a specific byte sequence to trigger response
+# 3. Rate limiting — service may be throttling connections from your IP
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							The container runs several services that lie about their identity: a fake
+							<abbr title="File Transfer Protocol">FTP</abbr>
+							banner, a minimal nginx banner, a reverse proxy that strips headers, a verbose development server,
+							and binary protocols that need a real probe. Fingerprint each service and decide which banners
+							are real.
+						</p>
+						<p><a href="/wiki/articles/redteam/banner-grabbing.Containerfile">banner-grabbing.Containerfile</a></p>
+						<pre class="bash">
+podman build -t banner-grab-lab -f banner-grabbing.Containerfile .
+podman run -it --rm -p 21:21 -p 22:22 -p 25:25 -p 80:80 -p 8001:8001 \
+  -p 443:443 -p 3306:3306 -p 6379:6379 banner-grab-lab
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc4253" target="_blank">RFC 4253 - SSH Transport Layer Protocol</a> - the <abbr title="Secure Shell">SSH</abbr> version string exchange</li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc959" target="_blank">RFC 959 - File Transfer Protocol (FTP)</a> - the 220 greeting and FEAT command</li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc5321" target="_blank">RFC 5321 - Simple Mail Transfer Protocol</a> - the 220 greeting and EHLO extensions</li>
+							<li><a class="icon-website" href="https://redis.io/docs/latest/develop/reference/protocol-spec/" target="_blank">Redis Protocol Specification</a> - <code>RESP</code> type prefixes and inline commands</li>
+							<li><a class="icon-website" href="https://dev.mysql.com/doc/dev/mysql-server/latest/PAGE_PROTOCOL.html" target="_blank">MySQL Client/Server Protocol</a> - the HandshakeV10 packet layout</li>
+							<li><a class="icon-website" href="https://docs.docker.com/engine/api/" target="_blank">Docker Engine API</a> - the <abbr title="Hypertext Transfer Protocol">HTTP</abbr>  <abbr title="Application Programming Interface">API</abbr> exposed on port 2375</li>
+							<li><a class="icon-website" href="https://www.elastic.co/guide/en/elasticsearch/reference/current/rest-apis.html" target="_blank">Elasticsearch REST APIs</a> - <abbr title="JavaScript Object Notation">JSON</abbr> endpoints that expose version data</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

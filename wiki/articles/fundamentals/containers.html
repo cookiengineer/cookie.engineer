@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Containers | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Containers">
+		<meta name="keywords" content="cgroups, containers, namespaces, oci, overlayfs, podman, security, techniques">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Containers">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Linux namespaces, cgroups, OverlayFS, podman architecture, OCI runtime, rootless containers, and container security.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/fundamentals/containers.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Containers">
+		<meta name="twitter:description" itemprop="description" content="Linux namespaces, cgroups, OverlayFS, podman architecture, OCI runtime, rootless containers, and container security.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#containers-vs-vms">Containers vs VMs</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#linux-namespaces">Linux Namespaces</a></b>
+					<ul>
+						<li><a href="#namespace-types">Namespace Types</a></li>
+						<li><a href="#inspecting-namespaces">Inspecting Namespaces</a></li>
+						<li><a href="#creating-namespaces">Creating Namespaces</a></li>
+						<li><a href="#uid-mapping">UID Mapping</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#cgroups">cgroups</a></b>
+					<ul>
+						<li><a href="#cgroup-v2-hierarchy">cgroup v2 Hierarchy</a></li>
+						<li><a href="#resource-control">Resource Control</a></li>
+						<li><a href="#cgroup-stats">cgroup Stats</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#overlayfs">OverlayFS</a></b>
+					<ul>
+						<li><a href="#overlayfs-layers">OverlayFS Layers</a></li>
+						<li><a href="#manual-overlayfs-setup">Manual OverlayFS Setup</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#podman-architecture">podman Architecture</a></b>
+					<ul>
+						<li><a href="#rootless-containers">Rootless Containers</a></li>
+						<li><a href="#podman-commands">podman Commands</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#container-images">Container Images</a></b>
+					<ul>
+						<li><a href="#image-structure">Image Structure</a></li>
+						<li><a href="#containerfile">Containerfile</a></li>
+						<li><a href="#layer-caching">Layer Caching</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#minimal-container-in-bash">Minimal Container in Bash</a></b>
+					<ul>
+						<li><a href="#what-each-step-does">What Each Step Does</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#container-security">Container Security</a></b>
+					<ul>
+						<li><a href="#default-restrictions">Default Restrictions</a></li>
+						<li><a href="#capabilities">Capabilities</a></li>
+						<li><a href="#seccomp-profiles">seccomp Profiles</a></li>
+						<li><a href="#privileged-containers">Privileged Containers</a></li>
+						<li><a href="#escape-vectors">Escape Vectors</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#oci-standards">OCI Standards</a></b>
+					<ul>
+						<li><a href="#example-configjson">Example config.json</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#container-auditing">Container Auditing</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#arch-linux-containers">Arch Linux Containers</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#summary">Summary</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/fundamentals/index.html">Fundamentals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/fundamentals/containers.html">Containers</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="containers">Containers</h2>
+					<p>
+						Linux namespaces, cgroups, OverlayFS, podman architecture, OCI runtime, rootless containers,
+						and container security.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							A container is a Linux process (or process tree) running in an isolated context built from kernel
+							features: namespaces restrict what the process can see, cgroups restrict what it can consume,
+							and layered filesystems provide a private root filesystem. The kernel is shared with the host;
+							there is no hypervisor and no guest kernel. This article dissects how containers actually work,
+							from namespaces and cgroups up to the OCI runtime, and shows how to audit a container's security
+							posture with
+							<code>podman</code>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - process creation, signaling, and lifecycle</li>
+							<li><a href="/wiki/articles/fundamentals/virtual-memory.html">Virtual Memory</a> - virtual memory and address spaces</li>
+							<li><a href="/wiki/articles/fundamentals/filesystems.html">Filesystems</a> - filesystem layers, mount namespaces, inodes</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="containers-vs-vms">Containers vs VMs</h3>
+						<pre class="plaintext">
+VIRTUAL MACHINE:
+  App A  |  App B  |  App C
+  Bins/Libs  |  Bins/Libs  |  Bins/Libs
+  Guest OS (Kernel)           |
+  -----------------------------
+  Hypervisor (KVM)
+  -----------------------------
+  Host OS Kernel
+  -----------------------------
+  Physical Hardware
+
+CONTAINER:
+  App A  |  App B  |  App C
+  Bins/Libs  |  Bins/Libs  |  Bins/Libs
+  --------------------------------
+  Host OS Kernel  (shared by all)
+  --------------------------------
+  Physical Hardware
+						</pre>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Property</th>
+									<th align="center">VM</th>
+									<th align="center">Container</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Isolation boundary</td>
+									<td align="center">Hypervisor</td>
+									<td align="center">Kernel namespaces + cgroups</td>
+								</tr>
+								<tr>
+									<td align="center">Boot time</td>
+									<td align="center">10-60 seconds</td>
+									<td align="center">0.1 - 2 seconds</td>
+								</tr>
+								<tr>
+									<td align="center">Memory overhead</td>
+									<td align="center">GBs (guest kernel + OS)</td>
+									<td align="center">MBs (process tree only)</td>
+								</tr>
+								<tr>
+									<td align="center">Kernel</td>
+									<td align="center">Separate per VM</td>
+									<td align="center">Shared with host</td>
+								</tr>
+								<tr>
+									<td align="center">Security</td>
+									<td align="center">Strong (hardware boundary)</td>
+									<td align="center">Moderate (kernel boundary)</td>
+								</tr>
+								<tr>
+									<td align="center">Snapshoting</td>
+									<td align="center">Full VM snapshot</td>
+									<td align="center">Image layer commit</td>
+								</tr>
+								<tr>
+									<td align="center">Density</td>
+									<td align="center">10s of VMs per host</td>
+									<td align="center">100s of containers per host</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="linux-namespaces">Linux Namespaces</h3>
+						<p>
+							Namespaces are the foundation of container isolation. Each namespace type restricts what a process
+							sees of a specific kernel resource.
+						</p>
+						<h4 id="namespace-types">Namespace Types</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Namespace</th>
+									<th align="center">Kernel Constant</th>
+									<th align="center">Isolates</th>
+									<th align="center">Created with</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">PID</td>
+									<td align="center"><code>CLONE_NEWPID</code></td>
+									<td align="center">Process IDs</td>
+									<td align="center">PID 1 in container maps to some host PID</td>
+								</tr>
+								<tr>
+									<td align="center">Mount</td>
+									<td align="center"><code>CLONE_NEWNS</code></td>
+									<td align="center">Mount points</td>
+									<td align="center">Private<code>/proc</code>,<code>/sys</code>,<code>/dev</code>, rootfs</td>
+								</tr>
+								<tr>
+									<td align="center">Network</td>
+									<td align="center"><code>CLONE_NEWNET</code></td>
+									<td align="center">Network stack</td>
+									<td align="center">Private interfaces, routes, iptables rules</td>
+								</tr>
+								<tr>
+									<td align="center">UTS</td>
+									<td align="center"><code>CLONE_NEWUTS</code></td>
+									<td align="center">Hostname, domain</td>
+									<td align="center"><code>hostname</code>inside container vs host</td>
+								</tr>
+								<tr>
+									<td align="center">IPC</td>
+									<td align="center"><code>CLONE_NEWIPC</code></td>
+									<td align="center">System V IPC, POSIX msg queues</td>
+									<td align="center">Isolated message queues and semaphores</td>
+								</tr>
+								<tr>
+									<td align="center">User</td>
+									<td align="center"><code>CLONE_NEWUSER</code></td>
+									<td align="center">UID/GID mapping</td>
+									<td align="center">UID 0 in container maps to UID 1000 on host</td>
+								</tr>
+								<tr>
+									<td align="center">Cgroup</td>
+									<td align="center"><code>CLONE_NEWCGROUP</code></td>
+									<td align="center">Cgroup root</td>
+									<td align="center">Container sees its own cgroup tree</td>
+								</tr>
+								<tr>
+									<td align="center">Time</td>
+									<td align="center"><code>CLONE_NEWTIME</code></td>
+									<td align="center">Clock offsets</td>
+									<td align="center">Different<code>CLOCK_MONOTONIC</code>,<code>CLOCK_BOOTTIME</code></td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="inspecting-namespaces">Inspecting Namespaces</h4>
+						<pre class="bash">
+# List namespaces of a process
+ls -la /proc/$$/ns/
+# Each entry is a symlink to a namespace identifier:
+#   cgroup -&gt; cgroup:[4026531835]
+#   ipc -&gt; ipc:[4026531839]
+#   mnt -&gt; mnt:[4026531841]
+#   net -&gt; net:[4026531840]
+#   pid -&gt; pid:[4026531836]
+#   uts -&gt; uts:[4026531838]
+#   user -&gt; user:[4026531837]
+
+# The namespace identifier (inode number) identifies the namespace instance.
+# Processes in the same namespace share the same inode number.
+
+# Compare namespaces between host and container
+HOST_PID=1
+CONTAINER_PID=$(podman inspect --format &#39;{{.State.Pid}}&#39; mycontainer)
+
+echo &#34;Host PID namespace:    $(readlink /proc/$HOST_PID/ns/pid)&#34;
+echo &#34;Container PID namespace: $(readlink /proc/$CONTAINER_PID/ns/pid)&#34;
+
+# Namespace persistence: bind-mount a namespace to keep it alive
+touch /tmp/netns
+mount --bind /proc/$$/ns/net /tmp/netns
+# Even when the original process exits, this namespace survives.
+# Used by ip netns and container runtimes.
+						</pre>
+						<h4 id="creating-namespaces">Creating Namespaces</h4>
+						<pre class="bash">
+# Create a process in its own PID and mount namespace
+unshare --pid --mount --fork --mount-proc /bin/bash
+
+# Inside the new namespace:
+echo $$           # PID 1 (in this namespace)
+ps aux            # Only processes in this namespace
+ls /proc          # Only this namespace&#39;s entries
+
+# Create a process with its own network namespace
+unshare --net /bin/bash
+ip link           # Only loopback, no eth0
+ip addr           # 127.0.0.1 only
+
+# Create a user namespace with UID mapping
+unshare --user --map-root-user /bin/bash
+id                # uid=0(root) gid=0(root)
+# This is root in the namespace only. On the host, it maps to the original UID.
+
+# Combined: full container-like isolation
+unshare \
+    --pid --fork --mount-proc \
+    --mount \
+    --net \
+    --uts \
+    --ipc \
+    --cgroup \
+    --user --map-root-user \
+    /bin/bash
+						</pre>
+						<h4 id="uid-mapping">UID Mapping</h4>
+						<pre class="bash">
+# UID mapping configuration
+cat /proc/$$/uid_map
+# Format: ID-inside-ns  ID-outside-ns  length
+#   0          1000         1
+# UID 0 in namespace -&gt; UID 1000 on host (for 1 ID)
+
+# Example: map 65536 UIDs
+# echo &#34;0 100000 65536&#34; &gt; /proc/$(pid)/uid_map
+
+# The kernel enforces: writing to uid_map requires CAP_SETUID in the
+# parent namespace. Without mapping, all UIDs appear as the overflow UID
+# (typically 65534/nobody).
+						</pre>
+					</section>
+					<section>
+						<h3 id="cgroups">cgroups</h3>
+						<p>
+							If namespaces control what a process can
+							<em>see</em>
+							, cgroups control what a process can
+							<em>use</em>
+							.
+							cgroups limit, account for, and isolate resource usage (
+							<abbr title="Central Processing Unit">CPU</abbr>
+							, memory,
+							disk I/O, network).
+						</p>
+						<h4 id="cgroup-v2-hierarchy">cgroup v2 Hierarchy</h4>
+						<p>cgroup v2 has a unified hierarchy (single tree). All controllers are mounted together:</p>
+						<pre class="bash">
+# cgroup v2 is mounted at /sys/fs/cgroup
+mount | grep cgroup
+# cgroup2 on /sys/fs/cgroup type cgroup2 (rw,nosuid,nodev,noexec,relatime,nsdelegate,memory_recursiveprot)
+
+# List available controllers
+cat /sys/fs/cgroup/cgroup.controllers
+# cpuset cpu io memory hugetlb pids rdma misc
+
+# List child cgroups
+ls /sys/fs/cgroup/
+# system.slice/  user.slice/  machine.slice/
+						</pre>
+						<h4 id="resource-control">Resource Control</h4>
+						<pre class="bash">
+# Create a cgroup for a container workload
+CGROUP=/sys/fs/cgroup/containers/myapp
+mkdir $CGROUP
+
+# CPU: limit to 50% of one core
+echo &#34;50000 100000&#34; &gt; $CGROUP/cpu.max
+
+# Memory: limit to 256 MiB
+echo $((256 * 1024 * 1024)) &gt; $CGROUP/memory.max
+# 268435456 bytes
+
+# Memory swap limit (0 = no swap for this cgroup)
+echo 0 &gt; $CGROUP/memory.swap.max
+
+# IO: limit writes to 10 MB/s on device 8:0 (sda)
+echo &#34;8:0 wbps=10485760&#34; &gt; $CGROUP/io.max
+
+# PIDs: limit to 100 processes
+echo 100 &gt; $CGROUP/pids.max
+
+# Move a process into the cgroup by writing its PID
+echo $PID &gt; $CGROUP/cgroup.procs
+
+# Move the shell into the cgroup to test limits
+echo $$ &gt; $CGROUP/cgroup.procs
+# Now run memory-intensive program: it will be killed (OOM) at 256 MiB
+
+# Verify limits are applied
+cat /proc/$$/cgroup
+# 0::/containers/myapp
+						</pre>
+						<h4 id="cgroup-stats">cgroup Stats</h4>
+						<pre class="bash">
+# View current memory usage of a cgroup
+cat $CGROUP/memory.current
+# 45236224  (bytes)
+
+# CPU usage statistics
+cat $CGROUP/cpu.stat
+# usage_usec 12345678
+# user_usec 9876543
+# system_usec 2469135
+
+# Number of times the cgroup was OOM-killed
+cat $CGROUP/memory.events
+# low 0
+# high 0
+# max 5
+# oom 5
+# oom_kill 5
+
+# Pressure stall information (PSI) - how much tasks are stalled
+cat $CGROUP/cpu.pressure
+# some avg10=1.23 avg60=0.45 avg300=0.12 total=4567890
+# full avg10=0.00 avg60=0.00 avg300=0.00 total=0
+						</pre>
+					</section>
+					<section>
+						<h3 id="overlayfs">OverlayFS</h3>
+						<p>
+							Container images use layered filesystems. Each layer is a directory of files. The OverlayFS
+							kernel module stacks these layers, presenting a unified view to the container.
+						</p>
+						<h4 id="overlayfs-layers">OverlayFS Layers</h4>
+						<pre class="plaintext">
+Merged View (what the container sees)
+  = Upperdir (writable, container&#39;s changes)
+    + Lowerdir (read-only, image layers)
+
+Example with two lower layers:
+
+Lower layer 1 (base image: archlinux):
+  /etc/os-release
+  /usr/bin/bash
+  /usr/bin/ls
+
+Lower layer 2 (app layer):
+  /usr/bin/myapp
+  /etc/myapp.conf
+
+Upper layer (writable container layer):
+  (starts empty)
+
+Merged:
+  /etc/os-release     (from lower1)
+  /usr/bin/bash       (from lower1)
+  /usr/bin/ls         (from lower1)
+  /usr/bin/myapp      (from lower2)
+  /etc/myapp.conf     (from lower2)
+  /var/log/myapp.log  (created in upper, only in this container)
+						</pre>
+						<p>
+							OverlayFS copy-up: when a file from a lower layer is modified, the entire file is copied to
+							the upper layer first, then modified. This means the original in the lower layer is never touched
+							<ul>
+								<li>the container's changes are isolated in the upper layer.</li>
+							</ul>
+						</p>
+						<h4 id="manual-overlayfs-setup">Manual OverlayFS Setup</h4>
+						<pre class="bash">
+# Create layer directories
+mkdir -p lower1 lower2 upper work merged
+
+# Populate lower layers (simulating image layers)
+echo &#34;base file&#34; &gt; lower1/base.txt
+echo &#34;app file&#34;  &gt; lower2/app.txt
+
+# Mount OverlayFS
+mount -t overlay overlay \
+    -o lowerdir=lower2:lower1,upperdir=upper,workdir=work \
+    merged
+
+# The merged view shows both layers&#39; files
+ls merged/
+# app.txt  base.txt
+
+# Write a new file - goes to upper layer
+echo &#34;container data&#34; &gt; merged/container.txt
+ls upper/
+# container.txt
+
+# Modify a lower-layer file - copy-up to upper
+echo &#34;modified&#34; &gt; merged/base.txt
+cat upper/base.txt
+# modified
+cat lower1/base.txt
+# base file  (unchanged!)
+
+# Cleanup
+umount merged
+						</pre>
+						<p>
+							The
+							<code>workdir</code>
+							is a technical requirement: OverlayFS uses it to prepare files before atomically
+							moving them to the upper layer. It must be on the same filesystem as
+							<code>upperdir</code>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="podman-architecture">podman Architecture</h3>
+						<p>
+							podman implements the OCI container runtime specification without a daemon. Unlike Docker (which
+							uses a persistent
+							<code>dockerd</code>
+							process), podman uses a fork-exec model:
+						</p>
+						<pre class="plaintext">
+podman run creates conmon (container monitor) which forks container process
+
+podman can exit, conmon stays to:
+  - Forward logs
+  - Report exit code
+  - Handle terminal IO
+
+DOCKER:
+  client (docker) -&gt; dockerd (daemon, always running) -&gt; containerd -&gt; runc -&gt; container
+
+PODMAN:
+  client (podman) -&gt; directly creates container process via fork/exec
+                    No persistent daemon. podman CLI IS the runtime.
+						</pre>
+						<p>Advantages of the daemonless model:</p>
+						<ul>
+							<li>No single point of failure (dockerd crash kills all containers under Docker)</li>
+							<li>No always-running root process with socket exposure</li>
+							<li>Better systemd integration (podman generates systemd unit files natively)</li>
+							<li>REST <abbr title="Application Programming Interface">API</abbr> available via <code>podman system service</code> (optional, on-demand)</li>
+						</ul>
+						<h4 id="rootless-containers">Rootless Containers</h4>
+						<p>
+							Rootless mode is podman's default for non-root users. It uses user namespaces to map container
+							UID 0 to the user's host UID:
+						</p>
+						<pre class="bash">
+# Run a container as a regular user (no root required)
+podman run --rm -it archlinux:latest /bin/bash
+
+# Inside the container, you appear as root:
+id
+# uid=0(root) gid=0(root) groups=0(root)
+
+# On the host, the container process runs as your UID:
+ps aux | grep &#34;container process&#34;
+# user  12345  ...  /bin/bash
+
+# Rootless networking uses a userspace TCP/IP stack (slirp4netns or pasta):
+#   - No CAP_NET_ADMIN required
+#   - Network traffic goes through a userspace NAT
+#   - Cannot bind privileged ports (less than 1024) without additional setup
+						</pre>
+						<p>
+							User namespace allows the container to have "root" capabilities within the container, but these
+							capabilities are scoped to the namespace and do not grant host root access.
+						</p>
+						<h4 id="podman-commands">podman Commands</h4>
+						<pre class="bash">
+# Image management
+podman pull archlinux:latest
+podman images
+podman rmi archlinux:latest
+podman build -t myapp -f Containerfile .
+
+# Container lifecycle
+podman run --name web -d -p 8080:80 nginx:alpine
+podman ps
+podman ps -a            # including stopped
+podman stop web
+podman start web
+podman restart web
+podman rm web
+podman rm -f web        # force remove running container
+
+# Interactive
+podman run --rm -it archlinux:latest /bin/bash
+podman exec -it web /bin/sh         # enter running container
+
+# Logs and inspect
+podman logs web
+podman logs -f web                  # follow
+podman inspect web | jq &#39;.[0].State&#39;
+podman inspect web --format &#39;{{.NetworkSettings.IPAddress}}&#39;
+
+# Copy files
+podman cp ./file.txt web:/tmp/
+podman cp web:/tmp/file.txt ./
+
+# Commit changes to new image
+podman commit web myapp:v2
+
+# Export/import
+podman save myapp:v2 -o myapp.tar
+podman load -i myapp.tar
+						</pre>
+					</section>
+					<section>
+						<h3 id="container-images">Container Images</h3>
+						<h4 id="image-structure">Image Structure</h4>
+						<pre class="plaintext">
+Container image (OCI format):
+  index.json          (manifest list for multi-arch)
+  oci-layout          (spec version)
+  blobs/
+    sha256/
+      a1b2...     (config JSON: env, entrypoint, exposed ports)
+      c3d4...     (layer 1: rootfs diff, gzip compressed tar)
+      e5f6...     (layer 2)
+      g7h8...     (layer 3)
+						</pre>
+						<p>
+							Each layer is a tar archive containing the files added, modified, or deleted relative to the
+							previous layer. Images are content-addressable: the filename is the SHA256 hash of the content.
+						</p>
+						<h4 id="containerfile">Containerfile</h4>
+						<pre class="dockerfile">
+# Containerfile - OCI-compatible, works with podman and docker
+
+FROM archlinux:latest
+
+LABEL org.opencontainers.image.title=&#34;My Application&#34;
+LABEL org.opencontainers.image.version=&#34;1.0.0&#34;
+
+ENV APP_HOME=/opt/myapp
+ENV PATH=$APP_HOME/bin:$PATH
+
+RUN pacman -Syu --noconfirm &amp;&amp; \
+    pacman -S --noconfirm python python-pip gcc make &amp;&amp; \
+    pacman -Scc --noconfirm
+
+COPY . $APP_HOME/
+
+RUN useradd --create-home --shell /bin/bash appuser &amp;&amp; \
+    chown -R appuser:appuser $APP_HOME
+
+USER appuser
+WORKDIR $APP_HOME
+
+RUN pip install --user -r requirements.txt
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+ENTRYPOINT [&#34;python&#34;, &#34;-m&#34;, &#34;myapp&#34;]
+CMD [&#34;--host&#34;, &#34;0.0.0.0&#34;, &#34;--port&#34;, &#34;8080&#34;]
+						</pre>
+						<h4 id="layer-caching">Layer Caching</h4>
+						<p>Each instruction creates a new layer. Order instructions to maximize cache hits:</p>
+						<pre class="plaintext">
+1. Base image           // rarely changes
+2. Package manager updates // changes occasionally
+3. Dependency install   // changes when dependencies change
+4. Application code     // changes most frequently
+5. Configuration        // changes occasionally
+						</pre>
+						<p>
+							If you COPY code before installing dependencies, every code change invalidates the dependency
+							cache. Always install dependencies first, then copy code.
+						</p>
+						<pre class="dockerfile">
+# Multi-stage build
+FROM archlinux:latest AS builder
+RUN pacman -Syu --noconfirm &amp;&amp; pacman -S --noconfirm gcc make
+COPY src/ /build/
+RUN make -C /build
+
+FROM archlinux:latest
+COPY --from=builder /build/output/binary /usr/local/bin/myapp
+ENTRYPOINT [&#34;/usr/local/bin/myapp&#34;]
+						</pre>
+					</section>
+					<section>
+						<h3 id="minimal-container-in-bash">Minimal Container in Bash</h3>
+						<p>A minimal container runtime demonstrates how all these pieces fit together:</p>
+						<pre class="bash">
+#!/bin/bash
+# simple-container.sh - minimal container runtime
+set -euo pipefail
+
+ROOTFS=&#34;$1&#34;
+COMMAND=&#34;${2:-/bin/sh}&#34;
+
+if [ -z &#34;$ROOTFS&#34; ] || [ ! -d &#34;$ROOTFS&#34; ]; then
+    echo &#34;Usage: $0 &lt;rootfs_directory&gt; [command]&#34;
+    exit 1
+fi
+
+die() { echo &#34;ERROR: $1&#34; &gt;&amp;2; exit 1; }
+
+# Create directories for the container
+CGROUP_DIR=&#34;/sys/fs/cgroup/containers/simple-$$&#34;
+OVERLAY_UPPER=$(mktemp -d /tmp/simple-upper-XXXXX)
+OVERLAY_WORK=$(mktemp -d /tmp/simple-work-XXXXX)
+OVERLAY_MERGED=$(mktemp -d /tmp/simple-merged-XXXXX)
+
+cleanup() {
+    umount &#34;$OVERLAY_MERGED&#34; 2&gt;/dev/null || true
+    rmdir &#34;$OVERLAY_MERGED&#34; &#34;$OVERLAY_UPPER&#34; &#34;$OVERLAY_WORK&#34; 2&gt;/dev/null || true
+    [ -d &#34;$CGROUP_DIR&#34; ] &amp;&amp; rmdir &#34;$CGROUP_DIR&#34; 2&gt;/dev/null || true
+}
+trap cleanup EXIT
+
+# Step 1: Setup OverlayFS
+mount -t overlay overlay \
+    -o &#34;lowerdir=$ROOTFS,upperdir=$OVERLAY_UPPER,workdir=$OVERLAY_WORK&#34; \
+    &#34;$OVERLAY_MERGED&#34; || die &#34;Failed to mount OverlayFS&#34;
+
+# Step 2: Create cgroup
+mkdir -p &#34;$CGROUP_DIR&#34;
+echo $((128 * 1024 * 1024)) &gt; &#34;$CGROUP_DIR/memory.max&#34; 2&gt;/dev/null || true
+echo 100 &gt; &#34;$CGROUP_DIR/pids.max&#34; 2&gt;/dev/null || true
+
+# Step 3: Create namespaces and enter container
+unshare \
+    --pid --fork --mount-proc \
+    --mount \
+    --uts --hostname container \
+    --ipc \
+    --cgroup \
+    /bin/bash -c &#34;
+        # Mount /proc, /sys, /dev inside container
+        mount -t proc proc /proc
+        mount -t sysfs sys /sys
+        mount -t tmpfs tmp /tmp
+
+        # pivot_root to the merged overlay
+        mkdir -p $OVERLAY_MERGED/proc $OVERLAY_MERGED/sys $OVERLAY_MERGED/.old_root
+        pivot_root $OVERLAY_MERGED $OVERLAY_MERGED/.old_root
+        cd /
+
+        # Move ourselves into the cgroup
+        [ -f $CGROUP_DIR/cgroup.procs ] &amp;&amp; echo \$PPID &gt; $CGROUP_DIR/cgroup.procs 2&gt;/dev/null || true
+
+        # Execute the command
+        exec $COMMAND
+    &#34;
+						</pre>
+						<h4 id="what-each-step-does">What Each Step Does</h4>
+						<ol>
+							<li><b>OverlayFS mount</b> : creates a writable view of the read-only rootfs</li>
+							<li><b>cgroup creation</b> : sets memory and process limits for the container</li>
+							<li><b>unshare</b> : creates PID, mount, UTS, <abbr title="Inter-Process Communication">IPC</abbr> , and cgroup namespaces</li>
+							<li><b>Mount /proc and /sys</b> : makes these pseudo-filesystems available inside</li>
+							<li><b>pivot_root</b> : changes the process's root to the overlay mount point</li>
+							<li><b>cgroup assignment</b> : places the container process in its cgroup</li>
+							<li><b>exec</b> : replaces bash with the target command</li>
+						</ol>
+					</section>
+					<section>
+						<h3 id="container-security">Container Security</h3>
+						<h4 id="default-restrictions">Default Restrictions</h4>
+						<p>podman applies these restrictions by default:</p>
+						<pre class="bash">
+# Inspect security settings applied to a container
+podman inspect secure-container --format &#39;{{.HostConfig}}&#39;
+
+# Equivalent podman run flags:
+#   --security-opt no-new-privileges       Block privilege escalation
+#   --security-opt seccomp=...             System call filter
+#   --cap-drop ALL                         Drop all capabilities
+#   --cap-add NET_BIND_SERVICE             Add only needed caps
+#   --read-only                            Read-only rootfs
+#   --read-only-tmpfs=false                Except for /tmp
+#   --user 1000:1000                       Non-root user
+podman run \
+    --security-opt no-new-privileges \
+    --security-opt seccomp=/usr/share/containers/seccomp.json \
+    --cap-drop ALL \
+    --cap-add NET_BIND_SERVICE \
+    --read-only \
+    --read-only-tmpfs=false \
+    --user 1000:1000 \
+    myimage
+						</pre>
+						<h4 id="capabilities">Capabilities</h4>
+						<p>
+							Containers start with a reduced capability set. Read the current set from
+							<code>/proc/self/status</code>
+							inside the container:
+						</p>
+						<pre class="bash">
+# Default capabilities in a rootless podman container
+podman run --rm alpine grep Cap /proc/self/status
+# CapInh: 0000000000000000
+# CapPrm: 0000000000000000
+# CapEff: 0000000000000000
+# CapBnd: 00000000a80425fb
+# CapAmb: 0000000000000000
+
+# Drop ALL capabilities
+podman run --rm --cap-drop ALL alpine grep Cap /proc/self/status
+# CapBnd: 0000000000000000
+
+# Add specific capabilities
+podman run --rm --cap-drop ALL --cap-add NET_BIND_SERVICE alpine grep Cap /proc/self/status
+						</pre>
+						<h4 id="seccomp-profiles">seccomp Profiles</h4>
+						<p>
+							seccomp (Secure Computing Mode) filters system calls. A container's default seccomp profile
+							blocks roughly 44 syscalls:
+						</p>
+						<pre class="bash">
+# The default seccomp profile (simplified)
+# Located at /usr/share/containers/seccomp.json on Arch
+# Blocked syscalls include:
+#   - kexec_load          (kernel execution)
+#   - mount               (restricted mounting)
+#   - ptrace              (process tracing)
+#   - perf_event_open     (performance events)
+#   - bpf                 (BPF program loading)
+#   - init_module         (kernel module loading)
+#   - clock_settime       (time modification)
+
+# Run without seccomp (dangerous)
+podman run --rm --security-opt seccomp=unconfined alpine /bin/sh
+
+# Custom seccomp profile
+podman run --rm --security-opt seccomp=/path/to/custom.json alpine /bin/sh
+						</pre>
+						<h4 id="privileged-containers">Privileged Containers</h4>
+						<p>
+							<code>--privileged</code>
+							disables all security features:
+						</p>
+						<pre class="bash">
+# PRIVILEGED: all capabilities, all devices, no seccomp, no AppArmor
+podman run --rm --privileged alpine /bin/sh
+
+# This gives:
+#   - ALL capabilities (including CAP_SYS_ADMIN)
+#   - Access to all host devices (/dev/*)
+#   - Disabled seccomp filtering
+#   - Disabled AppArmor/SELinux confinement
+#   - Access to host cgroup controllers
+						</pre>
+						<p>
+							A privileged container is effectively root on the host. Never use
+							<code>--privileged</code>
+							unless you
+							have a specific, well-understood need.
+						</p>
+						<h4 id="escape-vectors">Escape Vectors</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Vector</th>
+									<th align="center">Condition</th>
+									<th align="center">Mitigation</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Kernel exploit in namespace/cgroup</td>
+									<td align="center">Any container</td>
+									<td align="center">Kernel patches, minimize attack surface</td>
+								</tr>
+								<tr>
+									<td align="center">Mounted docker/podman socket</td>
+									<td align="center"><code>/var/run/docker.sock</code>bind-mount</td>
+									<td align="center">Never mount container socket</td>
+								</tr>
+								<tr>
+									<td align="center">Host PID namespace</td>
+									<td align="center"><code>--pid=host</code></td>
+									<td align="center">Never use host PID namespace</td>
+								</tr>
+								<tr>
+									<td align="center">Host network namespace</td>
+									<td align="center"><code>--net=host</code></td>
+									<td align="center">Avoid unless necessary</td>
+								</tr>
+								<tr>
+									<td align="center">Privileged container</td>
+									<td align="center"><code>--privileged</code></td>
+									<td align="center">Never use</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_SYS_ADMIN</td>
+									<td align="center">Explicitly added capability</td>
+									<td align="center">Drop ALL, add only needed</td>
+								</tr>
+								<tr>
+									<td align="center">CVE-2019-5736</td>
+									<td align="center">runc < 1.0-rc6, attacker overwrites /proc/self/exe</td>
+									<td align="center">Update container runtime</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							<b>CVE-2019-5736 (runc escape)</b>
+							: An attacker with root inside a container could overwrite the
+							host's runc binary by tricking it into opening
+							<code>/proc/self/exe</code>
+							(which pointed to the host binary
+							when runc executed the container process). Fixed in runc >= 1.0-rc6 by using memfd to create
+							a private copy of runc in memory.
+						</p>
+					</section>
+					<section>
+						<h3 id="oci-standards">OCI Standards</h3>
+						<p>The Open Container Initiative defines two specifications:</p>
+						<pre class="plaintext">
+runtime-spec: how to run a container
+  - config.json: OCI runtime configuration
+    * ociVersion, root (path, readonly)
+    * process (terminal, user, args, env, cwd, capabilities, rlimits)
+    * mounts, linux (namespaces, uidMappings, gidMappings, sysctl, seccomp)
+    * hooks (prestart, poststart, poststop)
+  - Defines lifecycle: create, start, kill, delete
+
+image-spec: how to package a container image
+  - oci-layout (version)
+  - index.json (manifest list)
+  - blobs/sha256/ (content-addressable blobs)
+    * Config: JSON with image config
+    * Manifest: JSON with layer references
+    * Layers: tar+gzip filesystem diffs
+						</pre>
+						<h4 id="example-configjson">Example config.json</h4>
+						<pre class="json">
+{
+  &#34;ociVersion&#34;: &#34;1.0.2&#34;,
+  &#34;process&#34;: {
+    &#34;terminal&#34;: true,
+    &#34;user&#34;: {&#34;uid&#34;: 0, &#34;gid&#34;: 0},
+    &#34;args&#34;: [&#34;/bin/sh&#34;],
+    &#34;env&#34;: [&#34;PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin&#34;],
+    &#34;cwd&#34;: &#34;/&#34;,
+    &#34;capabilities&#34;: {
+      &#34;bounding&#34;: [&#34;CAP_CHOWN&#34;, &#34;CAP_NET_BIND_SERVICE&#34;],
+      &#34;effective&#34;: [&#34;CAP_CHOWN&#34;]
+    }
+  },
+  &#34;root&#34;: {
+    &#34;path&#34;: &#34;/var/lib/containers/storage/overlay/abc123/merged&#34;,
+    &#34;readonly&#34;: false
+  },
+  &#34;linux&#34;: {
+    &#34;namespaces&#34;: [
+      {&#34;type&#34;: &#34;pid&#34;},
+      {&#34;type&#34;: &#34;network&#34;},
+      {&#34;type&#34;: &#34;mount&#34;},
+      {&#34;type&#34;: &#34;uts&#34;},
+      {&#34;type&#34;: &#34;ipc&#34;}
+    ],
+    &#34;resources&#34;: {
+      &#34;memory&#34;: {&#34;limit&#34;: 268435456},
+      &#34;cpu&#34;: {&#34;shares&#34;: 1024}
+    }
+  }
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="container-auditing">Container Auditing</h3>
+						<pre class="bash">
+# List all containers (root + rootless)
+podman ps -a
+podman ps -a --external    # includes externally created containers
+
+# Inspect a container&#39;s security posture
+podman inspect mycontainer | jq &#39;.[0].HostConfig | {privileged, capAdd, readonlyRootfs, pidMode, networkMode, usernsMode}&#39;
+
+# Check running containers&#39; capabilities
+for pid in $(podman ps -q | xargs -I{} podman inspect {} --format &#39;{{.State.Pid}}&#39;); do
+    echo &#34;PID $pid: $(getpcaps $pid 2&gt;/dev/null || echo &#39;N/A&#39;)&#34;
+done
+
+# Check cgroup resource limits
+podman stats --no-stream
+
+# Check image layers
+podman image tree myapp:latest
+
+# Show namespace information
+podman inspect mycontainer | jq &#39;.[0].State.Pid&#39; | xargs ls -la /proc/{}/ns/
+
+# Audit for dangerous mounts
+podman inspect mycontainer | jq &#39;.[0].Mounts[] | select(.Source | contains(&#34;docker.sock&#34;) or contains(&#34;podman.sock&#34;))&#39;
+
+# Check for privileged containers
+podman ps -a --format &#39;{{.Names}} {{.ID}}&#39; | while read name id; do
+    priv=$(podman inspect $id --format &#39;{{.HostConfig.Privileged}}&#39;)
+    [ &#34;$priv&#34; = &#34;true&#34; ] &amp;&amp; echo &#34;PRIVILEGED: $name&#34;
+done
+
+# Show seccomp profiles in use
+podman inspect mycontainer | jq &#39;.[0].HostConfig.SecurityOpt&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="arch-linux-containers">Arch Linux Containers</h3>
+						<pre class="bash">
+# Pull Arch Linux image
+podman pull archlinux:latest
+
+# Run an interactive Arch container
+podman run --rm -it archlinux:latest /bin/bash
+
+# Build an Arch-based container with your packages
+cat &gt; Containerfile &lt;&lt; &#39;EOF&#39;
+FROM archlinux:latest
+RUN pacman -Syu --noconfirm &amp;&amp; \
+    pacman -S --noconfirm nginx python python-pip &amp;&amp; \
+    pacman -Scc --noconfirm
+COPY nginx.conf /etc/nginx/nginx.conf
+EXPOSE 80
+CMD [&#34;nginx&#34;, &#34;-g&#34;, &#34;daemon off;&#34;]
+EOF
+
+podman build -t my-nginx .
+podman run -d -p 8080:80 my-nginx
+						</pre>
+					</section>
+					<section>
+						<h3 id="summary">Summary</h3>
+						<p>Containers are a composition of Linux kernel features, not virtualization:</p>
+						<pre class="plaintext">
+Container = namespaces (visibility) + cgroups (resource limits)
+            + OverlayFS (root filesystem) + OCI config (setup)
+
+Security = capabilities (drop ALL, add needed) + seccomp (syscall filter)
+            + user namespaces (rootless) + read-only rootfs
+            + no-new-privileges + AppArmor/SELinux profile
+
+Each feature addresses a specific isolation or security concern.
+Disabling any one weakens the entire model.
+--privileged disables them all.
+						</pre>
+						<p>
+							The
+							<a href="/wiki/articles/fundamentals/virtualization.html">Virtualization</a>
+							article covers the next
+							level of isolation - running entire guest operating systems with hardware-enforced boundaries.
+						</p>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that enumerates namespace inodes across all running processes and counts how
+							many processes share each namespace. This is the same view
+							<code>podman</code>
+							and
+							<code>nsenter</code>
+							rely on when
+							they decide which namespaces to join:
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;path/filepath&#34;
+	&#34;sort&#34;
+	&#34;strings&#34;
+)
+
+func main() {
+	entries, err := filepath.Glob(&#34;/proc/[0-9]*/ns/*&#34;)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	counts := make(map[string]int)
+	for _, entry := range entries {
+		target, err := os.Readlink(entry)
+		if err != nil {
+			continue
+		}
+		key := filepath.Base(entry) + &#34;:&#34; + target
+		counts[key]++
+	}
+
+	keys := make([]string, 0, len(counts))
+	for key := range counts {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		parts := strings.SplitN(key, &#34;:&#34;, 2)
+		fmt.Printf(&#34;%-6s %-28s %d proc(s)\n&#34;, parts[0], parts[1], counts[key])
+	}
+}
+						</pre>
+						<p>
+							Run it on the host, note the inode for the
+							<code>mnt</code>
+							namespace, then start a container with
+							<code>podman run -d alpine sleep 3600</code>
+							and run the tool again. New inode numbers appear for the container's mount, PID, and network
+							namespaces. Extend the tool to read
+							<code>/proc/PID/cgroup</code>
+							and report which cgroup each process
+							belongs to.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/namespaces.7" target="_blank">namespaces(7) - Linux manual page</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/cgroups.7" target="_blank">cgroups(7) - Linux manual page</a></li>
+							<li><a class="icon-website" href="https://www.kernel.org/doc/html/latest/filesystems/overlayfs.html" target="_blank">Overlay Filesystem - Linux kernel documentation</a></li>
+							<li><a class="icon-github" href="https://github.com/opencontainers/runtime-spec" target="_blank">Open Container Initiative Runtime Specification</a></li>
+							<li><a class="icon-github" href="https://github.com/opencontainers/image-spec" target="_blank">Open Container Initiative Image Specification</a></li>
+							<li><a class="icon-website" href="https://docs.podman.io/" target="_blank">podman documentation</a></li>
+							<li><a class="icon-website" href="https://nvd.nist.gov/vuln/detail/CVE-2019-5736" target="_blank">CVE-2019-5736 - runc container escape</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

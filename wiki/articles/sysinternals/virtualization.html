@@ -1,0 +1,1409 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Virtualization Internals | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Virtualization Internals">
+		<meta name="keywords" content="ept, hypervisor, kvm, qemu, side-channel, svm, sysinternals, virtualization, vmcs, vmx">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Virtualization Internals">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Hardware-assisted virtualization internals, from CPU privilege modes and hypervisor control structures to two-level address translation, paravirtual I/O, and guest escape attacks.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/sysinternals/virtualization.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Virtualization Internals">
+		<meta name="twitter:description" itemprop="description" content="Hardware-assisted virtualization internals, from CPU privilege modes and hypervisor control structures to two-level address translation, paravirtual I/O, and guest escape attacks.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-virtualization-problem">The Virtualization Problem</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#intel-vmx-vt-x">Intel VMX (VT-x)</a></b>
+					<ul>
+						<li><a href="#vmx-lifecycle">VMX Lifecycle</a></li>
+						<li><a href="#vmcs-control-structure">VMCS Control Structure</a></li>
+						<li><a href="#intel-vm-exit-reasons">Intel VM Exit Reasons</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#extended-page-tables-ept">Extended Page Tables (EPT)</a></b>
+					<ul>
+						<li><a href="#ept-entry-structure">EPT Entry Structure</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#amd-v-svm">AMD-V (SVM)</a></b>
+					<ul>
+						<li><a href="#amd-vmrun-flow">AMD VMRUN Flow</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kvm-architecture">KVM Architecture</a></b>
+					<ul>
+						<li><a href="#creating-a-kvm-guest">Creating a KVM Guest</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#qemu-kvm-interaction">QEMU + KVM Interaction</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#hyper-v-architecture">Hyper-V Architecture</a></b>
+					<ul>
+						<li><a href="#hyper-v-hypercalls">Hyper-V Hypercalls</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#virtio-paravirtualized-io">Virtio Paravirtualized I/O</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#nested-virtualization">Nested Virtualization</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#vm-escape-vulnerabilities">VM Escape Vulnerabilities</a></b>
+					<ul>
+						<li><a href="#notable-vm-escape-cves">Notable VM Escape CVEs</a></li>
+						<li><a href="#vm-escape-attack-chain">VM Escape Attack Chain</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#virtualization-side-channels">Virtualization Side Channels</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#hardware-feature-matrix">Hardware Feature Matrix</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification">Verification</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/sysinternals/index.html">Sysinternals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/sysinternals/virtualization.html">Virtualization</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="virtualization-internals">Virtualization Internals</h2>
+					<p>
+						Hardware-assisted virtualization internals, from
+						<abbr title="Central Processing Unit">CPU</abbr>
+						privilege modes
+						and hypervisor control structures to two-level address translation, paravirtual I/O, and guest
+						escape attacks.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Guest isolation on x86 once required binary translation or paravirtualization, because the hypervisor
+							and the guest kernel competed for ring 0. Hardware extensions removed that conflict: Intel
+							<code>VMX</code>
+							and AMD
+							<code>SVM</code>
+							add a privilege dimension above ring 0, a control structure (
+							<code>VMCS</code>
+							or
+							<code>VMCB</code>
+							), and second-level address translation (
+							<code>EPT</code>
+							or
+							<code>NPT</code>
+							). This article follows those mechanisms
+							down to the
+							<code>KVM</code>
+							interface at
+							<code>/dev/kvm</code>
+							, then covers Hyper-V hypercalls, virtio paravirtual
+							I/O, nested virtualization, and the escape and side-channel attacks that target hypervisors.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/virtualization.html">Virtualization Fundamentals</a> - hypervisors, QEMU, libvirt basics</li>
+							<li><a href="/wiki/articles/sysinternals/kernel-architecture.html">Kernel Architecture</a> - protection rings, privilege levels, address spaces</li>
+							<li><a href="/wiki/articles/sysinternals/interrupts.html">Interrupts</a> - interrupt vectors, interrupt delivery, IDT</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-virtualization-problem">The Virtualization Problem</h3>
+						<p>
+							Virtualization is the problem of running multiple guest operating systems on a single physical
+							machine while maintaining isolation, performance, and compatibility. Before hardware virtualization
+							extensions (Intel VT-x in 2005, AMD-V in 2006), x86 virtualization relied on binary translation:
+							the hypervisor scanned guest code at runtime and rewrote privileged instructions on the fly.
+							This was slow and complex.
+						</p>
+						<p>
+							Hardware virtualization adds a new
+							<abbr title="Central Processing Unit">CPU</abbr>
+							operating mode - a dimension
+							orthogonal to ring 0-3 - that allows the hypervisor to run at a higher privilege level than
+							the guest kernel without binary translation.
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                    X86 PRIVILEGE DIMENSIONS                            │
+│                                                                      │
+│  Before VT-x (single dimension):                                      │
+│    Ring 3: User applications                                          │
+│    Ring 2: (unused on x86)                                            │
+│    Ring 1: (unused on x86)                                            │
+│    Ring 0: Kernel + Hypervisor (conflict!)                            │
+│                                                                      │
+│  With VT-x (two dimensions):                                          │
+│    HORIZONTAL: VMX root vs VMX non-root                               │
+│    VERTICAL:   Ring 3, Ring 2, Ring 1, Ring 0 (in each mode)         │
+│                                                                      │
+│  ┌─────────────────────────────────────────────────────────────┐     │
+│  │                     VMX ROOT OPERATION                        │     │
+│  │  Ring 3: ┌──────────┐  Hypervisor user-space (QEMU)          │     │
+│  │  Ring 0: │  KVM.ko  │  Hypervisor kernel (Linux + KVM)       │     │
+│  │          │  kernel  │  ← VMXON, VMLAUNCH, VMRESUME, VMREAD   │     │
+│  │          └──────────┘                                         │     │
+│  └─────────────────────────────────────────────────────────────┘     │
+│                                                                      │
+│  ┌─────────────────────────────────────────────────────────────┐     │
+│  │                  VMX NON-ROOT OPERATION                       │     │
+│  │  Ring 3: ┌──────────┐  Guest user applications                │     │
+│  │  Ring 0: │  Guest   │  Guest kernel ← privileged              │     │
+│  │          │  Kernel  │     instructions trigger VM exits       │     │
+│  │          └──────────┘                                         │     │
+│  └─────────────────────────────────────────────────────────────┘     │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="intel-vmx-vt-x">Intel VMX (VT-x)</h3>
+						<p>
+							<code>VMX</code>
+							(Virtual Machine Extensions) introduces two new
+							<abbr title="Central Processing Unit">CPU</abbr>
+							operating
+							modes and a data structure called the Virtual Machine Control Structure (
+							<code>VMCS</code>
+							).
+						</p>
+						<h4 id="vmx-lifecycle">VMX Lifecycle</h4>
+						<pre class="plaintext">
+                    ┌─────────────────┐
+                    │  CPU RESET      │
+                    │  (VMX off)      │
+                    └────────+────────┘
+                             │ VMXON (physical address of VMXON region)
+                             ▼
+                    ┌─────────────────┐
+                    │  VMX ROOT       │
+                    │  OPERATION      │◄──────────────────────────┐
+                    └────────+────────┘                           │
+                             │ VMCLEAR + VMPTRLD (set current VMCS)│
+                             │ VMCS initialization:                │
+                             │   Set guest/host state              │
+                             │   Set VM-execution controls         │
+                             │   Set VM-exit controls              │
+                             │   Set VM-entry controls             │
+                             ▼                                     │
+                    ┌─────────────────┐                            │
+                    │  VMLAUNCH       │  (first entry into this    │
+                    │  (enters guest) │   VMCS — must be clean)   │
+                    └────────+────────┘                            │
+                             ▼                                     │
+                    ┌─────────────────┐                            │
+                    │  VMX NON-ROOT   │   Guest executes until:    │
+                    │  (guest runs)   │   - Privileged instruction │
+                    └────────+────────┘   - I/O access             │
+                             │            - EPT violation          │
+                             │ VM EXIT   - Interrupt window        │
+                             ▼           - HLT, INVLPG, CPUID, etc.│
+                    ┌─────────────────┐                            │
+                    │  VM EXIT        │   Hypervisor handles exit  │
+                    │  handler        │   - Emulate instruction    │
+                    │  (KVM code)     │   - Inject virtual interrupt│
+                    └────────+────────┘   - Update VMCS fields     │
+                             │                                      │
+                             │ VMRESUME (or VMLAUNCH if flushed)    │
+                             └──────────────────────────────────────┘
+						</pre>
+						<h4 id="vmcs-control-structure">VMCS Control Structure</h4>
+						<p>
+							The
+							<code>VMCS</code>
+							is a 4 KB (one page) data structure that controls
+							<code>VMX</code>
+							non-root operation and records
+							<abbr title="Virtual Machine">VM</abbr>
+							exit information. It is configured via
+							<code>VMREAD</code>
+							and
+							<code>VMWRITE</code>
+							instructions
+							and is always associated with exactly one logical processor.
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                    VMCS FIELD GROUPS                                   │
+│                                                                      │
+│  1. Guest-State Area:                                                 │
+│     Saved on VM exit, loaded on VM entry.                             │
+│     ┌───────────────────────────────────────────────────────────┐    │
+│     │  Guest CR0, CR3, CR4                    (control regs)     │    │
+│     │  Guest DR7                               (debug control)   │    │
+│     │  Guest RSP, RIP, RFLAGS                 (GPR + flags)      │    │
+│     │  Guest CS, SS, DS, ES, FS, GS, LDTR, TR (segment regs)    │    │
+│     │  Guest GDTR, IDTR base/limit           (table regs)       │    │
+│     │  Guest IA32_SYSENTER_CS/EIP/ESP         (sysenter)        │    │
+│     │  Guest IA32_EFER                         (ext features)    │    │
+│     │  Guest IA32_PAT                          (page attrib)     │    │
+│     │  VMCS link pointer                       (nested virt)    │    │
+│     └───────────────────────────────────────────────────────────┘    │
+│                                                                      │
+│  2. Host-State Area:                                                  │
+│     Loaded on VM exit to restore hypervisor context.                  │
+│     ┌───────────────────────────────────────────────────────────┐    │
+│     │  Host CR0, CR3, CR4, RSP, RIP, RFLAGS                     │    │
+│     │  Host CS, SS, DS, ES, FS, GS, TR selector + base          │    │
+│     │  Host GDTR, IDTR base                                     │    │
+│     │  Host IA32_SYSENTER_CS/EIP/ESP                             │    │
+│     │  Host IA32_EFER, IA32_PAT                                  │    │
+│     └───────────────────────────────────────────────────────────┘    │
+│                                                                      │
+│  3. VM-Execution Control Fields:                                      │
+│     Control what causes VM exits.                                     │
+│     ┌───────────────────────────────────────────────────────────┐    │
+│     │  Pin-based controls:                                       │    │
+│     │    - External-interrupt exiting                             │    │
+│     │    - NMI exiting                                            │    │
+│     │    - Virtual NMIs                                            │    │
+│     │    - Activate VMX-preemption timer                           │    │
+│     │  Primary processor-based controls:                          │    │
+│     │    - Interrupt-window exiting                                │    │
+│     │    - Use TSC offsetting                                      │    │
+│     │    - HLT exiting                                             │    │
+│     │    - INVLPG exiting                                          │    │
+│     │    - CR3-load/CR3-store exiting                             │    │
+│     │    - Unconditional I/O exiting                               │    │
+│     │    - Use I/O bitmaps                                         │    │
+│     │    - MSR bitmaps (selective MSR exit)                        │    │
+│     │  Secondary processor-based controls:                         │    │
+│     │    - Enable EPT (Extended Page Tables)                      │    │
+│     │    - Enable VPID (Virtual Processor ID)                     │    │
+│     │    - Enable VM functions                                     │    │
+│     │    - Enable RDTSCP                                           │    │
+│     │    - Enable XSAVES/XRSTORS                                   │    │
+│     └───────────────────────────────────────────────────────────┘    │
+│                                                                      │
+│  4. VM-Exit Control Fields:                                          │
+│     Control behavior on VM exit.                                     │
+│     ┌───────────────────────────────────────────────────────────┐    │
+│     │  - Save guest IA32_EFER, IA32_PAT                           │    │
+│     │  - Load host IA32_EFER, IA32_PAT                            │    │
+│     │  - Acknowledge interrupt on exit                             │    │
+│     │  - Save VMX-preemption timer value                           │    │
+│     └───────────────────────────────────────────────────────────┘    │
+│                                                                      │
+│  5. VM-Entry Control Fields:                                         │
+│     Control behavior on VM entry.                                    │
+│     ┌───────────────────────────────────────────────────────────┐    │
+│     │  - Load guest IA32_EFER, IA32_PAT                           │    │
+│     │  - Inject event vector (for interrupt/exception injection) │    │
+│     │  - Entry to SMM (System Management Mode)                   │    │
+│     └───────────────────────────────────────────────────────────┘    │
+│                                                                      │
+│  6. VM-Exit Information Fields (read-only):                           │
+│     Populated by hardware on VM exit.                                 │
+│     ┌───────────────────────────────────────────────────────────┐    │
+│     │  - Exit reason (why did we exit?)                            │    │
+│     │  - Exit qualification (details about the exit)               │    │
+│     │  - Guest-linear address (for page-fault exits)              │    │
+│     │  - Guest-physical address (for EPT violations)              │    │
+│     │  - VM-exit instruction length (how long was the instr?)     │    │
+│     │  - VM-exit instruction info (fields of the instruction)     │    │
+│     │  - I/O RCX, RSI, RDI (if I/O instruction caused exit)      │    │
+│     └───────────────────────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+						<h4 id="intel-vm-exit-reasons">Intel VM Exit Reasons</h4>
+						<p>
+							The basic exit reason is a 16-bit value reported in the
+							<code>VMCS</code>
+							. A sample from Intel SDM Vol.
+							3C, Appendix C:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Exit Reason</th>
+									<th align="center">Mnemonic</th>
+									<th align="center">Description</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">0</td>
+									<td align="center">EXCEPTION_NMI</td>
+									<td align="center">Exception or NMI occurred</td>
+								</tr>
+								<tr>
+									<td align="center">1</td>
+									<td align="center">EXTERNAL_INTERRUPT</td>
+									<td align="center">External interrupt arrived while guest running</td>
+								</tr>
+								<tr>
+									<td align="center">2</td>
+									<td align="center">TRIPLE_FAULT</td>
+									<td align="center">Guest triple-faulted (unrecoverable)</td>
+								</tr>
+								<tr>
+									<td align="center">7</td>
+									<td align="center">INTERRUPT_WINDOW</td>
+									<td align="center">Interrupt-window exiting triggered</td>
+								</tr>
+								<tr>
+									<td align="center">10</td>
+									<td align="center">CPUID</td>
+									<td align="center">Guest executed CPUID</td>
+								</tr>
+								<tr>
+									<td align="center">12</td>
+									<td align="center">HLT</td>
+									<td align="center">Guest executed HLT</td>
+								</tr>
+								<tr>
+									<td align="center">18</td>
+									<td align="center">VMCALL</td>
+									<td align="center">Guest executed VMCALL (hypercall)</td>
+								</tr>
+								<tr>
+									<td align="center">19</td>
+									<td align="center">VMCLEAR</td>
+									<td align="center">Guest attempted VMCLEAR</td>
+								</tr>
+								<tr>
+									<td align="center">28</td>
+									<td align="center">CR_ACCESS</td>
+									<td align="center">Guest accessed CR0/CR3/CR4 (mov to/from CR)</td>
+								</tr>
+								<tr>
+									<td align="center">30</td>
+									<td align="center">IO_INSTRUCTION</td>
+									<td align="center">Guest executed IN/OUT</td>
+								</tr>
+								<tr>
+									<td align="center">31</td>
+									<td align="center">MSR_READ</td>
+									<td align="center">Guest executed RDMSR</td>
+								</tr>
+								<tr>
+									<td align="center">32</td>
+									<td align="center">MSR_WRITE</td>
+									<td align="center">Guest executed WRMSR</td>
+								</tr>
+								<tr>
+									<td align="center">48</td>
+									<td align="center">EPT_VIOLATION</td>
+									<td align="center">EPT access violation</td>
+								</tr>
+								<tr>
+									<td align="center">49</td>
+									<td align="center">EPT_MISCONFIGURATION</td>
+									<td align="center">EPT paging-structure misconfiguration</td>
+								</tr>
+								<tr>
+									<td align="center">52</td>
+									<td align="center">VMX_PREEMPTION_TIMER_EXPIRED</td>
+									<td align="center">VMX-preemption timer fired</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="extended-page-tables-ept">Extended Page Tables (EPT)</h3>
+						<p>
+							Without
+							<code>EPT</code>
+							, the hypervisor must maintain shadow page tables - a synthetic set of page tables
+							that combine guest-virtual to guest-physical and guest-physical to host-physical translations.
+							Shadow page tables are expensive: every guest CR3 change requires rebuilding the shadow tables.
+						</p>
+						<p>
+							<code>EPT</code>
+							provides hardware-level second-level address translation. The guest manages its own page
+							tables (guest-virtual to guest-physical), and the hypervisor configures
+							<code>EPT</code>
+							(guest-physical
+							to host-physical). The
+							<abbr title="Central Processing Unit">CPU</abbr>
+							's MMU walks both tables in hardware,
+							in a single TLB lookup.
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                    TWO-LEVEL ADDRESS TRANSLATION (EPT)                 │
+│                                                                      │
+│  Guest Virtual Address (GVA)                                          │
+│       │                                                              │
+│       ▼                                                              │
+│  ┌──────────────────────────────────────────┐                        │
+│  │   Guest Page Tables (managed by guest)   │   CR3 (guest)          │
+│  │   GVA → GPA translation                  │                        │
+│  │   PML4 → PDPT → PD → PT → 4KB page      │                        │
+│  └──────────────────+───────────────────────┘                        │
+│                     │ Guest Physical Address (GPA)                    │
+│                     ▼                                                │
+│  ┌──────────────────────────────────────────┐                        │
+│  │   Extended Page Tables (managed by host) │   EPT pointer (VMCS)   │
+│  │   GPA → HPA translation                  │                        │
+│  │   EPT PML4 → EPT PDPT → EPT PD → EPT PT │                        │
+│  └──────────────────+───────────────────────┘                        │
+│                     │ Host Physical Address (HPA)                     │
+│                     ▼                                                │
+│              ┌──────────────┐                                        │
+│              │  DRAM PAGE   │                                        │
+│              └──────────────┘                                        │
+│                                                                      │
+│  EPT Violations occur when:                                          │
+│  - GPA does not map to any HPA (not present)                        │
+│  - Access type not permitted by EPT entry (read/write/execute)      │
+│  - The EPT paging-structure entry is misconfigured                  │
+│                                                                      │
+│  Hardware walks both tables, interleaved:                            │
+│    TLB stores: {GVA → HPA} directly                                 │
+│    On TLB miss: walks GVA→GPA then GPA→HPA in hardware              │
+│    VPID tags TLB entries per-VM to avoid flush on VM exit            │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+						<h4 id="ept-entry-structure">EPT Entry Structure</h4>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│  EPT Entry (leaf, mapping a 4 KB page):                               │
+│                                                                      │
+│  Bit 0:  Read access (1 = allowed)                                    │
+│  Bit 1:  Write access (1 = allowed)                                   │
+│  Bit 2:  Execute access (1 = allowed, subject to mode-based exec)    │
+│  Bits 5-3: EPT memory type (0 = UC, 6 = WB)                          │
+│  Bit 6:  Ignore PAT memory type                                       │
+│  Bit 7:  Page size (1 for 2MB or 1GB large pages)                    │
+│  Bit 8:  Accessed flag                                                │
+│  Bit 9:  Dirty flag (if EPT accessed/dirty is enabled)               │
+│  Bits 11-10: Ignored                                                  │
+│  Bits 51-12: Physical address of the page (bits 51:12)               │
+│  Bits 57-52: Ignored                                                  │
+│  Bits 62-58: Ignored or feature-specific (paging-write, verify)      │
+│  Bit 63: Suppress #VE (virtualization exception)                     │
+│                                                                      │
+│  EPT supports two paging modes:                                       │
+│    - 4-level (48-bit GPA)                                             │
+│    - 5-level (57-bit GPA, Ice Lake and later)                        │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="amd-v-svm">AMD-V (SVM)</h3>
+						<p>
+							AMD's
+							<code>SVM</code>
+							(Secure Virtual Machine) offers equivalent functionality with a different architecture:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Feature</th>
+									<th align="center">Intel VMX</th>
+									<th align="center">AMD SVM</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Control structure</td>
+									<td align="center">VMCS (4 KB)</td>
+									<td align="center">VMCB (4 KB)</td>
+								</tr>
+								<tr>
+									<td align="center">VM entry instruction</td>
+									<td align="center">VMLAUNCH/VMRESUME</td>
+									<td align="center">VMRUN</td>
+								</tr>
+								<tr>
+									<td align="center">VM exit return</td>
+									<td align="center">VM-exit handler + VMRESUME</td>
+									<td align="center">#VMEXIT followed by VMRUN</td>
+								</tr>
+								<tr>
+									<td align="center">Nested page tables</td>
+									<td align="center">EPT</td>
+									<td align="center">NPT (Nested Page Tables)</td>
+								</tr>
+								<tr>
+									<td align="center">Virtual processor ID</td>
+									<td align="center">VPID</td>
+									<td align="center">ASID (Address Space Identifier)</td>
+								</tr>
+								<tr>
+									<td align="center">Posted interrupts</td>
+									<td align="center">APICv</td>
+									<td align="center">AVIC (Advanced Virtual Interrupt Controller)</td>
+								</tr>
+								<tr>
+									<td align="center">Intercept bitmap</td>
+									<td align="center">VM-execution controls</td>
+									<td align="center">VMCB.intercept bitmaps (legacy) + VMCB.ctrl_area</td>
+								</tr>
+								<tr>
+									<td align="center">Virtual interrupt injection</td>
+									<td align="center">VMCS fields for vector info</td>
+									<td align="center">VMCB.vintr</td>
+								</tr>
+								<tr>
+									<td align="center">Nested virtualization</td>
+									<td align="center">VMCS shadowing + VMCS link</td>
+									<td align="center">VMRUN from within guest (nv=VMRUN)</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="amd-vmrun-flow">AMD VMRUN Flow</h4>
+						<pre class="x86asm">
+; Hypervisor entry point after guest #VMEXIT:
+vmrun_handler:
+    ; The VMCB contains the saved guest state
+    ; The #VMEXIT reason is the EXITCODE field at VMCB offset 0x70
+    mov rax, vmcb.exitcode
+    cmp rax, 0x000   ; SVM_EXIT_READ_CR0
+    je  handle_cr0_read
+    cmp rax, 0x072   ; SVM_EXIT_CPUID
+    je  handle_cpuid
+    cmp rax, 0x081   ; SVM_EXIT_VMMCALL
+    je  handle_hypercall
+    ; ... handle other exit reasons ...
+
+    ; After handling, resume guest:
+    mov rax, vmcb_phys_addr
+    vmrun rax        ; Enters guest at guest RIP from VMCB
+    ; At this point, execution continues inside the guest
+    ; The next instruction to execute here is the return
+    ; from the NEXT #VMEXIT
+						</pre>
+					</section>
+					<section>
+						<h3 id="kvm-architecture">KVM Architecture</h3>
+						<p>
+							<code>KVM</code>
+							(Kernel-based Virtual Machine) turns the Linux kernel into a hypervisor. It loads as two
+							kernel modules (
+							<code>kvm.ko</code>
+							plus
+							<code>kvm-intel.ko</code>
+							or
+							<code>kvm-amd.ko</code>
+							) and exposes a character device
+							at
+							<code>/dev/kvm</code>
+							.
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                       KVM ARCHITECTURE                                 │
+│                                                                      │
+│  ┌────────────────────────────────────────────────────────────┐     │
+│  │                       User Space                             │     │
+│  │                                                              │     │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │     │
+│  │  │  QEMU    │  │  QEMU    │  │  Fire-   │  │  Cloud   │   │     │
+│  │  │  VM 1    │  │  VM 2    │  │  cracker │  │  Hyper-  │   │     │
+│  │  └────+─────┘  └────+─────┘  └────+─────┘  │  visor   │   │     │
+│  │       │             │             │        └──────────┘   │     │
+│  └───────+─────────────+─────────────+───────────────────────┘     │
+│          │ ioctl()     │ ioctl()     │ ioctl()                       │
+│          ▼             ▼             ▼                               │
+│  ┌────────────────────────────────────────────────────────────┐     │
+│  │                     /dev/kvm (character device)              │     │
+│  │  ioctl() interface:                                          │     │
+│  │    KVM_CREATE_VM       → create a VM (returns VM fd)        │     │
+│  │    KVM_CREATE_VCPU     → create a vCPU (returns vCPU fd)    │     │
+│  │    KVM_SET_USER_MEMORY_REGION → map guest physical memory   │     │
+│  │    KVM_RUN              → enter guest on this vCPU          │     │
+│  │    KVM_GET/SET_REGS     → read/write vCPU registers         │     │
+│  │    KVM_GET/SET_SREGS    → read/write special registers      │     │
+│  │    KVM_GET/SET_MSRS     → read/write MSRs                   │     │
+│  │    KVM_SET_CPUID2       → configure guest CPUID leaves      │     │
+│  │    KVM_GET/SET_VCPU_EVENTS → inject/read exception events   │     │
+│  │    KVM_SET_IDENTITY_MAP_ADDR → initial page table mapping   │     │
+│  └────────────────────────────────────────────────────────────┘     │
+│          │                                                           │
+│  ┌───────+─────────────────────────────────────────────────────┐     │
+│  │                     KVM Kernel Module                         │     │
+│  │                                                               │     │
+│  │  ┌────────────────┐  ┌──────────────────────────────────┐    │     │
+│  │  │ kvm.ko         │  │ kvm-intel.ko / kvm-amd.ko        │    │     │
+│  │  │ - VM lifecycle │  │ - VMXON/VMXOFF on each CPU       │    │     │
+│  │  │ - memslot mgmt │  │ - VMREAD/VMWRITE                 │    │     │
+│  │  │ - MMU notifier │  │ - VMLAUNCH/VMRESUME              │    │     │
+│  │  │ - irqchip       │  │ - VM exit handler dispatch      │    │     │
+│  │  │ - device model │  │ - EPT page table management      │    │     │
+│  │  └────────────────┘  └──────────────────────────────────┘    │     │
+│  └──────────────────────────────────────────────────────────────┘     │
+│          │                                                            │
+│          ▼                                                            │
+│  ┌────────────────────────────────────────────────────────────┐     │
+│  │                     Hardware (CPU)                           │     │
+│  │  VMX: VMXON → VMLAUNCH → [guest runs] → VM exit → loop     │     │
+│  │  SVM: VMRUN  → [guest runs] → #VMEXIT → VMRUN loop         │     │
+│  └────────────────────────────────────────────────────────────┘     │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+						<h4 id="creating-a-kvm-guest">Creating a KVM Guest</h4>
+						<pre class="c">
+#include &lt;fcntl.h&gt;
+#include &lt;linux/kvm.h&gt;
+#include &lt;sys/ioctl.h&gt;
+#include &lt;sys/mman.h&gt;
+
+// 1. Open /dev/kvm
+int kvm_fd = open(&#34;/dev/kvm&#34;, O_RDWR);
+if (kvm_fd &lt; 0) { perror(&#34;open /dev/kvm&#34;); exit(1); }
+
+// 2. Check KVM API version
+int api_version = ioctl(kvm_fd, KVM_GET_API_VERSION, 0);
+assert(api_version == 12);
+
+// 3. Create a VM
+int vm_fd = ioctl(kvm_fd, KVM_CREATE_VM, 0);
+
+// 4. Allocate guest physical memory
+size_t guest_mem_size = 128 * 1024 * 1024;  // 128 MB
+void *guest_mem = mmap(NULL, guest_mem_size,
+    PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+
+struct kvm_userspace_memory_region region = {
+    .slot = 0,
+    .guest_phys_addr = 0,
+    .memory_size = guest_mem_size,
+    .userspace_addr = (uint64_t)guest_mem,
+    .flags = 0,
+};
+ioctl(vm_fd, KVM_SET_USER_MEMORY_REGION, &amp;region);
+
+// 5. Create a vCPU
+int vcpu_fd = ioctl(vm_fd, KVM_CREATE_VCPU, 0);
+int vcpu_mmap_size = ioctl(kvm_fd, KVM_GET_VCPU_MMAP_SIZE, 0);
+struct kvm_run *run = mmap(NULL, vcpu_mmap_size,
+    PROT_READ | PROT_WRITE, MAP_SHARED, vcpu_fd, 0);
+
+// 6. Initialize vCPU state (registers, page tables, etc.)
+struct kvm_regs regs = {0};
+struct kvm_sregs sregs = {0};
+// ... set up regs.rip to entry point, sregs.cr3 to page tables ...
+ioctl(vcpu_fd, KVM_SET_REGS, &amp;regs);
+ioctl(vcpu_fd, KVM_SET_SREGS, &amp;sregs);
+
+// 7. Run the guest — main loop
+while (1) {
+    int ret = ioctl(vcpu_fd, KVM_RUN, 0);
+    if (ret &lt; 0) { perror(&#34;KVM_RUN&#34;); break; }
+
+    switch (run-&gt;exit_reason) {
+    case KVM_EXIT_IO:
+        // Handle PIO (port I/O) — e.g., serial console output
+        if (run-&gt;io.direction == KVM_EXIT_IO_OUT &amp;&amp;
+            run-&gt;io.port == 0x3F8) {  // COM1
+            write(STDOUT_FILENO,
+                  (char*)guest_mem + run-&gt;io.data_offset,
+                  run-&gt;io.size);
+        }
+        break;
+    case KVM_EXIT_HLT:
+        // Guest halted — we&#39;re done
+        goto done;
+    case KVM_EXIT_FAIL_ENTRY:
+        fprintf(stderr, &#34;KVM: failed entry, hardware reason %llx\n&#34;,
+                run-&gt;fail_entry.hardware_entry_failure_reason);
+        goto done;
+    default:
+        fprintf(stderr, &#34;KVM: exit reason %d\n&#34;, run-&gt;exit_reason);
+        goto done;
+    }
+}
+done:
+						</pre>
+					</section>
+					<section>
+						<h3 id="qemu-kvm-interaction">QEMU + KVM Interaction</h3>
+						<p>
+							QEMU emulates hardware devices;
+							<code>KVM</code>
+							accelerates
+							<abbr title="Central Processing Unit">CPU</abbr>
+							and memory.
+							Together they form a full virtualization platform:
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                     QEMU + KVM RESPONSIBILITY SPLIT                    │
+│                                                                      │
+│  KVM (kernel) handles:                                                │
+│    - CPU execution (VMX non-root mode)                                │
+│    - Memory virtualization (EPT/NPT)                                  │
+│    - Interrupt injection (APICv/AVIC)                                │
+│    - Timers (TSC offset, preemption timer)                            │
+│    - Selective VM exits (CPUID, MSR, I/O)                            │
+│                                                                      │
+│  QEMU (userspace) handles:                                            │
+│    - Device emulation (NIC, disk, USB, VGA, serial)                   │
+│    - Firmware (SeaBIOS, OVMF/edk2 for UEFI)                          │
+│    - ACPI/SMBIOS tables                                               │
+│    - Live migration orchestration                                     │
+│    - VM configuration (CPU topology, NUMA)                            │
+│    - QMP (QEMU Machine Protocol) monitoring                           │
+│                                                                      │
+│  Flow:                                                                │
+│    Guest executes I/O instruction (e.g., outb to disk controller)    │
+│    → VM Exit (KVM_EXIT_IO)                                            │
+│    → KVM delivers to QEMU via kvm_run struct                          │
+│    → QEMU emulates the device                                         │
+│    → QEMU ioctl(KVM_RUN) to re-enter guest                            │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="hyper-v-architecture">Hyper-V Architecture</h3>
+						<p>
+							Hyper-V is Microsoft's Type 1 hypervisor. On Windows, the "root partition" runs the management
+							OS and device drivers; "child partitions" run guests. On Linux, the Hyper-V synthetic devices
+							(netvsc, storvsc) use the
+							<code>VMBus</code>
+							channel for paravirtualized I/O.
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                       HYPER-V ARCHITECTURE                             │
+│                                                                      │
+│  ┌──────────────────────────┐  ┌──────────────┐  ┌──────────────┐   │
+│  │   Root Partition         │  │ Child Part.  │  │ Child Part.  │   │
+│  │   (Management OS)        │  │ (Windows VM) │  │ (Linux VM)   │   │
+│  │                          │  │              │  │              │   │
+│  │  ┌────────────────────┐  │  │  ┌──────────┐│  │  ┌──────────┐│   │
+│  │  │ Virtualization     │  │  │  │ Guest    ││  │  │ Guest    ││   │
+│  │  │ Service Provider   │  │  │  │ Apps     ││  │  │ Apps     ││   │
+│  │  │ (VSP)              │  │  │  └──────────┘│  │  └──────────┘│   │
+│  │  └────────+───────────┘  │  │  ┌──────────┐│  │  ┌──────────┐│   │
+│  │           │              │  │  │Guest     ││  │  │Linux     ││   │
+│  │  ┌────────+───────────┐  │  │  │Kernel    ││  │  │Kernel    ││   │
+│  │  │ VMBus (root side)  │  │  │  └────+─────┘│  │  └────+─────┘│   │
+│  │  └────────────────────┘  │  │       │      │  │       │      │   │
+│  └──────────────────────────┘  │  ┌────+─────┐│  │  ┌────+─────┐│   │
+│                                 │  │VSC       ││  │  │ hv_*     ││   │
+│  ┌──────────────────────────┐   │  │(Windows  ││  │  │ drivers  ││   │
+│  │   Hyper-V Hypervisor     │   │  │Synth.    ││  │  │(storvsc, ││   │
+│  │   (hypervisor layer)     │◄──+──┤Devices)  ││  │  │ netvsc,  ││   │
+│  │                          │   │  └──────────┘│  │  │ vmbus)   ││   │
+│  │   VMCALL handler         │   │              │  │  └──────────┘│   │
+│  │   Hypercall interface    │   └──────────────┘  └──────────────┘   │
+│  └──────────────────────────┘                                        │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+						<h4 id="hyper-v-hypercalls">Hyper-V Hypercalls</h4>
+						<pre class="c">
+// Hyper-V hypercall ABI: the guest invokes VMCALL through a hypercall page
+// that the hypervisor fills with code stubs.
+
+// Hypercall input registers (64-bit):
+//   RCX = hypercall input value (control + input GPA)
+//   RDX = input parameter GPA (for rep hypercalls) or immediate value
+//   R8  = output parameter GPA
+
+// Example: HvCallPostMessage (post a message to a VMBus channel)
+// The control value encodes:
+//   Call code: 0x005C (HVCALL_POST_MESSAGE)
+//   Fast: 0 (memory-based, uses GPA pointers)
+//   Rep count: bits 30:17
+
+struct hv_input_post_message {
+    u32 connection_id;
+    u32 reserved;
+    u32 message_type;
+    u32 payload_size;
+    u8  payload[240];  // max 240 bytes
+};
+
+// The guest writes the hypercall page GPA into MSR 0x40000001
+// (HV_X64_MSR_HYPERCALL), and Hyper-V populates that page in place.
+// CPUID leaf 0x40000002 reports the hypervisor version, not the page address.
+						</pre>
+					</section>
+					<section>
+						<h3 id="virtio-paravirtualized-io">Virtio Paravirtualized I/O</h3>
+						<p>
+							Virtio is the standard interface for paravirtualized devices on Linux/
+							<code>KVM</code>
+							. Unlike emulated
+							devices, where every MMIO or PIO access triggers a
+							<abbr title="Virtual Machine">VM</abbr>
+							exit, virtio uses shared
+							memory rings (virtqueues) to batch I/O operations and minimize exits.
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                        VIRTIO ARCHITECTURE                             │
+│                                                                      │
+│  ┌──────────────────────────────┐  ┌──────────────────────────────┐  │
+│  │          GUEST                │  │            HOST              │  │
+│  │                               │  │                              │  │
+│  │  ┌─────────────────────────┐  │  │  ┌────────────────────────┐  │  │
+│  │  │  Guest Application      │  │  │  │  QEMU / vhost          │  │  │
+│  │  └───────────+─────────────┘  │  │  └───────────+────────────┘  │  │
+│  │              │                │  │              │               │  │
+│  │  ┌───────────▼─────────────┐  │  │  ┌───────────▼────────────┐  │  │
+│  │  │  Guest Kernel           │  │  │  │  Host Kernel           │  │  │
+│  │  │  - virtio-blk           │  │  │  │  - vhost-net            │  │  │
+│  │  │  - virtio-net           │  │  │  │  - vhost-scsi           │  │  │
+│  │  │  - virtio-scsi          │  │  │  │  - vhost-vsock          │  │  │
+│  │  │  - virtio-rng           │  │  │  └────────────────────────┘  │  │
+│  │  └───────────+─────────────┘  │  │                              │  │
+│  │              │                │  │                              │  │
+│  │  ┌───────────▼─────────────┐  │  │                              │  │
+│  │  │  Virtio Transport       │  │  │                              │  │
+│  │  │  - PCI (modern)         │  │  │                              │  │
+│  │  │  - MMIO (embedded)      │  │  │                              │  │
+│  │  │  - CCW (s390)           │  │  │                              │  │
+│  │  └───────────+─────────────┘  │  │                              │  │
+│  │              │                │  │                              │  │
+│  │  ┌───────────▼───────────────────────────┐                      │  │
+│  │  │  Virtqueue (shared memory ring buffer)│                      │  │
+│  │  │                                       │                      │  │
+│  │  │  Available Ring:  [desc0][desc1][...] │  ◄ guest writes     │  │
+│  │  │  Used Ring:        [desc0][desc1][...]│  ◄ host writes      │  │
+│  │  │  Descriptor Table: [addr,len,flags,next]                     │  │
+│  │  └───────────────────────────────────────┘                      │  │
+│  │              │ VM exit (kick)           ▲ IRQ (call)            │  │
+│  └──────────────+──────────────────────────+──────────────────────┘  │
+│                 │                          │                         │
+│  ┌──────────────▼──────────────────────────+──────────────────────┐  │
+│  │                   HOST                  │                      │  │
+│  │  QEMU virtio device backend:            │                      │  │
+│  │    Processes descriptor, performs I/O, fills used ring         │  │
+│  │    Injects interrupt to guest when done                        │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="nested-virtualization">Nested Virtualization</h3>
+						<p>
+							Nested virtualization runs a hypervisor inside a
+							<abbr title="Virtual Machine">VM</abbr>
+							. L0 is the physical
+							hypervisor, L1 is the guest hypervisor, and L2 is the innermost guest.
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                     NESTED VIRTUALIZATION                              │
+│                                                                      │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │                         L2 Guest                              │   │
+│  │  (VM running inside L1 hypervisor)                            │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                              │                                       │
+│  ┌───────────────────────────▼──────────────────────────────────┐   │
+│  │                     L1 Hypervisor (guest)                      │   │
+│  │  e.g., KVM inside KVM, Hyper-V inside KVM                     │   │
+│  │  - L1 executes VMXON/VMRUN (causes VM exit to L0)              │   │
+│  │  - L0 emulates or accelerates these instructions              │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                              │                                       │
+│  ┌───────────────────────────▼──────────────────────────────────┐   │
+│  │                     L0 Hypervisor (host)                       │   │
+│  │  Hardware VMX support with VMCS shadowing                     │   │
+│  │  - L1&#39;s VMCS is &#34;shadowed&#34; in hardware                        │   │
+│  │  - VM exits from L2 first go to L0 (or directly to L1)       │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                                                                      │
+│  Without VMCS shadowing: every L1→L2 VMRESUME causes exit to L0.    │
+│  With VMCS shadowing: L1 writes to its VMCS → L0 merges into        │
+│  hardware VMCS → L2 executes directly. Fewer exits, better perf.    │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="vm-escape-vulnerabilities">VM Escape Vulnerabilities</h3>
+						<p>
+							A
+							<abbr title="Virtual Machine">VM</abbr>
+							escape occurs when code inside a guest
+							<abbr title="Virtual Machine">VM</abbr>
+							breaks
+							isolation and executes on the host hypervisor. This is the most severe virtualization vulnerability.
+						</p>
+						<h4 id="notable-vm-escape-cves">Notable VM Escape CVEs</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">CVE</th>
+									<th align="center">Affected</th>
+									<th align="center">Mechanism</th>
+									<th align="center">Impact</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">CVE-2015-3456 (VENOM)</td>
+									<td align="center">QEMU floppy disk controller</td>
+									<td align="center">Buffer overflow in FDC emulation</td>
+									<td align="center">Code execution on host</td>
+								</tr>
+								<tr>
+									<td align="center">CVE-2015-7504</td>
+									<td align="center">QEMU AMD PCnet NIC</td>
+									<td align="center">Heap overflow in pcnet_receive()</td>
+									<td align="center">Code execution on host</td>
+								</tr>
+								<tr>
+									<td align="center">CVE-2016-3710</td>
+									<td align="center">QEMU VGA (VMware)</td>
+									<td align="center">Improper bounds checking in VGA</td>
+									<td align="center">Code execution on host</td>
+								</tr>
+								<tr>
+									<td align="center">CVE-2020-14364</td>
+									<td align="center">QEMU USB emulation</td>
+									<td align="center">Out-of-bounds read/write in USB</td>
+									<td align="center">Code execution on host</td>
+								</tr>
+								<tr>
+									<td align="center">CVE-2021-28476</td>
+									<td align="center">Hyper-V vmswitch</td>
+									<td align="center">Malformed packet handling</td>
+									<td align="center">Host code execution</td>
+								</tr>
+								<tr>
+									<td align="center">CVE-2021-29657</td>
+									<td align="center">KVM AMD SVM</td>
+									<td align="center">Nested VMCB double fetch (TOCTOU)</td>
+									<td align="center">Host privilege escalation</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="vm-escape-attack-chain">VM Escape Attack Chain</h4>
+						<pre class="plaintext">
+1. Guest user → Guest kernel privilege escalation (LPE)
+2. Guest kernel → Identify hypervisor interface
+   - CPUID vendor string (&#34;KVMKVMKVM&#34;, &#34;Microsoft Hv&#34;, &#34;VMwareVMware&#34;)
+   - I/O port probing (0x5658 = VMware backdoor)
+   - Device enumeration (virtio, Hyper-V synthetic devices)
+3. Trigger vulnerability in emulated device:
+   - Craft malicious I/O operation → VM exit → QEMU processes request
+   - Trigger buffer overflow in QEMU device emulation
+   - Gain code execution in QEMU process (host userspace)
+4. QEMU → Host ring 0 (further exploit if QEMU is not sandboxed)
+						</pre>
+					</section>
+					<section>
+						<h3 id="virtualization-side-channels">Virtualization Side Channels</h3>
+						<p>
+							Shared microarchitectural state crosses the guest boundary even when memory is isolated. The
+							following classes leak data between guests or from host to guest:
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│               VIRTUALIZATION SIDE-CHANNEL ATTACKS                      │
+│                                                                      │
+│  L1TF (L1 Terminal Fault):                                           │
+│    - CPU speculative execution reads PTE &#34;not present&#34; entries.      │
+│    - Attacker VM maps page, then unmaps.                             │
+│    - Speculative access leaks data through cache timing.             │
+│    - Mitigation: PTE inversion (mark all not-present PTEs with       │
+│      invalid physical address), disable SMT, or flush L1 on VM entry.│
+│                                                                      │
+│  MDS (Microarchitectural Data Sampling):                              │
+│    - Leaks stale data from CPU internal buffers.                     │
+│    - Cross-VM: attacker VM can read data left in buffers by victim.  │
+│    - Mitigation: VERW instruction on kernel entry, clear buffers.    │
+│                                                                      │
+│  Cross-VM Cache Attacks (Prime+Probe):                                │
+│    ┌──────────────────────────────────────────────────────------─┐  │
+│    │  Step 1: Attacker VM primes L1/L3 cache with known data     │  │
+│    │  Step 2: Victim VM executes — evicts some attacker cache    │  │
+│    │          lines based on its memory access patterns           │  │
+│    │  Step 3: Attacker probes cache to see which lines were      │  │
+│    │          evicted → infers victim&#39;s memory access pattern    │  │
+│    │                                                              │  │
+│    │  Used to: steal AES keys, infer keystroke timing, etc.      │  │
+│    └──────────────────────────────────────────────────────────────┘  │
+│                                                                      │
+│  Mitigations:                                                         │
+│    - Cache partitioning (Intel CAT — Cache Allocation Technology)    │
+│    - Core scheduling (pin VMs to dedicated cores)                     │
+│    - Disable SMT (Hyper-Threading) on security-sensitive hosts        │
+│    - Flush L1/L2 on VM entry (slow)                                   │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="hardware-feature-matrix">Hardware Feature Matrix</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Feature</th>
+									<th align="center">Intel</th>
+									<th align="center">AMD</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Basic VMX/SVM</td>
+									<td align="center">VT-x (2005)</td>
+									<td align="center">AMD-V (2006)</td>
+								</tr>
+								<tr>
+									<td align="center">Nested paging</td>
+									<td align="center">EPT (2008)</td>
+									<td align="center">NPT (2007)</td>
+								</tr>
+								<tr>
+									<td align="center">VPID/ASID</td>
+									<td align="center">VPID (2008)</td>
+									<td align="center">ASID (2007)</td>
+								</tr>
+								<tr>
+									<td align="center">Unrestricted guest</td>
+									<td align="center">UG (2008)</td>
+									<td align="center">Always (guest mode)</td>
+								</tr>
+								<tr>
+									<td align="center">APIC virtualization</td>
+									<td align="center">APICv (2012)</td>
+									<td align="center">AVIC (2016)</td>
+								</tr>
+								<tr>
+									<td align="center">Posted interrupts</td>
+									<td align="center">VT-d PI</td>
+									<td align="center">AVIC IPI</td>
+								</tr>
+								<tr>
+									<td align="center">VMCS shadowing</td>
+									<td align="center">VMCS shadow</td>
+									<td align="center">VMRUN within guest (NV)</td>
+								</tr>
+								<tr>
+									<td align="center">EPT A/D bits</td>
+									<td align="center">EPT A/D</td>
+									<td align="center">NPT Accessed/Dirty</td>
+								</tr>
+								<tr>
+									<td align="center">#VE (EPT violation -> exc)</td>
+									<td align="center">#VE (2020)</td>
+									<td align="center">#VE (via #NPF)</td>
+								</tr>
+								<tr>
+									<td align="center">MBEC (Mode-Based Exec)</td>
+									<td align="center">MBEC (2020)</td>
+									<td align="center">N/A (different model)</td>
+								</tr>
+								<tr>
+									<td align="center">Intel PT for guest</td>
+									<td align="center">PT in VMX</td>
+									<td align="center">N/A</td>
+								</tr>
+								<tr>
+									<td align="center">CET (Shadow Stack)</td>
+									<td align="center">CET in VMX</td>
+									<td align="center">N/A</td>
+								</tr>
+								<tr>
+									<td align="center">SEV (encrypted VM)</td>
+									<td align="center">TDX (2023)</td>
+									<td align="center">SEV/SEV-ES/SEV-SNP</td>
+								</tr>
+								<tr>
+									<td align="center">Nested virtualization</td>
+									<td align="center">VMX in VMX</td>
+									<td align="center">SVM in SVM</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="verification">Verification</h3>
+						<pre class="bash">
+# 1. Check CPU virtualization support
+egrep -o &#39;(vmx|svm)&#39; /proc/cpuinfo | sort -u
+# vmx = Intel VT-x supported, svm = AMD-V supported
+
+# 2. Check KVM kernel modules
+lsmod | grep kvm
+# Expected: kvm_intel (or kvm_amd), kvm
+
+# 3. KVM module parameters
+cat /sys/module/kvm/parameters/halt_poll_ns
+modinfo kvm | grep -E &#39;filename|version&#39;
+for param in /sys/module/kvm/parameters/*; do
+    echo &#34;$(basename $param) = $(cat $param 2&gt;/dev/null)&#34;
+done
+
+# 4. KVM Intel/AMD-specific parameters
+if lsmod | grep -q kvm_intel; then
+    echo &#34;=== Intel KVM parameters ===&#34;
+    cat /sys/module/kvm_intel/parameters/ept           # EPT enabled?
+    cat /sys/module/kvm_intel/parameters/enable_shadow_vmcs
+    cat /sys/module/kvm_intel/parameters/nested        # Nested virt?
+    cat /sys/module/kvm_intel/parameters/vpid          # VPID?
+    cat /sys/module/kvm_intel/parameters/unrestricted_guest
+elif lsmod | grep -q kvm_amd; then
+    echo &#34;=== AMD KVM parameters ===&#34;
+    cat /sys/module/kvm_amd/parameters/npt             # NPT enabled?
+    cat /sys/module/kvm_amd/parameters/nested          # Nested virt?
+fi
+
+# 5. Check /dev/kvm permissions
+ls -la /dev/kvm
+# Expected: crw-rw---- 1 root kvm
+
+# 6. Check virtualized environment (are we inside a VM?)
+systemd-detect-virt 2&gt;/dev/null || \
+  (grep -qi hypervisor /proc/cpuinfo &amp;&amp; echo &#34;VM detected (hypervisor flag)&#34;)
+
+# 7. Hypervisor CPUID leaves (install the cpuid package first)
+cpuid -1 | grep -i hypervisor
+cpuid -r 0x40000000 2&gt;/dev/null    # Hypervisor CPUID range (KVM signature)
+cpuid -r 0x40000001 2&gt;/dev/null    # KVM feature flags
+
+# 8. Check for KVM virtual machines
+sudo virsh list --all 2&gt;/dev/null || echo &#34;libvirt not installed (optional)&#34;
+
+# 9. CPU virtualization vulnerabilities (side-channel)
+for f in /sys/devices/system/cpu/vulnerabilities/*; do
+    echo &#34;$(basename $f): $(cat $f)&#34;
+done
+
+# 10. TSC and timing checks inside VM
+cat /sys/devices/system/clocksource/clocksource0/current_clocksource
+cat /sys/devices/system/clocksource/clocksource0/available_clocksource
+
+# 11. Memory encryption (SEV/TDX)
+dmesg | grep -i &#39;SEV\|SME\|TDX&#39; 2&gt;/dev/null
+# For AMD SEV: cat /sys/module/kvm_amd/parameters/sev
+
+# 12. Check EPT/NPT features (Intel/AMD specific)
+if lsmod | grep -q kvm_intel; then
+    dmesg | grep -i &#39;EPT\|VPID\|VMX&#39; | head -10
+elif lsmod | grep -q kvm_amd; then
+    dmesg | grep -i &#39;NPT\|AVIC\|SVM&#39; | head -10
+fi
+
+# 13. Run a lightweight VM with QEMU/KVM verification
+qemu-system-x86_64 -enable-kvm -cpu host -m 64 -nographic \
+  -kernel /boot/vmlinuz-linux -append &#34;console=ttyS0 quiet&#34; \
+  -initrd /boot/initramfs-linux.img -serial mon:stdio 2&gt;&amp;1 | head -20
+# Ctrl-A X to exit if QEMU starts
+
+# 14. Verify nested virtualization status
+cat /sys/module/kvm_intel/parameters/nested 2&gt;/dev/null
+cat /sys/module/kvm_amd/parameters/nested 2&gt;/dev/null
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that reports whether the local machine can run hardware-accelerated guests.
+							It reads
+							<code>/proc/cpuinfo</code>
+							for the
+							<code>vmx</code>
+							or
+							<code>svm</code>
+							flag, lists the loaded
+							<code>kvm</code>
+							modules, and prints
+							every entry under
+							<code>/sys/devices/system/cpu/vulnerabilities/</code>
+							that mentions a virtualization
+							or SMT mitigation. Run it on a bare-metal host and inside a virtual machine, then compare the
+							two outputs.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;bufio&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;path/filepath&#34;
+	&#34;strings&#34;
+)
+
+func cpuFlags(path string) map[string]bool {
+	flags := make(map[string]bool)
+	file, err := os.Open(path)
+	if err != nil {
+		return flags
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, &#34;flags&#34;) {
+			parts := strings.SplitN(line, &#34;:&#34;, 2)
+			if len(parts) == 2 {
+				for _, flag := range strings.Fields(parts[1]) {
+					flags[flag] = true
+				}
+			}
+		}
+	}
+	return flags
+}
+
+func readParam(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return &#34;n/a&#34;
+	}
+	return strings.TrimSpace(string(data))
+}
+
+func main() {
+	flags := cpuFlags(&#34;/proc/cpuinfo&#34;)
+
+	switch {
+	case flags[&#34;vmx&#34;]:
+		fmt.Println(&#34;CPU: Intel VT-x (vmx) available&#34;)
+		fmt.Println(&#34;nested:&#34;, readParam(&#34;/sys/module/kvm_intel/parameters/nested&#34;))
+	case flags[&#34;svm&#34;]:
+		fmt.Println(&#34;CPU: AMD-V (svm) available&#34;)
+		fmt.Println(&#34;nested:&#34;, readParam(&#34;/sys/module/kvm_amd/parameters/nested&#34;))
+	default:
+		fmt.Println(&#34;CPU: no hardware virtualization extension&#34;)
+	}
+
+	modules, _ := os.ReadDir(&#34;/sys/module&#34;)
+	for _, module := range modules {
+		if strings.HasPrefix(module.Name(), &#34;kvm&#34;) {
+			fmt.Println(&#34;module:&#34;, module.Name())
+		}
+	}
+
+	if info, err := os.Stat(&#34;/dev/kvm&#34;); err == nil {
+		fmt.Println(&#34;/dev/kvm:&#34;, info.Mode())
+	} else {
+		fmt.Println(&#34;/dev/kvm: unavailable&#34;)
+	}
+
+	files, _ := filepath.Glob(&#34;/sys/devices/system/cpu/vulnerabilities/*&#34;)
+	for _, file := range files {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			continue
+		}
+		text := strings.TrimSpace(string(data))
+		if strings.Contains(text, &#34;VMX&#34;) || strings.Contains(text, &#34;SVM&#34;) ||
+			strings.Contains(text, &#34;SMT&#34;) || strings.Contains(text, &#34;PTE&#34;) {
+			fmt.Printf(&#34;%-28s %s\n&#34;, filepath.Base(file), text)
+		}
+	}
+}
+						</pre>
+						<p>Build and run it:</p>
+						<pre class="bash">
+go build -o virtcheck virtcheck.go
+./virtcheck
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/arch/x86/kvm" target="_blank">Linux kernel: arch/x86/kvm/ - KVM implementation</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/arch/x86/kvm/vmx/vmx.c" target="_blank">Linux kernel: arch/x86/kvm/vmx/vmx.c - Intel VMX code</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/arch/x86/kvm/svm/svm.c" target="_blank">Linux kernel: arch/x86/kvm/svm/svm.c - AMD SVM code</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/include/uapi/linux/kvm.h" target="_blank">Linux kernel: include/uapi/linux/kvm.h - KVM ioctl API</a></li>
+							<li><a class="icon-website" href="https://www.intel.com/sdm" target="_blank">Intel SDM Vol. 3C, Chapters 24-33: VMX</a></li>
+							<li><a class="icon-website" href="https://www.intel.com/sdm" target="_blank">Intel SDM Vol. 3C, Chapter 28: VMX Support for Address Translation (EPT)</a></li>
+							<li><a class="icon-download" href="https://www.amd.com/system/files/TechDocs/24593.pdf" target="_blank">AMD APM Vol. 2, Chapter 15: Secure Virtual Machine</a></li>
+							<li><a class="icon-website" href="https://www.qemu.org/docs/master/system/i386/kvm.html" target="_blank">QEMU Documentation: KVM</a></li>
+							<li><a class="icon-website" href="https://www.kernel.org/doc/html/latest/virt/kvm/index.html" target="_blank">Linux KVM Documentation</a></li>
+							<li><a class="icon-website" href="https://docs.oasis-open.org/virtio/virtio/v1.2/virtio-v1.2.html" target="_blank">Virtio Specification v1.2</a></li>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/virtualization/hyper-v-on-windows/tlfs/tlfs" target="_blank">Hyper-V Top-Level Functional Specification (TLFS)</a></li>
+							<li><a class="icon-website" href="https://nvd.nist.gov/vuln/detail/CVE-2015-3456" target="_blank">CVE-2015-3456 (VENOM)</a></li>
+							<li><a class="icon-website" href="https://nvd.nist.gov/vuln/detail/CVE-2021-28476" target="_blank">CVE-2021-28476 (Hyper-V vmswitch)</a></li>
+							<li><a class="icon-website" href="https://nvd.nist.gov/vuln/detail/CVE-2021-29657" target="_blank">CVE-2021-29657 (KVM AMD SVM)</a></li>
+							<li><a class="icon-website" href="https://www.intel.com/content/www/us/en/architecture-and-technology/l1tf.html" target="_blank">L1TF - L1 Terminal Fault</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

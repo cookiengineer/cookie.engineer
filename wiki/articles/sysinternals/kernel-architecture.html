@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Kernel Architecture | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Kernel Architecture">
+		<meta name="keywords" content="architecture, kernel, linux, protection-rings, syscall, sysinternals, windows-nt, xnu">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Kernel Architecture">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Monolithic vs hybrid designs, protection rings, address space layout, kernel subsystems, and the system call boundary on Linux and Windows NT.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/sysinternals/kernel-architecture.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Kernel Architecture">
+		<meta name="twitter:description" itemprop="description" content="Monolithic vs hybrid designs, protection rings, address space layout, kernel subsystems, and the system call boundary on Linux and Windows NT.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#what-a-kernel-is">What a Kernel Is</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kernel-design-taxonomy">Kernel Design Taxonomy</a></b>
+					<ul>
+						<li><a href="#monolithic-kernel-linux">Monolithic Kernel (Linux)</a></li>
+						<li><a href="#microkernel-minix-sel4-qnx-gnu-hurd">Microkernel (Minix, seL4, QNX, GNU Hurd)</a></li>
+						<li><a href="#hybrid-kernel-windows-nt-xnumacos">Hybrid Kernel (Windows NT, XNU/macOS)</a></li>
+						<li><a href="#windows-nt-architecture">Windows NT Architecture</a></li>
+						<li><a href="#xnu-macosios-architecture">XNU (macOS/iOS) Architecture</a></li>
+						<li><a href="#architecture-comparison">Architecture Comparison</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#protection-rings">Protection Rings</a></b>
+					<ul>
+						<li><a href="#ring-transition-cost">Ring transition cost</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kernel-vs-user-address-space">Kernel vs User Address Space</a></b>
+					<ul>
+						<li><a href="#arm64-memory-layout">ARM64 Memory Layout</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kernel-subsystems-deep-dive">Kernel Subsystems Deep Dive</a></b>
+					<ul>
+						<li><a href="#core-subsystem-directories">Core Subsystem Directories</a></li>
+						<li><a href="#headers-for-exploit-development">Headers For Exploit Development</a></li>
+						<li><a href="#inside-task-struct">Inside task_struct</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#system-call-interface-the-boundary">System Call Interface: The Boundary</a></b>
+					<ul>
+						<li><a href="#linux-syscall-dispatch-path">Linux syscall dispatch path</a></li>
+						<li><a href="#windows-nt-syscall-dispatch-path">Windows NT syscall dispatch path</a></li>
+						<li><a href="#finding-the-syscall-table">Finding The Syscall Table</a></li>
+						<li><a href="#modern-kptikaiser-meltdown-mitigation">Modern KPTI/Kaiser (Meltdown mitigation)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#linux-kernel-build-system">Linux Kernel Build System</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kernel-module-lifecycle">Kernel Module Lifecycle</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#prockallsyms-the-kernel-symbol-map">/proc/kallsyms - The Kernel Symbol Map</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#linux-vs-windows-nt-subsystems">Linux vs Windows NT Subsystems</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kernel-reconnaissance">Kernel Reconnaissance</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#windows-nt-structures-on-linux">Windows NT Structures on Linux</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/sysinternals/index.html">Sysinternals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/sysinternals/kernel-architecture.html">Kernel Architecture</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="kernel-architecture">Kernel Architecture</h2>
+					<p>
+						Monolithic vs hybrid designs, protection rings, address space layout, kernel subsystems, and
+						the system call boundary on Linux and Windows NT.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							The kernel is the code that runs at the highest privilege level and arbitrates access to hardware.
+							This article compares monolithic, microkernel, and hybrid designs, maps the protection rings
+							the
+							<abbr title="Central Processing Unit">CPU</abbr>
+							enforces, and walks the Linux address-space layout, subsystem
+							tree, and syscall entry path. It also sketches the Windows NT and XNU architectures for contrast.
+							After reading it you can identify which kernel component handles a given request.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - process memory layout, /proc, fork/exec/wait lifecycle, cgroups</li>
+							<li><a href="/wiki/articles/fundamentals/system-calls.html">System Calls</a> - syscall mechanism, syscall table, strace, vDSO</li>
+							<li><a href="/wiki/articles/fundamentals/virtual-memory.html">Virtual Memory</a> - page tables, TLB, mmap() internals, /proc/PID/maps</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="what-a-kernel-is">What a Kernel Is</h3>
+						<p>
+							The kernel is the operating system core - the piece of software that runs at the
+							<abbr title="Central Processing Unit">CPU</abbr>
+							's highest privilege level and arbitrates all access to hardware. Every instruction executed
+							by a user-space program runs at ring 3 (on x86-64). When the program needs memory, a file, a
+							network socket, or a new process, it enters the kernel through a system call. The kernel validates
+							the request, performs it on the hardware's behalf, and returns the result.
+						</p>
+						<p>
+							The kernel is not a process. It has no
+							<code>/proc/PID/</code>
+							directory. It is a body of code and data
+							mapped into every process's address space in the upper half of virtual memory - invisible to
+							user code but always present. When a hardware interrupt fires, when a timer tick expires, when
+							a page fault occurs, the
+							<abbr title="Central Processing Unit">CPU</abbr>
+							transitions into the kernel to handle
+							it.
+						</p>
+						<pre class="plaintext">
+┌─────────────────────────────────────────────────────────────────────┐
+│                        USER SPACE (ring 3)                          │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌──────────────┐  │
+│  │  bash   │ │  nginx  │ │ python  │ │  top    │ │ systemd      │  │
+│  │  PID 1  │ │  PID 2  │ │  PID 3  │ │  PID 4  │ │  PID 1       │  │
+│  └────+────┘ └────+────┘ └────+────┘ └────+────┘ └──────+───────┘  │
+│       │           │           │           │              │          │
+│       └───────────+───────────+─────+─────+──────────────┘          │
+│                                     │                                │
+│                         System Call Interface                        │
+│                         (syscall / int 0x80 / svc)                   │
+├─────────────────────────────────────────────────────────────────────┤
+│                        KERNEL SPACE (ring 0)                        │
+│                                                                     │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │                   System Call Dispatcher                      │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│                                                                     │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────┐   │
+│  │ Process  │ │ Memory   │ │ VFS      │ │ Network  │ │ Device │   │
+│  │ Manager  │ │ Manager  │ │          │ │ Stack    │ │ Drivers│   │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └────────┘   │
+│                                                                     │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │              Architecture-Dependent Code                     │    │
+│  │          (arch/x86/, arch/arm64/, arch/riscv/)               │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│                                                                     │
+│                         Hardware Abstraction                         │
+├═════════════════════════════════════════════════════════════════════┤
+│                        HARDWARE (ring -1 / -2)                      │
+│  CPU │ Memory │ Disk │ NIC │ GPU │ USB │ PCIe Bus │ APIC │ TPM     │
+└─────────────────────────────────────────────────────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="kernel-design-taxonomy">Kernel Design Taxonomy</h3>
+						<p>
+							Operating system kernels fall into three broad architectural categories. The distinction matters
+							for security: a bug in a monolithic kernel driver can compromise the entire system; a bug in
+							a microkernel server is contained.
+						</p>
+						<h4 id="monolithic-kernel-linux">Monolithic Kernel (Linux)</h4>
+						<p>
+							All kernel services run in a single privileged address space at ring 0. The filesystem driver,
+							network stack, process scheduler, and memory manager all share the same address space and call
+							each other through direct function calls. This is fast (no
+							<abbr title="Internet Protocol">IP</abbr>
+							C overhead)
+							but fragile: a null pointer dereference in a
+							<abbr title="Universal Serial Bus">USB</abbr>
+							driver panics the entire
+							kernel.
+						</p>
+						<pre class="plaintext">
+┌────────────────────────────────────────────────────────────┐
+│                    MONOLITHIC KERNEL                        │
+│                    (single address space)                   │
+│                                                             │
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────────┐   │
+│  │Scheduler│  │   VM    │  │   VFS   │  │  ext4.ko    │   │
+│  └────+────┘  └────+────┘  └────+────┘  └──────+──────┘   │
+│       └─────────────+─────────────+──────────────┘         │
+│                     │  Direct fn  │                         │
+│                     │    calls    │                         │
+│                     ▼             ▼                         │
+│              ┌──────────────────────┐                      │
+│              │  Hardware Abstraction│                      │
+│              └──────────────────────┘                      │
+│                                                             │
+│  Kernel modules (.ko) loaded at runtime share the same      │
+│  address space — no isolation from core kernel              │
+└────────────────────────────────────────────────────────────┘
+						</pre>
+						<p>
+							Linux is a monolithic kernel with loadable module support. Modules (
+							<code>*.ko</code>
+							files) extend kernel
+							functionality at runtime - device drivers, filesystems, security modules - but they execute
+							in the same ring 0 address space as the core kernel. A malicious or buggy module can overwrite
+							kernel text, patch the syscall table, or install a rootkit with no special privileges beyond
+							<code>CAP_SYS_MODULE</code>
+							.
+						</p>
+						<h4 id="microkernel-minix-sel4-qnx-gnu-hurd">Microkernel (Minix, seL4, QNX, GNU Hurd)</h4>
+						<p>
+							Only the minimum necessary code runs in kernel space: address space management, thread scheduling,
+							and inter-process communication (
+							<abbr title="Internet Protocol">IP</abbr>
+							C). Everything else - filesystems,
+							networking, device drivers - runs as user-space servers. The kernel's job is to shuttle messages
+							between these servers securely.
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────┐
+│                      MICROKERNEL                              │
+│                                                               │
+│  Ring 0 (kernel):          Ring 3 (user-space servers):       │
+│  ┌──────────────┐          ┌──────────────────────┐          │
+│  │ IPC          │◄────────►│ File System Server   │          │
+│  │ Scheduler    │          └──────────────────────┘          │
+│  │ Memory Mgmt  │          ┌──────────────────────┐          │
+│  │ (basic)      │◄────────►│ Network Server       │          │
+│  └──────────────┘          └──────────────────────┘          │
+│                             ┌──────────────────────┐          │
+│                             │ Device Driver Server │          │
+│                             └──────────────────────┘          │
+│                                                               │
+│  All communication via message-passing IPC                    │
+└──────────────────────────────────────────────────────────────┘
+						</pre>
+						<p>
+							seL4 is the only microkernel with a formal proof of correctness (functional correctness, integrity,
+							confidentiality). It has roughly 10,000 lines of C and 1,000 lines of assembly. QNX powers the
+							BlackBerry PlayBook and many automotive systems. Minix 3 runs inside Intel Management Engine
+							on modern x86 platforms - a full microkernel hidden inside your
+							<abbr title="Central Processing Unit">CPU</abbr>
+							.
+						</p>
+						<h4 id="hybrid-kernel-windows-nt-xnumacos">Hybrid Kernel (Windows NT, XNU/macOS)</h4>
+						<p>
+							A "hybrid" kernel attempts to combine monolithic performance with microkernel structure. In
+							practice, this means that some services run in kernel space (like a monolithic kernel) while
+							others run in user space (like a microkernel), or that the design is modular but not fully separated.
+						</p>
+						<h4 id="windows-nt-architecture">Windows NT Architecture</h4>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────┐
+│                   USER MODE (ring 3)                         │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐         │
+│  │  Subsystem   │ │  Subsystem   │ │  User-mode   │         │
+│  │  DLLs        │ │  Processes   │ │  Drivers     │         │
+│  │  (kernel32,  │ │  (smss.exe,  │ │  (print,      │         │
+│  │   ntdll)     │ │   csrss.exe) │ │   graphics)  │         │
+│  └──────+───────┘ └──────+───────┘ └──────────────┘         │
+│         │                │                                    │
+│   ┌─────+────────────────+─────┐                             │
+│   │    ntdll.dll (syscall stub)│                             │
+│   └─────────────+──────────────┘                             │
+│                 │ syscall / sysenter                          │
+├═════════════════+═════════════════════════════════════════════┤
+│                 │           KERNEL MODE (ring 0)               │
+│   ┌─────────────+──────────────────────────────────────┐     │
+│   │             Executive (ntoskrnl.exe)                 │     │
+│   │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────┐  │     │
+│   │  │Object Mgr│ │Process   │ │I/O       │ │Security│  │     │
+│   │  │          │ │Mgr       │ │Manager   │ │Ref Mgr │  │     │
+│   │  ├──────────┤ ├──────────┤ ├──────────┤ ├───────┤  │     │
+│   │  │Memory Mgr│ │Config Mgr│ │PnP Mgr   │ │Power  │  │     │
+│   │  │          │ │(registry)│ │          │ │Mgr    │  │     │
+│   │  └──────────┘ └──────────┘ └──────────┘ └───────┘  │     │
+│   └──────────────────────+───────────────────────────────┘     │
+│                          │                                     │
+│   ┌──────────────────────+───────────────────────────────┐    │
+│   │             Kernel (ntoskrnl.exe)                      │    │
+│   │  Thread scheduling, interrupt dispatch, sync prims    │    │
+│   │  CPU-specific: DPCs, APCs, trap handling              │    │
+│   └──────────────────────+───────────────────────────────┘    │
+│                          │                                     │
+│   ┌──────────────────────+───────────────────────────────┐    │
+│   │    Hardware Abstraction Layer (HAL.dll)               │    │
+│   │    Platform-specific: APIC, timers, PCI config        │    │
+│   └──────────────────────────────────────────────────────┘    │
+├═════════════════════════════════════════════════════════════════┤
+│                       HARDWARE                                   │
+└─────────────────────────────────────────────────────────────────┘
+						</pre>
+						<h4 id="xnu-macosios-architecture">XNU (macOS/iOS) Architecture</h4>
+						<p>
+							XNU (X is Not Unix) combines the Mach microkernel with BSD kernel components. Mach provides
+							the scheduler,
+							<abbr title="Internet Protocol">IP</abbr>
+							C, and
+							<abbr title="Virtual Machine">VM</abbr>
+							subsystem. BSD provides
+							the P
+							<abbr title="Open Systems Interconnection">OSI</abbr>
+							X interface, filesystems, and networking. The I/O
+							Kit provides device drivers in a restricted C++ subset.
+						</p>
+						<pre class="plaintext">
+┌─────────────────────────────────────────────────────────────┐
+│                        XNU Kernel                           │
+│                                                              │
+│  ┌─────────────────────┐  ┌───────────────────────────┐    │
+│  │   BSD Subsystem     │  │      Mach Subsystem        │    │
+│  │   (syscalls, VFS,   │  │   (threads, IPC, VM,      │    │
+│  │    networking,      │  │    scheduler, tasks,       │    │
+│  │    process model,   │  │    clock, host info)       │    │
+│  │    signals, ptrace) │  │                             │    │
+│  └──────────+──────────┘  └─────────────+───────────────┘    │
+│             │                           │                     │
+│             └────────────+──────────────┘                    │
+│                          │                                    │
+│  ┌───────────────────────+──────────────────────────────┐    │
+│  │              I/O Kit (C++ runtime)                     │    │
+│  │  Device drivers, families, nubs, user clients         │    │
+│  │  Sandbox extension points, code signing checks        │    │
+│  └──────────────────────────────────────────────────────┘    │
+│                                                              │
+│  Mach IPC is the backbone — XNU is message-passing at heart  │
+└─────────────────────────────────────────────────────────────┘
+						</pre>
+						<h4 id="architecture-comparison">Architecture Comparison</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Property</th>
+									<th align="center">Linux</th>
+									<th align="center">Windows NT</th>
+									<th align="center">XNU</th>
+									<th align="center">seL4</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Type</td>
+									<td align="center">Monolithic</td>
+									<td align="center">Hybrid</td>
+									<td align="center">Hybrid</td>
+									<td align="center">Microkernel</td>
+								</tr>
+								<tr>
+									<td align="center">Kernel code size</td>
+									<td align="center">~28M loc</td>
+									<td align="center">~15M loc (guess)</td>
+									<td align="center">~2M loc</td>
+									<td align="center">~10k loc</td>
+								</tr>
+								<tr>
+									<td align="center">Drivers in kernel</td>
+									<td align="center">Yes (modules)</td>
+									<td align="center">Yes</td>
+									<td align="center">Yes (via I/O Kit)</td>
+									<td align="center">No</td>
+								</tr>
+								<tr>
+									<td align="center">Formally verified</td>
+									<td align="center">No</td>
+									<td align="center">No</td>
+									<td align="center">No</td>
+									<td align="center">Yes</td>
+								</tr>
+								<tr>
+									<td align="center">License</td>
+									<td align="center">GPLv2</td>
+									<td align="center">Proprietary</td>
+									<td align="center">APSL</td>
+									<td align="center">GPLv2</td>
+								</tr>
+								<tr>
+									<td align="center">Primary IPC</td>
+									<td align="center">Signals, pipes</td>
+									<td align="center">ALPC, LPC</td>
+									<td align="center">Mach ports</td>
+									<td align="center">seL4 IPC</td>
+								</tr>
+								<tr>
+									<td align="center">Source available</td>
+									<td align="center">Full</td>
+									<td align="center">Partial (WRK)</td>
+									<td align="center">Full</td>
+									<td align="center">Full</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="protection-rings">Protection Rings</h3>
+						<p>x86-64 defines four hierarchical protection rings (0 through 3), but only two are used in practice:</p>
+						<pre class="plaintext">
+Ring 3 ─── User applications, libraries, system daemons
+             ├─ Cannot execute privileged instructions (lgdt, lidt, hlt, invlpg, wrmsr)
+             ├─ Cannot access I/O ports directly (unless IOPL allows it)
+             ├─ Cannot modify page tables (only the kernel page tables, mapped in upper half)
+             ├─ Cannot access kernel memory (page table U/S bit = 0 for kernel pages)
+             └─ Segmented by SMAP/SMEP on modern CPUs
+
+Ring 2 ─── UNUSED (originally for device drivers in OS/2)
+
+Ring 1 ─── UNUSED (originally for device drivers in OS/2)
+
+Ring 0 ─── Kernel, device drivers, hypervisor (KVM)
+             ├─ Full access to all hardware
+             ├─ Can modify page tables, MSRs, I/O ports
+             └─ Includes kernel modules (.ko files) and eBPF programs
+
+Ring -1 ── Hypervisor (VMX root mode on Intel, EL2 on ARM64)
+             ├─ Manages multiple guest VM ring 0 instances
+             └─ Controls second-level address translation (EPT/NPT)
+
+Ring -2 ── System Management Mode (SMM), Intel ME, AMD PSP
+             ├─ Invisible to the OS, even the hypervisor
+             └─ Has unrestricted access to all memory
+						</pre>
+						<h4 id="ring-transition-cost">Ring transition cost</h4>
+						<p>
+							Crossing from ring 3 to ring 0 is expensive. On modern x86-64, a
+							<code>syscall</code>
+							/
+							<code>sysret</code>
+							pair costs
+							roughly 50-100
+							<abbr title="Central Processing Unit">CPU</abbr>
+							cycles, depending on cache state, microcode version,
+							and mitigations (Spectre/Meltdown mitigations dramatically increased this cost due to K
+							<abbr title="Penetration Test">PT</abbr>
+							I page table switching).
+						</p>
+						<pre class="bash">
+# Measure syscall overhead on your system (requires lmbench or similar)
+sudo pacman -S lmbench 2&gt;/dev/null || echo &#34;Install lmbench for syscall latency tests&#34;
+
+# Quick-and-dirty measurement: empty syscall (getpid) latency
+python3 -c &#34;
+import time
+N = 10_000_000
+start = time.perf_counter_ns()
+for _ in range(N):
+    pass
+overhead = time.perf_counter_ns() - start
+
+start = time.perf_counter_ns()
+for _ in range(N):
+    import os; os.getpid()
+elapsed = time.perf_counter_ns() - start
+
+ns_per_call = (elapsed - overhead) / N
+print(f&#39;getpid() syscall: ~{ns_per_call:.1f} ns&#39;)
+print(f&#39;Cycles (at 3 GHz): ~{ns_per_call * 3:.0f}&#39;)
+&#34;
+						</pre>
+						<p>
+							<b>SMEP and SMAP:</b>
+							Supervisor Mode Execution Prevention (SMEP, CR4 bit 20) prevents the kernel
+							from executing code in user-space pages. Supervisor Mode Access Prevention (SM
+							<abbr title="Access Point">AP</abbr>
+							, CR4 bit 21) prevents the kernel from reading/writing user-space pages without explicitly using
+							<code>stac</code>
+							/
+							<code>clac</code>
+							instructions. Both are critical for exploit mitigation - without them, a kernel
+							exploit that hijacks control flow could redirect execution to user-controlled
+							<abbr title="Return-Oriented Programming">ROP</abbr>
+							chains mapped in the lower half.
+						</p>
+						<pre class="bash">
+# Check SMEP/SMAP status on your CPU
+grep -o &#39;sme[ap]&#39; /proc/cpuinfo | sort -u
+# Should see &#34;smep&#34; and &#34;smap&#34; on modern systems
+						</pre>
+					</section>
+					<section>
+						<h3 id="kernel-vs-user-address-space">Kernel vs User Address Space</h3>
+						<p>
+							On x86-64, Linux uses a split address space. The upper half (0xFFFF...) belongs to the kernel,
+							the lower half (0x0000...) belongs to user space. The boundary is fixed by the 48-bit canonical
+							form; the direct-map base (
+							<code>page_offset_base</code>
+							) is chosen at boot and can be randomized with
+							<code>CONFIG_RANDOMIZE_MEMORY</code>
+							.
+						</p>
+						<pre class="plaintext">
+x86-64 Linux canonical addresses (48-bit virtual, 47:0 effective):
+
+0x0000000000000000  ┌─────────────────────────────┐
+                    │                               │
+                    │      User Space (ring 3)       │
+                    │      128 TiB maximum           │
+                    │      Processes can only        │
+                    │      access this half          │
+                    │                               │
+0x00007FFFFFFFFFFF  ├─────────────────────────────┤
+                    │      Non-canonical hole       │
+                    │      (access → GP fault)      │
+0xFFFF800000000000  ├─────────────────────────────┤
+                    │                               │
+                    │      Kernel Space (ring 0)    │
+                    │      128 TiB maximum          │
+                    │      Includes direct map,      │
+                    │      vmalloc, modules,        │
+                    │      fixmap, cpu_entry_area,  │
+                    │      and kernel text/data      │
+                    │                               │
+0xFFFFFFFFFFFFFFFF  └─────────────────────────────┘
+
+Kernel virtual address regions (typical layout, varies by KASLR):
+
+0xFFFF888000000000  Direct map of all physical memory (PAGE_OFFSET)
+0xFFFFC90000000000  vmalloc region (non-contiguous allocations)
+0xFFFFEA0000000000  Virtual memory map (vmemmap) for struct page array
+0xFFFFFE0000000000  KASAN shadow (if CONFIG_KASAN)
+0xFFFFFF0000000000  CPU entry area (per-CPU GDT, TSS, exception stacks)
+0xFFFFFF8000000000  Kernel text mapping (phys_base + __START_KERNEL_map)
+						</pre>
+						<h4 id="arm64-memory-layout">ARM64 Memory Layout</h4>
+						<pre class="plaintext">
+0x0000000000000000  User space  (TTBR0)
+0x0000FFFFFFFFFFF  ──
+                    Non-canonical gap
+0xFFFF000000000000  ──
+0xFFFF000000000000  Kernel space (TTBR1)
+                    ├─ 0xFFFF800000000000  Linear map (PAGE_OFFSET) — direct map
+                    ├─ 0xFFFF800100000000  vmalloc region
+                    ├─ 0xFFFFFC0000000000  vmemmap
+                    └─ 0xFFFFFE0000000000  Fixmap, PCI I/O, modules
+						</pre>
+						<pre class="bash">
+# Inspect your kernel&#39;s address layout
+uname -r
+
+# Show kernel address space layout
+cat /proc/kallsyms | head -20 | awk &#39;{print $1, $3}&#39; | column -t
+
+# Find important kernel addresses
+grep -E &#39; (startup_64|_text|_stext|_etext|__start_rodata|__end_rodata|_sinittext|_einittext) &#39; /proc/kallsyms
+
+# Check KASLR randomization
+cat /proc/kallsyms | head -1 | awk &#39;{print &#34;Kernel base appears at&#34;, $1}&#39;
+# Compare across reboots — addresses will differ (except when CONFIG_RANDOMIZE_BASE=n)
+						</pre>
+					</section>
+					<section>
+						<h3 id="kernel-subsystems-deep-dive">Kernel Subsystems Deep Dive</h3>
+						<p>
+							The Linux kernel source tree (
+							<code>/usr/src/linux/</code>
+							) is organized by subsystem. Understanding
+							the layout is essential for both auditing and exploitation.
+						</p>
+						<pre class="bash">
+# Install kernel source (Arch Linux)
+sudo pacman -S linux-headers
+
+# The kernel tree
+ls -1 /usr/src/linux/ | head -40
+						</pre>
+						<h4 id="core-subsystem-directories">Core Subsystem Directories</h4>
+						<pre class="plaintext">
+/usr/src/linux/
+├── arch/           Architecture-specific code
+│   ├── x86/        x86-64 and i386
+│   │   ├── boot/   Early boot, real-mode setup, compressed kernel
+│   │   ├── entry/  syscall entry, interrupt entry, NMI handling
+│   │   ├── kernel/ CPU-specific: APIC, traps, alternative instructions
+│   │   ├── mm/     x86 page table init, tlb, pat, pgtable
+│   │   └── kvm/    KVM virtualization
+│   ├── arm64/      ARM 64-bit
+│   └── riscv/      RISC-V
+│
+├── kernel/         Core kernel infrastructure
+│   ├── sched/      Scheduler (CFS, EEVDF, deadline, RT)
+│   ├── locking/    Spinlocks, mutexes, rwsem, rcu
+│   ├── irq/        Interrupt handling
+│   ├── time/       Timers, clockevents, timekeeping
+│   ├── printk/     Kernel logging
+│   └── bpf/        eBPF verifier and JIT
+│
+├── mm/             Memory management
+│   ├── page_alloc.c  Buddy allocator
+│   ├── slab.c        Slab allocator (SLUB default)
+│   ├── vmalloc.c     Non-contiguous allocation
+│   ├── memory.c      Page fault handler
+│   ├── swap.c        Swap subsystem
+│   ├── vmscan.c      Page reclaim (kswapd)
+│   ├── oom_kill.c    Out-of-memory killer
+│   └── huge_memory.c THP implementation
+│
+├── fs/             Virtual File System and all filesystem drivers
+│   ├── vfs.c       VFS layer, file descriptors, open/create
+│   ├── namei.c     Path resolution, dentry lookup
+│   ├── exec.c      execve() implementation
+│   ├── read_write.c __kernel_read, __kernel_write
+│   ├── ext4/       EXT4 filesystem driver
+│   └── btrfs/      Btrfs filesystem driver
+│
+├── net/            Networking stack
+│   ├── core/       Socket layer, sk_buff management
+│   ├── ipv4/       IPv4, TCP, UDP, ICMP
+│   ├── ipv6/       IPv6
+│   └── netlink/    Netlink sockets (used by udev, iproute2)
+│
+├── drivers/        Device drivers (by far the largest directory)
+│   ├── char/       Character devices (ttys, random, mem)
+│   ├── block/      Block devices (loop, nbd, ramdisk)
+│   ├── net/        Network interface drivers
+│   ├── usb/        USB subsystem
+│   └── gpu/        DRM/KMS graphics drivers
+│
+├── security/       Linux Security Modules (LSM)
+│   ├── selinux/    SELinux
+│   ├── apparmor/   AppArmor
+│   └── integrity/  IMA/EVM
+│
+├── include/        Kernel header files
+│   ├── linux/      Core kernel headers
+│   │   ├── sched.h task_struct definition
+│   │   ├── mm.h    VM and page allocation
+│   │   ├── fs.h    VFS structures
+│   │   └── net.h   Networking
+│   └── uapi/       Userspace-visible headers (ioctl numbers, syscall numbers)
+│
+├── lib/            Utility functions (string, checksums, compression)
+├── scripts/        Build scripts, kconfig
+├── tools/          User-space tools (perf, objtool, selftests)
+└── Documentation/  Kernel documentation
+						</pre>
+						<h4 id="headers-for-exploit-development">Headers For Exploit Development</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Header</th>
+									<th align="center">Contains</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>/usr/src/linux/include/linux/sched.h</code></td>
+									<td align="center"><code>task_struct</code>- the kernel's process descriptor</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/usr/src/linux/include/linux/mm_types.h</code></td>
+									<td align="center"><code>struct page</code>,<code>struct mm_struct</code>,<code>struct vm_area_struct</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>/usr/src/linux/include/linux/cred.h</code></td>
+									<td align="center"><code>struct cred</code>- process credentials (uid, gid, capabilities)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/usr/src/linux/include/linux/fs.h</code></td>
+									<td align="center"><code>struct file</code>,<code>struct file_operations</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>/usr/src/linux/include/net/sock.h</code></td>
+									<td align="center"><code>struct sock</code>- socket kernel representation</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/usr/src/linux/include/uapi/asm-generic/unistd.h</code></td>
+									<td align="center">System call number definitions</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="inside-task-struct">Inside task_struct</h4>
+						<pre class="c">
+// /usr/src/linux/include/linux/sched.h (simplified view)
+struct task_struct {
+    // ─── Scheduling ───
+    struct thread_info       thread_info;   // arch-specific, on stack
+    unsigned int             __state;       // TASK_RUNNING, TASK_INTERRUPTIBLE, etc.
+    int                      prio;          // Dynamic priority
+    int                      static_prio;   // Static priority (nice value)
+    struct sched_entity      se;            // CFS scheduler data
+    struct sched_rt_entity   rt;            // RT scheduler data
+    struct sched_dl_entity   dl;            // Deadline scheduler data
+    const struct sched_class *sched_class;  // Which scheduling class
+    struct list_head         tasks;         // Linked list node (task list)
+    cpumask_t                cpus_mask;     // CPU affinity mask
+
+    // ─── Memory ───
+    struct mm_struct        *mm;            // Address space (NULL for kernel threads)
+    struct mm_struct        *active_mm;     // Address space when active
+
+    // ─── Identity ───
+    pid_t                    pid;           // Thread ID
+    pid_t                    tgid;          // Thread Group ID (userspace &#34;PID&#34;)
+    const struct cred __rcu *cred;          // Effective credentials
+    const struct cred __rcu *real_cred;     // Real credentials
+    char                     comm[TASK_COMM_LEN]; // 16-byte process name
+
+    // ─── Files ───
+    struct files_struct     *files;         // File descriptor table
+    struct fs_struct        *fs;            // CWD and root inode
+
+    // ─── Signals ───
+    struct signal_struct    *signal;        // Signal state (shared by threads)
+    struct sigpending        pending;       // Private pending signals
+    sigset_t                 blocked;       // Blocked signal mask
+
+    // ─── Stack ───
+    void                    *stack;         // Kernel stack pointer (if not on thread_info)
+
+    // ... hundreds more fields ...
+};
+						</pre>
+					</section>
+					<section>
+						<h3 id="system-call-interface-the-boundary">System Call Interface: The Boundary</h3>
+						<p>
+							The syscall interface is the
+							<b>only legitimate</b>
+							way to transition from ring 3 to ring 0. Every
+							attempt to cross this boundary by other means (direct jumps, interrupts to kernel handlers,
+							MSR manipulation) should trigger a page fault, general protection fault, or be blocked by SMEP/SM
+							<abbr title="Access Point">AP</abbr>
+							.
+						</p>
+						<h4 id="linux-syscall-dispatch-path">Linux syscall dispatch path</h4>
+						<pre class="plaintext">
+Userspace: write(fd, buf, len)
+  → libc: mov $1, %rax; syscall
+    → entry_SYSCALL_64 (arch/x86/entry/entry_64.S)
+      → do_syscall_64 (arch/x86/entry/common.c)
+        → sys_call_table[%rax] (generated array of function pointers)
+          → __x64_sys_write (fs/read_write.c)
+            → ksys_write → vfs_write → ...
+
+Key structures:
+  MSR_LSTAR (0xC0000082)    → address of entry_SYSCALL_64
+  MSR_STAR (0xC0000081)     → segment selectors for kernel/user
+  MSR_SYSCALL_MASK (0xC0000084)→ which rflags bits to clear on entry
+						</pre>
+						<h4 id="windows-nt-syscall-dispatch-path">Windows NT syscall dispatch path</h4>
+						<pre class="plaintext">
+Userspace: NtWriteFile (ntdll.dll)
+  → mov eax, 0xNN; syscall (or int 0x2E on older systems)
+    → KiSystemCall64 (ntoskrnl.exe; written in assembly in MSR_LSTAR)
+      → KiSystemServiceHandler
+        → KeServiceDescriptorTable[n].KiServiceLimit bounds check
+          → KiServiceTable[SSDT index] → NtWriteFile (ring 0)
+						</pre>
+						<h4 id="finding-the-syscall-table">Finding The Syscall Table</h4>
+						<p>
+							Before Linux 5.7, the syscall table was exported as
+							<code>sys_call_table</code>
+							and trivially accessible
+							from kernel modules. Post-5.7,
+							<code>kallsyms_lookup_name()</code>
+							is no longer exported, and the table
+							must be found by other means:
+						</p>
+						<pre class="bash">
+# Check kernel version
+uname -r
+
+# On older kernels, find syscall table address
+sudo cat /proc/kallsyms | grep &#39; sys_call_table$&#39;
+# Expected output: ffffffff8b4001c0 R sys_call_table
+
+# Count number of syscalls
+sudo cat /proc/kallsyms | grep &#39; sys_call_table$&#39; | wc -l
+
+# List all registered syscall handlers (first 20)
+sudo cat /proc/kallsyms | grep __x64_sys_ | head -20
+						</pre>
+						<h4 id="modern-kptikaiser-meltdown-mitigation">Modern KPTI/Kaiser (Meltdown mitigation)</h4>
+						<p>
+							Kernel Page-Table Isolation (K
+							<abbr title="Penetration Test">PT</abbr>
+							I) removes kernel mappings from user-space
+							page tables almost entirely. When a process runs in ring 3, only a tiny stub of kernel code
+							(the trampoline for syscall entry/exit) is mapped. The full kernel is mapped only after the
+							transition to ring 0. This means:
+						</p>
+						<ol>
+							<li><b>Syscall cost increased</b> - every syscall flushes some TLB entries.</li>
+							<li><b>PCID (Process-Context Identifier)</b> reduces the TLB flush penalty by tagging TLB entries with an address-space ID.</li>
+							<li><b>The kernel's "direct map" is not accessible from user space</b> - even speculative execution cannot leak kernel data through cache side-channels as easily.</li>
+						</ol>
+						<pre class="bash">
+# Check if KPTI is active
+dmesg | grep -i &#39;page.*table.*isolation\|KPTI\|kaiser&#39;
+# Or check /proc/cpuinfo
+grep -q &#39; pti&#39; /proc/cpuinfo &amp;&amp; echo &#34;KPTI enabled&#34; || echo &#34;KPTI disabled&#34;
+
+# If your kernel has it, check if PCID is used
+grep -q &#39; pcid&#39; /proc/cpuinfo &amp;&amp; echo &#34;PCID supported&#34; || echo &#34;PCID not supported&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="linux-kernel-build-system">Linux Kernel Build System</h3>
+						<p>
+							Understanding how the kernel is compiled helps when backporting exploits or building custom
+							modules.
+						</p>
+						<pre class="bash">
+# Kernel config — what features are enabled
+zcat /proc/config.gz | head -30
+
+# Or if that&#39;s not available:
+cat /boot/config-$(uname -r) | head -30
+
+# Find specific config options
+grep -E &#39;CONFIG_(KASAN|SLUB|VMAP_STACK|PAGE_TABLE_ISOLATION|RANDOMIZE)&#39; /boot/config-$(uname -r)
+
+# Module information
+modinfo ext4 | head -20
+lsmod | head -20
+
+# Kernel build commands (for custom kernels)
+# make defconfig       # Default config for current arch
+# make menuconfig      # Interactive config
+# make -j$(nproc)      # Build kernel image and modules
+# make modules_install # Install modules to /lib/modules/
+# make install         # Copy kernel to /boot, update bootloader
+						</pre>
+					</section>
+					<section>
+						<h3 id="kernel-module-lifecycle">Kernel Module Lifecycle</h3>
+						<p>
+							Kernel modules are the extensibility mechanism for Linux. They are ELF relocatable objects loaded
+							at runtime via
+							<code>insmod</code>
+							(traditional) or
+							<code>modprobe</code>
+							(dependency-aware). The
+							<code>finit_module()</code>
+							syscall loads a module from a file descriptor.
+						</p>
+						<pre class="c">
+// Minimal kernel module: /usr/src/linux/samples/hello-1.c style
+// Place at: sysinternals/kernel-architecture.Containerfile (container)
+#include &lt;linux/module.h&gt;
+#include &lt;linux/kernel.h&gt;
+#include &lt;linux/init.h&gt;
+
+MODULE_LICENSE(&#34;GPL&#34;);
+MODULE_AUTHOR(&#34;Kernel Architecture Lab&#34;);
+
+static int __init hello_init(void)
+{
+    printk(KERN_INFO &#34;[arch-lab] Module loaded. Kernel version: %s\n&#34;,
+           UTS_RELEASE);
+    
+    // Print current task&#39;s comm
+    printk(KERN_INFO &#34;[arch-lab] Loaded by process: %s (PID: %d)\n&#34;,
+           current-&gt;comm, current-&gt;pid);
+    
+    // Demonstrate access to kernel symbols
+    printk(KERN_INFO &#34;[arch-lab] current pointer: %px\n&#34;, current);
+    printk(KERN_INFO &#34;[arch-lab] init_task pointer: %px\n&#34;, &amp;init_task);
+    
+    return 0;
+}
+
+static void __exit hello_exit(void)
+{
+    printk(KERN_INFO &#34;[arch-lab] Module unloaded.\n&#34;);
+}
+
+module_init(hello_init);
+module_exit(hello_exit);
+						</pre>
+						<pre class="bash">
+# Build and load the module
+# (In a VM or container with kernel headers)
+make -C /lib/modules/$(uname -r)/build M=$(pwd) modules
+sudo insmod hello.ko
+sudo dmesg | tail -5
+sudo rmmod hello
+						</pre>
+					</section>
+					<section>
+						<h3 id="prockallsyms-the-kernel-symbol-map">/proc/kallsyms - The Kernel Symbol Map</h3>
+						<p>
+							<code>/proc/kallsyms</code>
+							is a text interface to the kernel's internal symbol table. It lists the address
+							of every function and variable known to the kernel - including unexported internal symbols.
+							On production systems with
+							<code>kptr_restrict</code>
+							, addresses are hidden from unprivileged users.
+						</p>
+						<pre class="bash">
+# Show all kernel symbols (requires root or kptr_restrict=0)
+sudo head -30 /proc/kallsyms
+
+# Typical output format:
+# ffffffff81000000 T startup_64         ← T = Text (code in .text)
+# ffffffff81000000 T _text              ← Exact same address
+# ffffffff81000110 t secondary_startup_64
+# ffffffff82000000 D __per_cpu_start    ← D = Data (initialized)
+# ffffffff83400000 R __start_rodata     ← R = Read-only data
+
+# Symbol type codes:
+# T/t = Text (code), uppercase = global, lowercase = local
+# D/d = Initialized data
+# B/b = BSS (zero-initialized data)
+# R/r = Read-only data
+# A   = Absolute (unchanging address)
+# W/w = Weak symbol
+
+# Filter for writeable function pointers (potential hijack targets)
+sudo cat /proc/kallsyms | grep -E &#39; [Dd] &#39; | head -20
+
+# Find module symbols
+sudo cat /proc/kallsyms | grep -E &#39; \[[a-z]&#39; | head -20
+# Modules get a [...] suffix: [ext4], [nf_tables], etc.
+						</pre>
+					</section>
+					<section>
+						<h3 id="linux-vs-windows-nt-subsystems">Linux vs Windows NT Subsystems</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Subsystem</th>
+									<th align="center">Linux</th>
+									<th align="center">Windows NT</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Scheduler</td>
+									<td align="center">CFS/EEVDF in kernel/sched/</td>
+									<td align="center">ntoskrnl!KiSwapThread, priority-based</td>
+								</tr>
+								<tr>
+									<td align="center">Memory Manager</td>
+									<td align="center">mm/ directory,<code>alloc_pages()</code></td>
+									<td align="center">ntoskrnl!Mm,<code>MmAllocatePagesForMdl()</code></td>
+								</tr>
+								<tr>
+									<td align="center">VFS</td>
+									<td align="center">fs/ directory,<code>file_operations</code></td>
+									<td align="center">ntoskrnl!Io, IRP-based I/O model</td>
+								</tr>
+								<tr>
+									<td align="center">Process Manager</td>
+									<td align="center">kernel/fork.c,<code>task_struct</code></td>
+									<td align="center">ntoskrnl!Ps,<code>EPROCESS</code></td>
+								</tr>
+								<tr>
+									<td align="center">IPC</td>
+									<td align="center">signals, pipes, netlink, futex</td>
+									<td align="center">ALPC (Advanced Local Procedure Call)</td>
+								</tr>
+								<tr>
+									<td align="center">Object Manager</td>
+									<td align="center">None (everything is a file-ish)</td>
+									<td align="center">ntoskrnl!Ob, object types, handles</td>
+								</tr>
+								<tr>
+									<td align="center">Registry</td>
+									<td align="center">None (sysfs, procfs, configfs)</td>
+									<td align="center">ntoskrnl!Cm, hive files</td>
+								</tr>
+								<tr>
+									<td align="center">Security</td>
+									<td align="center">LSM hooks, capabilities</td>
+									<td align="center">ntoskrnl!Se, ACLs, SIDs, tokens</td>
+								</tr>
+								<tr>
+									<td align="center">Networking</td>
+									<td align="center">net/ directory, socket buffers</td>
+									<td align="center">ntoskrnl net stack, Winsock Kernel</td>
+								</tr>
+								<tr>
+									<td align="center">Device Drivers</td>
+									<td align="center">Three types: char, block, network</td>
+									<td align="center">WDM, KMDF, UMDF frameworks</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="kernel-reconnaissance">Kernel Reconnaissance</h3>
+						<pre class="bash">
+# 1. Kernel version and build info
+uname -a
+cat /proc/version
+
+# 2. Kernel cmdline — what was passed at boot
+cat /proc/cmdline
+
+# 3. Kernel config (if enabled)
+zcat /proc/config.gz | grep -E &#39;CONFIG_(KALLSYMS|MODULES|KASLR|SECURITY)&#39;
+
+# 4. Loaded modules with memory footprint
+lsmod | sort -k2 -n -r | head -20
+
+# 5. Kernel taint state — has a proprietary module loaded?
+cat /proc/sys/kernel/tainted
+# Bit meanings (values are bit masks, i.e. 1 &lt;&lt; position):
+#     1 = proprietary module loaded
+#     2 = module force-loaded
+#     4 = CPU out of specification
+#     8 = module force-unloaded
+#    16 = machine check exception
+#    32 = bad page
+#    64 = user-requested taint
+#   128 = kernel died recently (oops/panic)
+#   256 = overridden ACPI table
+#   512 = warning issued
+#  1024 = staging/out-of-tree module
+#  2048 = firmware workaround
+#  4096 = out-of-tree module
+#  8192 = unsigned module
+# 16384 = soft lockup
+# 32768 = livepatched kernel
+
+# 6. Kernel symbol addresses hidden?
+cat /proc/sys/kernel/kptr_restrict
+# 0 = unrestricted (development), 1 = restricted to CAP_SYSLOG, 2 = hidden
+
+# 7. Kernel stack protector
+cat /sys/kernel/security/lsm
+# Shows active LSMs (e.g., &#34;capability,lockdown,yama,apparmor,bpf&#34;)
+
+# 8. Check available kernel interfaces
+ls /sys/kernel/
+ls /sys/module/
+
+# 9. Kernel ring buffer (dmesg) — boot and runtime messages
+sudo dmesg | tail -50
+sudo dmesg --level=err,warn | tail -20
+
+# 10. Kernel threads — processes with no userspace
+ps -eo pid,comm,args | grep -E &#39;^[[:space:]]*[0-9]+ [[]&#39; | head -20
+# Kernel threads have their name in brackets: [kthreadd], [ksoftirqd/0], [migration/0]
+						</pre>
+					</section>
+					<section>
+						<h3 id="windows-nt-structures-on-linux">Windows NT Structures on Linux</h3>
+						<p>
+							While this is a Linux-focused article, understanding Windows internals is essential for cross-platform
+							red teaming. You can inspect key structures without a Windows machine:
+						</p>
+						<pre class="bash">
+# Install Volatility 3 for memory forensics (supports Windows crash dumps)
+sudo pacman -S python-volatility3 2&gt;/dev/null || pip install volatility3
+
+# Key Windows kernel structures (for Volatility plugins):
+# _EPROCESS   — Executive Process block (Windows equivalent of task_struct)
+# _ETHREAD    — Executive Thread block
+# _KPROCESS   — Kernel Process block (scheduler portion)
+# _KTHREAD    — Kernel Thread block (scheduler portion)
+# _PEB        — Process Environment Block (user-mode, per-process)
+# _TEB        — Thread Environment Block (user-mode, per-thread)
+# _EPROCESS offsets of interest:
+#   +0x000 Pcb              : _KPROCESS
+#   +0x440 UniqueProcessId  : Ptr64 Void (PID)
+#   +0x448 ActiveProcessLinks: _LIST_ENTRY (doubly-linked list of all processes)
+#   +0x520 ImageFileName    : [15] UChar (truncated process name)
+#   +0x530 Token            : _EX_FAST_REF (security token pointer)
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Build the container and map your host's kernel layout. The image ships kernel headers,
+							<code>kmod</code>
+							,
+							<code>pciutils</code>
+							,
+							<code>usbutils</code>
+							, and
+							<code>bpftrace</code>
+							; it prints the kernel config, symbol-table statistics,
+							module list, and
+							<abbr title="Central Processing Unit">CPU</abbr>
+							feature flags at startup.
+						</p>
+						<p><a href="/wiki/articles/sysinternals/kernel-architecture.Containerfile">kernel-architecture.Containerfile</a></p>
+						<pre class="bash">
+podman build -t kernel-architecture-lab -f kernel-architecture.Containerfile .
+podman run -it --rm --privileged kernel-architecture-lab
+						</pre>
+						<p>Then answer three questions inside the container:</p>
+						<pre class="bash">
+# 1. Where does the syscall table live?
+grep &#39; sys_call_table$&#39; /proc/kallsyms
+
+# 2. How many functions does the core kernel export?
+grep -c &#39; T &#39; /proc/kallsyms
+
+# 3. Are SMEP and SMAP active, and is KPTI on?
+grep -o &#39;sme[ap]&#39; /proc/cpuinfo | sort -u
+cat /sys/devices/system/cpu/vulnerabilities/meltdown
+						</pre>
+						<p>
+							Reboot the host (or start a second container) and compare the address of
+							<code>_text</code>
+							to observe
+							<code>KASLR</code>
+							in action.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/system-calls.html">/wiki/articles/fundamentals/system-calls.html</a> - syscall mechanism, table, tracing</li>
+							<li><a href="/wiki/articles/fundamentals/virtual-memory.html">/wiki/articles/fundamentals/virtual-memory.html</a> - page tables, TLB, address translation</li>
+							<li><a class="icon-website" href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git" target="_blank">Linux kernel source tree</a> - /usr/src/linux/ equivalent upstream</li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source" target="_blank">bootlin.com - Linux kernel source cross-reference</a></li>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/sysinternals/resources/windows-internals" target="_blank">Windows Internals, Part 1, 7th Edition</a> - Yosifovich, Ionescu, Russinovich, Solomon</li>
+							<li><a class="icon-website" href="https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html" target="_blank">Intel SDM Vol. 3A - Chapter 5: Protection</a> - Ring architecture</li>
+							<li><a class="icon-website" href="https://developer.arm.com/documentation/ddi0487/latest/" target="_blank">ARM Architecture Reference Manual - Exception levels</a></li>
+							<li><a class="icon-github" href="https://github.com/apple-oss-distributions/xnu" target="_blank">XNU source (Apple open source)</a></li>
+							<li><a class="icon-website" href="https://sel4.systems/" target="_blank">seL4 Microkernel - Proof of Correctness</a></li>
+							<li><a class="icon-website" href="https://lwn.net/Articles/738975/" target="_blank">LWN.net - Meltdown and KPTI</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/proc.5" target="_blank">man 5 proc</a> - Documentation for /proc/kallsyms, /proc/kcore, /proc/iomem</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

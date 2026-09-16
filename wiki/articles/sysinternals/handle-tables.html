@@ -1,0 +1,1227 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Handle Tables | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Handle Tables">
+		<meta name="keywords" content="file-descriptors, handle-table, handles, linux, privilege-escalation, sysinternals, windows">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Handle Tables">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Process handle tables, including handle encoding, table expansion, access validation, inheritance, handle leaks, and the Linux file descriptor table analogue.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/sysinternals/handle-tables.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Handle Tables">
+		<meta name="twitter:description" itemprop="description" content="Process handle tables, including handle encoding, table expansion, access validation, inheritance, handle leaks, and the Linux file descriptor table analogue.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#why-handle-tables-exist">Why Handle Tables Exist</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-handle-table-structure">The HANDLE_TABLE Structure</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#handle-value-encoding">Handle Value Encoding</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#low-level-handle-creation">Low-Level Handle Creation</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#handle-table-expansion">Handle Table Expansion</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#access-validation">Access Validation</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#handle-inheritance-and-duplicatehandle">Handle Inheritance and DuplicateHandle</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#handle-auditing-obpauditobjectaccess">Handle Auditing: ObpAuditObjectAccess</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#process-explorer-handleexe-analysis">Process Explorer / Handle.exe Analysis</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#handle-leaks">Handle Leaks</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#abuse-patterns">Abuse Patterns</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#sedebugprivilege-escalation">SeDebugPrivilege Escalation</a></b>
+					<ul>
+						<li><a href="#escalation-chain">Escalation chain</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification">Verification</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/sysinternals/index.html">Sysinternals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/sysinternals/handle-tables.html">Handle Tables</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="handle-tables">Handle Tables</h2>
+					<p>
+						Process handle tables, including handle encoding, table expansion, access validation, inheritance,
+						handle leaks, and the Linux file descriptor table analogue.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							A handle is an opaque integer that indexes a per-process table, translating a user-space value
+							such as
+							<code>0x60</code>
+							into a kernel object pointer. Handle tables keep raw kernel addresses out of
+							user mode while giving the kernel a place to cache access rights and inheritance flags. This
+							article covers the Windows
+							<code>HANDLE_TABLE</code>
+							encoding and three-level expansion, then compares
+							it with the Linux
+							<code>files_struct</code>
+							and
+							<code>fdtable</code>
+							and the abuse patterns that both structures enable.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - process fundamentals, /proc, fork/exec</li>
+							<li><a href="/wiki/articles/sysinternals/object-manager.html">Object Manager</a> - Object Manager architecture, object types, namespaces, reference counting</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="why-handle-tables-exist">Why Handle Tables Exist</h3>
+						<p>
+							A process interacts with kernel objects - files, threads, mutexes, shared memory sections -
+							through
+							<b>handles</b>
+							. A handle is an opaque integer that indexes into a per-process table.
+						</p>
+						<p>
+							The handle table serves as the translation layer between user-space handle values (like 0x60)
+							and kernel-space object pointers (like
+							<code>&amp;FileObject</code>
+							). Without handle tables, user mode would
+							need to store raw kernel pointers - a security disaster, as it would expose kernel memory layout
+							and enable arbitrary kernel read/write.
+						</p>
+						<pre class="plaintext">
+User Mode                            Kernel Mode
+══════════                            ═══════════
+
+fd = open(&#34;/etc/passwd&#34;, O_RDONLY)    struct file *fp
+fd == 3                               │
+  │                                   ▼
+  ▼                              ┌────────────────┐
+read(3, buf, 4096)               │   files_struct │ (task_struct→files)
+  │                              │                │
+  │  syscall(SYS_read)           │ fdt-&gt;fd[3] ───►│ struct file *
+  └──────────────────────────────►│                │
+                                  └────────────────┘
+
+                Linux: file descriptor table
+
+HANDLE hFile = CreateFile(...)       PFILE_OBJECT pFile
+hFile == 0x60                        │
+  │                                  ▼
+  ▼                             ┌───────────────────┐
+ReadFile(hFile, buf, 4096)      │    HANDLE_TABLE    │
+  │                             │                    │
+  │  NtReadFile(hFile, ...)     │ TableCode + Index  │
+  └─────────────────────────────►│    → Entry[0x60]  │
+                                 │    → FILE_OBJECT* │
+                                 └───────────────────┘
+
+                Windows: handle table
+						</pre>
+						<p>
+							Linux uses a flat array
+							<code>fdtable</code>
+							(inside
+							<code>struct files_struct</code>
+							), indexed directly by fd number.
+							Windows uses a more complex, multi-level table for scalability.
+						</p>
+					</section>
+					<section>
+						<h3 id="the-handle-table-structure">The HANDLE_TABLE Structure</h3>
+						<p>
+							Every Windows process has an
+							<code>EPROCESS</code>
+							structure. Inside it,
+							<code>ObjectTable</code>
+							points to a
+							<code>HANDLE_TABLE</code>
+							:
+						</p>
+						<pre class="plaintext">
+EPROCESS
+  ...
+  ObjectTable ────────►  HANDLE_TABLE
+                         ┌──────────────────────────────────┐
+                         │  TableCode      (ULONG_PTR)      │ ◄── encoded: level + address
+                         │  QuotaProcess   (PEPROCESS)      │ ◄── process for quota charges
+                         │  UniqueProcessId(HANDLE)          │ ◄── process ID (for lookup)
+                         │  HandleLock     (EX_PUSH_LOCK)   │ ◄── lock for table operations
+                         │  HandleTableList(LIST_ENTRY)     │ ◄── linked into global list
+                         │  HandleContentionEvent           │ ◄── for blocking on expansion
+                         │  DebugInfo      (PVOID)          │ ◄── debug handle tracing
+                         │  ExtraInfoPages (LONG)           │ ◄── additional pages
+                         │  FirstFree      (ULONG)          │ ◄── hint for free slot search
+                         │  LastFree       (ULONG)          │
+                         │  NextHandleNeedingPool (ULONG)   │ ◄── next handle requiring pool alloc
+                         │  HandleCount    (LONG)           │ ◄── total allocated handles
+                         │  Flags          (ULONG)          │
+                         └──────────────────────────────────┘
+						</pre>
+						<p>
+							Linux equivalent -
+							<code>struct files_struct</code>
+							and
+							<code>struct fdtable</code>
+							:
+						</p>
+						<pre class="plaintext">
+task_struct
+  files ──────►  files_struct
+                 ┌─────────────────────┐
+                 │  count              │ ◄── reference count
+                 │  file_lock          │ ◄── spinlock
+                 │  next_fd            │ ◄── hint for next free fd
+                 │  close_on_exec_init │
+                 │  open_fds_init      │ ◄── initial bitmap
+                 │  fd_array[64]       │ ◄── initial inline array
+                 │                     │
+                 │  fdt (fdtable*) ───►│
+                 └─────────+───────────┘
+                           ▼
+                      struct fdtable
+                      ┌─────────────────────┐
+                      │  max_fds            │ ◄── current table size
+                      │  fd (struct file**) │ ◄── array of file pointers
+                      │  open_fds (ulong*)  │ ◄── bitmap of open fds
+                      │  close_on_exec*     │ ◄── bitmap for CLOEXEC
+                      │  full_fds_bits*     │ ◄── bitmap for full regions
+                      └─────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="handle-value-encoding">Handle Value Encoding</h3>
+						<p>
+							A Windows handle is a 32-bit or 64-bit value encoded with both the table index and flags in
+							its low bits:
+						</p>
+						<pre class="plaintext">
+32-bit Handle Encoding:
+┌──────────────────────────────────+───────┐
+│  Table Index (bits 31:2)         │ Flags │
+│                                   │ (1:0) │
+└──────────────────────────────────+───────┘
+  Index = handle &gt;&gt; 2
+
+64-bit Handle Encoding:
+┌─────────────────────────────────────+───────┐
+│  Table Index (bits 63:2)            │ Flags │
+│                                      │ (1:0) │
+└─────────────────────────────────────+───────┘
+  Index = handle &gt;&gt; 2
+
+Flag bits (low 2 bits):
+  Bit 0: INHERIT             - handle inherited by child processes
+  Bit 1: PROTECT_FROM_CLOSE  - handle cannot be closed
+
+Example:
+  Handle 0x64 = 0110 0100
+  &gt;&gt; 2 = 0x19 = index 25
+  &amp; 0x3 = 0x0 = no flags set
+
+  Handle 0x67 = 0110 0111
+  &gt;&gt; 2 = 0x19 = index 25
+  &amp; 0x3 = 0x3 = PROTECT_FROM_CLOSE | INHERIT
+						</pre>
+						<p>
+							In Linux, file descriptors use no encoding - the fd number directly indexes the
+							<code>fd</code>
+							array.
+							The
+							<code>O_CLOEXEC</code>
+							flag is stored in a separate bitmap, not encoded in the fd number:
+						</p>
+						<pre class="bash">
+# Linux fd allocation: simple sequential allocation
+# No encoding, just direct array index
+
+python3 -c &#34;
+import os, fcntl
+# Open several files, observe fd numbers
+fds = [os.open(&#39;/dev/null&#39;, os.O_RDONLY) for _ in range(5)]
+print(&#39;Allocated fds:&#39;, fds)  # [3, 4, 5, 6, 7]
+
+# Show close-on-exec flag (separate bitmap)
+for fd in fds[:3]:
+    flags = fcntl.fcntl(fd, fcntl.F_GETFD)
+    print(f&#39;fd {fd}: CLOEXEC={bool(flags &amp; fcntl.FD_CLOEXEC)}&#39;)
+    os.close(fd)
+&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="low-level-handle-creation">Low-Level Handle Creation</h3>
+						<p>
+							When
+							<code>ObInsertObject()</code>
+							needs to create a user-mode handle for a kernel object, it calls
+							<code>ObpCreateHandle()</code>
+							:
+						</p>
+						<pre class="plaintext">
+ObpCreateHandle(Process, Object, AccessMask, Flags)
+    │
+    ├── 1. Lock HandleTable
+    ├── 2. Find free entry in handle table
+    │       ├── Scan starting from FirstFree
+    │       └── If table full → expand table (ObpExpandHandleTable)
+    ├── 3. Allocate/initialize OBJECT_HANDLE_TABLE_ENTRY
+    │       ├── Entry.Object = ObjectBody pointer
+    │       ├── Entry.GrantedAccess = computed access mask
+    │       └── Entry.Attributes = inheritance &amp; audit flags
+    ├── 4. Encode handle value: Index &lt;&lt; 2 | Flags
+    ├── 5. Increment HandleCount in OBJECT_HEADER
+    ├── 6. If auditing enabled → ObpAuditObjectAccess()
+    ├── 7. Unlock HandleTable
+    └── 8. Return encoded handle to caller
+						</pre>
+						<p>
+							Each table entry is an
+							<code>OBJECT_HANDLE_TABLE_ENTRY</code>
+							:
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────┐
+│  OBJECT_HANDLE_TABLE_ENTRY (bytes may vary)  │
+│                                              │
+│  union {                                     │
+│      PVOID Object;          // pointer to body│
+│      ULONG_PTR ObAttributes; // or attributes│
+│  };                                          │
+│  union {                                     │
+│      ACCESS_MASK GrantedAccess;              │
+│      ULONG_PTR GrantedAccessIndex;           │
+│  };                                          │
+│  union {                                     │
+│      ULONG_PTR NextFreeEntry; // if entry free│
+│      ULONG_PTR Spare;                        │
+│  };                                          │
+└──────────────────────────────────────────────┘
+						</pre>
+						<p>
+							Linux fd allocation is simpler -
+							<code>get_unused_fd_flags()</code>
+							finds the next zero bit in the
+							<code>open_fds</code>
+							bitmap, expands the table if needed, and returns the fd number:
+						</p>
+						<pre class="bash">
+# Trace fd allocation in Linux
+sudo bpftrace -e &#39;
+kprobe:__alloc_fd {
+    $files = (struct files_struct *)arg0;
+    $fd = arg3;
+    printf(&#34;alloc_fd: pid=%d target=%d\n&#34;, pid, $fd);
+}
+kprobe:__put_unused_fd {
+    printf(&#34;free_fd: pid=%d fd=%d\n&#34;, pid, arg1);
+}
+&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="handle-table-expansion">Handle Table Expansion</h3>
+						<p>
+							The Windows handle table uses a
+							<b>three-level (sparse) scheme</b>
+							to conserve memory for processes
+							with few handles while supporting millions of handles:
+						</p>
+						<pre class="plaintext">
+TableCode Encoding:
+  ┌────────────────────────────────┐
+  │  TableCode = Level | TableAddr │
+  │  Level = TableCode &amp; 0x3       │
+  │  TableAddr = TableCode &amp; ~0x3  │
+  └────────────────────────────────┘
+
+Level 0 (TableCode &amp; 3 == 0): Direct table — up to 512 entries
+  ┌──────────────────────────────────────────┐
+  │  TableCode ──► Entry[512] (4K page)      │
+  │  Handles: 0x04 through 0x7FC             │
+  └──────────────────────────────────────────┘
+
+Level 1 (TableCode &amp; 3 == 1): Mid-table — up to 1,024 × 512 entries
+  ┌──────────────────────────────────────────┐
+  │  TableCode ──► Mid[1024] (4K page)       │
+  │    Mid[i] ──► Low_Table[512] (4K each)   │
+  │  Handles: up to 0x200000                 │
+  └──────────────────────────────────────────┘
+
+Level 2 (TableCode &amp; 3 == 2): High-table — up to 1,024 × 1,024 × 512
+  ┌──────────────────────────────────────────┐
+  │  TableCode ──► High[1024] (4K page)      │
+  │    High[i] ──► Mid[1024] (4K each)       │
+  │      Mid[j] ──► Low_Table[512] (4K each) │
+  │  Handles: up to ~16 million              │
+  └──────────────────────────────────────────┘
+
+Handle → Entry Translation:
+                              Level 0   Level 1         Level 2
+  Index = Handle &gt;&gt; 2
+  if Level == 0: Entry = Table[Index]
+  if Level == 1: Entry = Table[Index &gt;&gt; 9][Index &amp; 0x1FF]
+  if Level == 2: Entry = Table[Index &gt;&gt; 18][(Index &gt;&gt; 9) &amp; 0x1FF][Index &amp; 0x1FF]
+						</pre>
+						<p>
+							Linux file descriptor expansion is simpler - the
+							<code>fdtable</code>
+							is a flat array that's reallocated
+							when full:
+						</p>
+						<pre class="bash">
+# Linux fd table expansion: flat array with bitmap
+# Default: 64 inline entries in files_struct
+# Beyond 64: allocated page(s) — 512 fds per page
+# Beyond that: realloc to 2×, up to RLIMIT_NOFILE
+
+# Check current and max fd limits
+cat /proc/$$/limits | grep &#34;open files&#34;
+# Max open files      1024      524288
+
+# Expand fd table by opening many files
+python3 -c &#34;
+import os, resource
+soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+print(f&#39;Limits: soft={soft}, hard={hard}&#39;)
+resource.setrlimit(resource.RLIMIT_NOFILE, (100000, hard))
+
+fds = []
+try:
+    for i in range(10000):
+        fds.append(os.open(&#39;/dev/null&#39;, os.O_RDONLY))
+except OSError as e:
+    print(f&#39;Failed at {i}: {e}&#39;)
+finally:
+    for fd in fds:
+        os.close(fd)
+&#34;
+
+# Inspect fd table size
+sudo bpftrace -e &#39;
+kprobe:expand_files {
+    $files = (struct files_struct *)arg0;
+    $nr = arg1;
+    printf(&#34;expand_files: pid=%d nr=%d count=%d\n&#34;, pid, $nr, $files-&gt;count.counter);
+}
+&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="access-validation">Access Validation</h3>
+						<p>
+							When a handle is created, the Object Manager validates that the caller has sufficient access
+							rights. The desired access mask (what the caller wants) is compared against the granted access
+							mask (what the security subsystem allows):
+						</p>
+						<pre class="plaintext">
+ACCESS_MASK Structure (32 bits):
+┌────+───+──+──────────────────────────────+─────────────────────────┐
+│ G  │ S │ R│  Standard Rights (bits 23:16)│ Specific &amp; Generic (15:0)│
+│ E  │ A │ e│                              │                         │
+│ N  │ C │ s│  DELETE      (0x00010000)    │  GENERIC_READ  (0x80000000)│
+│ E  │ L │ e│  READ_CONTROL(0x00020000)    │  GENERIC_WRITE (0x40000000)│
+│ R  │   │ r│  WRITE_DAC   (0x00040000)    │  GENERIC_EXEC  (0x20000000)│
+│ I  │   │ v│  WRITE_OWNER (0x00080000)    │  GENERIC_ALL   (0x10000000)│
+│ C  │   │ e│  SYNCHRONIZE (0x00100000)    │  MAXIMUM_ALLOWED(0x02000000)│
+└────+───+──+──────────────────────────────+─────────────────────────┘
+
+AccessCheck Algorithm (simplified):
+  ObpGrantAccess(DesiredAccess, Token, SecurityDescriptor):
+      if (DesiredAccess &amp; MAXIMUM_ALLOWED):
+          GrantedAccess = EvaluateDacl(Token, DesiredAccess)
+      else:
+          GrantedAccess = DesiredAccess &amp; EvaluateDacl(Token, DesiredAccess)
+      
+      if (GrantedAccess == 0):
+          return STATUS_ACCESS_DENIED
+      
+      if (GENERIC_READ in DesiredAccess):
+          GrantedAccess |= MapGenericToSpecific(GENERIC_READ)
+      if (GENERIC_WRITE in DesiredAccess):
+          GrantedAccess |= MapGenericToSpecific(GENERIC_WRITE)
+      ...
+      return GrantedAccess
+						</pre>
+						<p>
+							The granted access mask is stored in the handle table entry. Subsequent operations using the
+							handle automatically succeed because the access was pre-validated:
+						</p>
+						<pre class="bash">
+# Linux access validation: checked at open() time, not encoded in fd
+# The struct file carries f_mode (FMODE_READ, FMODE_WRITE) but runtime
+# access checks happen per-syscall (capabilities, euid/egid)
+
+# Show file access mode (read/write) for each fd
+ls -la /proc/$$/fd/ | head -10
+# lr-x------ 1 user user 64 Jun 26 12:00 0 -&gt; /dev/pts/0
+# l-wx------ 1 user user 64 Jun 26 12:00 1 -&gt; /dev/pts/0
+# lrwx------ 1 user user 64 Jun 26 12:00 3 -&gt; /home/user/file.txt
+#  ^
+#  l=link, r=read, w=write, x=execute (meaningless for fd symlinks)
+
+cat /proc/$$/fdinfo/3
+# pos:    0
+# flags:  0100000     (O_RDONLY = 0, O_WRONLY = 1, O_RDWR = 2)
+# mnt_id: 27
+# ino:    123456
+
+# Trace access decisions
+sudo bpftrace -e &#39;
+kprobe:generic_permission {
+    $inode = (struct inode *)arg0;
+    $mask = arg1;
+    printf(&#34;check_access: inode=%p mask=%d comm=%s\n&#34;, $inode, $mask, comm);
+}
+&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="handle-inheritance-and-duplicatehandle">Handle Inheritance and DuplicateHandle</h3>
+						<p>Windows handles can be inherited by child processes. Three mechanisms control inheritance:</p>
+						<ol>
+							<li><b>OBJ_INHERIT flag</b> on <code>OBJECT_ATTRIBUTES</code> - the handle itself is inheritable</li>
+							<li><b>'bInheritHandles' in 'CreateProcess'</b> - parent controls whether any handles are inherited</li>
+							<li><b>'PROCESS_DUP_HANDLE' access</b> - duplicate handle into another process's table</li>
+						</ol>
+						<pre class="plaintext">
+Handle Inheritance Flow:
+══════════════════════════════════════════════════════════════
+
+Parent Process (PID 1000)              Child Process (PID 2000)
+│                                     │
+│ CreateEvent(..., &#34;MyEvent&#34;)         │
+│ HANDLE h = 0x60 (inheritable)       │
+│                                     │
+│ CreateProcess(&#34;child.exe&#34;,          │
+│   bInheritHandles = TRUE) ─────────►│ child.exe starts
+│                                     │ h = 0x60 is valid in child!
+│                                     │ WaitForSingleObject(h, INFINITE)
+│                                     │   → references the SAME event object
+│                                     │ HandleCount in OBJECT_HEADER incremented
+│                                     │
+│ CloseHandle(h)                      │
+│ HandleCount-- (child still has it)  │
+│                                     │ CloseHandle(h)
+│                                     │ HandleCount = 0 → event destroyed
+						</pre>
+						<p>
+							<code>DuplicateHandle()</code>
+							allows one process to inject a handle into another:
+						</p>
+						<pre class="plaintext">
+DuplicateHandle(srcProcess, srcHandle,
+                dstProcess, &amp;dstHandle,
+                desiredAccess, inherit, options)
+
+    │
+    ├── 1. Look up source object from srcProcess handle table
+    ├── 2. Verify PROCES_DUP_HANDLE access on srcProcess
+    ├── 3. Verify desiredAccess against object&#39;s security
+    ├── 4. Verify PROCESS_CREATE_THREAD/VM_WRITE access on dstProcess
+    ├── 5. Insert new handle into dstProcess&#39;s handle table
+    └── 6. Return dstHandle (indexed in dstProcess&#39;s table)
+
+Options:
+  DUPLICATE_CLOSE_SOURCE   — close srcHandle after duplication
+  DUPLICATE_SAME_ACCESS    — copy granted access from source handle
+						</pre>
+						<p>
+							Linux fd inheritance uses
+							<code>O_CLOEXEC</code>
+							flag and
+							<code>close-on-exec</code>
+							bitmap:
+						</p>
+						<pre class="bash">
+# Linux fd inheritance across fork/exec
+
+python3 &lt;&lt; &#39;EOF&#39;
+import os, fcntl, subprocess
+
+# Open a file without CLOEXEC (inherited by child after exec)
+fd_inherit = os.open(&#39;/tmp/parent_file&#39;, os.O_CREAT | os.O_RDWR, 0o644)
+os.write(fd_inherit, b&#39;PARENT DATA\n&#39;)
+
+# Open a file WITH CLOEXEC (closed on exec)
+fd_noinherit = os.open(&#39;/tmp/noinherit_file&#39;, os.O_CREAT | os.O_RDWR | os.O_CLOEXEC, 0o644)
+
+print(f&#39;Parent PID: {os.getpid()}&#39;)
+print(f&#39;fd_inherit={fd_inherit} (CLOEXEC={bool(fcntl.fcntl(fd_inherit, fcntl.F_GETFD) &amp; fcntl.FD_CLOEXEC)})&#39;)
+print(f&#39;fd_noinherit={fd_noinherit} (CLOEXEC={bool(fcntl.fcntl(fd_noinherit, fcntl.F_GETFD) &amp; fcntl.FD_CLOEXEC)})&#39;)
+
+# Execute child that lists its fds
+subprocess.run([&#39;bash&#39;, &#39;-c&#39;, &#39;echo &#34;Child fds:&#34;; ls -la /proc/$$/fd/&#39;], pass_fds=[fd_inherit])
+
+os.close(fd_inherit)
+os.close(fd_noinherit)
+os.unlink(&#39;/tmp/parent_file&#39;)
+os.unlink(&#39;/tmp/noinherit_file&#39;)
+EOF
+
+# Linux has no direct &#34;DuplicateHandle&#34; between arbitrary processes,
+# but UNIX domain sockets with SCM_RIGHTS can pass fds:
+python3 -c &#34;
+import socket, os
+s = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
+fd_to_send = os.open(&#39;/etc/hostname&#39;, os.O_RDONLY)
+with open(&#39;/proc/self/fd/&#39; + str(fd_to_send)) as f:
+    print(f&#39;Sending fd {fd_to_send}: {f.read().strip()}&#39;)
+&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="handle-auditing-obpauditobjectaccess">Handle Auditing: ObpAuditObjectAccess</h3>
+						<p>
+							Windows can generate audit events when handles are created or closed for objects with a System
+							Access Control List (S
+							<abbr title="Access Control List">ACL</abbr>
+							). The kernel routine
+							<code>ObpAuditObjectAccess()</code>
+							records:
+						</p>
+						<ul>
+							<li>Subject (user SID, process ID)</li>
+							<li>Object (name, type)</li>
+							<li>Access requested / granted</li>
+							<li>Result (success / access denied)</li>
+						</ul>
+						<pre class="plaintext">
+Audit Flow:
+  ObpCreateHandle()
+    │
+    ├── Check SACL on object&#39;s security descriptor
+    │     │
+    │     ├── SACL present + AUDIT_SUCCESS → log success
+    │     └── SACL present + AUDIT_FAILURE → log failure
+    │
+    └── ObpAuditObjectAccess()
+          │
+          ├── Build AUDIT_HANDLE_CREATE record
+          │     ├── User SID
+          │     ├── Object name, type
+          │     ├── DesiredAccess, GrantedAccess
+          │     └── Timestamp
+          │
+          └── SeAuditWithClosure → EventLog
+						</pre>
+						<p>
+							Linux auditing uses
+							<code>auditd</code>
+							with syscall rules:
+						</p>
+						<pre class="bash">
+# Linux file descriptor audit equivalent
+# Enable auditing and add rules for specific files
+
+sudo auditctl -l                              # List current rules
+sudo auditctl -a exit,always -F path=/etc/shadow -F perm=r -F key=shadow-read
+sudo auditctl -a exit,always -S openat -F success=0 -k failed-open
+
+# Trigger an audit event
+cat /etc/shadow 2&gt;&amp;1 || true
+
+# View the audit log
+sudo ausearch -k shadow-read --interpret
+# Output includes: uid, pid, comm, exe, path, fd, result
+
+# Clean up
+sudo auditctl -d exit,always -F path=/etc/shadow -F perm=r -F key=shadow-read
+						</pre>
+					</section>
+					<section>
+						<h3 id="process-explorer-handleexe-analysis">Process Explorer / Handle.exe Analysis</h3>
+						<p>
+							Sysinternals
+							<b>Process Explorer</b>
+							displays the full handle table of any process. Key columns:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Column</th>
+									<th align="center">Description</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Handle</td>
+									<td align="center">Hex handle value (e.g., 0x64)</td>
+								</tr>
+								<tr>
+									<td align="center">Type</td>
+									<td align="center">Object type (File, Event, Process, ...)</td>
+								</tr>
+								<tr>
+									<td align="center">Name</td>
+									<td align="center">Object name (e.g.,<code>\Device\HarddiskVolume3\Windows\System32\ntdll.dll</code>)</td>
+								</tr>
+								<tr>
+									<td align="center">Access</td>
+									<td align="center">Granted access mask in hex</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							<b>Handle.exe</b>
+							(command-line) enumerates all handles system-wide:
+						</p>
+						<pre class="plaintext">
+handle -a                          # All handles on the system
+handle -p 1234                     # Handles for PID 1234
+handle -p 1234 -a                  # Full detail for PID 1234
+handle -s                          # Show summary counts per type
+handle &#34;Mutex&#34;                     # Search for handles to objects named &#34;Mutex&#34;
+handle -accepteula &#34;Process&#34;       # Show all Process handles
+						</pre>
+						<p>Linux equivalent tools:</p>
+						<pre class="bash">
+# Linux process handle (fd) analysis tools
+
+# lsof — comprehensive file/handle listing
+lsof -p $$                          # All open handles for current shell
+lsof -p $$ | awk &#39;{print $1,$3,$4,$5,$NF}&#39; | head -20
+# COMMAND PID FD  TYPE NAME
+# bash    1234 0u  CHR  /dev/pts/0
+# bash    1234 1u  CHR  /dev/pts/0
+# bash    1234 3r  REG  /home/user/.bashrc
+# bash    1234 255u CHR /dev/pts/0
+
+# fd types: r=read, w=write, u=read+write, mem=mmap, txt=text, cwd=CWD, rtd=root
+
+# fuser — find processes owning a handle
+fuser -v /var/log/syslog
+fuser -n tcp 22
+
+# ls /proc/PID/fd — direct fd inspection
+ls -la /proc/$$/fd/
+ls -la /proc/$$/fdinfo/
+
+# ss — socket handles
+ss -tlnp | head -20
+
+# perf trace — trace handle (fd) operations
+sudo perf trace -e &#39;close,open*&#39; -p $$ --no-inherit
+						</pre>
+					</section>
+					<section>
+						<h3 id="handle-leaks">Handle Leaks</h3>
+						<p>
+							A handle leak occurs when a process opens handles but never closes them. Over time, the handle
+							table grows, the kernel objects accumulate, and the process eventually hits its handle quota.
+						</p>
+						<pre class="plaintext">
+Handle Leak Example (Windows):
+══════════════════════════════════════════════════════════════
+
+void LeakyThread() {
+    while (true) {
+        HANDLE h = CreateEvent(NULL, FALSE, FALSE, NULL);
+        // BUG: never calls CloseHandle(h)
+        // Handle table grows by one entry each iteration
+        // Event object persists (HandleCount &gt; 0 in OBJECT_HEADER)
+        Sleep(100);
+    }
+}
+
+Detection:
+  handle -p &lt;PID&gt; -s             ← increasing HandleCount
+  Process Explorer handle view   ← hundreds of unnamed Event objects
+  !handle in WinDbg              ← kernel debugger: dump handle table
+						</pre>
+						<p>
+							Linux fd leaks are analogous - unreachable fds (no
+							<code>O_CLOEXEC</code>
+							) that are never closed:
+						</p>
+						<pre class="bash">
+# Linux fd leak detection
+
+# 1. Check fd count for a suspicious process
+ls /proc/$$/fd/ | wc -l
+cat /proc/$$/status | grep FDSize
+
+# 2. Monitor fd growth over time
+watch -n 1 &#39;ls /proc/&lt;PID&gt;/fd/ | wc -l&#39;
+
+# 3. Find processes with most open fds
+sudo ls /proc/*/fd 2&gt;/dev/null | awk -F/ &#39;{print $3}&#39; | sort | uniq -c | sort -rn | head -10
+
+# 4. Show leaked fds and what they reference
+for pid in $(pgrep -f &#34;leaky_program&#34;); do
+    echo &#34;PID $pid: $(ls /proc/$pid/fd/ 2&gt;/dev/null | wc -l) fds&#34;
+    ls -la /proc/$pid/fd/ 2&gt;/dev/null | head -20
+done
+
+# 5. Trace fd lifecycle for potential leaks
+sudo bpftrace -e &#39;
+kprobe:__alloc_fd  { @open[pid] = count(); }
+kprobe:__close_fd  { @close[pid] = count(); }
+interval:s:10 {
+    printf(&#34;=== FD Stats ===\n&#34;);
+    print(@open);
+    print(@close);
+    printf(&#34;Net open for each PID:\n&#34;);
+    print(hist(@open - @close));
+}
+&#39;
+
+# 6. Intentional leak demo and detection
+python3 -c &#34;
+import os, time
+fds = []
+for i in range(100):
+    fds.append(os.open(&#39;/dev/null&#39;, os.O_RDONLY))
+    time.sleep(0.1)
+print(f&#39;Leaked {len(fds)} fds. PID={os.getpid()}&#39;)
+input(&#39;Press Enter to close...&#39;)
+for fd in fds:
+    os.close(fd)
+&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="abuse-patterns">Abuse Patterns</h3>
+						<p>
+							<b>Handle Hijacking</b>
+							- an attacker with sufficient privileges (
+							<code>PROCESS_DUP_HANDLE</code>
+							) duplicates
+							a handle from a privileged process into their own handle table:
+						</p>
+						<pre class="plaintext">
+Attacker (PID 5000)                    LSASS (PID 600)
+│                                      │
+│ NtOpenProcess(600,                   │  (LSASS holds HANDLE to
+│   PROCESS_DUP_HANDLE) ──────────────►│   \Registry\Machine\SAM)
+│                                      │
+│ NtDuplicateObject(                   │
+│   hLSASS,          // source proc    │
+│   0x1A4,           // source handle  │
+│   GetCurrentProcess(),               │
+│   &amp;stolenHandle,   // out: stolen    │
+│   KEY_READ,                          │
+│   0,                                  │
+│   0) ────────────────────────────────┤
+│                                      │
+│ Now attacker has KEY_READ access     │
+│ to SAM hive through stolenHandle     │
+						</pre>
+						<p>
+							<b>LSASS Handle Theft</b>
+							- attackers with
+							<code>SeDebugPrivilege</code>
+							can open
+							<abbr title="Local Security Authority Subsystem Service">LSASS</abbr>
+							with
+							<code>PROCESS_DUP_HANDLE</code>
+							, enumerate its handle table, and duplicate handles to authentication
+							tokens or cached credentials.
+						</p>
+						<p>
+							<b>CSRSS Handle Extraction</b>
+							- CSRSS (Client/Server Runtime Subsystem) holds handles to every
+							console process. In older Windows versions, duplicating a CSRSS handle to a target process gave
+							full process access.
+						</p>
+						<p>Linux equivalent abuse patterns:</p>
+						<pre class="bash">
+# Linux &#34;handle hijacking&#34; equivalent: fd passing, /proc/PID/fd/ access
+
+# 1. Ptrace-based fd stealing (requires CAP_SYS_PTRACE or same uid)
+# Attacker attaches to a privileged process, inspects fd table, dup2&#39;s fds
+
+# 2. /proc/PID/fd/ access — if process has open fd to a restricted file
+# and attacker can read /proc/PID/fd/, they can access the file
+sudo ls -la /proc/1/fd/              # PID 1&#39;s open file descriptors
+sudo cat /proc/1/fd/3                # Read fd 3 of PID 1 (if perms allow)
+
+# 3. Check for processes with interesting handles
+sudo lsof -nP | grep -E &#34;shadow|passwd|private_key|\.pem&#34; 2&gt;/dev/null | head -10
+
+# 4. SCM_RIGHTS fd passing over unix sockets (legitimate DuplicateHandle)
+# Process A sends fd to Process B via sendmsg(SCM_RIGHTS)
+# This is the Linux equivalent of DuplicateHandle between processes
+python3 &lt;&lt; &#39;PYEOF&#39;
+import socket, os, struct, array, threading
+
+def receiver():
+    srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    srv.bind(&#39;/tmp/fdpass.sock&#39;)
+    srv.listen(1)
+    conn, _ = srv.accept()
+    
+    # Receive fd via SCM_RIGHTS
+    msg, ancdata, flags, addr = conn.recvmsg(1024, socket.CMSG_SPACE(struct.calcsize(&#39;i&#39;)))
+    for cmsg_level, cmsg_type, cmsg_data in ancdata:
+        if cmsg_level == socket.SOL_SOCKET and cmsg_type == socket.SCM_RIGHTS:
+            received_fd = struct.unpack(&#39;i&#39;, cmsg_data)[0]
+            print(f&#39;Received fd {received_fd}&#39;)
+            with open(f&#39;/proc/self/fd/{received_fd}&#39;) as f:
+                print(f&#39;Content: {f.read().strip()}&#39;)
+    
+    conn.close()
+    srv.close()
+    os.unlink(&#39;/tmp/fdpass.sock&#39;)
+
+def sender():
+    import time
+    time.sleep(0.5)
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.connect(&#39;/tmp/fdpass.sock&#39;)
+    
+    fd = os.open(&#39;/etc/hostname&#39;, os.O_RDONLY)
+    sock.sendmsg([b&#39;here&#39;], [(socket.SOL_SOCKET, socket.SCM_RIGHTS, struct.pack(&#39;i&#39;, fd))])
+    sock.close()
+    os.close(fd)
+
+threading.Thread(target=receiver, daemon=True).start()
+sender()
+PYEOF
+						</pre>
+					</section>
+					<section>
+						<h3 id="sedebugprivilege-escalation">SeDebugPrivilege Escalation</h3>
+						<p>
+							<code>SeDebugPrivilege</code>
+							is the most powerful Windows privilege for handle manipulation. It grants:
+						</p>
+						<pre class="plaintext">
+SeDebugPrivilege Effects on Handle Operations:
+  - NtOpenProcess: bypass DACL — can open ANY process
+  - NtOpenThread: bypass DACL — can open ANY thread
+  - Maximizes granted access: PROCESS_ALL_ACCESS, THREAD_ALL_ACCESS
+  - Combine with PROCESS_DUP_HANDLE → steal any handle
+						</pre>
+						<h4 id="escalation-chain">Escalation chain</h4>
+						<pre class="plaintext">
+1. Acquire SeDebugPrivilege (admin token adjustment)
+2. Open winlogon.exe (PID always fixed) with PROCESS_DUP_HANDLE
+3. Enumerate winlogon handle table → find handle to SYSTEM token
+4. DuplicateHandle(winlogon, tokenHandle, self, &amp;myToken)
+5. ImpersonateLoggedOnUser(myToken) or SetThreadToken(NULL, myToken)
+6. Now running as SYSTEM
+						</pre>
+						<p>Linux equivalent:</p>
+						<pre class="bash">
+# Linux &#34;privilege escalation via process handles&#34; analogue
+
+# CAP_SYS_PTRACE — equivalent to SeDebugPrivilege
+# Allows attaching to any process, reading /proc/PID/mem,
+# inspecting /proc/PID/fd/, and using ptrace
+
+# Check capabilities of a running process
+cat /proc/$$/status | grep -i cap
+getpcaps $$
+
+# CAP_SYS_PTRACE attack chain:
+# 1. Find process with elevated caps
+sudo getpcaps $(pgrep -x sshd | head -1)
+# 2. Read its memory for credentials
+# 3. Dup fds to sensitive files
+
+# Linux has no &#34;impersonate&#34; but setuid, setgid, and
+# user namespaces provide similar context switching:
+unshare -U bash -c &#39;echo &#34;inside new user namespace: $(id)&#34;&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="verification">Verification</h3>
+						<pre class="bash">
+# 1. Inspect current process handle (fd) table
+echo &#34;=== My PID: $$ ===&#34;
+echo &#34;Open fds: $(ls /proc/$$/fd/ | wc -l)&#34;
+echo &#34;Max fds: $(cat /proc/$$/limits | grep &#39;open files&#39; | awk &#39;{print $4}&#39;)&#34;
+ls -la /proc/$$/fd/ | head -10
+echo &#34;&#34;
+ls -la /proc/$$/fdinfo/ | head -10
+
+# 2. System-wide handle enumeration
+echo &#34;=== System-wide fd usage ===&#34;
+sudo ls /proc/*/fd 2&gt;/dev/null | awk -F/ &#39;{print $3}&#39; | sort | uniq -c | sort -rn | head -10
+
+# 3. Find processes holding handles to sensitive files
+sudo lsof -nP 2&gt;/dev/null | grep -E &#34;shadow|passwd&#34; | head -5
+
+# 4. Handle (fd) access validation — try reading a protected fd
+sudo python3 -c &#34;
+import os
+# Open /etc/shadow as root
+fd = os.open(&#39;/etc/shadow&#39;, os.O_RDONLY)
+print(f&#39;Opened /etc/shadow as fd {fd}&#39;)
+# The fd stores the open mode, but Linux doesn&#39;t pre-validate access per syscall
+# Access was validated at open() time based on euid
+os.close(fd)
+&#34;
+
+# 5. Trace handle creation and destruction
+echo &#34;=== Tracing fd alloc/free (press Ctrl+C after a few seconds) ===&#34;
+timeout 10 sudo bpftrace -e &#39;
+kprobe:__alloc_fd  { printf(&#34;+ fd alloc:  pid=%d comm=%s\n&#34;, pid, comm); }
+kprobe:__close_fd  { printf(&#34;- fd close:  pid=%d fd=%d comm=%s\n&#34;, pid, arg1, comm); }
+kprobe:dup2         { printf(&#34;= dup2:     pid=%d old=%d new=%d\n&#34;, pid, arg0, arg1); }
+&#39; 2&gt;/dev/null || echo &#34;(bpftrace may require running as root)&#34;
+
+# 6. Handle inheritance demonstration
+echo &#34;=== Handle inheritance across fork ===&#34;
+python3 -c &#34;
+import os, subprocess
+# Create fd without CLOEXEC  
+fd = os.open(&#39;/etc/hostname&#39;, os.O_RDONLY)
+# Verify it&#39;s open
+print(f&#39;Parent fd: {fd}, file: {os.readlink(f\&#34;/proc/{os.getpid()}/fd/{fd}\&#34;)}&#39;)
+# Fork and check
+subprocess.run([&#39;bash&#39;, &#39;-c&#39;, f&#39;echo -n \&#34;Child sees fd {fd}: \&#34;; cat /proc/\$\$/fd/{fd}&#39;], pass_fds=[fd])
+os.close(fd)
+&#34;
+
+# 7. Check handle limits
+echo &#34;=== Handle (fd) limits ===&#34;
+ulimit -n          # Soft limit
+ulimit -Hn         # Hard limit
+cat /proc/$$/limits | grep &#34;open files&#34;
+
+# 8. System-wide handle statistics
+echo &#34;=== Kernel file handle stats ===&#34;
+cat /proc/sys/fs/file-nr
+# Output: &lt;allocated&gt; &lt;unused&gt; &lt;max&gt;
+#   allocated: total allocated file handles system-wide
+#   unused:    free file handles
+#   max:       kernel maximum (fs.file-max)
+
+cat /proc/sys/fs/file-max
+cat /proc/sys/fs/nr_open
+
+# 9. Find orphaned handles (fds pointing to deleted files)
+sudo lsof +L1 2&gt;/dev/null | head -10
+# Files with link count &lt; 1 — deleted but still held open
+
+# 10. Monitor handle table growth of a process
+echo &#34;=== Create leaky process and watch fd count ===&#34;
+python3 -c &#34;
+import os, time
+print(f&#39;PID={os.getpid()}&#39;)
+for i in range(10):
+    os.open(&#39;/dev/null&#39;, os.O_RDONLY)
+    time.sleep(1)
+print(&#39;Done leaking&#39;)
+&#34; &amp;
+LEAK_PID=$!
+sleep 3
+for i in $(seq 1 3); do
+    echo &#34;Tick $i: fd count = $(ls /proc/$LEAK_PID/fd/ 2&gt;/dev/null | wc -l)&#34;
+    sleep 1
+done
+kill $LEAK_PID 2&gt;/dev/null
+wait $LEAK_PID 2&gt;/dev/null
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that decodes a Linux process handle table. Read
+							<code>/proc/&lt;pid&gt;/fd</code>
+							and
+							<code>/proc/&lt;pid&gt;/fdinfo/&lt;fd&gt;</code>
+							, resolve the target path, and print the file descriptor, its access mode, and what it points
+							to. Run it against a shell and watch new descriptors appear as you open files.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;path/filepath&#34;
+	&#34;strconv&#34;
+	&#34;strings&#34;
+)
+
+func main() {
+	if len(os.Args) != 2 {
+		fmt.Fprintf(os.Stderr, &#34;usage: %s &lt;pid&gt;\n&#34;, os.Args[0])
+		os.Exit(1)
+	}
+
+	pid := os.Args[1]
+	dir := filepath.Join(&#34;/proc&#34;, pid, &#34;fd&#34;)
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	for _, entry := range entries {
+		target, _ := os.Readlink(filepath.Join(dir, entry.Name()))
+		fmt.Printf(&#34;fd %-4s %-9s %s\n&#34;, entry.Name(), accessMode(pid, entry.Name()), target)
+	}
+}
+
+// accessMode parses the octal flags field from fdinfo and returns the low
+// two bits, which encode read, write, or read-write access.
+func accessMode(pid string, fd string) string {
+	data, err := os.ReadFile(filepath.Join(&#34;/proc&#34;, pid, &#34;fdinfo&#34;, fd))
+	if err != nil {
+		return &#34;?&#34;
+	}
+
+	for _, line := range strings.Split(string(data), &#34;\n&#34;) {
+		if strings.HasPrefix(line, &#34;flags:&#34;) {
+			octal := strings.TrimSpace(strings.TrimPrefix(line, &#34;flags:&#34;))
+			value, err := strconv.ParseUint(octal, 8, 64)
+			if err != nil {
+				return &#34;?&#34;
+			}
+			switch value &amp; 3 {
+			case 0:
+				return &#34;O_RDONLY&#34;
+			case 1:
+				return &#34;O_WRONLY&#34;
+			case 2:
+				return &#34;O_RDWR&#34;
+			}
+		}
+	}
+
+	return &#34;?&#34;
+}
+						</pre>
+						<p>Build and run it against your own shell:</p>
+						<pre class="bash">
+go build -o fdtable fdtable.go
+./fdtable $$
+
+# In another terminal, open a file and hold it with a long sleep
+sleep 600 &lt; /etc/hostname &amp;
+./fdtable $$
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/sysinternals/resources/windows-internals" target="_blank">Windows Internals, Part 1 - Chapter 3: System Mechanisms - Object Manager Handle Routines</a></li>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/sysinternals/downloads/handle" target="_blank">Sysinternals Handle v5.0</a></li>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/sysinternals/downloads/process-explorer" target="_blank">Sysinternals Process Explorer</a></li>
+							<li><a class="icon-website" href="https://googleprojectzero.blogspot.com/2016/10/using-programming-skills-to-exploit.html" target="_blank">Win32k/Client Server Runtime Subsystem Handle Abuse - James Forshaw</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/include/linux/fdtable.h" target="_blank">Linux - struct files_struct and struct fdtable</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/fs/file.c" target="_blank">Linux - __alloc_fd implementation</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/lsof.8" target="_blank">lsof(8) - list open files</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/proc.5" target="_blank">proc(5) - /proc/PID/fd/</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/unix.7" target="_blank">SCM_RIGHTS - send/receive file descriptors via UNIX sockets</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/include/uapi/asm-generic/fcntl.h" target="_blank">Linux Elixir - close-on-exec and O_CLOEXEC</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

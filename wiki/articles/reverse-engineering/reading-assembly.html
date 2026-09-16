@@ -1,0 +1,1640 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Reading x86-64 Assembly | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Reading x86-64 Assembly">
+		<meta name="keywords" content="assembly, control-flow, disassembly, intel-syntax, manual-decompilation, objdump, reverse-engineering, x86-64">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Reading x86-64 Assembly">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Systematic instruction-by-instruction decoding of x86-64 disassembly, covering Intel syntax, essential opcodes, control-flow patterns, function prologues, and manual decompilation.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/reverse-engineering/reading-assembly.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Reading x86-64 Assembly">
+		<meta name="twitter:description" itemprop="description" content="Systematic instruction-by-instruction decoding of x86-64 disassembly, covering Intel syntax, essential opcodes, control-flow patterns, function prologues, and manual decompilation.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#why-intel-syntax">Why Intel Syntax</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#x86-64-register-set">x86-64 Register Set</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#essential-instructions">Essential Instructions</a></b>
+					<ul>
+						<li><a href="#data-movement">Data Movement</a></li>
+						<li><a href="#arithmetic">Arithmetic</a></li>
+						<li><a href="#bitwise-operations">Bitwise Operations</a></li>
+						<li><a href="#comparison-and-test">Comparison and Test</a></li>
+						<li><a href="#conditional-jumps-decoding-the-branch">Conditional Jumps - Decoding the Branch</a></li>
+						<li><a href="#unconditional-jump-call-return">Unconditional Jump, Call, Return</a></li>
+						<li><a href="#stack-operations">Stack Operations</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#function-prologue-and-epilogue">Function Prologue And Epilogue</a></b>
+					<ul>
+						<li><a href="#prologue-function-entry">Prologue (function entry)</a></li>
+						<li><a href="#epilogue-function-exit">Epilogue (function exit)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#annotated-disassembly-example">Annotated Disassembly Example</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#recognizing-control-flow-patterns">Recognizing Control Flow Patterns</a></b>
+					<ul>
+						<li><a href="#if-else-diamond">if-else (diamond)</a></li>
+						<li><a href="#while-loop-test-at-top">while loop (test at top)</a></li>
+						<li><a href="#do-while-loop-test-at-bottom">do-while loop (test at bottom)</a></li>
+						<li><a href="#for-loop">for loop</a></li>
+						<li><a href="#switch-statement-jump-table">switch statement - jump table</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#optimization-effects-o0-vs-o2">Optimization Effects - O0 vs O2</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#hands-on-manual-decompilation-exercise">Hands-On - Manual Decompilation Exercise</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#common-pitfalls">Common Pitfalls</a></b>
+					<ul>
+						<li><a href="#confusing-lea-with-mov">Confusing lea with mov</a></li>
+						<li><a href="#missing-the-red-zone">Missing the red zone</a></li>
+						<li><a href="#tail-call-optimization">Tail call optimization</a></li>
+						<li><a href="#function-boundaries-in-stripped-bins">Function Boundaries In Stripped Bins</a></li>
+						<li><a href="#rip-relative-string-references">RIP-Relative String References</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#reading-stripped-disassembly">Reading Stripped Disassembly</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#summary">Summary</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/reverse-engineering/index.html">Reverse Engineering</a></li>
+						<li aria-current="page"><a href="/wiki/articles/reverse-engineering/reading-assembly.html">Reading Assembly</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="reading-x86-64-assembly">Reading x86-64 Assembly</h2>
+					<p>
+						Systematic instruction-by-instruction decoding of x86-64 disassembly, covering Intel syntax,
+						essential opcodes, control-flow patterns, function prologues, and manual decompilation.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Disassembly is the lowest-level view of a compiled program, and reading it fluently is the core
+							skill of reverse engineering. This article teaches the small vocabulary of instructions that
+							covers most real code, then shows how the compiler turns C control structures and functions
+							into recognizable assembly patterns. After reading it you can take an
+							<code>objdump</code>
+							listing and
+							reconstruct the original C logic by hand.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/calling-conventions.html">Calling Conventions</a> - System V AMD64 ABI, argument placement, caller/callee-saved registers</li>
+							<li><a href="/wiki/articles/fundamentals/stack.html">Stack</a> - stack frame anatomy, prologue/epilogue, rbp/rsp mechanics</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="why-intel-syntax">Why Intel Syntax</h3>
+						<p>
+							Reverse engineering tools overwhelmingly use Intel syntax: Ghidra, I
+							<abbr title="Domain Admin">DA</abbr>
+							Pro,
+							radare2, Binary Ninja, x64dbg, and LLDB's default on macOS. objdump defaults to AT&T but switches
+							with
+							<code>-M intel</code>
+							. The difference matters.
+						</p>
+						<p>
+							AT&T syntax uses
+							<code>mov src, dst</code>
+							with register prefixes (
+							<code>%rax</code>
+							,
+							<code>%rbx</code>
+							), immediate prefixes
+							(
+							<code>$0x42</code>
+							), and size suffixes (
+							<code>movl</code>
+							,
+							<code>movq</code>
+							). Intel syntax uses
+							<code>mov dst, src</code>
+							with bare
+							register names (
+							<code>rax</code>
+							,
+							<code>rbx</code>
+							), bare immediates (
+							<code>0x42</code>
+							), and memory operand form
+							<code>[base + index*scale + displacement]</code>
+							. Intel syntax reads left-to-right like C assignment:
+							<code>mov rax, rbx</code>
+							means
+							<code>rax = rbx</code>
+							.
+						</p>
+						<pre class="plaintext">
+; AT&amp;T (objdump default)
+movq   %rax, -0x8(%rbp)      ; read: move rax into [rbp-8]
+
+; Intel (objdump -M intel)
+mov    QWORD PTR [rbp-0x8], rax  ; read: [rbp-8] = rax
+						</pre>
+						<p>
+							Always use Intel syntax when reversing. Every modern tool outputs it. If you use objdump, always
+							pass
+							<code>-M intel</code>
+							.
+						</p>
+						<pre class="plaintext">
+objdump -d -M intel binary
+objdump -d -M intel --no-show-raw-insn binary  # cleaner output
+						</pre>
+					</section>
+					<section>
+						<h3 id="x86-64-register-set">x86-64 Register Set</h3>
+						<p>
+							Before reading disassembly, you must know what each register holds and when it's safe to clobber.
+							The mapping is not arbitrary - the ABI assigns roles.
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Register</th>
+									<th align="center">Role (System V AMD64)</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">rax</td>
+									<td align="center">Return value from function call. Also accumulator for imul/idiv.</td>
+								</tr>
+								<tr>
+									<td align="center">rbx</td>
+									<td align="center">Callee-saved general purpose.</td>
+								</tr>
+								<tr>
+									<td align="center">rcx</td>
+									<td align="center">Fourth argument (rdi, rsi, rdx, rcx). Volatile.</td>
+								</tr>
+								<tr>
+									<td align="center">rdx</td>
+									<td align="center">Third argument. Also upper half of 128-bit return (rdx:rax).</td>
+								</tr>
+								<tr>
+									<td align="center">rsi</td>
+									<td align="center">Second argument. Source index for string ops.</td>
+								</tr>
+								<tr>
+									<td align="center">rdi</td>
+									<td align="center">First argument. Destination index for string ops.</td>
+								</tr>
+								<tr>
+									<td align="center">rbp</td>
+									<td align="center">Frame pointer (base pointer). Callee-saved.</td>
+								</tr>
+								<tr>
+									<td align="center">rsp</td>
+									<td align="center">Stack pointer. Points to last pushed value.</td>
+								</tr>
+								<tr>
+									<td align="center">r8 - r9</td>
+									<td align="center">Fifth and sixth arguments. Volatile.</td>
+								</tr>
+								<tr>
+									<td align="center">r10 - r11</td>
+									<td align="center">Temporary/volatile. Used by syscall instruction.</td>
+								</tr>
+								<tr>
+									<td align="center">r12 - r15</td>
+									<td align="center">Callee-saved general purpose.</td>
+								</tr>
+								<tr>
+									<td align="center">rip</td>
+									<td align="center">Instruction pointer. Cannot be directly accessed.</td>
+								</tr>
+								<tr>
+									<td align="center">rflags</td>
+									<td align="center">Condition flags (ZF, SF, CF, OF, PF). Set by cmp/test/etc.</td>
+								</tr>
+								<tr>
+									<td align="center">xmm0 - xmm7</td>
+									<td align="center">Floating-point arguments and return (xmm0). Volatile.</td>
+								</tr>
+								<tr>
+									<td align="center">xmm8 - xmm15</td>
+									<td align="center">Floating-point temporaries.</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							Lower 32-bit, 16-bit, and 8-bit sub-register aliases exist but don't zero-extend to the full
+							register. Writing to
+							<code>eax</code>
+							zero-extends to
+							<code>rax</code>
+							. Writing to
+							<code>ax</code>
+							,
+							<code>al</code>
+							, or
+							<code>ah</code>
+							leaves upper
+							bits untouched.
+						</p>
+						<pre class="plaintext">
+mov eax, 0          ; sets rax to 0 (zero-extension)
+mov ax, 0           ; only sets lower 16 bits; upper 48 bits are preserved
+mov al, 0           ; only sets lower 8 bits; upper 56 bits are preserved
+						</pre>
+						<p>
+							This behavior causes subtle bugs. When reversing,
+							<code>xor eax, eax</code>
+							always zeroes the full
+							<code>rax</code>
+							. This is the canonical "set to zero" idiom because
+							<code>xor eax, eax</code>
+							is 2 bytes;
+							<code>mov rax, 0</code>
+							is 7 bytes for the immediate.
+						</p>
+					</section>
+					<section>
+						<h3 id="essential-instructions">Essential Instructions</h3>
+						<p>
+							You can understand 90% of typical disassembly with roughly 20 instructions. The rest are SSE/AVX
+							vector ops, privileged instructions, or redundant mnemonics. Master these first.
+						</p>
+						<h4 id="data-movement">Data Movement</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Instruction</th>
+									<th align="center">Example</th>
+									<th align="center">Semantics</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>mov dst, src</code></td>
+									<td align="center"><code>mov rax, [rbp-0x8]</code></td>
+									<td align="center"><code>rax = *(local_var)</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>movzx dst, src</code></td>
+									<td align="center"><code>movzx eax, byte [rdi]</code></td>
+									<td align="center">Zero-extend byte to dword</td>
+								</tr>
+								<tr>
+									<td align="center"><code>movsx dst, src</code></td>
+									<td align="center"><code>movsx rax, word [rsi]</code></td>
+									<td align="center">Sign-extend word to qword</td>
+								</tr>
+								<tr>
+									<td align="center"><code>lea dst, [expr]</code></td>
+									<td align="center"><code>lea rax, [rbp-0x10]</code></td>
+									<td align="center"><code>rax = &amp;local_var</code>(address, NOT value)</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							<code>lea</code>
+							is the most misunderstood instruction in x86-64 reversing. It computes an effective address
+							but does NOT dereference memory.
+							<code>lea rax, [rbp-0x8]</code>
+							computes
+							<code>rbp - 8</code>
+							and stores that pointer
+							in rax. It never touches memory at
+							<code>[rbp-8]</code>
+							. Compare:
+						</p>
+						<pre class="c">
+int x = *ptr;        // mov eax, [rdi]     - loads value at ptr
+int *p = &amp;x;         // lea rax, [rbp-8]   - computes address of x
+int y = x * 5;       // lea eax, [rax + rax*4] - compute without dedicated multiply
+						</pre>
+						<p>
+							That last line is critical:
+							<code>lea</code>
+							is often used for arithmetic because it can compute
+							<code>base + index*scale + displacement</code>
+							in a single instruction without modifying flags.
+							<code>lea eax, [rax + rax*4]</code>
+							multiplies by 5.
+							<code>lea rax, [rdi + rsi*8]</code>
+							computes
+							<code>rdi + rsi * 8</code>
+							- an array index.
+						</p>
+						<h4 id="arithmetic">Arithmetic</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Instruction</th>
+									<th align="center">Example</th>
+									<th align="center">Semantics</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>add dst, src</code></td>
+									<td align="center"><code>add rax, 1</code></td>
+									<td align="center"><code>rax += 1</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>sub dst, src</code></td>
+									<td align="center"><code>sub rsp, 0x20</code></td>
+									<td align="center"><code>rsp -= 0x20</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>inc dst</code></td>
+									<td align="center"><code>inc ecx</code></td>
+									<td align="center"><code>ecx++</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>dec dst</code></td>
+									<td align="center"><code>dec rbx</code></td>
+									<td align="center"><code>rbx--</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>imul dst, src</code></td>
+									<td align="center"><code>imul rax, rcx</code></td>
+									<td align="center"><code>rax *= rcx</code>(signed)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>imul dst, src1, src2</code></td>
+									<td align="center"><code>imul eax, ebx, 13</code></td>
+									<td align="center"><code>eax = ebx * 13</code>(3-operand form)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>idiv src</code></td>
+									<td align="center"><code>idiv rcx</code></td>
+									<td align="center"><code>rdx:rax / rcx</code>-><code>rax=quotient, rdx=remainder</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>neg dst</code></td>
+									<td align="center"><code>neg rax</code></td>
+									<td align="center"><code>rax = -rax</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>cdq</code>/<code>cqo</code></td>
+									<td align="center"><code>cqo</code></td>
+									<td align="center">Sign-extend rax -> rdx:rax (for idiv setup)</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							<code>idiv</code>
+							is messy. Before
+							<code>idiv rcx</code>
+							, the 128-bit dividend is in
+							<code>rdx:rax</code>
+							. The typical pattern:
+						</p>
+						<pre class="plaintext">
+mov    rax, [rbp-0x8]   ; dividend
+cqo                      ; sign-extend rax -&gt; rdx:rax
+idiv   rcx               ; rax = quotient, rdx = remainder
+						</pre>
+						<h4 id="bitwise-operations">Bitwise Operations</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Instruction</th>
+									<th align="center">Example</th>
+									<th align="center">Semantics</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>and dst, src</code></td>
+									<td align="center"><code>and eax, 0xff</code></td>
+									<td align="center"><code>eax &amp;= 0xff</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>or dst, src</code></td>
+									<td align="center"><code>or rax, 1</code></td>
+									<td align="center"><code>rax |= 1</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>xor dst, src</code></td>
+									<td align="center"><code>xor eax, eax</code></td>
+									<td align="center"><code>eax ^= eax</code>-> zero (canonical zero idiom)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>not dst</code></td>
+									<td align="center"><code>not rax</code></td>
+									<td align="center"><code>rax = ~rax</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>shl dst, count</code></td>
+									<td align="center"><code>shl eax, 3</code></td>
+									<td align="center"><code>eax &lt;&lt;= 3</code>(logical left)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>shr dst, count</code></td>
+									<td align="center"><code>shr rax, cl</code></td>
+									<td align="center"><code>rax &gt;&gt;= cl</code>(logical right)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>sar dst, count</code></td>
+									<td align="center"><code>sar eax, 1</code></td>
+									<td align="center"><code>eax &gt;&gt;= 1</code>(arithmetic right, preserves sign)</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							<code>xor eax, eax</code>
+							is the canonical register zero. It's 2 bytes (
+							<code>31 c0</code>
+							) vs
+							<code>mov eax, 0</code>
+							at 5
+							bytes (
+							<code>b8 00 00 00 00</code>
+							). Any competent compiler uses xor-zeroing. In disassembly, whenever
+							you see
+							<code>xor reg, reg</code>
+							, read it as
+							<code>reg = 0</code>
+							.
+						</p>
+						<h4 id="comparison-and-test">Comparison and Test</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Instruction</th>
+									<th align="center">Example</th>
+									<th align="center">Flags Set</th>
+									<th align="center">Use Case</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>cmp dst, src</code></td>
+									<td align="center"><code>cmp eax, 0x7f</code></td>
+									<td align="center">ZF, SF, CF, OF</td>
+									<td align="center"><code>dst - src</code>, sets flags, discards result</td>
+								</tr>
+								<tr>
+									<td align="center"><code>test dst, src</code></td>
+									<td align="center"><code>test al, al</code></td>
+									<td align="center">ZF, SF, PF</td>
+									<td align="center"><code>dst &amp; src</code>, sets flags, discards result</td>
+								</tr>
+								<tr>
+									<td align="center"><code>cmp</code>with memory</td>
+									<td align="center"><code>cmp [rdi+0x18], ebx</code></td>
+									<td align="center">ZF, SF, CF, OF</td>
+									<td align="center">Compare memory to register</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							<code>cmp a, b</code>
+							computes
+							<code>a - b</code>
+							and sets flags. The key insight: the flags tell you the relationship
+							between a and b.
+						</p>
+						<pre class="plaintext">
+cmp eax, 0x42
+je  somewhere    ; jump if eax == 0x42 (ZF=1)
+jne somewhere    ; jump if eax != 0x42 (ZF=0)
+jg  somewhere    ; jump if eax &gt; 0x42  (signed, ZF=0 and SF=OF)
+jl  somewhere    ; jump if eax &lt; 0x42  (signed, SF≠OF)
+ja  somewhere    ; jump if eax &gt; 0x42  (unsigned, CF=0 and ZF=0)
+jb  somewhere    ; jump if eax &lt; 0x42  (unsigned, CF=1)
+						</pre>
+						<p>
+							<code>test reg, reg</code>
+							is the canonical null check.
+							<code>test eax, eax</code>
+							sets ZF=1 if
+							<code>eax == 0</code>
+							. Equivalent
+							to
+							<code>cmp eax, 0</code>
+							but 2 bytes instead of 3.
+						</p>
+						<h4 id="conditional-jumps-decoding-the-branch">Conditional Jumps - Decoding the Branch</h4>
+						<p>
+							Every conditional jump reads flags set by the immediately preceding
+							<code>cmp</code>
+							or
+							<code>test</code>
+							. The mnemonic
+							tells you the condition:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Signed</th>
+									<th align="center">Unsigned</th>
+									<th align="center">Condition</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">je / jz</td>
+									<td align="center">je / jz</td>
+									<td align="center">Equal / Zero</td>
+								</tr>
+								<tr>
+									<td align="center">jne / jnz</td>
+									<td align="center">jne / jnz</td>
+									<td align="center">Not equal / Not zero</td>
+								</tr>
+								<tr>
+									<td align="center">jg</td>
+									<td align="center">ja</td>
+									<td align="center">>  (greater/above)</td>
+								</tr>
+								<tr>
+									<td align="center">jge</td>
+									<td align="center">jae / jnb</td>
+									<td align="center">>= (greater-or-equal)</td>
+								</tr>
+								<tr>
+									<td align="center">jl</td>
+									<td align="center">jb / jc</td>
+									<td align="center"><  (less/below)</td>
+								</tr>
+								<tr>
+									<td align="center">jle</td>
+									<td align="center">jbe</td>
+									<td align="center"><= (less-or-equal)</td>
+								</tr>
+								<tr>
+									<td align="center">js</td>
+									<td align="center"></td>
+									<td align="center">Sign flag set</td>
+								</tr>
+								<tr>
+									<td align="center">jns</td>
+									<td align="center"></td>
+									<td align="center">Sign flag not set</td>
+								</tr>
+								<tr>
+									<td align="center">jo</td>
+									<td align="center"></td>
+									<td align="center">Overflow flag set</td>
+								</tr>
+								<tr>
+									<td align="center">jno</td>
+									<td align="center"></td>
+									<td align="center">Overflow flag not set</td>
+								</tr>
+								<tr>
+									<td align="center">jp / jpe</td>
+									<td align="center"></td>
+									<td align="center">Parity even</td>
+								</tr>
+								<tr>
+									<td align="center">jnp / jpo</td>
+									<td align="center"></td>
+									<td align="center">Parity odd</td>
+								</tr>
+								<tr>
+									<td align="center">jcxz</td>
+									<td align="center"></td>
+									<td align="center">Jump if cx == 0</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							The signed/unsigned distinction is critical. If a disassembly shows
+							<code>jl</code>
+							after
+							<code>cmp</code>
+							, the comparison
+							is signed. If it shows
+							<code>jb</code>
+							, it's unsigned. This tells you the type of the C variable:
+							<code>int</code>
+							(signed) vs
+							<code>unsigned int</code>
+							(unsigned).
+						</p>
+						<h4 id="unconditional-jump-call-return">Unconditional Jump, Call, Return</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Instruction</th>
+									<th align="center">Stack Effect</th>
+									<th align="center">Semantics</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>jmp addr</code></td>
+									<td align="center">None</td>
+									<td align="center"><code>rip = addr</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>call addr</code></td>
+									<td align="center">Push return address;<code>rip = addr</code></td>
+									<td align="center">Function call</td>
+								</tr>
+								<tr>
+									<td align="center"><code>ret</code></td>
+									<td align="center">Pop return address -> rip</td>
+									<td align="center">Return from function</td>
+								</tr>
+								<tr>
+									<td align="center"><code>call [rax]</code></td>
+									<td align="center">Push return address;<code>rip = *rax</code></td>
+									<td align="center">Indirect call (function pointer)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>jmp [rax]</code></td>
+									<td align="center">None</td>
+									<td align="center">Indirect jump (tail call, switch)</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							<code>call</code>
+							is equivalent to:
+						</p>
+						<pre class="plaintext">
+push rip_of_next_instruction   ; implicit - not visible in disassembly
+jmp target_function
+						</pre>
+						<p>
+							<code>ret</code>
+							is equivalent to:
+						</p>
+						<pre class="plaintext">
+pop rip   ; also implicit - destination comes from stack
+						</pre>
+						<p>
+							The return address pushed by
+							<code>call</code>
+							sits at
+							<code>[rsp]</code>
+							immediately after the call. This is why
+							buffer overflows on the stack can overwrite return addresses: the return address is stored on
+							the stack alongside local variables.
+						</p>
+						<h4 id="stack-operations">Stack Operations</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Instruction</th>
+									<th align="center">Example</th>
+									<th align="center">Semantics</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>push src</code></td>
+									<td align="center"><code>push rbp</code></td>
+									<td align="center"><code>rsp -= 8; *(uint64_t*)rsp = rbp</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>pop dst</code></td>
+									<td align="center"><code>pop rbp</code></td>
+									<td align="center"><code>rbp = *(uint64_t*)rsp; rsp += 8</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>pushfq</code></td>
+									<td align="center"><code>pushfq</code></td>
+									<td align="center">Push rflags</td>
+								</tr>
+								<tr>
+									<td align="center"><code>popfq</code></td>
+									<td align="center"><code>popfq</code></td>
+									<td align="center">Pop rflags</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="function-prologue-and-epilogue">Function Prologue And Epilogue</h3>
+						<p>
+							Every non-leaf function (a function that calls other functions) on x86-64 Linux, compiled without
+							<code>-fomit-frame-pointer</code>
+							, begins and ends with the same pattern. Recognizing this instantly tells
+							you where functions start and end.
+						</p>
+						<h4 id="prologue-function-entry">Prologue (function entry)</h4>
+						<pre class="plaintext">
+push   rbp              ; save caller&#39;s frame pointer
+mov    rbp, rsp         ; set new frame pointer = current stack top
+sub    rsp, 0x28        ; allocate 0x28 bytes of local variable space
+						</pre>
+						<p>
+							After the prologue: -
+							<code>rbp</code>
+							points to the base of the current frame (where the saved old rbp
+							sits) -
+							<code>rsp</code>
+							points to the bottom of the local variable area - Local variable N is at
+							<code>[rbp - N*8]</code>
+							(or the appropriate offset) - The return address is at
+							<code>[rbp + 0x8]</code>
+							- The saved caller's rbp is at
+							<code>[rbp]</code>
+						</p>
+						<pre class="plaintext">
+        High addresses
+        ┌────────────────────┐
+        │  7th arg (stack)   │  [rbp + 0x10]
+        │  return address    │  [rbp + 0x8]
+rbp -&gt;   │  saved old rbp     │  [rbp]
+        │  local var 1       │  [rbp - 0x8]
+        │  local var 2       │  [rbp - 0x10]
+        │  local var 3       │  [rbp - 0x18]
+rsp -&gt;   │  (next call)       │  [rbp - 0x28]
+        └────────────────────┘
+        Low addresses
+						</pre>
+						<h4 id="epilogue-function-exit">Epilogue (function exit)</h4>
+						<pre class="plaintext">
+leave         ; mov rsp, rbp; pop rbp
+ret           ; pop rip
+						</pre>
+						<p>
+							<code>leave</code>
+							is equivalent to:
+						</p>
+						<pre class="plaintext">
+mov rsp, rbp    ; deallocate local variable space
+pop rbp         ; restore caller&#39;s frame pointer
+						</pre>
+						<p>
+							This is followed by
+							<code>ret</code>
+							which pops the return address and jumps to it.
+						</p>
+						<p>
+							When
+							<code>-fomit-frame-pointer</code>
+							is used (common with
+							<code>-O2</code>
+							),
+							<code>rbp</code>
+							is used as a general-purpose
+							register (callee-saved). The compiler tracks offsets from
+							<code>rsp</code>
+							instead. Functions compiled
+							this way have no
+							<code>push rbp / mov rbp, rsp</code>
+							- they directly
+							<code>sub rsp, imm</code>
+							and reference locals
+							as
+							<code>[rsp + offset]</code>
+							. This is harder to read manually but saves a register and two instructions
+							per call.
+						</p>
+					</section>
+					<section>
+						<h3 id="annotated-disassembly-example">Annotated Disassembly Example</h3>
+						<p>
+							Write a small C program that exercises the patterns you need to recognize. Compile it. Disassemble
+							it. Annotate every line.
+						</p>
+						<pre class="c">
+// example.c
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+int check_password(const char *input) {
+    const char *secret = &#34;1337haxor&#34;;
+    return strcmp(input, secret) == 0;
+}
+
+int authenticate(const char *user, const char *pass) {
+    if (strcmp(user, &#34;root&#34;) != 0)
+        return 0;
+
+    if (check_password(pass))
+        return 1;
+
+    return 0;
+}
+
+int main(int argc, char **argv) {
+    if (argc &lt; 3) {
+        printf(&#34;Usage: %s &lt;user&gt; &lt;pass&gt;\n&#34;, argv[0]);
+        return 1;
+    }
+
+    if (authenticate(argv[1], argv[2])) {
+        printf(&#34;Access granted.\n&#34;);
+        return 0;
+    }
+
+    printf(&#34;Access denied.\n&#34;);
+    return 1;
+}
+						</pre>
+						<p>Compile with no optimization:</p>
+						<pre class="plaintext">
+gcc -O0 -fno-stack-protector -no-pie -o example example.c
+						</pre>
+						<p>Disassemble:</p>
+						<pre class="plaintext">
+objdump -d -M intel --no-show-raw-insn example
+						</pre>
+						<p>
+							The output for
+							<code>check_password</code>
+							:
+						</p>
+						<pre class="x86asm">
+0000000000401162 &lt;check_password&gt;:
+  401162:  push   rbp
+  401163:  mov    rbp, rsp
+  401166:  sub    rsp, 0x20
+  40116a:  mov    QWORD PTR [rbp-0x18], rdi     ; save input ptr to local
+  40116e:  lea    rax, [rip+0xe93]              ; rax = &amp;&#34;1337haxor&#34;
+  401175:  mov    QWORD PTR [rbp-0x8], rax       ; local var = &amp;secret
+  401179:  mov    rdx, QWORD PTR [rbp-0x8]       ; rdx = &amp;secret  (arg2)
+  40117d:  mov    rax, QWORD PTR [rbp-0x18]      ; rax = input    (arg1)
+  401181:  mov    rsi, rdx                       ; rsi = arg2
+  401184:  mov    rdi, rax                       ; rdi = arg1
+  401187:  call   401036 &lt;strcmp@plt&gt;             ; strcmp(input, secret)
+  40118c:  test   eax, eax                       ; eax == 0?
+  40118e:  sete   al                             ; al = (ZF ? 1 : 0)
+  401191:  movzx  eax, al                        ; zero-extend al to eax
+  401194:  leave
+  401195:  ret
+						</pre>
+						<p>Line-by-line annotation:</p>
+						<pre class="plaintext">
+401162: push rbp                  ; function prologue - save caller&#39;s frame
+401163: mov rbp, rsp              ; set frame pointer
+401166: sub rsp, 0x20             ; allocate 0x20 (32) bytes of locals
+
+40116a: mov [rbp-0x18], rdi       ; save rdi (arg1: input pointer) to stack
+                                  ;   at -fno-pie -O0 the compiler spills
+                                  ;   args to memory redundantly
+
+40116e: lea rax, [rip+0xe93]      ; rax = address of &#34;1337haxor&#34; string
+                                  ;   lea with rip-relative addressing:
+                                  ;   rax = rip + 0xe93 (PIE-compatible)
+                                  ;   this loads the ADDRESS, not the string
+
+401175: mov [rbp-0x8], rax        ; store secret ptr in local var
+
+401179: mov rdx, [rbp-0x8]        ; rdx = secret ptr (will be arg2)
+40117d: mov rax, [rbp-0x18]       ; rax = input ptr  (will be arg1)
+401181: mov rsi, rdx              ; rsi = arg2 = secret
+401184: mov rdi, rax              ; rdi = arg1 = input
+401187: call 401036 &lt;strcmp@plt&gt;  ; strcmp(input, secret)
+
+40118c: test eax, eax             ; set ZF=1 if strcmp returned 0 (match)
+40118e: sete al                   ; al = ZF ? 1 : 0
+401191: movzx eax, al             ; zero-extend to full eax (return value)
+
+401194: leave                     ; epilogue
+401195: ret                       ; return
+						</pre>
+						<p>Manual decompilation from this disassembly:</p>
+						<pre class="c">
+int check_password(const char *input) {
+    const char *secret = &#34;1337haxor&#34;;
+    return (strcmp(input, secret) == 0);
+}
+						</pre>
+						<p>
+							The
+							<code>authenticate</code>
+							function disassembly:
+						</p>
+						<pre class="x86asm">
+0000000000401196 &lt;authenticate&gt;:
+  401196:  push   rbp
+  401197:  mov    rbp, rsp
+  40119a:  sub    rsp, 0x10
+  40119e:  mov    QWORD PTR [rbp-0x8], rdi    ; save user ptr
+  4011a2:  mov    QWORD PTR [rbp-0x10], rsi   ; save pass ptr
+  4011a6:  mov    rax, QWORD PTR [rbp-0x8]    ; rax = user (arg1)
+  4011aa:  lea    rsi, [rip+0xe5e]            ; rsi = &amp;&#34;root&#34; (arg2)
+  4011b1:  mov    rdi, rax                    ; rdi = user (arg1)
+  4011b4:  call   401036 &lt;strcmp@plt&gt;
+  4011b9:  test   eax, eax
+  4011bb:  je     4011c4 &lt;authenticate+0x2e&gt;  ; if (strcmp(user,&#34;root&#34;)==0) goto inner
+  4011bd:  mov    eax, 0x0                    ; return 0
+  4011c2:  jmp    4011ed &lt;authenticate+0x57&gt;  ; goto end
+  4011c4:  mov    rax, QWORD PTR [rbp-0x10]   ; rax = pass (arg1)
+  4011c8:  mov    rdi, rax                    ; rdi = pass
+  4011cb:  call   401162 &lt;check_password&gt;     ; check_password(pass)
+  4011d0:  test   eax, eax
+  4011d2:  je     4011db &lt;authenticate+0x45&gt;  ; if (!check_password(pass)) goto fail
+  4011d4:  mov    eax, 0x1                    ; return 1
+  4011d9:  jmp    4011ed &lt;authenticate+0x57&gt;  ; goto end
+  4011db:  mov    eax, 0x0                    ; fail: return 0
+  4011e0:  jmp    4011ed &lt;authenticate+0x57&gt;  ; goto end
+  4011ed:  leave
+  4011ee:  ret
+						</pre>
+						<p>Manual decompilation:</p>
+						<pre class="c">
+int authenticate(const char *user, const char *pass) {
+    if (strcmp(user, &#34;root&#34;) != 0)
+        return 0;
+    if (check_password(pass))
+        return 1;
+    return 0;
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="recognizing-control-flow-patterns">Recognizing Control Flow Patterns</h3>
+						<p>
+							Every high-level control structure compiles to a specific pattern. When you see these patterns
+							in disassembly, reconstruct the C.
+						</p>
+						<h4 id="if-else-diamond">if-else (diamond)</h4>
+						<pre class="plaintext">
+    cmp    rax, 0             ; if (condition)
+    jne    .L_else            ; branch to else block if false
+    ; then block
+    mov    eax, 1
+    jmp    .L_end
+.L_else:
+    ; else block
+    mov    eax, 0
+.L_end:
+    ; code after if-else
+						</pre>
+						<p>Decompilation:</p>
+						<pre class="c">
+if (condition)
+    result = 1;
+else
+    result = 0;
+						</pre>
+						<h4 id="while-loop-test-at-top">while loop (test at top)</h4>
+						<pre class="plaintext">
+.L_loop_top:
+    cmp    DWORD PTR [rbp-0x4], 0xa   ; while (i &lt; 10)
+    jge    .L_loop_end
+    ; loop body
+    add    DWORD PTR [rbp-0x4], 0x1   ; i++
+    jmp    .L_loop_top
+.L_loop_end:
+						</pre>
+						<p>Decompilation:</p>
+						<pre class="c">
+while (i &lt; 10) {
+    // body
+    i++;
+}
+						</pre>
+						<h4 id="do-while-loop-test-at-bottom">do-while loop (test at bottom)</h4>
+						<pre class="plaintext">
+.L_do_top:
+    ; loop body
+    add    DWORD PTR [rbp-0x4], 0x1   ; i++
+    cmp    DWORD PTR [rbp-0x4], 0xa   ; while (i &lt; 10)
+    jl     .L_do_top
+						</pre>
+						<p>Decompilation:</p>
+						<pre class="c">
+do {
+    i++;
+} while (i &lt; 10);
+						</pre>
+						<h4 id="for-loop">for loop</h4>
+						<pre class="plaintext">
+    mov    DWORD PTR [rbp-0x4], 0x0   ; i = 0
+    jmp    .L_for_check
+.L_for_body:
+    ; loop body
+    add    DWORD PTR [rbp-0x4], 0x1   ; i++
+.L_for_check:
+    cmp    DWORD PTR [rbp-0x4], 0x9   ; i &lt; 10?
+    jle    .L_for_body
+						</pre>
+						<p>Decompilation:</p>
+						<pre class="c">
+for (int i = 0; i &lt;= 9; i++) {
+    // body
+}
+						</pre>
+						<p>
+							At
+							<code>-O2</code>
+							, the for loop often converts to a do-while form (inversion optimization), eliminating
+							the initial
+							<code>jmp</code>
+							to the check.
+						</p>
+						<h4 id="switch-statement-jump-table">switch statement - jump table</h4>
+						<pre class="x86asm">
+    cmp    eax, 0x4              ; if (value &gt; 4) goto default
+    ja     .L_default
+    mov    eax, eax              ; zero-extend (already done, but explicit)
+    lea    rdx, [rip+0x1234]     ; rdx = &amp;jump_table
+    movsxd rax, DWORD PTR [rdx + rax*4]  ; rax = jump_table[value] (sign-extended offset)
+    add    rax, rdx              ; rax = &amp;jump_table + offset
+    jmp    rax                   ; indirect jump into table
+						</pre>
+						<p>Decompilation:</p>
+						<pre class="c">
+switch (value) {
+    case 0: ... break;
+    case 1: ... break;
+    case 2: ... break;
+    case 3: ... break;
+    case 4: ... break;
+    default: ... break;
+}
+						</pre>
+						<p>
+							The jump table is an array of 32-bit signed offsets in the data section. The
+							<code>movsxd</code>
+							sign-extends
+							the offset into a 64-bit register, then it's added to the table base to form an absolute address.
+						</p>
+					</section>
+					<section>
+						<h3 id="optimization-effects-o0-vs-o2">Optimization Effects - O0 vs O2</h3>
+						<p>
+							The same
+							<code>check_password</code>
+							function compiled with
+							<code>-O2</code>
+							:
+						</p>
+						<pre class="plaintext">
+gcc -O2 -fno-stack-protector -no-pie -o example_O2 example.c
+						</pre>
+						<pre class="x86asm">
+00000000004011d0 &lt;check_password&gt;:
+  4011d0:  sub    rsp, 0x8
+  4011d4:  lea    rsi, [rip+0xe29]           ; rsi = &amp;&#34;1337haxor&#34;
+  4011db:  call   401050 &lt;strcmp@plt&gt;         ; strcmp(rdi, &#34;1337haxor&#34;)
+  4011e0:  test   eax, eax
+  4011e2:  sete   al                         ; al = (strcmp == 0)
+  4011e5:  add    rsp, 0x8
+  4011e9:  movzx  eax, al
+  4011ec:  ret
+						</pre>
+						<p>
+							The prologue and frame pointer are gone, and the string pointer is loaded straight into
+							<code>rsi</code>
+							instead of being spilled to a local. The call is not a pure tail call, because
+							<code>strcmp</code>
+							returns
+							0 on a match and the function must return 1;
+							<code>sete al</code>
+							followed by
+							<code>movzx eax, al</code>
+							performs
+							that conversion.
+						</p>
+						<p>
+							<code>authenticate</code>
+							at
+							<code>-O2</code>
+							inlines
+							<code>check_password</code>
+							and keeps only the values it needs across calls
+							in a callee-saved register:
+						</p>
+						<pre class="x86asm">
+00000000004011f0 &lt;authenticate&gt;:
+  4011f0:  push   rbx                        ; preserve callee-saved rbx
+  4011f1:  mov    rbx, rsi                   ; rbx = pass
+  4011f4:  lea    rsi, [rip+0xe13]           ; rsi = &amp;&#34;root&#34;
+  4011fb:  call   401050 &lt;strcmp@plt&gt;         ; strcmp(user, &#34;root&#34;)
+  401200:  test   eax, eax
+  401202:  jne    401220 &lt;authenticate+0x30&gt;  ; if (strcmp != 0) return 0
+  401204:  mov    rdi, rbx                   ; rdi = pass
+  401207:  lea    rsi, [rip+0xdf6]           ; rsi = &amp;&#34;1337haxor&#34;
+  40120e:  call   401050 &lt;strcmp@plt&gt;         ; inlined check_password(pass)
+  401213:  pop    rbx
+  401214:  test   eax, eax
+  401216:  sete   al
+  401219:  movzx  eax, al
+  40121c:  ret
+  40121d:  nop    DWORD PTR [rax]
+  401220:  xor    eax, eax                   ; return 0
+  401222:  pop    rbx
+  401223:  ret
+						</pre>
+						<p>
+							The compiler replaced the call to
+							<code>check_password</code>
+							with an inline
+							<code>strcmp</code>
+							against the secret
+							string, so the second comparison never leaves
+							<code>authenticate</code>
+							. The only register saved across
+							a call is
+							<code>rbx</code>
+							, which holds
+							<code>pass</code>
+							;
+							<code>rdi</code>
+							is overwritten when the second call needs it. The
+							<code>test</code>
+							/
+							<code>sete</code>
+							/
+							<code>movzx</code>
+							sequence turns a comparison into a 0-or-1 return value without branching.
+						</p>
+					</section>
+					<section>
+						<h3 id="hands-on-manual-decompilation-exercise">Hands-On - Manual Decompilation Exercise</h3>
+						<p>
+							Given this disassembly (a small, self-contained function,
+							<code>-O0</code>
+							), manually translate to C:
+						</p>
+						<pre class="x86asm">
+0000000000401220 &lt;mystery&gt;:
+  401220:  push   rbp
+  401221:  mov    rbp, rsp
+  401224:  mov    QWORD PTR [rbp-0x18], rdi    ; arg1 -&gt; local_18
+  401228:  mov    QWORD PTR [rbp-0x20], rsi    ; arg2 -&gt; local_20
+  40122c:  mov    DWORD PTR [rbp-0x4], 0x0     ; local_4 = 0
+  401233:  jmp    401256 &lt;.L_check&gt;
+  401235:  mov    eax, DWORD PTR [rbp-0x4]     ; eax = local_4
+  401238:  movsxd rdx, eax                      ; rdx = (int64_t)local_4 (sign extend)
+  40123b:  mov    rax, QWORD PTR [rbp-0x18]    ; rax = arg1
+  40123f:  add    rax, rdx                      ; rax = arg1 + local_4
+  401242:  movzx  eax, BYTE PTR [rax]           ; al = arg1[local_4] (zero-extend)
+  401245:  movsx  eax, al                       ; sign-extend al -&gt; eax
+  401248:  cdqe                                 ; sign-extend eax -&gt; rax
+  40124a:  add    QWORD PTR [rbp-0x8], rax      ; local_8 += char
+  40124e:  add    DWORD PTR [rbp-0x4], 0x1      ; local_4++
+  401252:  add    DWORD PTR [rbp-0x4], 0x1      ; local_4++  (???)
+  401256:  mov    eax, DWORD PTR [rbp-0x4]      ; eax = local_4
+  401259:  movsxd rdx, eax                      ; sign-extend
+  40125c:  mov    rax, QWORD PTR [rbp-0x20]     ; rax = arg2
+  401260:  cmp    rdx, rax                      ; if ((int64_t)local_4 &lt; arg2)
+  401263:  jl     401235                        ;   goto loop
+  401265:  mov    rax, QWORD PTR [rbp-0x8]      ; return local_8
+  401269:  pop    rbp
+  40126a:  ret
+						</pre>
+						<p>Step-by-step reconstruction:</p>
+						<ol>
+							<li>Function takes two args: <code>rdi</code> (pointer) and <code>rsi</code> (integer). Let's call them <code>char *buf</code> and <code>long len</code> .</li>
+							<li><code>[rbp-0x4]</code> is a local initialized to 0, incremented each iteration - <code>int i = 0</code> .</li>
+							<li><code>[rbp-0x8]</code> is a local that accumulates <code>buf[i]</code> - <code>long sum = 0</code> . The listing skips its</li>
+						</ol>
+						<p>
+							initialization; a real
+							<code>-O0</code>
+							build emits
+							<code>mov QWORD PTR [rbp-0x8], 0x0</code>
+							before the loop. 1.
+							The loop runs while
+							<code>(int64_t)i &lt; len</code>
+							. 1. Inside:
+							<code>sum += buf[i]</code>
+							,
+							<code>i += 2</code>
+							(the
+							<code>add DWORD PTR [rbp-0x4], 0x1</code>
+							appears twice).
+						</p>
+						<p>
+							Wait - the double increment at
+							<code>40124e</code>
+							and
+							<code>401252</code>
+							looks like
+							<code>i += 2</code>
+							, but that's unusual
+							for a sum. Let me reconsider. Actually at
+							<code>-O0</code>
+							, the compiler might generate redundant code.
+							Looking more carefully: the two
+							<code>add</code>
+							instructions are sequential and both target
+							<code>[rbp-0x4]</code>
+							. This means the loop variable increments by 2 each iteration. This is summing every other character.
+						</p>
+						<p>Decompilation:</p>
+						<pre class="c">
+long mystery(const char *buf, long len) {
+    long sum = 0;
+    int i;
+    for (i = 0; (long)i &lt; len; i += 2) {
+        sum += (long)(signed char)buf[i];
+    }
+    return sum;
+}
+						</pre>
+						<p>
+							The function sums every other byte of the input buffer, treating each byte as a signed char,
+							then casting to long. Not useful per se, but walking through the annotation shows how local
+							variables map to
+							<code>[rbp-offset]</code>
+							and how array indexing compiles to
+							<code>[base + index]</code>
+							addressing.
+						</p>
+					</section>
+					<section>
+						<h3 id="common-pitfalls">Common Pitfalls</h3>
+						<h4 id="confusing-lea-with-mov">Confusing lea with mov</h4>
+						<pre class="x86asm">
+lea rax, [rbp-0x8]     ; rax = rbp - 8  (ADDRESS)
+mov rax, [rbp-0x8]     ; rax = *(rbp - 8)  (VALUE at that address)
+						</pre>
+						<p>
+							If you see
+							<code>lea rax, [rbp-0x8]</code>
+							followed by
+							<code>mov rdi, rax; call scanf</code>
+							, the function is passing
+							the address of a local variable to scanf - the function wants to write to that variable.
+						</p>
+						<h4 id="missing-the-red-zone">Missing the red zone</h4>
+						<p>
+							The System V ABI defines a 128-byte "red zone" below
+							<code>rsp</code>
+							that functions may use without adjusting
+							<code>rsp</code>
+							. Leaf functions (functions that don't call other functions) can access
+							<code>[rsp-0x80]</code>
+							through
+							<code>[rsp-0x1]</code>
+							without a
+							<code>sub rsp, ...</code>
+							. If you see
+							<code>[rsp-0x8]</code>
+							in a leaf function without a corresponding
+							<code>sub rsp</code>
+							, the red zone is in use - not a bug.
+						</p>
+						<h4 id="tail-call-optimization">Tail call optimization</h4>
+						<pre class="x86asm">
+call foo
+; ... more code ...
+ret
+						</pre>
+						<p>vs.</p>
+						<pre class="x86asm">
+; ... code ...
+jmp foo
+						</pre>
+						<p>
+							When a function ends with
+							<code>jmp target</code>
+							instead of
+							<code>call target; ret</code>
+							, it's a tail call. The
+							callee's
+							<code>ret</code>
+							will return directly to the original caller. This is legitimate and common at
+							<code>-O2</code>
+							.
+						</p>
+						<h4 id="function-boundaries-in-stripped-bins">Function Boundaries In Stripped Bins</h4>
+						<p>
+							Without symbols, function boundaries become non-obvious. Look for: - The prologue pattern (
+							<code>push rbp; mov rbp, rsp; sub rsp, ...</code>
+							) -
+							<code>ret</code>
+							instructions (end of function) - Padding bytes
+							(
+							<code>0xcc</code>
+							or
+							<code>nop</code>
+							sequences) between functions - Alignment to 16-byte boundaries
+						</p>
+						<h4 id="rip-relative-string-references">RIP-Relative String References</h4>
+						<pre class="plaintext">
+lea rdi, [rip+0xe93]   ; rdi = &amp;&#34;some string&#34; (rip-relative)
+						</pre>
+						<p>
+							This loads the address of a string in
+							<code>.rodata</code>
+							. The disassembler may already resolve the actual
+							string and show it as a comment:
+						</p>
+						<pre class="plaintext">
+lea rdi, [rip+0xe93]   # 402010 &#34;Access granted.&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="reading-stripped-disassembly">Reading Stripped Disassembly</h3>
+						<p>
+							When you run
+							<code>objdump -d</code>
+							on a stripped binary, you get raw addresses without function names.
+							The workflow:
+						</p>
+						<ol>
+							<li>Find <code>_start</code> or the entry point (ELF header <code>e_entry</code> field)</li>
+							<li><code>_start</code> calls <code>__libc_start_main</code> with <code>main</code> as an argument - look for the <code>rdi</code> argument to that call</li>
+							<li>That register holds the address of <code>main</code> . Navigate there.</li>
+							<li>From <code>main</code> , trace calls to find all user-defined functions.</li>
+						</ol>
+						<p>
+							Alternatively, let Ghidra/I
+							<abbr title="Domain Admin">DA</abbr>
+							do function detection and then read their disassembly.
+							But knowing how to do it manually matters when dealing with custom loaders or obfuscated binaries
+							that confuse automated analysis.
+						</p>
+						<pre class="plaintext">
+objdump -d -M intel stripped_binary | grep -A5 &#34;&lt;_start&gt;:&#34;
+						</pre>
+						<p>
+							Then follow the chain:
+							<code>_start</code>
+							->
+							<code>__libc_start_main</code>
+							->
+							<code>main</code>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="summary">Summary</h3>
+						<p>Reading x86-64 disassembly is pattern recognition. The patterns are small and composable:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Pattern</th>
+									<th align="center">Recognition Signature</th>
+									<th align="center">C Equivalent</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Prologue</td>
+									<td align="center"><code>push rbp; mov rbp, rsp; sub rsp, N</code></td>
+									<td align="center">Function entry</td>
+								</tr>
+								<tr>
+									<td align="center">Epilogue</td>
+									<td align="center"><code>leave; ret</code></td>
+									<td align="center">Function exit</td>
+								</tr>
+								<tr>
+									<td align="center">Zero register</td>
+									<td align="center"><code>xor eax, eax</code></td>
+									<td align="center"><code>x = 0</code></td>
+								</tr>
+								<tr>
+									<td align="center">Null check</td>
+									<td align="center"><code>test rax, rax; je</code></td>
+									<td align="center"><code>if (!ptr)</code></td>
+								</tr>
+								<tr>
+									<td align="center">Signed compare</td>
+									<td align="center"><code>cmp; jl</code></td>
+									<td align="center"><code>if (a &lt; b)</code>(signed)</td>
+								</tr>
+								<tr>
+									<td align="center">Unsigned compare</td>
+									<td align="center"><code>cmp; jb</code></td>
+									<td align="center"><code>if (a &lt; b)</code>(unsigned)</td>
+								</tr>
+								<tr>
+									<td align="center">Array access</td>
+									<td align="center"><code>mov rax, [rdi + rsi*8]</code></td>
+									<td align="center"><code>arr[i]</code>where<code>rdi=arr, rsi=i</code></td>
+								</tr>
+								<tr>
+									<td align="center">Address-of</td>
+									<td align="center"><code>lea rax, [rbp-8]</code></td>
+									<td align="center"><code>&amp;local_var</code></td>
+								</tr>
+								<tr>
+									<td align="center">Tail call</td>
+									<td align="center"><code>jmp func</code>at end</td>
+									<td align="center"><code>return func(args)</code></td>
+								</tr>
+								<tr>
+									<td align="center">Jump table</td>
+									<td align="center"><code>jmp [base + rax*8]</code></td>
+									<td align="center"><code>switch</code>statement</td>
+								</tr>
+								<tr>
+									<td align="center">String reference</td>
+									<td align="center"><code>lea rdi, [rip+offset]</code></td>
+									<td align="center"><code>&#34;string literal&#34;</code></td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							The skill compounds. Each pattern you internalize makes the next disassembly faster to read.
+							The goal is to reach the point where you look at the assembly and see the C - not translate
+							instruction by instruction, but recognize the gestalt of loops, conditionals, and function boundaries
+							instantly.
+						</p>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Disassemble a binary with
+							<code>objdump -d -M intel --no-show-raw-insn binary &gt; disasm.txt</code>
+							. Write
+							a Go tool that parses that listing and, for every function, reports whether it has a standard
+							prologue (
+							<code>push rbp</code>
+							followed by
+							<code>mov rbp, rsp</code>
+							), whether it has an epilogue (
+							<code>leave</code>
+							),
+							and which functions it tail-calls through
+							<code>jmp</code>
+							. Compile the example from this article at
+							<code>-O0</code>
+							and
+							<code>-O2</code>
+							and compare the reports.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;bufio&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;regexp&#34;
+	&#34;strings&#34;
+)
+
+var (
+	reFunc    = regexp.MustCompile(`^([0-9a-f]+) &lt;([^&gt;]+)&gt;:`)
+	rePushRbp = regexp.MustCompile(`\bpush\s+rbp\b`)
+	reMovRsp  = regexp.MustCompile(`\bmov\s+rbp,\s*rsp\b`)
+	reLeave   = regexp.MustCompile(`\bleave\b`)
+	reJmp     = regexp.MustCompile(`\bjmp\s+[0-9a-f]+\s+&lt;([^&gt;+]+)`)
+)
+
+func main() {
+	if len(os.Args) != 2 {
+		fmt.Fprintf(os.Stderr, &#34;usage: %s &lt;disasm.txt&gt;\n&#34;, os.Args[0])
+		os.Exit(1)
+	}
+
+	file, err := os.Open(os.Args[1])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer file.Close()
+
+	var current string
+	var hasPush, hasFrame, hasLeave bool
+	var tails []string
+
+	flush := func() {
+		if current == &#34;&#34; {
+			return
+		}
+		fmt.Printf(&#34;%s\n&#34;, current)
+		fmt.Printf(&#34;  prologue: %v\n&#34;, hasPush &amp;&amp; hasFrame)
+		fmt.Printf(&#34;  epilogue: %v\n&#34;, hasLeave)
+		for _, tail := range tails {
+			fmt.Printf(&#34;  tail call: %s\n&#34;, tail)
+		}
+		tails = tails[:0]
+	}
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+
+		if match := reFunc.FindStringSubmatch(line); match != nil {
+			flush()
+			current = match[2]
+			hasPush, hasFrame, hasLeave = false, false, false
+			continue
+		}
+		if current == &#34;&#34; {
+			continue
+		}
+		if rePushRbp.MatchString(line) {
+			hasPush = true
+		}
+		if reMovRsp.MatchString(line) {
+			hasFrame = true
+		}
+		if reLeave.MatchString(line) {
+			hasLeave = true
+		}
+		if match := reJmp.FindStringSubmatch(line); match != nil {
+			tails = append(tails, match[1])
+		}
+	}
+	flush()
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html" target="_blank">Intel 64 and IA-32 Architectures Software Developer Manuals</a> - the authoritative x86-64 instruction reference</li>
+							<li><a class="icon-download" href="https://refspecs.linuxfoundation.org/elf/x86-64-abi-0.99.pdf" target="_blank">System V AMD64 ABI</a> - register roles and the calling convention</li>
+							<li><a class="icon-website" href="https://sourceware.org/binutils/docs/binutils/objdump.html" target="_blank">GNU objdump</a> - the <code>-d</code> and <code>-M intel</code> options used here</li>
+							<li><a class="icon-download" href="https://uclibc.org/docs/psABI-x86_64.pdf" target="_blank">ELF x86-64 ABI</a> - object format and relocation details</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

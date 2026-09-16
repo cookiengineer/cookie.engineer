@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Osquery | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Osquery">
+		<meta name="keywords" content="blueteam, endpoint, fleet, forensics, osquery, sql">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Osquery">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Endpoint querying for investigations using osquery virtual tables, scheduled packs, and forensic use cases.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/blueteam/osquery.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Osquery">
+		<meta name="twitter:description" itemprop="description" content="Endpoint querying for investigations using osquery virtual tables, scheduled packs, and forensic use cases.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#why-osquery">Why Osquery</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#architecture">Architecture</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#installation-arch">Installation (Arch)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#interactive-mode-osqueryi">Interactive Mode (osqueryi)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#essential-schema-tables">Essential Schema Tables</a></b>
+					<ul>
+						<li><a href="#process-tables">Process Tables</a></li>
+						<li><a href="#network-tables">Network Tables</a></li>
+						<li><a href="#file-tables">File Tables</a></li>
+						<li><a href="#user-and-authentication-tables">User and Authentication Tables</a></li>
+						<li><a href="#persistence-detection-tables">Persistence Detection Tables</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#scheduled-queries-and-packs">Scheduled Queries and Packs</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#custom-pack-example">Custom Pack Example</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#differential-queries">Differential Queries</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#yara-integration">YARA Integration</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#fleet-central-management">Fleet Central Management</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#forensic-use-cases">Forensic Use Cases</a></b>
+					<ul>
+						<li><a href="#finding-persistence-mechanisms">Finding Persistence Mechanisms</a></li>
+						<li><a href="#unusual-process-investigation">Unusual Process Investigation</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/blueteam/index.html">Blueteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/blueteam/osquery.html">Osquery</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="osquery">Osquery</h2>
+					<p>
+						Endpoint querying for investigations using osquery virtual tables, scheduled packs, and forensic
+						use cases.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Osquery exposes operating system state as relational tables, so the same
+							<abbr title="Structured Query Language">SQL</abbr>
+							query runs on Linux, macOS, and Windows. This article covers the architecture, the tables that
+							matter during incident response, scheduled differential queries, and a challenge that hunts
+							planted forensic artifacts on a live host.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - process lifecycle, signals, parent relationships</li>
+							<li><a href="/wiki/articles/fundamentals/filesystems.html">Filesystems</a> - inodes, file metadata, extended attributes</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="why-osquery">Why Osquery</h3>
+						<p>
+							Osquery turns your operating system into a relational database. Instead of writing platform-specific
+							scripts to query process lists, open sockets, kernel modules, or installed packages, you write
+							<abbr title="Structured Query Language">SQL</abbr>
+							. This uniformity across Linux, macOS, and Windows is osquery's
+							superpower. A query written on your Arch workstation runs identically on a Windows domain controller.
+						</p>
+					</section>
+					<section>
+						<h3 id="architecture">Architecture</h3>
+						<pre class="plaintext">
+osqueryi — interactive SQL shell, ad-hoc queries, one-shot
+osqueryd — daemon mode, scheduled queries, log results, distributed plugins
+osquery  ─+─ osquery-extension (thrift-based plugin)
+          ├─ RocksDB (internal state database)
+          └─ Virtual Tables (filesystem, process table, etc.)
+						</pre>
+						<p>
+							osquery uses
+							<b>virtual tables</b>
+							- tables that look like
+							<abbr title="Structured Query Language">SQL</abbr>
+							but
+							are backed by function calls to the OS
+							<abbr title="Application Programming Interface">API</abbr>
+							. A
+							<code>SELECT * FROM processes</code>
+							triggers
+							<code>/proc</code>
+							enumeration on Linux,
+							<code>sysctl</code>
+							on macOS, and
+							<code>CreateToolhelp32Snapshot</code>
+							on
+							Windows.
+						</p>
+					</section>
+					<section>
+						<h3 id="installation-arch">Installation (Arch)</h3>
+						<pre class="bash">
+pacman -S osquery
+# Or AUR for newer versions
+yay -S osquery-bin
+						</pre>
+					</section>
+					<section>
+						<h3 id="interactive-mode-osqueryi">Interactive Mode (osqueryi)</h3>
+						<pre class="bash">
+osqueryi
+
+# Show all tables
+osquery&gt; .tables
+
+# Describe a table&#39;s schema
+osquery&gt; .schema processes
+osquery&gt; .schema listening_ports
+
+# Enable/disable display modes
+osquery&gt; .mode line       # one field per line (best for reading)
+osquery&gt; .mode csv        # CSV output
+osquery&gt; .mode column     # columnar table (default)
+osquery&gt; .mode pretty     # formatted bordered table
+osquery&gt; .mode json       # JSON output
+
+# Exit
+osquery&gt; .exit
+						</pre>
+					</section>
+					<section>
+						<h3 id="essential-schema-tables">Essential Schema Tables</h3>
+						<h4 id="process-tables">Process Tables</h4>
+						<pre class="sql">
+-- All running processes
+SELECT pid, name, uid, gid, parent, cmdline, start_time
+FROM processes
+WHERE name != &#39;&#39;
+ORDER BY start_time DESC
+LIMIT 20;
+
+-- Processes that are listening on network ports
+SELECT DISTINCT p.pid, p.name, p.cmdline, p.uid, p.parent
+FROM processes p
+JOIN listening_ports l ON p.pid = l.pid
+WHERE l.port &gt; 0;
+
+-- Process ancestry — find what spawned a suspicious process
+WITH RECURSIVE ancestors(pid, name, parent, depth) AS (
+    SELECT pid, name, parent, 0
+    FROM processes
+    WHERE pid = 12345  -- target PID
+    UNION ALL
+    SELECT p.pid, p.name, p.parent, a.depth + 1
+    FROM processes p
+    JOIN ancestors a ON p.pid = a.parent
+    WHERE a.depth &lt; 10
+)
+SELECT * FROM ancestors ORDER BY depth;
+
+-- Processes running from temp directories (malware staging)
+SELECT pid, name, cmdline, uid
+FROM processes
+WHERE cmdline LIKE &#39;%/tmp/%&#39; OR cmdline LIKE &#39;%/dev/shm/%&#39;
+   OR cmdline LIKE &#39;%/var/tmp/%&#39;;
+						</pre>
+						<h4 id="network-tables">Network Tables</h4>
+						<pre class="sql">
+-- All listening ports with process info
+SELECT l.port, l.protocol, l.address, p.pid, p.name
+FROM listening_ports l
+JOIN processes p ON l.pid = p.pid
+WHERE l.port &gt; 0
+ORDER BY l.port;
+
+-- Outbound connections (not listening)
+SELECT s.pid, s.remote_address, s.remote_port, s.local_port, s.state, p.name
+FROM process_open_sockets s
+JOIN processes p ON s.pid = p.pid
+WHERE s.remote_port &gt; 0 AND s.state != &#39;LISTEN&#39;;
+
+-- Check for services listening on all interfaces (0.0.0.0 / ::)
+SELECT l.port, l.protocol, l.address, p.name
+FROM listening_ports l
+JOIN processes p ON l.pid = p.pid
+WHERE l.address IN (&#39;0.0.0.0&#39;, &#39;::&#39;) AND l.port &gt; 0;
+
+-- Open sockets to external IPs (exclude RFC 1918 and loopback)
+SELECT p.name, p.cmdline, s.remote_address, s.remote_port
+FROM process_open_sockets s
+JOIN processes p ON s.pid = p.pid
+WHERE s.remote_address NOT LIKE &#39;127.%&#39;
+  AND s.remote_address NOT LIKE &#39;10.%&#39;
+  AND s.remote_address NOT LIKE &#39;192.168.%&#39;
+  AND s.remote_address NOT LIKE &#39;172.1_.%&#39;
+  AND s.remote_address NOT LIKE &#39;172.2_.%&#39;
+  AND s.remote_address NOT LIKE &#39;172.3[0-1].%&#39;;
+						</pre>
+						<h4 id="file-tables">File Tables</h4>
+						<pre class="sql">
+-- Setuid/setgid binaries (privilege escalation paths)
+SELECT path, uid, gid, mode, mtime
+FROM file
+WHERE (path LIKE &#39;/usr/bin/%&#39; OR path LIKE &#39;/usr/sbin/%&#39;
+    OR path LIKE &#39;/bin/%&#39; OR path LIKE &#39;/sbin/%&#39;)
+  AND (mode LIKE &#39;4%&#39; OR mode LIKE &#39;2%&#39;)
+ORDER BY path;
+
+-- Recently modified files in system bin dirs (potential tampering)
+SELECT path, mtime, size, uid
+FROM file
+WHERE path LIKE &#39;/usr/bin/%&#39;
+  AND mtime &gt; strftime(&#39;%s&#39;, &#39;now&#39;) - 604800  -- last 7 days
+ORDER BY mtime DESC
+LIMIT 30;
+
+-- SSH authorized_keys files (persistence check)
+SELECT path, mtime, size
+FROM file
+WHERE path LIKE &#39;%/.ssh/authorized_keys&#39;;
+
+-- Writable crontabs (persistence)
+SELECT path, mtime
+FROM file
+WHERE path LIKE &#39;/var/spool/cron/%&#39; OR path LIKE &#39;/etc/cron.d/%&#39;;
+						</pre>
+						<h4 id="user-and-authentication-tables">User and Authentication Tables</h4>
+						<pre class="sql">
+-- Users with UID 0 (root-equivalent)
+SELECT uid, username, description, directory, shell
+FROM users
+WHERE uid = 0;
+
+-- Users with shells (can log in)
+SELECT uid, username, shell
+FROM users
+WHERE shell NOT LIKE &#39;%/nologin%&#39; AND shell NOT LIKE &#39;%/false&#39;
+  AND uid &gt;= 1000;
+
+-- Recently logged in users
+SELECT time, type, username, host, message
+FROM last
+ORDER BY time DESC
+LIMIT 20;
+						</pre>
+						<h4 id="persistence-detection-tables">Persistence Detection Tables</h4>
+						<pre class="sql">
+-- Crontab entries
+SELECT command, path, hour, minute, day_of_week, day_of_month, month
+FROM crontab;
+
+-- Systemd units (Linux)
+SELECT id, fragment_path, active_state, sub_state
+FROM systemd_units
+WHERE fragment_path != &#39;&#39;;
+
+-- Shell history — check for suspicious commands
+SELECT uid, command, history_file, line
+FROM shell_history
+WHERE command LIKE &#39;%curl%|%bash%&#39; OR command LIKE &#39;%wget%|%bash%&#39;
+   OR command LIKE &#39;%nc -e%&#39; OR command LIKE &#39;%/dev/tcp/%&#39;;
+
+-- Loaded kernel modules (rootkit detection)
+SELECT name, size, used_by, address
+FROM kernel_modules
+ORDER BY name;
+						</pre>
+					</section>
+					<section>
+						<h3 id="scheduled-queries-and-packs">Scheduled Queries and Packs</h3>
+						<p>
+							osqueryd runs queries on a schedule and logs differential results. It writes to a local log
+							file and can forward results to remote collectors.
+						</p>
+						<pre class="json">
+// /etc/osquery/osquery.conf
+{
+  &#34;options&#34;: {
+    &#34;config_plugin&#34;: &#34;filesystem&#34;,
+    &#34;logger_plugin&#34;: &#34;filesystem&#34;,
+    &#34;logger_path&#34;: &#34;/var/log/osquery&#34;,
+    &#34;schedule_splay_percent&#34;: 10,
+    &#34;events_expiry&#34;: 3600,
+    &#34;disable_audit&#34;: false,
+    &#34;audit_allow_config&#34;: true,
+    &#34;audit_allow_sockets&#34;: true,
+    &#34;enable_syslog&#34;: true,
+    &#34;syslog_pipe_path&#34;: &#34;/var/osquery/syslog_pipe&#34;
+  },
+
+  &#34;schedule&#34;: {
+    &#34;processes_listening&#34;: {
+      &#34;query&#34;: &#34;SELECT p.pid, p.name, p.cmdline, l.port, l.protocol FROM processes p JOIN listening_ports l ON p.pid = l.pid WHERE l.port &gt; 0;&#34;,
+      &#34;interval&#34;: 300
+    },
+    &#34;new_setuid_binaries&#34;: {
+      &#34;query&#34;: &#34;SELECT path, uid, mode FROM file WHERE (path LIKE &#39;/usr/bin/%&#39; OR path LIKE &#39;/usr/sbin/%&#39;) AND mode LIKE &#39;4%&#39; AND mtime &gt; strftime(&#39;%s&#39;, &#39;now&#39;) - 86400;&#34;,
+      &#34;interval&#34;: 3600,
+      &#34;removed&#34;: false
+    },
+    &#34;unauthorized_users&#34;: {
+      &#34;query&#34;: &#34;SELECT uid, username, shell FROM users WHERE uid = 0 AND username != &#39;root&#39;;&#34;,
+      &#34;interval&#34;: 7200
+    },
+    &#34;kernel_modules&#34;: {
+      &#34;query&#34;: &#34;SELECT name, size, used_by FROM kernel_modules;&#34;,
+      &#34;interval&#34;: 3600
+    },
+    &#34;suspicious_processes&#34;: {
+      &#34;query&#34;: &#34;SELECT pid, name, cmdline FROM processes WHERE cmdline LIKE &#39;%/tmp/%&#39; OR cmdline LIKE &#39;%nc -e%&#39; OR cmdline LIKE &#39;%/dev/tcp%&#39;;&#34;,
+      &#34;interval&#34;: 60
+    }
+  },
+
+  &#34;packs&#34;: {
+    &#34;incident-response&#34;: &#34;/usr/share/osquery/packs/incident-response.conf&#34;,
+    &#34;osquery-monitoring&#34;: &#34;/usr/share/osquery/packs/osquery-monitoring.conf&#34;,
+    &#34;vuln-management&#34;: &#34;/usr/share/osquery/packs/vuln-management.conf&#34;
+  }
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="custom-pack-example">Custom Pack Example</h3>
+						<pre class="json">
+// /usr/share/osquery/packs/linux-persistence.json
+{
+  &#34;platform&#34;: &#34;linux&#34;,
+  &#34;queries&#34;: {
+    &#34;systemd_services&#34;: {
+      &#34;query&#34;: &#34;SELECT id, fragment_path, active_state FROM systemd_units WHERE fragment_path != &#39;&#39;;&#34;,
+      &#34;interval&#34;: 3600,
+      &#34;description&#34;: &#34;Enumerate all systemd units&#34;
+    },
+    &#34;authorized_keys&#34;: {
+      &#34;query&#34;: &#34;SELECT path, mtime FROM file WHERE path LIKE &#39;%/.ssh/authorized_keys&#39;;&#34;,
+      &#34;interval&#34;: 1800,
+      &#34;description&#34;: &#34;Check SSH authorized_keys for changes&#34;
+    },
+    &#34;crontab_entries&#34;: {
+      &#34;query&#34;: &#34;SELECT command, path, hour, minute FROM crontab;&#34;,
+      &#34;interval&#34;: 3600,
+      &#34;description&#34;: &#34;Enumerate all crontab entries&#34;
+    },
+    &#34;shell_history_suspicious&#34;: {
+      &#34;query&#34;: &#34;SELECT uid, command FROM shell_history WHERE command LIKE &#39;%base64%|%sh%&#39; OR command LIKE &#39;%bash -i%&#39; OR command LIKE &#39;%/dev/tcp%&#39;;&#34;,
+      &#34;interval&#34;: 300,
+      &#34;description&#34;: &#34;Detect suspicious shell history entries&#34;
+    },
+    &#34;kernel_module_load&#34;: {
+      &#34;query&#34;: &#34;SELECT name, size, used_by FROM kernel_modules WHERE name NOT IN (&#39;ext4&#39;, &#39;nf_conntrack&#39;, &#39;nfnetlink&#39;, &#39;nf_tables&#39;, &#39;iptable_filter&#39;);&#34;,
+      &#34;interval&#34;: 7200,
+      &#34;description&#34;: &#34;List non-standard kernel modules&#34;
+    }
+  }
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="differential-queries">Differential Queries</h3>
+						<p>
+							Differential queries track state changes between runs. They detect addition, removal, or modification
+							of rows.
+						</p>
+						<pre class="sql">
+-- Track new processes since last query
+-- When configured with &#34;removed&#34;: true, osquery reports:
+-- &#34;added&#34;: rows that appeared since last query
+-- &#34;removed&#34;: rows that disappeared since last query
+SELECT pid, name, cmdline FROM processes WHERE parent = 1;
+
+-- Track new listening ports (potential backdoors)
+SELECT port, protocol, pid FROM listening_ports WHERE port NOT IN (22, 80, 443);
+
+-- Track changes to /etc/passwd
+SELECT * FROM file WHERE path = &#39;/etc/passwd&#39;;
+						</pre>
+					</section>
+					<section>
+						<h3 id="yara-integration">YARA Integration</h3>
+						<p>
+							osquery supports
+							<abbr title="Yet Another Recursive Acronym">YARA</abbr>
+							scanning via the
+							<code>yara</code>
+							table. It can
+							scan files, process memory, or both.
+						</p>
+						<pre class="sql">
+-- Configure YARA signature file
+-- In osquery.conf:
+-- &#34;yara&#34;: { &#34;signature_urls&#34;: [&#34;file:///etc/osquery/yara/signatures.yara&#34;] }
+
+-- Scan a specific directory with a YARA signature group
+SELECT path, matches, count
+FROM yara
+WHERE path LIKE &#39;/var/www/%&#39;
+  AND sig_group = &#39;webshell_signatures&#39;;
+
+-- Scan running process memory (Linux only, requires /proc/sys/kernel/yama/ptrace_scope = 0)
+SELECT pid, name, matches
+FROM yara
+WHERE count &gt; 0
+  AND sig_group = &#39;malware_signatures&#39;;
+
+-- Scan process memory of non-system processes
+SELECT y.pid, p.name, y.matches, y.count
+FROM yara y
+JOIN processes p ON y.pid = p.pid
+WHERE y.sig_group = &#39;credential_dump_signatures&#39;
+  AND y.count &gt; 0;
+						</pre>
+					</section>
+					<section>
+						<h3 id="fleet-central-management">Fleet Central Management</h3>
+						<p>
+							Fleet (successor to Kolide) manages osquery deployments at scale - pushing configs, collecting
+							results, and providing a web UI.
+						</p>
+						<pre class="bash">
+# Fleet server setup (simplified)
+git clone https://github.com/fleetdm/fleet.git
+cd fleet
+./tools/backEnd/build/fleet prepare db --dev
+./tools/backEnd/build/fleet serve --dev
+
+# Enroll host
+fleetctl package --type deb --fleet-url https://fleet.example.com:8443 --enroll-secret=secret
+
+# Query all hosts for open SSH sessions
+fleetctl query --hosts all &#34;SELECT * FROM logged_in_users WHERE tty != &#39;&#39;;&#34;
+
+# Schedule a query across the fleet
+fleetctl apply -f scheduled-query.yaml
+						</pre>
+					</section>
+					<section>
+						<h3 id="forensic-use-cases">Forensic Use Cases</h3>
+						<h4 id="finding-persistence-mechanisms">Finding Persistence Mechanisms</h4>
+						<pre class="sql">
+-- Combine multiple persistence indicators
+SELECT &#39;crontab&#39; AS source, command AS detail FROM crontab
+UNION ALL
+SELECT &#39;systemd_user_unit&#39;, target_path FROM systemd_units WHERE fragment_path LIKE &#39;/home/%&#39;
+UNION ALL
+SELECT &#39;ssh_key&#39;, path FROM file WHERE path LIKE &#39;%/.ssh/authorized_keys&#39;
+UNION ALL
+SELECT &#39;bashrc&#39;, key || &#39;=&#39; || value FROM file
+WHERE (path LIKE &#39;/home/%/.bashrc&#39; OR path = &#39;/root/.bashrc&#39;);
+						</pre>
+						<h4 id="unusual-process-investigation">Unusual Process Investigation</h4>
+						<pre class="sql">
+-- Find processes without a known parent (potential daemonization or PID reuse)
+SELECT p.pid, p.name, p.parent, p.cmdline
+FROM processes p
+LEFT JOIN processes pp ON p.parent = pp.pid
+WHERE pp.pid IS NULL AND p.parent != 0;
+
+-- Find processes with deleted executables (malware that unlinks itself)
+SELECT pid, name, path, cmdline
+FROM processes
+WHERE on_disk = 0;
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							The container ships osqueryd, a set of planted persistence artifacts, and ten investigation
+							exercises. Build it, run it, and answer each exercise with a query instead of with shell commands.
+						</p>
+						<p><a href="/wiki/articles/blueteam/osquery.Containerfile">osquery.Containerfile</a></p>
+						<pre class="bash">
+podman build -f blueteam/osquery.Containerfile -t osquery-ctf .
+podman run -it --rm osquery-ctf
+						</pre>
+						<p>Inside the container, start from the planted shell history:</p>
+						<pre class="bash">
+osqueryi &#34;SELECT uid, command, history_file FROM shell_history WHERE command LIKE &#39;%/dev/tcp%&#39;;&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://osquery.readthedocs.io/" target="_blank">osquery Documentation</a></li>
+							<li><a class="icon-website" href="https://osquery.io/schema/" target="_blank">osquery Schema Tables Reference</a></li>
+							<li><a class="icon-website" href="https://fleetdm.com/docs" target="_blank">Fleet Documentation</a></li>
+							<li><a class="icon-github" href="https://github.com/osquery/osquery" target="_blank">GitHub: osquery</a></li>
+							<li><a class="icon-website" href="https://osquery.readthedocs.io/en/stable/deployment/yara/" target="_blank">YARA with osquery</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

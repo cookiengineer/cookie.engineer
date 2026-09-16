@@ -1,0 +1,1217 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Kernel Memory | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Kernel Memory">
+		<meta name="keywords" content="alloc_pages, buddy, fragmentation, kernel, kmalloc, memory, slab, slub, sysinternals, vmalloc, zones">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Kernel Memory">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Kernel heap allocators - kmalloc, vmalloc, page allocator, slab/SLUB internals, memory zones, fragmentation, and kernel memory corruption patterns.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/sysinternals/kernel-memory.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Kernel Memory">
+		<meta name="twitter:description" itemprop="description" content="Kernel heap allocators - kmalloc, vmalloc, page allocator, slab/SLUB internals, memory zones, fragmentation, and kernel memory corruption patterns.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kernel-memory-landscape">Kernel Memory Landscape</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-three-kernel-allocators">The Three Kernel Allocators</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#page-allocator-and-the-buddy-system">Page Allocator and the Buddy System</a></b>
+					<ul>
+						<li><a href="#the-buddy-formula">The buddy formula</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#memory-zones">Memory Zones</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#gfp-flags-asking-the-kernel-for-memory">GFP Flags: Asking the Kernel for Memory</a></b>
+					<ul>
+						<li><a href="#common-gfp-bugs-and-exploit-primitives">Common GFP Bugs and Exploit Primitives</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#slub-the-default-slab-allocator">SLUB: The Default Slab Allocator</a></b>
+					<ul>
+						<li><a href="#slab-object-layout-and-embedded-freelist">Slab Object Layout and Embedded Freelist</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kmalloc-the-kernels-malloc">kmalloc - The Kernel's malloc()</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#vmalloc-virtual-vs-physical-layout">vmalloc: Virtual vs Physical Layout</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kmalloc-vs-vmalloc-vs-alloc-pages">kmalloc vs vmalloc vs alloc_pages</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kernel-stack">Kernel Stack</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kernel-memory-corruption-patterns">Kernel Memory Corruption Patterns</a></b>
+					<ul>
+						<li><a href="#slab-out-of-bounds-write">1. Slab out-of-bounds write</a></li>
+						<li><a href="#use-after-free-in-slab">2. Use-after-free in slab</a></li>
+						<li><a href="#double-free">3. Double-free</a></li>
+						<li><a href="#invalid-free-wrong-cache">4. Invalid-free / wrong cache</a></li>
+						<li><a href="#slub-debugging-and-detection">SLUB debugging and detection</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kernel-address-sanitizer-kasan">Kernel Address Sanitizer (KASAN)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#memory-fragmentation-and-exhaustion">Memory Fragmentation and Exhaustion</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kernel-oom-when-the-kernel-runs-out">Kernel OOM - When the Kernel Runs Out</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#practical-kernel-memory-tracing">Practical Kernel Memory Tracing</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification">Verification</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/sysinternals/index.html">Sysinternals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/sysinternals/kernel-memory.html">Kernel Memory</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="kernel-memory">Kernel Memory</h2>
+					<p>
+						Kernel heap allocators - kmalloc, vmalloc, page allocator, slab/SLUB internals, memory zones,
+						fragmentation, and kernel memory corruption patterns.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							The kernel cannot swap and has no lazy overcommit, so every allocation is backed by physical
+							memory the moment it succeeds. This article walks the layered allocator stack from the page
+							allocator up through slab/SLUB and vmalloc, shows how to inspect each layer through
+							<code>/proc</code>
+							and
+							<code>/sys</code>
+							, and surveys the corruption patterns (out-of-bounds writes, use-after-free, double-free)
+							that turn allocator bugs into kernel exploit primitives.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/virtual-memory.html">/wiki/articles/fundamentals/virtual-memory.html</a> - page tables, TLB, mmap, page faults, virtual-to-physical translation</li>
+							<li><a href="/wiki/articles/fundamentals/heap.html">/wiki/articles/fundamentals/heap.html</a> - userspace heap internals (glibc ptmalloc), arenas, bins, freelists</li>
+							<li><a href="/wiki/articles/fundamentals/stack.html">/wiki/articles/fundamentals/stack.html</a> - stack frame structure, calling conventions, stack pivoting</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="kernel-memory-landscape">Kernel Memory Landscape</h3>
+						<p>
+							The kernel is not a process, but it needs to allocate memory. Every
+							<code>kmalloc()</code>
+							, every new
+							<code>task_struct</code>
+							, every network socket buffer, every inode cache - all consume kernel memory.
+							Unlike user space, the kernel has no swap backing, no lazy overcommit, and no second chance.
+							When the kernel runs out of memory, the OOM killer activates, or the system panics.
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────┐
+│                   Kernel Virtual Address Space                   │
+│                   0xFFFF800000000000 – 0xFFFFFFFFFFFFFFFF         │
+│                                                                   │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │  Direct Map (PAGE_OFFSET)                                    │ │
+│  │  ~64 TiB on x86-64                                            │ │
+│  │  All physical memory mapped 1:1                               │ │
+│  │  Used by: alloc_pages(), kmalloc() slabs, page cache         │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+│                                                                   │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │  vmalloc Region                                              │ │
+│  │  ~32 TiB on x86-64                                            │ │
+│  │  Virtually contiguous, physically scattered                    │ │
+│  │  Used by: large allocations, module loading, stack           │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+│                                                                   │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │  vmemmap (struct page array)                                  │ │
+│  │  One struct page per physical page (64 bytes per 4 KiB)      │ │
+│  │  Tracks: refcount, flags, LRU lists, mapping                  │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+│                                                                   │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │  Modules (MODULES_VADDR)                                      │ │
+│  │  ~1 GiB region for kernel module .text, .data, .bss         │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+│                                                                   │
+│  ┌──────┐ ┌──────┐ ┌──────────────────────┐ ┌──────────────────┐ │
+│  │Fixmap│ │CPU   │ │ Kernel text/data      │ │ Guard gaps       │ │
+│  │      │ │entry │ │ (KASLR-randomized)    │ │ between regions  │ │
+│  └──────┘ └──────┘ └──────────────────────┘ └──────────────────┘ │
+│                                                                   │
+│  Note: Every region is separated by guard gaps (PMD/PUD-sized)   │
+│  to catch stray pointer dereferences and prevent cross-region     │
+│  exploitation.                                                     │
+└──────────────────────────────────────────────────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="the-three-kernel-allocators">The Three Kernel Allocators</h3>
+						<p>
+							The kernel uses a layered allocator architecture. Each layer is optimized for different allocation
+							sizes, lifetimes, and performance characteristics.
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Allocation Layer</th>
+									<th align="center">Use Case</th>
+									<th align="center">Typical Sizes</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">kmalloc() (slab/SLUB)</td>
+									<td align="center">Small objects, frequent alloc/free, short lifetime</td>
+									<td align="center">8 bytes - 8 KiB; kernel structs</td>
+								</tr>
+								<tr>
+									<td align="center">vmalloc()</td>
+									<td align="center">Large, virtually contig, physically scattered</td>
+									<td align="center">> 1 page, up to several MiB</td>
+								</tr>
+								<tr>
+									<td align="center">alloc_pages() / __get_free_pages()</td>
+									<td align="center">Physically contiguous, DMA buffers, page tables</td>
+									<td align="center">4 KiB - 4 MiB (rarely larger)</td>
+								</tr>
+								<tr>
+									<td align="center">kmem_cache_alloc()</td>
+									<td align="center">Custom objects with constructor/destructor (slab cache API)</td>
+									<td align="center">Fixed size per cache (dentry, inode, task_struct)</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="plaintext">
+                 User of kernel memory
+                         │
+                         ▼
+              ┌─────────────────────┐
+              │    kmalloc(size,    │  ← Primary interface
+              │    GFP_KERNEL)      │
+              └──────────+──────────┘
+                         │
+            ┌────────────+────────────┐
+            │            │            │
+         size ≤          │         size &gt;
+        SLAB_MAX         │        SLAB_MAX
+            │            │            │
+            ▼            │            ▼
+    ┌──────────────┐     │     ┌──────────────┐
+    │ SLUB/SLAB    │     │     │ alloc_pages()│
+    │ (per-cache)  │     │     │ or vmalloc() │
+    └──────+───────┘     │     └──────+───────┘
+           │             │            │
+           ▼             │            ▼
+    ┌──────────────┐     │     ┌──────────────┐
+    │ Page         │◄────┘     │ Buddy        │
+    │ Allocator    │           │ Allocator    │
+    │ (buddy)      │           │              │
+    └──────────────┘           └──────────────┘
+           │
+           ▼
+      Physical RAM
+						</pre>
+					</section>
+					<section>
+						<h3 id="page-allocator-and-the-buddy-system">Page Allocator and the Buddy System</h3>
+						<p>
+							The page allocator is the foundation. All other allocators (slab, vmalloc) sit on top of it.
+							It manages physical memory using the buddy system - a binary splitting algorithm that maintains
+							free page blocks in power-of-two orders.
+						</p>
+						<p>Buddy System Data Structure:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Order</th>
+									<th align="center">Block Size</th>
+									<th align="center">Number of pages</th>
+									<th align="center">Memory zone(s)</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">11</td>
+									<td align="center">8 MiB (2^11)</td>
+									<td align="center">2048</td>
+									<td align="center">ZONE_NORMAL</td>
+								</tr>
+								<tr>
+									<td align="center">10</td>
+									<td align="center">4 MiB</td>
+									<td align="center">1024</td>
+									<td align="center">ZONE_NORMAL</td>
+								</tr>
+								<tr>
+									<td align="center">9</td>
+									<td align="center">2 MiB</td>
+									<td align="center">512</td>
+									<td align="center">ZONE_NORMAL</td>
+								</tr>
+								<tr>
+									<td align="center">8</td>
+									<td align="center">1 MiB</td>
+									<td align="center">256</td>
+									<td align="center">ZONE_NORMAL</td>
+								</tr>
+								<tr>
+									<td align="center">...</td>
+									<td align="center"></td>
+									<td align="center"></td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center">3</td>
+									<td align="center">32 KiB</td>
+									<td align="center">8</td>
+									<td align="center">ZONE_NORMAL</td>
+								</tr>
+								<tr>
+									<td align="center">2</td>
+									<td align="center">16 KiB</td>
+									<td align="center">4</td>
+									<td align="center">ZONE_NORMAL</td>
+								</tr>
+								<tr>
+									<td align="center">1</td>
+									<td align="center">8 KiB</td>
+									<td align="center">2</td>
+									<td align="center">ZONE_NORMAL</td>
+								</tr>
+								<tr>
+									<td align="center">0</td>
+									<td align="center">4 KiB (1 page)</td>
+									<td align="center">1</td>
+									<td align="center">ZONE_NORMAL</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="plaintext">
+Per-order freelist: free_area[order].free_list
+Each node in the freelist points to struct page of the first page in the block.
+
+Allocation (order=2, 16 KiB):
+  ┌─────────────────────┐
+  │ Check order=2 free  │
+  │ list. If empty:     │
+  │   Split order=3     │
+  │   block -&gt; two      │
+  │   order=2 blocks.   │
+  │   Use one, put       │
+  │   other on order=2. │
+  └─────────────────────┘
+
+Free (order=2 block):
+  ┌─────────────────────┐
+  │ Check if buddy is   │
+  │ free (same order).   │
+  │ If yes: coalesce    │
+  │   -&gt; order=3 block. │
+  │ Recurse upward.     │
+  │ If no: put on       │
+  │ order=2 freelist.   │
+  └─────────────────────┘
+						</pre>
+						<h4 id="the-buddy-formula">The buddy formula</h4>
+						<p>
+							Two pages are buddies if they are the same size, contiguous in physical memory, and the first
+							page's PFN is aligned to
+							<code>2^(order+1)</code>
+							.
+						</p>
+						<pre class="c">
+// /usr/src/linux/mm/page_alloc.c — find_buddy_page()
+static inline struct page *__page_find_buddy(struct page *page,
+                                              unsigned long page_idx,
+                                              unsigned int order)
+{
+    // Buddy PFN = page_idx XOR (1 &lt;&lt; order)
+    unsigned long buddy_idx = page_idx ^ (1 &lt;&lt; order);
+    return page + (buddy_idx - page_idx);
+}
+// Example: page_idx=4, order=1
+//   4 ^ (1 &lt;&lt; 1) = 4 ^ 2 = 6  → buddy is PFN 6
+//   Blocks [4,5] and [6,7] are order-1 buddies
+//   They form block [4,5,6,7] (order=2) when coalesced
+						</pre>
+						<pre class="bash">
+# Inspect buddy allocator state
+cat /proc/buddyinfo
+# Format: Node 0, zone   Normal    1234   567   234   89   45   12   8   4   2   1   0
+# Columns: order 0 through order 10 freelist counts
+
+# Example output:
+# Node 0, zone      DMA      0      0      0      0      0    ...
+# Node 0, zone    DMA32    123   456    78    90    45    23    12 ...
+# Node 0, zone   Normal  12345  6789  3456  1234  567   234   89 ...
+
+# Pagetype info — pages grouped by mobility
+cat /proc/pagetypeinfo | head -30
+# Columns: Unmovable, Movable, Reclaimable, HighAtomic, Isolate
+						</pre>
+					</section>
+					<section>
+						<h3 id="memory-zones">Memory Zones</h3>
+						<p>
+							Physical memory is divided into zones. Each zone serves a specific purpose. The zone division
+							exists because of hardware addressing limitations - some devices can only DMA to the first 16
+							MiB of RAM.
+						</p>
+						<pre class="plaintext">
+Memory Zones (x86-64, CONFIG_ZONE_DMA=n, CONFIG_ZONE_DMA32=y):
+
+┌───────────────────────────────────────────────────────────┐
+│ ZONE_DMA (0–16 MiB)                                        │
+│ For legacy ISA devices. Usually empty on modern systems.   │
+│ CONFIG_ZONE_DMA can be disabled on x86-64.                 │
+└───────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────┐
+│ ZONE_DMA32 (16 MiB – 4 GiB)                                │
+│ For 32-bit PCI devices that cannot address &gt;4GiB.          │
+│ GFP_DMA32 allocations come from here.                      │
+└───────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────┐
+│ ZONE_NORMAL (4 GiB – 64 TiB)                               │
+│ Direct-mapped by the kernel. All normal allocations.       │
+│ GFP_KERNEL allocations come from here.                     │
+└───────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────┐
+│ ZONE_HIGHMEM (32-bit only)                                 │
+│ Physical memory above ~896 MiB that the kernel cannot      │
+│ permanently map — needs temporary kmap()/kunmap().         │
+│ Not needed on 64-bit because all memory is direct-mapped.  │
+└───────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────┐
+│ ZONE_MOVABLE (optional)                                     │
+│ Pages that can be migrated (used for memory hotplug).      │
+│ Created via kernel cmdline: kernelcore=nnM or              │
+│ movablecore=nnM.                                           │
+└───────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────┐
+│ ZONE_DEVICE (optional)                                      │
+│ Persistent memory (PMEM), GPU device memory.               │
+└───────────────────────────────────────────────────────────┘
+						</pre>
+						<pre class="bash">
+# Inspect zone configuration and sizes
+cat /proc/zoneinfo | head -80
+
+# Show per-zone stats
+awk &#39;/^Node/,/^$/ {print}&#39; /proc/zoneinfo | head -40
+
+# Quick summary of zone sizes
+grep -A2 &#34;Node.*zone&#34; /proc/zoneinfo | grep -E &#34;(Node|managed|name)&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="gfp-flags-asking-the-kernel-for-memory">GFP Flags: Asking the Kernel for Memory</h3>
+						<p>
+							Every kernel allocation specifies GFP (Get Free Pages) flags that control where the allocation
+							comes from and what the allocator is allowed to do.
+						</p>
+						<pre class="c">
+// /usr/src/linux/include/linux/gfp_types.h
+// Important GFP flag combinations:
+
+// ---- GFP_KERNEL — the default for most kernel code ----
+// Can block (sleep), can reclaim pages, can trigger OOM
+#define GFP_KERNEL  (__GFP_RECLAIM | __GFP_IO | __GFP_FS)
+
+// ---- GFP_ATOMIC — for interrupt context, cannot sleep ----
+// Returns NULL if no memory is immediately available.
+// Has a small emergency reserve.
+#define GFP_ATOMIC  (__GFP_HIGH | __GFP_ATOMIC | __GFP_KSWAPD_RECLAIM)
+
+// ---- GFP_NOWAIT — do not block, do not reclaim ----
+// Like ATOMIC but without the emergency reserve.
+#define GFP_NOWAIT  (__GFP_KSWAPD_RECLAIM)
+
+// ---- GFP_NOFS — may block, may reclaim, but NO filesystem operations ----
+// Prevents recursion into filesystem code.
+#define GFP_NOFS    (__GFP_RECLAIM | __GFP_IO)
+
+// ---- GFP_NOIO — may block, but NO I/O at all ----
+// Prevents block layer recursion.
+#define GFP_NOIO    (__GFP_RECLAIM)
+
+// ---- GFP_DMA / GFP_DMA32 — request specific zones ----
+// GFP_DMA:    ZONE_DMA  (0-16 MiB)
+// GFP_DMA32:  ZONE_DMA32 (0-4 GiB)
+
+// ---- GFP_USER — user-space triggered allocation ----
+// Allowed to reclaim and trigger OOM.
+#define GFP_USER    (__GFP_RECLAIM | __GFP_IO | __GFP_FS | __GFP_HARDWALL)
+
+// ---- Individual flag bits ----
+// __GFP_DIRECT_RECLAIM  — caller can block and invoke direct reclaim
+// __GFP_KSWAPD_RECLAIM  — caller can wake kswapd (background reclaim)
+// __GFP_RECLAIM          — shortcut for both reclaim bits
+// __GFP_IO               — allocator can start filesystem I/O
+// __GFP_FS               — allocator can call filesystem operations
+// __GFP_HIGH             — can use emergency reserves
+// __GFP_MEMALLOC          — can access ALL memory (used by reclaim itself)
+// __GFP_NOWARN            — suppress allocation failure warning
+// __GFP_ZERO              — zero the allocated memory
+// __GFP_COMP              — allocate compound pages (for huge pages)
+						</pre>
+						<h4 id="common-gfp-bugs-and-exploit-primitives">Common GFP Bugs and Exploit Primitives</h4>
+						<ul>
+							<li>Using <code>GFP_KERNEL</code> in atomic context -> sleeping while atomic -> kernel panic or exploitable state</li>
+							<li>Using <code>GFP_ATOMIC</code> for large allocations -> always failing under memory pressure</li>
+							<li>Forgetting <code>__GFP_ZERO</code> -> information disclosure (uninitialized kernel memory returned to user space)</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="slub-the-default-slab-allocator">SLUB: The Default Slab Allocator</h3>
+						<p>
+							SLUB is the default slab allocator since Linux 2.6.23 (
+							<code>CONFIG_SLUB=y</code>
+							). It replaced the older
+							SLAB allocator with a simpler, more
+							<abbr title="Central Processing Unit">CPU</abbr>
+							-cache-friendly design; SLOB
+							is a separate allocator for memory-constrained systems. SLUB does not maintain per-cache freelist
+							arrays - instead, it embeds the freelist pointer directly in free objects.
+						</p>
+						<pre class="plaintext">
+SLUB Architecture:
+
+Per-kmem_cache (e.g., &#34;dentry&#34;, &#34;mm_struct&#34;, &#34;kmalloc-256&#34;):
+
+  ┌──────────────────────────────────────────────────────┐
+  │  kmem_cache                                             │
+  │  ├─ name       : &#34;kmalloc-256&#34;                          │
+  │  ├─ size       : 256                                    │
+  │  ├─ object_size: 256                                    │
+  │  ├─ offset     : 0  (freelist pointer offset in object) │
+  │  ├─ flags      : SLAB_*                                 │
+  │  ├─ cpu_slab   : per-CPU partial slabs (hot cache)      │
+  │  └─ node[]     : per-NUMA-node partial/full lists       │
+  └──────────────────────────────────────────────────────┘
+           │
+           ├──► CPU 0 slab (hot)
+           │     ┌──────────────────────────┐
+           │     │ struct page (slab page)   │
+           │     │  ├─ freelist → first free │
+           │     │  ├─ inuse   : 15 objects  │
+           │     │  ├─ objects : 16 objects  │
+           │     │  └─ slab_cache → kmem_cache │
+           │     │                            │
+           │     │  Object layout (256 bytes):│
+           │     │  ┌──────+──────+──────┐   │
+           │     │  │Free◄─┤Free◄─┤Free◄─┤...│
+           │     │  │(data)│(data)│(data)│   │
+           │     │  └──────+──────+──────┘   │
+           │     │  Freelist embedded in     │
+           │     │  free objects themselves  │
+           │     └──────────────────────────┘
+           │
+           ├──► Partial slabs (per-node list)
+           │     ┌─────────┐ ┌──────────┐
+           │     │Partial  │ │Partial   │ ...
+           │     │(some    │ │(some     │
+           │     │ free)   │ │ free)    │
+           │     └─────────┘ └──────────┘
+           │
+           └──► Full slabs (per-node list)
+                 ┌─────────┐ ┌──────────┐
+                 │Full     │ │Full      │ ...
+                 │(0 free) │ │(0 free)  │
+                 └─────────┘ └──────────┘
+						</pre>
+						<h4 id="slab-object-layout-and-embedded-freelist">Slab Object Layout and Embedded Freelist</h4>
+						<pre class="plaintext">
+Free object (256 bytes):
+┌────────────────────────────────────────────────┐
+│ offset 0: &lt;freelist_ptr&gt;  ← points to next free │
+│ offset 8: &lt;data... (248 bytes of stale data)&gt;   │
+│           ...                                    │
+│ offset 255: &lt;last byte&gt;                         │
+└────────────────────────────────────────────────┘
+
+Allocated object (256 bytes):
+┌────────────────────────────────────────────────┐
+│ offset 0: &lt;caller data (256 bytes)&gt;             │
+│           The entire object is usable           │
+└────────────────────────────────────────────────┘
+
+When freed: freelist pointer is written to offset 0 of the object.
+When allocated: caller overwrites offset 0 with their own data.
+
+Kernel hardening (CONFIG_SLAB_FREELIST_HARDENED):
+  → freelist_ptr is obfuscated:
+    freelist_ptr = (ptr ^ random ^ (address_of_freelist &gt;&gt; 12))
+  → Prevents freelist corruption through linear heap overflows
+  → Also adds freelist pointer to a different offset (offset field)
+						</pre>
+						<pre class="bash">
+# Inspect SLUB state
+cat /proc/slabinfo | head -5
+# Output: slabinfo - version: 2.1
+# name       &lt;active_objs&gt; &lt;num_objs&gt; &lt;objsize&gt; &lt;objperslab&gt; &lt;pagesperslab&gt; : tunables ...
+# dentry         12345   12600    192   21    1 : tunables ...
+# ext4_inode_cache  6789   6888   1080   15    4 : tunables ...
+
+# Live slab top monitor
+sudo slabtop -o | head -20
+# Sort by object count. Interactive: press &#39;c&#39; to sort by cache size.
+
+# Find a specific cache
+sudo cat /proc/slabinfo | grep -E &#34;kmalloc|dentry|inode_cache|task_struct|cred_jar&#34;
+
+# Show detailed slab info for a specific cache
+sudo cat /sys/kernel/slab/ext4_inode_cache/ 2&gt;/dev/null || \
+sudo cat /sys/kernel/slab/:ext4_inode_cache/ 2&gt;/dev/null
+# Each cache directory contains:
+#   aliases, align, alloc_calls, cpu_partial, cpu_slabs, ctor,
+#   destroy_by_rcu, free_calls, hwcache_align, min_partial,
+#   object_size, objects, objects_partial, objs_per_slab,
+#   order, partial, poison, reclaim_account, red_zone,
+#   remote_node_defrag_ratio, sanity_checks, shrink, slab_size,
+#   slabs, slabs_cpu_partial, store_user, total_objects,
+#   trace, usersize, validate
+						</pre>
+					</section>
+					<section>
+						<h3 id="kmalloc-the-kernels-malloc">kmalloc - The Kernel's malloc()</h3>
+						<p>
+							<code>kmalloc()</code>
+							allocates physically contiguous memory from a slab cache. Internally, it selects
+							a pre-allocated kmem_cache based on the requested size (rounded up to the nearest power of two
+							or common size).
+						</p>
+						<pre class="c">
+// /usr/src/linux/include/linux/slab.h
+// kmalloc size → cache mapping (kmalloc-96, kmalloc-192, kmalloc-512, etc.)
+// Common cache sizes on x86-64:
+//   8, 16, 32, 64, 96, 128, 192, 256, 512, 1024, 2048, 4096, 8192
+
+void *ptr = kmalloc(150, GFP_KERNEL);   // Allocates from kmalloc-192 cache
+// 150 rounded up to 192 → one of 21 objects in a 4 KiB slab page (192 * 21 = 4032)
+
+// kmalloc can allocate up to ~4 MiB (via kmalloc_large → alloc_pages)
+void *large = kmalloc(1024 * 1024, GFP_KERNEL);  // 1 MiB → compound pages
+						</pre>
+						<pre class="bash">
+# List all kmalloc caches
+sudo cat /proc/slabinfo | grep &#34;^kmalloc&#34; | sort -t&#39;-&#39; -k2 -n
+# Output shows: kmalloc-8, kmalloc-16, ..., kmalloc-8192, kmalloc-rcl-*, etc.
+
+# Show cache merging (aliases)
+sudo cat /sys/kernel/slab/kmalloc-96/aliases 2&gt;/dev/null
+# Shows which other caches are merged into this one
+						</pre>
+					</section>
+					<section>
+						<h3 id="vmalloc-virtual-vs-physical-layout">vmalloc: Virtual vs Physical Layout</h3>
+						<p>
+							<code>vmalloc()</code>
+							allocates memory that is contiguous in the kernel's virtual address space but may
+							be scattered across arbitrary physical pages. This avoids fragmentation issues but introduces
+							TLB pressure and a minor performance penalty.
+						</p>
+						<pre class="c">
+// /usr/src/linux/mm/vmalloc.c
+void *vmalloc(unsigned long size);
+void *vzalloc(unsigned long size);  // vmalloc + zero
+void vfree(const void *addr);
+
+// vmalloc is appropriate when:
+//   1. Physical contiguity is not required (most kernel code doesn&#39;t need it)
+//   2. The allocation is large (&gt; several pages)
+//   3. kmalloc() fails due to fragmentation
+//   4. The lifecycle is long (no hot-path usage)
+
+// vmalloc drawbacks:
+//   - Requires page table updates (TLB shootdown for every mapping)
+//   - Slower to allocate and free
+//   - Slower access (TLB is finite, vmalloc region is huge)
+//   - Cannot be used for DMA (device needs physical addresses)
+
+// Example: kernel module loading uses vmalloc for module .text/.data
+						</pre>
+						<pre class="bash">
+# Inspect vmalloc region usage
+sudo cat /proc/vmallocinfo | head -30
+# Output format:
+# 0xffff888010000000-0xffff888010001000   4096 module_alloc+0x... pages=1 vmalloc
+# StartAddr-EndAddr Size Caller
+
+# Show vmalloc usage summary
+sudo cat /proc/vmallocinfo | awk &#39;{sum+=$2} END {printf &#34;Total vmalloc: %d bytes (%.1f MiB)\n&#34;, sum, sum/1048576}&#39;
+
+# Who is using vmalloc?
+sudo cat /proc/vmallocinfo | awk -F&#39;/&#39; &#39;{print $NF}&#39; | sort | uniq -c | sort -rn | head -10
+						</pre>
+					</section>
+					<section>
+						<h3 id="kmalloc-vs-vmalloc-vs-alloc-pages">kmalloc vs vmalloc vs alloc_pages</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Property</th>
+									<th align="center">kmalloc()</th>
+									<th align="center">vmalloc()</th>
+									<th align="center">alloc_pages()</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Physical contig.</td>
+									<td align="center">Yes</td>
+									<td align="center">No</td>
+									<td align="center">Yes</td>
+								</tr>
+								<tr>
+									<td align="center">Virtual contig.</td>
+									<td align="center">Yes (via DM)</td>
+									<td align="center">Yes</td>
+									<td align="center">Yes (via DM)</td>
+								</tr>
+								<tr>
+									<td align="center">Max size</td>
+									<td align="center">~4 MiB</td>
+									<td align="center">~several GiB</td>
+									<td align="center">4 MiB (order 10)</td>
+								</tr>
+								<tr>
+									<td align="center">Allocation speed</td>
+									<td align="center">Fast</td>
+									<td align="center">Slow</td>
+									<td align="center">Medium</td>
+								</tr>
+								<tr>
+									<td align="center">Access speed</td>
+									<td align="center">Fast (cached)</td>
+									<td align="center">Slower (TLB miss)</td>
+									<td align="center">Fast (cached)</td>
+								</tr>
+								<tr>
+									<td align="center">Fragmentation</td>
+									<td align="center">Wastes space (internal only)</td>
+									<td align="center">Avoids frag</td>
+									<td align="center">External frag possible</td>
+								</tr>
+								<tr>
+									<td align="center">DMA capable</td>
+									<td align="center">Yes</td>
+									<td align="center">No</td>
+									<td align="center">Yes</td>
+								</tr>
+								<tr>
+									<td align="center">Can sleep?</td>
+									<td align="center">With GFP_KERNEL</td>
+									<td align="center">Always</td>
+									<td align="center">With GFP_KERNEL</td>
+								</tr>
+								<tr>
+									<td align="center">Use case</td>
+									<td align="center">Typical kernel structures</td>
+									<td align="center">Large buffers, module loading</td>
+									<td align="center">Raw pages, DMA page tables</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="kernel-stack">Kernel Stack</h3>
+						<p>
+							Each thread in Linux gets a kernel stack of
+							<code>THREAD_SIZE</code>
+							bytes (typically 16 KiB = 4 pages
+							on x86-64 with
+							<code>CONFIG_THREAD_SIZE_ORDER=2</code>
+							). The
+							<code>task_struct</code>
+							is embedded at the bottom (or
+							referenced from
+							<code>thread_info</code>
+							on older architectures).
+						</p>
+						<pre class="plaintext">
+Kernel Stack Layout (x86-64, CONFIG_THREAD_INFO_IN_TASK=y):
+
+High address (stack grows downward)
+┌──────────────────────────────┐
+│                              │
+│  Stack frames (grows ↓)      │
+│                              │
+│  ...                         │
+│  Frame N                     │
+│  Frame N-1                   │
+│  ...                         │
+├──────────────────────────────┤ ← stack pointer (RSP)
+│  Unused space                │
+├──────────────────────────────┤
+│                              │
+│  task_struct                 │ ← current pointer (embedded)
+│  (allocated separately,      │
+│   pointed to by per-CPU var) │
+│                              │
+└──────────────────────────────┘
+Low address
+
+Kernel stack overflow detection:
+  - CONFIG_VMAP_STACK: kernel stack allocated from vmalloc,
+                       with guard pages (unmapped) on both sides
+  - Stack overflow → page fault in guard page → double fault handler → panic
+  - Without VMAP_STACK: overflow silently corrupts adjacent memory
+						</pre>
+						<pre class="bash">
+# Check kernel stack size
+grep THREAD_SIZE /boot/config-$(uname -r) 2&gt;/dev/null
+# CONFIG_THREAD_SIZE_ORDER=2 → 2^2 pages = 16 KiB
+
+# Check if VMAP_STACK is enabled
+grep VMAP_STACK /boot/config-$(uname -r)
+
+# Show per-thread kernel stack usage
+sudo cat /proc/1/stack 2&gt;/dev/null
+# Shows kernel stack trace for PID 1
+
+# Check stack sizes of kernel threads
+for pid in $(ps -eo pid=); do
+    [ -f /proc/$pid/status ] &amp;&amp; awk &#39;/VmStk/{print &#34;&#39;$pid&#39;:&#34;, $2}&#39; /proc/$pid/status
+done 2&gt;/dev/null | sort -t: -k2 -n | tail -10
+						</pre>
+					</section>
+					<section>
+						<h3 id="kernel-memory-corruption-patterns">Kernel Memory Corruption Patterns</h3>
+						<p>
+							Kernel heap vulnerabilities are exploited differently from userland. There's no
+							<code>exit()</code>
+							- a
+							corrupted kernel must either be stabilized or exploited before the crash.
+						</p>
+						<h4 id="slab-out-of-bounds-write">1. Slab out-of-bounds write</h4>
+						<pre class="c">
+// Vulnerable code pattern:
+struct vuln_obj {
+    unsigned long data[4];  // 32 bytes on 64-bit
+    unsigned long *fn_ptr;  // Function pointer at offset 32
+};
+// Allocated from a 64-byte slab cache (or merged with another)
+
+struct vuln_obj *obj = kmalloc(sizeof(*obj), GFP_KERNEL);  // 40 bytes
+// If sizeof(*obj) &gt;= 32 and written with data[5] = attacker_addr,
+// fn_ptr is corrupted.
+// Exploit: trigger fn_ptr call → redirect to attacker&#39;s ROP/JOP chain
+						</pre>
+						<h4 id="use-after-free-in-slab">2. Use-after-free in slab</h4>
+						<pre class="c">
+// Vulnerable pattern:
+struct vuln_obj *obj = kmalloc(sizeof(*obj), GFP_KERNEL);
+// ... use obj ...
+kfree(obj);       // Freed back to slab freelist
+// ... bug: obj still referenced ...
+obj-&gt;fn_ptr();    // Use-after-free: fn_ptr slot may now hold
+                  // the freelist pointer or attacker-controlled data
+                  // if the slab was reallocated.
+						</pre>
+						<h4 id="double-free">3. Double-free</h4>
+						<pre class="c">
+// Double free → slab freelist corruption
+kfree(obj);       // obj goes to freelist
+// ...
+kfree(obj);       // Double free!
+// Now the freelist has a cycle → next two allocations return same address
+// This is a powerful exploit primitive: overlapping allocations
+						</pre>
+						<h4 id="invalid-free-wrong-cache">4. Invalid-free / wrong cache</h4>
+						<pre class="c">
+// Freeing a pointer to the wrong slab cache
+char *p = kmalloc(256, GFP_KERNEL);  // From kmalloc-256 cache
+kfree(p - 16);  // Free with wrong pointer → slab metadata corruption
+                // CONFIG_SLAB_FREELIST_HARDENED may detect this
+                // Otherwise: silent corruption of slab freelist
+						</pre>
+						<h4 id="slub-debugging-and-detection">SLUB debugging and detection</h4>
+						<pre class="bash">
+# Enable SLUB debugging at boot (add to kernel cmdline):
+#   slub_debug=FPZU
+#   F = Sanity checks (validate slab state)
+#   P = Poisoning (overwrite free&#39;d objects with pattern)
+#   Z = Red zoning (add guard bytes before/after objects)
+#   U = User tracking (record alloc/free callers)
+#
+# Example: slub_debug=FZPU,kmalloc-256
+
+# Check if SLUB debugging is active
+sudo dmesg | grep -i &#34;SLUB&#34;
+
+# Manually trigger SLUB validation
+echo 1 | sudo tee /sys/kernel/slab/kmalloc-256/validate 2&gt;/dev/null
+
+# Read poisoning values
+sudo xxd /sys/kernel/slab/kmalloc-256/poison 2&gt;/dev/null
+# Common poison values:
+#   0x5a = SLUB_RED_ACTIVE (allocated, fill byte)
+#   0x6b = POISON_FREE (freed, before overwrite by next alloc)
+#   0xbb = SLAB_RED_INACTIVE (for guard zone when write after free)
+						</pre>
+					</section>
+					<section>
+						<h3 id="kernel-address-sanitizer-kasan">Kernel Address Sanitizer (KASAN)</h3>
+						<p>
+							KASAN is a compiler-based tool that detects out-of-bounds accesses and use-after-free bugs in
+							the kernel. It uses a shadow memory region where each byte represents the accessibility of 8
+							bytes of kernel memory.
+						</p>
+						<pre class="plaintext">
+KASAN Shadow Memory Mapping:
+
+Kernel virtual address &gt;&gt; 3 = shadow address (plus offset)
+Shadow byte value:
+  0x00 = all 8 bytes accessible
+  0x01 - 0x07 = that many bytes accessible (partial)
+  0xFB = freed slab object (use-after-free)
+  0xFC = red zone around a slab object
+  0xF1 - 0xF4 = stack red zone (left, mid, right, partial)
+  0xFF = freed page
+  0xFE = inaccessible (shadow gap or invalid tag)
+
+Shadow memory is 1/8 the size of kernel virtual memory.
+Typical offset: 0xdffffc0000000000 (x86-64)
+						</pre>
+						<pre class="bash">
+# Check if KASAN is enabled in your kernel
+grep KASAN /boot/config-$(uname -r) 2&gt;/dev/null
+
+# Most production kernels have CONFIG_KASAN=n because of the 2x slowdown.
+# Ubuntu/Debian offer &#34;linux-image-*-kasan&#34; debug kernels.
+# For Arch, build a custom kernel with CONFIG_KASAN=y.
+
+# KASAN reports (in dmesg) look like:
+# ==================================================================
+# BUG: KASAN: slab-out-of-bounds in some_function+0x123/0x456
+# Write of size 8 at addr ffff888123456789 by task modprobe/1234
+						</pre>
+					</section>
+					<section>
+						<h3 id="memory-fragmentation-and-exhaustion">Memory Fragmentation and Exhaustion</h3>
+						<p>
+							Kernel memory fragmentation occurs when the buddy allocator has many free pages but cannot satisfy
+							a contiguous allocation request.
+						</p>
+						<pre class="plaintext">
+External fragmentation:
+  Free pages: [P] [P] [P] [P] (4 contiguous pages)
+  After allocations: [A1] [Free] [A2] [Free]
+  Need 2 contig pages → fail (despite 2 pages free)
+  
+  Solution: compaction (CONFIG_COMPACTION)
+    → kcompactd migrates movable pages to create larger contig blocks
+
+Internal fragmentation:
+  kmalloc(100) → allocates from kmalloc-192 cache (192 bytes)
+  Wastes 92 bytes per allocation.
+  
+  Slab caches are sized to minimize this, but there&#39;s always some waste.
+						</pre>
+						<pre class="bash">
+# Assess fragmentation
+cat /proc/buddyinfo
+
+# Check for compaction activity
+cat /proc/vmstat | grep compact
+
+# Memory fragmentation index (higher = more fragmented)
+grep -E &#34;extfrag|unusable&#34; /sys/kernel/debug/extfrag/extfrag_index 2&gt;/dev/null | head -5
+# Or:
+cat /sys/kernel/debug/extfrag/unusable_index 2&gt;/dev/null || echo &#34;debugfs not mounted&#34;
+
+# Mount debugfs for extfrag info
+sudo mount -t debugfs none /sys/kernel/debug 2&gt;/dev/null
+cat /sys/kernel/debug/extfrag/extfrag_index 2&gt;/dev/null | head -20
+
+# Show unusable free space per order and zone
+grep . /sys/kernel/debug/extfrag/unusable_index 2&gt;/dev/null
+
+# Trigger manual compaction
+echo 1 | sudo tee /proc/sys/vm/compact_memory 2&gt;/dev/null
+						</pre>
+					</section>
+					<section>
+						<h3 id="kernel-oom-when-the-kernel-runs-out">Kernel OOM - When the Kernel Runs Out</h3>
+						<p>
+							Unlike user space, the kernel cannot swap itself. When a kernel allocation fails: - For
+							<code>GFP_ATOMIC</code>
+							: returns
+							<code>NULL</code>
+							, caller must handle it - For
+							<code>GFP_KERNEL</code>
+							with
+							<code>__GFP_NORETRY</code>
+							: returns
+							<code>NULL</code>
+							<ul>
+								<li>For <code>GFP_KERNEL</code> (default): invokes OOM killer if reclaim fails</li>
+							</ul>
+						</p>
+						<p>
+							However, kernel allocations failing deep in the kernel (page fault handler, filesystem code)
+							often result in a
+							<code>BUG()</code>
+							or
+							<code>panic()</code>
+							because there's no clean recovery path.
+						</p>
+						<pre class="bash">
+# Trigger OOM in a container (safe - only the container dies)
+# In the Containerfile lab (kernel-memory.Containerfile):
+#   Use stress-ng to exhaust memory within cgroup limits
+
+# Check system OOM history
+sudo dmesg | grep -i &#34;out of memory\|oom-kill\|invoked oom-killer&#34;
+
+# Current memory pressure
+cat /proc/pressure/memory
+# Format: some avg10=0.00 avg60=0.00 avg300=0.00 total=123456
+#         full avg10=0.00 avg60=0.00 avg300=0.00 total=78901
+# &#34;some&#34; = some tasks are stalled on memory
+# &#34;full&#34; = all non-idle tasks are stalled on memory
+
+# Memory reclaim rate
+cat /proc/vmstat | grep -E &#34;pgscan|pgsteal|kswapd&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="practical-kernel-memory-tracing">Practical Kernel Memory Tracing</h3>
+						<pre class="bash">
+# Trace kmalloc events with ftrace
+echo kmem:kmalloc &gt; /sys/kernel/debug/tracing/set_event 2&gt;/dev/null
+echo 1 &gt; /sys/kernel/debug/tracing/tracing_on 2&gt;/dev/null
+sleep 1
+cat /sys/kernel/debug/tracing/trace 2&gt;/dev/null | head -20
+echo 0 &gt; /sys/kernel/debug/tracing/tracing_on 2&gt;/dev/null
+
+# Trace page allocation
+echo kmem:mm_page_alloc &gt; /sys/kernel/debug/tracing/set_event 2&gt;/dev/null
+echo 1 &gt; /sys/kernel/debug/tracing/tracing_on 2&gt;/dev/null
+sleep 1
+cat /sys/kernel/debug/tracing/trace | head -20
+echo 0 &gt; /sys/kernel/debug/tracing/tracing_on 2&gt;/dev/null
+
+# Count allocations by cache
+sudo cat /proc/slabinfo | awk &#39;NR&gt;2 {printf &#34;%-30s active=%8d  obj=%8d  size=%6d\n&#34;, $1, $2, $3, $4}&#39; | head -20
+						</pre>
+					</section>
+					<section>
+						<h3 id="verification">Verification</h3>
+						<pre class="bash">
+# 1. Inspect slab allocator state
+sudo cat /proc/slabinfo | head -10
+sudo slabtop -o 2&gt;/dev/null | head -20
+
+# 2. Examine buddy allocator freelists
+cat /proc/buddyinfo
+cat /proc/pagetypeinfo | head -30
+
+# 3. Check vmalloc region usage
+sudo cat /proc/vmallocinfo | head -20
+sudo cat /proc/vmallocinfo | awk &#39;{sum+=$2} END {printf &#34;Total vmalloc: %.1f MiB\n&#34;, sum/1048576}&#39;
+
+# 4. Inspect memory zones
+cat /proc/zoneinfo | grep -A5 &#34;Node 0, zone&#34; | head -30
+
+# 5. Check kmalloc cache sizes
+sudo cat /proc/slabinfo | grep &#34;^kmalloc&#34; | awk &#39;{print $1, $3, $4}&#39; | column -t
+
+# 6. Check kernel stack configuration
+grep -E &#34;THREAD_SIZE|VMAP_STACK&#34; /boot/config-$(uname -r) 2&gt;/dev/null
+
+# 7. Trace kmalloc activity (needs debugfs)
+sudo mount -t debugfs none /sys/kernel/debug 2&gt;/dev/null
+echo kmem:kmalloc &gt; /sys/kernel/debug/tracing/set_event 2&gt;/dev/null
+echo 1 &gt; /sys/kernel/debug/tracing/tracing_on 2&gt;/dev/null
+sleep 0.5
+sudo cat /sys/kernel/debug/tracing/trace | head -10
+echo 0 &gt; /sys/kernel/debug/tracing/tracing_on 2&gt;/dev/null
+
+# 8. Memory pressure statistics
+cat /proc/pressure/memory
+
+# 9. OOM history
+sudo dmesg | grep -i &#34;oom\|out of memory&#34; | tail -10
+
+# 10. Memory fragmentation index
+cat /sys/kernel/debug/extfrag/extfrag_index 2&gt;/dev/null | head -10
+
+# 11. List slabs with debug information
+for cache in /sys/kernel/slab/kmalloc-*; do
+    [ -d &#34;$cache&#34; ] &amp;&amp; echo &#34;$(basename $cache): objects=$(cat $cache/objects 2&gt;/dev/null) slabs=$(cat $cache/slabs 2&gt;/dev/null)&#34;
+done 2&gt;/dev/null | head -20
+
+# 12. Check for slab red zoning (if enabled)
+grep SLUB_DEBUG /boot/config-$(uname -r) 2&gt;/dev/null
+sudo dmesg | grep -i &#34;SLUB&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Build and run the kernel memory lab container. It compiles a small module that calls
+							<code>kmalloc()</code>
+							,
+							<code>vmalloc()</code>
+							, and
+							<code>alloc_pages()</code>
+							, then prints the buddy and slab state.
+						</p>
+						<p><a href="/wiki/articles/sysinternals/kernel-memory.Containerfile">kernel-memory.Containerfile</a></p>
+						<pre class="bash">
+podman build -t kernel-memory-lab -f kernel-memory.Containerfile .
+podman run -it --rm --privileged kernel-memory-lab
+						</pre>
+						<p>Inside the container, load the demo module and inspect the results:</p>
+						<pre class="bash">
+insmod /src/kernel_memory_demo.ko
+dmesg | tail -30
+cat /proc/buddyinfo
+head -20 /proc/slabinfo
+						</pre>
+						<p>
+							Then extend
+							<code>kernel_memory_demo.c</code>
+							: allocate a 1 MiB buffer once with
+							<code>kmalloc()</code>
+							and once
+							with
+							<code>vmalloc()</code>
+							, and compare
+							<code>virt_addr_valid()</code>
+							on both pointers. Why does the
+							<code>vmalloc()</code>
+							pointer report as not directly mapped, and which
+							<code>/proc/vmallocinfo</code>
+							entry does it create?
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/virtual-memory.html">Virtual Memory</a> - page tables, TLB, mmap() internals</li>
+							<li><a href="/wiki/articles/fundamentals/heap.html">Heap</a> - userspace heap internals, ptmalloc2</li>
+							<li><a href="/wiki/articles/fundamentals/double-free.html">Double Free</a> - double-free exploitation techniques</li>
+							<li><a href="/wiki/articles/fundamentals/use-after-free.html">Use After Free</a> - UAF exploitation techniques</li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/mm/slub.c" target="_blank">Linux kernel: mm/slub.c</a> - SLUB allocator source</li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/mm/page_alloc.c" target="_blank">Linux kernel: mm/page_alloc.c</a> - buddy allocator source</li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/mm/vmalloc.c" target="_blank">Linux kernel: mm/vmalloc.c</a> - vmalloc source</li>
+							<li><a class="icon-website" href="https://lwn.net/Articles/229984/" target="_blank">LWN.net - The SLUB allocator</a> - SLUB design and motivation</li>
+							<li><a class="icon-website" href="https://lwn.net/Articles/723102/" target="_blank">LWN.net - SLUB freelist hardening</a> - freelist pointer obfuscation</li>
+							<li><a class="icon-website" href="https://www.kernel.org/doc/html/latest/dev-tools/kasan.html" target="_blank">Kernel.org - KASAN documentation</a> - shadow memory layout and reports</li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/proc.5" target="_blank">man 5 proc</a> - /proc/slabinfo, /proc/buddyinfo, /proc/vmallocinfo, /proc/zoneinfo</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

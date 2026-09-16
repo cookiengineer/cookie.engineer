@@ -1,0 +1,1173 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Kernel Modules | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Kernel Modules">
+		<meta name="keywords" content="abi, depmod, insmod, kernel-modules, ko, modprobe, parameters, rootkit, signing, symbols, sysinternals">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Kernel Modules">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Anatomy of Linux kernel modules - .ko ELF format, loading, relocation, symbol resolution, parameters, dependencies, signing, reference counting, hiding techniques, and module ABI verification.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/sysinternals/kernel-modules.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Kernel Modules">
+		<meta name="twitter:description" itemprop="description" content="Anatomy of Linux kernel modules - .ko ELF format, loading, relocation, symbol resolution, parameters, dependencies, signing, reference counting, hiding techniques, and module ABI verification.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#anatomy-of-a-ko-file">Anatomy of a .ko File</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#module-loading-and-init-module">Module Loading and init_module()</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#relocation-and-kernel-symbols">Relocation and Kernel Symbols</a></b>
+					<ul>
+						<li><a href="#x86-64-relocation-types">x86-64 Relocation Types</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#symbol-tables-and-prockallsyms">Symbol Tables and /proc/kallsyms</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#module-parameters-and-sysfs-interface">Module Parameters and sysfs Interface</a></b>
+					<ul>
+						<li><a href="#module-parameter-types">Module Parameter Types</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#module-dependencies-depmod-and-modprobe">Module Dependencies: depmod and modprobe</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#module-signing-and-kernel-lockdown">Module Signing and Kernel Lockdown</a></b>
+					<ul>
+						<li><a href="#lockdown-modes">Lockdown modes</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#module-reference-counting">Module Reference Counting</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#module-initialization-and-cleanup">Module Initialization and Cleanup</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#module-device-table-auto-loading">Module Device Table Auto-loading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#module-hiding-rootkit-view">Module Hiding (Rootkit View)</a></b>
+					<ul>
+						<li><a href="#the-data-structures">The data structures</a></li>
+						<li><a href="#detection-bypass-techniques">Detection Bypass Techniques</a></li>
+						<li><a href="#detection-methods-defensive">Detection methods (defensive)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#abi-verification-and-modversions">ABI Verification and MODVERSIONS</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#struct-module-internals">struct module Internals</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kernel-taint-system">Kernel Taint System</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification">Verification</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/sysinternals/index.html">Sysinternals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/sysinternals/kernel-modules.html">Kernel Modules</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="kernel-modules">Kernel Modules</h2>
+					<p>
+						Anatomy of Linux kernel modules - .ko ELF format, loading, relocation, symbol resolution, parameters,
+						dependencies, signing, reference counting, hiding techniques, and module ABI verification.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							A kernel module is a relocatable ELF object that the running kernel links into itself on demand.
+							This article follows a
+							<code>.ko</code>
+							file from disk through
+							<code>init_module()</code>
+							, covering relocation, symbol
+							resolution, parameters, dependency tracking, signing, reference counting, and the techniques
+							rootkits use to hide a loaded module from
+							<code>lsmod</code>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/sysinternals/device-drivers.html">Device Drivers</a> - character/block/network drivers, device model, ioctl, mmap</li>
+							<li><a href="/wiki/articles/sysinternals/kernel-architecture.html">Kernel Architecture</a> - kernel compilation units, kbuild, init sequence, kernel sources</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="anatomy-of-a-ko-file">Anatomy of a .ko File</h3>
+						<p>
+							A kernel module (
+							<code>.ko</code>
+							) is an ELF relocatable object file - NOT a shared library and NOT an
+							executable. It is position-independent code (compiled with
+							<code>-fPIC</code>
+							) that expects to be linked
+							into the kernel's address space at load time by the kernel's built-in linker.
+						</p>
+						<pre class="plaintext">
+ELF Header Layout of a .ko file
+══════════════════════════════════
+
+┌──────────────────┐
+│ ELF Header       │  e_type = ET_REL (relocatable), e_machine = EM_X86_64
+├──────────────────┤
+│ Section Table    │  
+├──────────────────┤
+│ .text            │  Executable driver code
+│ .data            │  Initialized global data
+│ .bss             │  Zero-initialized data (no disk space)
+│ .rodata          │  Read-only data (strings)
+│ .rodata.str1.1   │  Packed string literals
+│ __versions       │  Module versioning checksums (CRC)
+│ __param          │  Module parameter declarations
+│ .modinfo         │  Module metadata (author, license, description, aliases)
+│ .gnu.linkonce.   │  Per-CPU and per-module data
+│   this_module    │  struct module itself, pre-initialized
+│ .rela.text       │  Relocations for .text section
+│ .rela.data       │  Relocations for .data section
+│ .symtab          │  Symbol table (local + exported)
+│ .strtab          │  Symbol name strings
+│ .note.Linux      │  Linux note section (build info)
+│ .note.gnu.       │  GNU build attributes
+│   build-id       │  Unique build hash
+└──────────────────┘
+						</pre>
+						<p>
+							Inspect any
+							<code>.ko</code>
+							file:
+						</p>
+						<pre class="bash">
+# Basic ELF info
+readelf -h /lib/modules/$(uname -r)/kernel/drivers/char/lp.ko 2&gt;/dev/null || \
+readelf -h /lib/modules/$(uname -r)/kernel/drivers/char/mem.ko
+
+# File type: ET_REL — relocatable object (not shared lib or executable)
+
+# Section headers
+readelf -S /lib/modules/$(uname -r)/kernel/drivers/block/loop.ko | head -60
+
+# Symbol table (the interesting part)
+readelf -s /lib/modules/$(uname -r)/kernel/drivers/block/loop.ko 2&gt;/dev/null | \
+    awk &#39;$4 == &#34;UND&#34; {undef++} $4 != &#34;UND&#34; &amp;&amp; $4 != &#34;ABS&#34; {defined++}
+          END {print &#34;Undefined: &#34; undef &#34;, Defined: &#34; defined}&#39;
+
+# .modinfo — human-readable metadata
+objdump -s -j .modinfo /lib/modules/$(uname -r)/kernel/drivers/block/loop.ko
+
+# Relocations — what addresses need fixing up?
+readelf -r /lib/modules/$(uname -r)/kernel/drivers/block/loop.ko | head -30
+						</pre>
+					</section>
+					<section>
+						<h3 id="module-loading-and-init-module">Module Loading and init_module()</h3>
+						<p>
+							The userspace tool
+							<code>insmod</code>
+							reads the
+							<code>.ko</code>
+							from disk, mmap's it, then calls the
+							<code>init_module()</code>
+							syscall. The kernel's
+							<code>load_module()</code>
+							function does all the heavy lifting:
+						</p>
+						<pre class="plaintext">
+insmod echo_driver.ko
+    │
+    ▼
+[Userspace]  open(&#34;.ko&#34;, O_RDONLY | O_CLOEXEC)
+    │
+    ▼
+[Userspace]  mmap() the file →  fd size, file contents
+    │
+    ▼
+[Userspace]  init_module(image, len, &#34;&#34;)   ← syscall number 175 (x86-64)
+    │
+    │  ┌─── Kernel space ─────────────────────────────────────────┐
+    │  │                                                           │
+    ▼  ▼                                                           │
+load_module(info, uargs, flags)   ← kernel/module/main.c           │
+    │                                                              │
+    │  1. copy_module_from_user()  — copy ELF to kernel memory     │
+    │  2. layout_and_allocate()    — allocate memory for sections   │
+    │  3. parse_elf()              — validate ELF, build section map│
+    │  4. apply_relocations()      — fix up symbol references      │
+    │  5. resolve_symbols()        — link against kernel exports    │
+    │  6. check_module_license_and_versions() — CRC check, taint   │
+    │  7. simplify_symbols()       — cleanup internal symbols       │
+    │  8. post_relocation()        — init per-cpu, module params    │
+    │  9. sysfs_create_module()    — create /sys/module/&lt;name&gt;      │
+    │ 10. call do_init_module()    →  mod-&gt;init() (module_init macro)│
+    │                                                              │
+    ▼                                                              │
+[Userspace]  init_module() returns 0                               │
+    │                                                              │
+    ▼                                                              │
+Module is live — /sys/module/&lt;name&gt;/ created, probe() called       │
+						</pre>
+						<p>
+							The key source file is
+							<a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/kernel/module/main.c" target="_blank">'kernel/module/main.c'</a>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="relocation-and-kernel-symbols">Relocation and Kernel Symbols</h3>
+						<p>
+							Since modules are compiled independently, all references to kernel functions and data are relocatable
+							entries. At load time,
+							<code>apply_relocations()</code>
+							processes
+							<code>.rela.text</code>
+							and
+							<code>.rela.data</code>
+							sections.
+						</p>
+						<h4 id="x86-64-relocation-types">x86-64 Relocation Types</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Relocation</th>
+									<th align="center">Value</th>
+									<th align="center">Description</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">R_X86_64_PC32</td>
+									<td align="center">2</td>
+									<td align="center">32-bit PC-relative: call function +/-2 GiB</td>
+								</tr>
+								<tr>
+									<td align="center">R_X86_64_PLT32</td>
+									<td align="center">4</td>
+									<td align="center">Same, with PLT relaxation</td>
+								</tr>
+								<tr>
+									<td align="center">R_X86_64_32S</td>
+									<td align="center">11</td>
+									<td align="center">32-bit sign-extended absolute (data)</td>
+								</tr>
+								<tr>
+									<td align="center">R_X86_64_64</td>
+									<td align="center">1</td>
+									<td align="center">64-bit absolute (data references)</td>
+								</tr>
+								<tr>
+									<td align="center">R_X86_64_GOT_PCREL</td>
+									<td align="center">9</td>
+									<td align="center">GOT-relative offset (rare in .ko)</td>
+								</tr>
+								<tr>
+									<td align="center">R_X86_64_REX_GOTPCRELX</td>
+									<td align="center">42</td>
+									<td align="center">GOTPCRELX (optimized GOT reference)</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# See exactly which relocations a module needs
+readelf -r /lib/modules/$(uname -r)/kernel/drivers/block/loop.ko 2&gt;/dev/null | \
+    awk &#39;{print $3}&#39; | sort | uniq -c | sort -rn | head -20
+
+# Undefined symbols = kernel functions/data the module needs
+readelf -s /lib/modules/$(uname -r)/kernel/drivers/block/loop.ko 2&gt;/dev/null | \
+    awk &#39;$4 == &#34;UND&#34; {print $8}&#39; | sort | head -20
+						</pre>
+					</section>
+					<section>
+						<h3 id="symbol-tables-and-prockallsyms">Symbol Tables and /proc/kallsyms</h3>
+						<p>
+							The kernel maintains a symbol table of all exported functions and data. Only symbols marked
+							<code>EXPORT_SYMBOL()</code>
+							or
+							<code>EXPORT_SYMBOL_GPL()</code>
+							are available to modules.
+						</p>
+						<pre class="c">
+// include/linux/export.h (simplified logic)
+
+// Standard export — available to all modules
+#define EXPORT_SYMBOL(sym)                      \
+    extern typeof(sym) sym;                     \
+    __EXPORT_SYMBOL(sym, &#34;&#34;)
+
+// GPL-only export — only loadable by GPL-licensed modules
+#define EXPORT_SYMBOL_GPL(sym)                  \
+    extern typeof(sym) sym;                     \
+    __EXPORT_SYMBOL(sym, &#34;_gpl&#34;)
+						</pre>
+						<pre class="plaintext">
+Kernel Symbol Visibility:
+
+    /proc/kallsyms entries (address type name):
+    
+    ffffffff81000000 T _stext              ← Text (code), visible
+    ffffffff810a1234 T sys_read            ← Exported by EXPORT_SYMBOL
+    ffffffff810b5678 T __x64_sys_clone     ← Not exported (kallsyms only)
+    ffffffff820a9abc D jiffies             ← Data, exported
+    ffffffff8210cdef D nr_cpu_ids          ← Data, exported
+    ffffffff83000000 t internal_func       ← lowercase &#39;t&#39;: local, NOT exported
+    ffffffff83123456 d internal_data       ← lowercase &#39;d&#39;: local, NOT exported
+    
+    Capital letter: global/exported (accessible to modules)
+    Lowercase letter: local/internal (inaccessible to modules)
+						</pre>
+						<pre class="bash">
+# Count exported symbols
+sudo cat /proc/kallsyms | grep -c &#39;^[0-9a-f]\+ [TDBR] &#39;
+
+# Find GPL-only exports
+sudo cat /proc/kallsyms | grep &#39;_gpl$&#39; | head -10
+# (The suffix is in the CRC metadata, not kallsyms directly)
+# Better: check the source
+grep -r &#39;EXPORT_SYMBOL_GPL&#39; /usr/src/linux/kernel/ 2&gt;/dev/null | head -10
+
+# What symbols does a loaded module use?
+lsmod | awk &#39;NR&gt;1{print $1}&#39; | while read mod; do
+    echo &#34;Module: $mod&#34;
+    sudo cat /sys/module/$mod/coresize 2&gt;/dev/null
+done
+
+# Show symbols provided BY a module (modules can export too!)
+sudo cat /proc/kallsyms | grep -E &#39;\[nvidia\]|\[vboxdrv\]&#39; | head -10
+
+# Find symbol address by name
+sudo cat /proc/kallsyms | grep &#39; sys_call_table$&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="module-parameters-and-sysfs-interface">Module Parameters and sysfs Interface</h3>
+						<p>Module parameters allow runtime configuration via command line or sysfs.</p>
+						<pre class="c">
+// include/linux/moduleparam.h
+
+// Basic usage
+static int my_int = 42;
+static char *my_string = &#34;default&#34;;
+static bool my_bool = true;
+
+module_param(my_int, int, 0644);
+MODULE_PARM_DESC(my_int, &#34;An example integer parameter&#34;);
+
+module_param(my_string, charp, 0644);
+MODULE_PARM_DESC(my_string, &#34;An example string parameter&#34;);
+
+module_param(my_bool, bool, 0644);
+MODULE_PARM_DESC(my_bool, &#34;An example boolean parameter&#34;);
+
+// Array parameter
+static int my_arr[4] = {1, 2, 3, 4};
+static int arr_argc = 4;
+module_param_array(my_arr, int, &amp;arr_argc, 0644);
+MODULE_PARM_DESC(my_arr, &#34;An example array parameter&#34;);
+
+// Parsed at module init time. Values come from:
+//   insmod echo.ko my_int=100 my_string=&#34;hello&#34; my_bool=0
+// or written later via sysfs (if perm != 0):
+//   echo 100 &gt; /sys/module/echo/parameters/my_int
+						</pre>
+						<h4 id="module-parameter-types">Module Parameter Types</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Type</th>
+									<th align="center">Format char</th>
+									<th align="center">What insmod/params accept</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">bool</td>
+									<td align="center">b</td>
+									<td align="center">0, 1, y, Y, n, N, false, true, off, on</td>
+								</tr>
+								<tr>
+									<td align="center">boolinv</td>
+									<td align="center">i</td>
+									<td align="center">Inverted bool (0=true, 1=false)</td>
+								</tr>
+								<tr>
+									<td align="center">charp</td>
+									<td align="center">s</td>
+									<td align="center">String pointer (kmalloc'd, freed on rm)</td>
+								</tr>
+								<tr>
+									<td align="center">int</td>
+									<td align="center">d or i</td>
+									<td align="center">Signed integer</td>
+								</tr>
+								<tr>
+									<td align="center">long</td>
+									<td align="center">l</td>
+									<td align="center">Signed long</td>
+								</tr>
+								<tr>
+									<td align="center">short</td>
+									<td align="center">h</td>
+									<td align="center">Signed short</td>
+								</tr>
+								<tr>
+									<td align="center">byte</td>
+									<td align="center">bb</td>
+									<td align="center">Single byte (0-255)</td>
+								</tr>
+								<tr>
+									<td align="center">uint</td>
+									<td align="center">u</td>
+									<td align="center">Unsigned int</td>
+								</tr>
+								<tr>
+									<td align="center">ulong</td>
+									<td align="center">ul</td>
+									<td align="center">Unsigned long</td>
+								</tr>
+								<tr>
+									<td align="center">ushort</td>
+									<td align="center">uh</td>
+									<td align="center">Unsigned short</td>
+								</tr>
+								<tr>
+									<td align="center">string</td>
+									<td align="center">s</td>
+									<td align="center">Fixed-size char array</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Inspect module parameters
+ls /sys/module/loop/parameters/
+cat /sys/module/loop/parameters/max_loop
+cat /sys/module/loop/parameters/max_part
+
+# Change a writable parameter
+sudo sh -c &#39;echo 1 &gt; /sys/module/usbcore/parameters/usbfs_snoop&#39;
+
+# Kernel command-line parameters (module-init-time)
+cat /proc/cmdline
+
+# Runtime parameter modification log
+sudo journalctl -k | grep &#39;usbcore.*parameter&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="module-dependencies-depmod-and-modprobe">Module Dependencies: depmod and modprobe</h3>
+						<p>
+							A module may depend on symbols exported by another module.
+							<code>depmod</code>
+							builds the dependency graph,
+							and
+							<code>modprobe</code>
+							loads modules and all their dependencies.
+						</p>
+						<pre class="plaintext">
+Dependency Chain Example:
+
+    usb_storage.ko
+        └──► usbcore.ko (provides usb_register_driver, usb_submit_urb, ...)
+                └──► nls_base.ko (optional, for FAT filesystem support)
+
+    modules.dep entry:
+    kernel/drivers/usb/storage/usb-storage.ko: kernel/drivers/usb/core/usbcore.ko
+    
+    modules.symbols entry:
+    alias symbol:usb_register_driver usbcore
+    alias symbol:usb_submit_urb usbcore
+						</pre>
+						<pre class="bash">
+# See all module dependencies
+cat /lib/modules/$(uname -r)/modules.dep | head -20
+
+# Dependency tree for a specific module
+modprobe --show-depends usb_storage
+
+# Reverse dependencies (what depends on this module?)
+modprobe -r --dry-run usbcore 2&gt;&amp;1 | head -10
+
+# Which module provides symbol X?
+modprobe --resolve-alias symbol:usb_submit_urb
+
+# Device aliases — hardware-driven auto-loading
+cat /lib/modules/$(uname -r)/modules.alias | grep &#39;pci:v00008086&#39; | head -5
+# udev uses these: when a device appears, it matches the alias and loads
+# the module via modprobe
+
+# Builtin aliases (compiled into the module&#39;s .modinfo)
+modinfo usb_storage | grep alias
+						</pre>
+					</section>
+					<section>
+						<h3 id="module-signing-and-kernel-lockdown">Module Signing and Kernel Lockdown</h3>
+						<p>
+							Since root can load arbitrary code into ring 0, module signing and lockdown provide defense-in-depth.
+							The chain is:
+						</p>
+						<pre class="plaintext">
+Module Signing Flow:
+═══════════════════
+    1. Distribution maintains a private key (stored securely, never in kernel)
+    2. At build time: sign-file signs the .ko with the private key
+    3. Kernel configured with: CONFIG_MODULE_SIG=y
+                               CONFIG_MODULE_SIG_FORCE=y (optional: reject unsigned)
+    4. Kernel embeds the public key at build time (in vmlinux)
+    5. At load time: the kernel verifies the signature against the embedded public key
+    6. Failure → module rejected, kernel can taint or panic
+
+    Secure Boot extends this chain:
+    UEFI Secure Boot → shim → GRUB → signed kernel → signed modules
+						</pre>
+						<pre class="bash">
+# Check if kernel enforces module signatures
+cat /proc/cmdline | grep module.sig
+cat /sys/module/module/parameters/sig_enforce  # 1 = enforced
+
+# Inspect a module&#39;s signature
+modinfo -F sig_key usb_storage        # Who signed it?
+modinfo -F sig_hashalgo usb_storage   # SHA-256, SHA-512?
+modinfo -F signer usb_storage         # Full signer info
+
+# Verify signature on disk
+modinfo -F sig_key /lib/modules/$(uname -r)/kernel/drivers/block/loop.ko
+
+# Which key is embedded in the running kernel?
+sudo keyctl list %:.builtin_trusted_keys 2&gt;/dev/null
+
+# Lockdown state
+cat /sys/kernel/security/lockdown 2&gt;/dev/null || \
+cat /sys/kernel/security/lockdown 2&gt;/dev/null
+# none / integrity / confidentiality
+						</pre>
+						<h4 id="lockdown-modes">Lockdown modes</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Mode</th>
+									<th align="center">Description</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">none</td>
+									<td align="center">No restrictions</td>
+								</tr>
+								<tr>
+									<td align="center">integrity</td>
+									<td align="center">Kernel image, initramfs, modules must be signed. /dev/mem, /dev/kmem blocked. kexec restricted. Hibernate restricted. PCI BAR access restricted.</td>
+								</tr>
+								<tr>
+									<td align="center">confidentiality</td>
+									<td align="center">Integrity mode +: /proc/kcore blocked. User access to kernel addresses via /proc/kallsyms blocked. BPF restrictions. Trace restrictions.</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="module-reference-counting">Module Reference Counting</h3>
+						<p>
+							Modules can't be unloaded while code inside them is executing. The refcount system prevents
+							this:
+						</p>
+						<pre class="c">
+// include/linux/module.h
+struct module {
+    // ...
+    int num_exentries;          // Reference count from external users
+    atomic_t refcnt;            // Internal reference count
+    // ...
+};
+
+// Common API:
+int try_module_get(struct module *mod);   // Increment refcount, fail if unloading
+void module_put(struct module *mod);      // Decrement refcount
+
+// Used primarily for cross-module callbacks. Example:
+// If module A registers a callback with module B&#39;s infrastructure,
+// module A must take a reference to module B so B can&#39;t unload
+// while A&#39;s callback might fire.
+						</pre>
+						<pre class="bash">
+# Module reference count
+lsmod | awk &#39;{print $1, $3, $4}&#39; | head -10
+# Column 3: size; Column 4: used by (ref count + dependent modules)
+
+# Detailed view: what uses each module
+lsmod | awk &#39;NR&gt;1{printf &#34;%-25s used by: %s\n&#34;, $1, $4}&#39; | head -20
+
+# Check if a module is safe to unload
+sudo rmmod --dry-run loop
+						</pre>
+					</section>
+					<section>
+						<h3 id="module-initialization-and-cleanup">Module Initialization and Cleanup</h3>
+						<pre class="c">
+// The two required entry/exit points
+
+// 1. Init function — runs once at load time
+//    Returns 0 for success, negative errno on failure
+static int __init my_module_init(void)
+{
+    pr_info(&#34;Module loaded at %p\n&#34;, my_module_init);
+    return 0;
+}
+module_init(my_module_init);
+
+// __init — tells linker to put this function in .init.text section
+//          which is freed after module init completes (memory saving)
+
+// 2. Exit function — runs at unload
+static void __exit my_module_exit(void)
+{
+    pr_info(&#34;Module unloaded\n&#34;);
+}
+module_exit(my_module_exit);
+
+// __exit — discard after init if module is built-in (not a module)
+//          puts function in .exit.text
+
+// If no exit function: module is permanently loaded (cannot rmmod)
+						</pre>
+					</section>
+					<section>
+						<h3 id="module-device-table-auto-loading">Module Device Table Auto-loading</h3>
+						<p>
+							When hardware appears, the kernel must find the right driver. The
+							<code>MODULE_DEVICE_TABLE()</code>
+							macro
+							embeds device IDs into the module's
+							<code>.modinfo</code>
+							section.
+							<code>depmod</code>
+							extracts these into
+							<code>/lib/modules/&lt;ver&gt;/modules.alias</code>
+							.
+							<code>udev</code>
+							matches hardware against these aliases and calls
+							<code>modprobe</code>
+							.
+						</p>
+						<pre class="c">
+// PCI device table
+static const struct pci_device_id my_pci_ids[] = {
+    { PCI_DEVICE(0x1234, 0x5678) },  // Vendor:Device ID
+    { PCI_DEVICE(0x1234, 0x9ABC) },
+    { }  // Terminating zero entry
+};
+MODULE_DEVICE_TABLE(pci, my_pci_ids);
+
+// USB device table
+static const struct usb_device_id my_usb_ids[] = {
+    { USB_DEVICE(0x1234, 0x5678) },
+    { }
+};
+MODULE_DEVICE_TABLE(usb, my_usb_ids);
+
+// ACPI table
+static const struct acpi_device_id my_acpi_ids[] = {
+    { &#34;PNP0C0D&#34;, 0 },
+    { }
+};
+MODULE_DEVICE_TABLE(acpi, my_acpi_ids);
+						</pre>
+						<pre class="bash">
+# Device ID to module mapping (generated by depmod)
+grep &#39;nvme&#39; /lib/modules/$(uname -r)/modules.alias | head -5
+
+# What udev sees during device discovery
+sudo udevadm monitor --property --subsystem-match=pci &amp;
+sleep 1; echo &#34;Trigger rescan...&#34;; kill %1
+
+# Simulate alias lookup
+modprobe -c | grep &#39;alias pci:v00008086d&#39; | head -5
+# v0000XXXX = vendor, dXXXX = device
+						</pre>
+					</section>
+					<section>
+						<h3 id="module-hiding-rootkit-view">Module Hiding (Rootkit View)</h3>
+						<p>
+							Understanding offensive techniques is essential for detection. Kernel rootkits manipulate the
+							data structures that
+							<code>lsmod</code>
+							and
+							<code>/proc/modules</code>
+							read.
+						</p>
+						<h4 id="the-data-structures">The data structures</h4>
+						<pre class="c">
+// kernel/module/internal.h
+// Modules are stored in a linked list:
+extern struct list_head modules;   // global module list
+
+// And also in:
+// mod_tree: a radix tree of module address ranges for quick lookup
+// Used by is_module_address() and is_module_text_address()
+
+// struct module itself is stored in its own .gnu.linkonce.this_module section
+						</pre>
+						<h4 id="detection-bypass-techniques">Detection Bypass Techniques</h4>
+						<pre class="plaintext">
+1. Unlink from module list:
+   list_del(&amp;mod-&gt;list);  → module vanishes from lsmod, /proc/modules
+   BUT: still in mod_tree → still on /sys/module/&lt;name&gt;/, still functional
+
+2. Hook /proc/modules:
+   Intercept seq_read on /proc/modules, filter lines
+   
+3. Kernel code injection without a module:
+   a) /dev/mem (if unlocked): write directly to kernel memory
+   b) kprobes: attach probe that modifies kernel text
+   c) eBPF: attach to kernel functions, writeable BPF maps
+   d) Null deref + mmap: exploit CVE-2016-8655 style for arbitrary kernel write
+   
+4. Module signature bypass:
+   a) Patch verification function in memory (needs write primitive first)
+   b) Replace kernel&#39;s public key (needs write to rodata)
+   c) Exploit a bug that sets module-&gt;sig_ok = true
+						</pre>
+						<h4 id="detection-methods-defensive">Detection methods (defensive)</h4>
+						<pre class="bash">
+# Method 1: Compare mod_tree entries vs module list
+# If module appears in /sys/module/ but NOT in lsmod → hidden via list_del
+for m in /sys/module/*; do
+    modname=$(basename $m)
+    if ! lsmod | grep -q &#34;^$modname &#34;; then
+        echo &#34;POTENTIAL HIDDEN MODULE: $modname&#34;
+    fi
+done
+
+# Method 2: Memory forensics — scan kernel text for deviations
+# Any executable region not belonging to vmlinux or a known module
+sudo cat /proc/kallsyms | awk &#39;{print $1}&#39; | while read addr; do
+    # (requires Volatility or LiME for full analysis)
+    true
+done
+
+# Method 3: Check sysfs module directory has no orphan entries
+diff &lt;(lsmod | awk &#39;NR&gt;1{print $1}&#39; | sort) \
+     &lt;(ls /sys/module | sort) 2&gt;/dev/null
+
+# Method 4: Inline hook detection
+# Compare in-memory function prologues against disk
+# (requires kernel memory analysis tools)
+
+# Method 5: Kernel thread anomalies
+ps aux | grep -E &#39;^\[.*\]$&#39; | awk &#39;{print $NF}&#39; | grep -vE \
+    &#39;^\[(kworker|ksoftirqd|migration|rcu_|watchdog|kswapd|jbd2|loop|scsi|kthreadd|idle)\]&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="abi-verification-and-modversions">ABI Verification and MODVERSIONS</h3>
+						<p>
+							The kernel ABI is unstable by design - internal structures change between versions.
+							<code>CONFIG_MODVERSIONS</code>
+							generates a CRC checksum for every exported symbol, derived from the type signature. If a module's
+							CRC for a symbol doesn't match the kernel's, loading fails.
+						</p>
+						<pre class="plaintext">
+modversions CRC generation pipeline:
+════════════════════════════════════
+
+    1. genksyms tool processes pre-processed source
+    2. For EXPORT_SYMBOL(usb_submit_urb):
+       genksyms sees: int usb_submit_urb(struct urb *, gfp_t)
+       Generates: CRC = 0x8a3b2c9d
+    3. CRC stored in .__versions section of vmlinux
+    4. At module build time, same CRC generated from headers → .ko
+    5. At load time, kernel compares CRCs:
+       match → OK
+       mismatch → &#34;usb_submit_urb: disagrees about version of symbol&#34;
+                   → -ENOEXEC
+						</pre>
+						<pre class="bash">
+# Check if kernel enforces module versions
+zcat /proc/config.gz 2&gt;/dev/null | grep MODVERSIONS || \
+    grep MODVERSIONS /boot/config-$(uname -r)
+
+# Inspect versioned symbols in a .ko
+modprobe --dump-modversions /lib/modules/$(uname -r)/kernel/drivers/usb/core/usbcore.ko 2&gt;/dev/null | head -10
+# or:
+objdump -s -j __versions /lib/modules/$(uname -r)/kernel/drivers/block/loop.ko 2&gt;/dev/null | head -20
+
+# See symbol CRC in running kernel (requires CONFIG_MODVERSIONS)
+# Not directly exposed via sysfs — use modprobe --dump-modversions
+						</pre>
+					</section>
+					<section>
+						<h3 id="struct-module-internals">struct module Internals</h3>
+						<pre class="c">
+// include/linux/module.h — key fields (simplified)
+struct module {
+    enum module_state state;             // MODULE_STATE_LIVE, COMING, GOING
+    struct list_head list;               // Entry in global module list
+    char name[MODULE_NAME_LEN];          // Unique module name
+    struct module_kobject mkobj;         // sysfs: /sys/module/&lt;name&gt;/
+    const struct kernel_symbol *syms;    // Exported symbols
+    const s32 *crcs;                     // CRC checksums
+    unsigned int num_syms;
+    struct kernel_param *kp;             // Module parameters
+    unsigned int num_kp;
+    const char **modinfo_attrs;          // .modinfo strings
+    unsigned int modinfo_attrs_num;
+    int (*init)(void);                   // Init function pointer
+    struct module_layout core_layout;    // .text + .rodata + .data
+    struct module_layout init_layout;    // .init.text + .init.data (freed)
+    struct mod_tree_node mtn;            // Radix tree node
+    // ... architecture-specific fields
+};
+
+// Initial values (pre-filled in .gnu.linkonce.this_module):
+static struct module __this_module
+__attribute__((section(&#34;.gnu.linkonce.this_module&#34;))) = {
+    .name = KBUILD_MODNAME,
+};
+						</pre>
+						<pre class="bash">
+# /proc/modules: the classic interface
+cat /proc/modules | head -5
+# Columns: name size instances_loaded dependencies state offset
+
+# sysfs interface — richer
+cat /sys/module/loop/version   # Kernel version module built for
+cat /sys/module/loop/srcversion # Source checksum for version tracking
+cat /sys/module/loop/taint     # Module taint flags
+cat /sys/module/loop/refcnt    # Reference count (always 0 now)
+ls /sys/module/loop/holders/   # Modules that depend on this one
+						</pre>
+					</section>
+					<section>
+						<h3 id="kernel-taint-system">Kernel Taint System</h3>
+						<p>
+							When a module loads, the kernel may set a "taint" bit. Some bits are informational; others restrict
+							debugging or reporting.
+						</p>
+						<p>Taint flags (include/linux/panic.h):</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Flag</th>
+									<th align="center">Bit</th>
+									<th align="center">Meaning</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">P</td>
+									<td align="center">1</td>
+									<td align="center">Proprietary module loaded</td>
+								</tr>
+								<tr>
+									<td align="center">F</td>
+									<td align="center">2</td>
+									<td align="center">Module force-loaded (modprobe --force)</td>
+								</tr>
+								<tr>
+									<td align="center">S</td>
+									<td align="center">4</td>
+									<td align="center">Running on SMP with non-SMP CPU</td>
+								</tr>
+								<tr>
+									<td align="center">R</td>
+									<td align="center">8</td>
+									<td align="center">Module force-unloaded</td>
+								</tr>
+								<tr>
+									<td align="center">M</td>
+									<td align="center">16</td>
+									<td align="center">Machine check exception</td>
+								</tr>
+								<tr>
+									<td align="center">B</td>
+									<td align="center">32</td>
+									<td align="center">Bad page reference</td>
+								</tr>
+								<tr>
+									<td align="center">U</td>
+									<td align="center">64</td>
+									<td align="center">User-requested (sysrq-t)</td>
+								</tr>
+								<tr>
+									<td align="center">D</td>
+									<td align="center">128</td>
+									<td align="center">Kernel OOPS (previous)</td>
+								</tr>
+								<tr>
+									<td align="center">A</td>
+									<td align="center">256</td>
+									<td align="center">ACPI table override</td>
+								</tr>
+								<tr>
+									<td align="center">W</td>
+									<td align="center">512</td>
+									<td align="center">Kernel warning (previous)</td>
+								</tr>
+								<tr>
+									<td align="center">C</td>
+									<td align="center">1024</td>
+									<td align="center">Staging driver loaded</td>
+								</tr>
+								<tr>
+									<td align="center">I</td>
+									<td align="center">2048</td>
+									<td align="center">Workaround for hardware bug applied</td>
+								</tr>
+								<tr>
+									<td align="center">O</td>
+									<td align="center">4096</td>
+									<td align="center">Out-of-tree module loaded</td>
+								</tr>
+								<tr>
+									<td align="center">E</td>
+									<td align="center">8192</td>
+									<td align="center">Unsigned module (with signing required)</td>
+								</tr>
+								<tr>
+									<td align="center">L</td>
+									<td align="center">16384</td>
+									<td align="center">Soft lockup occurred</td>
+								</tr>
+								<tr>
+									<td align="center">X</td>
+									<td align="center">32768</td>
+									<td align="center">Auxiliary kernel crash (e.g. Xen)</td>
+								</tr>
+								<tr>
+									<td align="center">K</td>
+									<td align="center">65536</td>
+									<td align="center">Live patching applied</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Check current taint state
+cat /proc/sys/kernel/tainted
+
+# Decode taint bits
+python3 -c &#34;
+taints = {
+    1:&#39;P&#39;,2:&#39;F&#39;,4:&#39;S&#39;,8:&#39;R&#39;,16:&#39;M&#39;,32:&#39;B&#39;,64:&#39;U&#39;,128:&#39;D&#39;,
+    256:&#39;A&#39;,512:&#39;W&#39;,1024:&#39;C&#39;,2048:&#39;I&#39;,4096:&#39;O&#39;,8192:&#39;E&#39;,
+    16384:&#39;L&#39;,32768:&#39;X&#39;,65536:&#39;K&#39;
+}
+val = int(open(&#39;/proc/sys/kernel/tainted&#39;).read().strip())
+print(&#39;Active taints:&#39;, &#39;&#39;.join(c for b,c in taints.items() if val &amp; b))
+&#34;
+
+# Per-module taint
+cat /sys/module/*/taint | grep -v &#39;^0$&#39; | while read f; do
+    echo &#34;$(dirname $(dirname $f)): $(cat $f)&#34;
+done
+						</pre>
+					</section>
+					<section>
+						<h3 id="verification">Verification</h3>
+						<pre class="bash">
+# 1. Examine .ko file anatomy
+OBJ=&#34;/lib/modules/$(uname -r)/kernel/drivers/block/loop.ko&#34;
+readelf -h &#34;$OBJ&#34;          # Verify ET_REL
+readelf -S &#34;$OBJ&#34; | head -40  # Sections
+readelf -s &#34;$OBJ&#34; | head -30   # Symbols
+readelf -r &#34;$OBJ&#34; | head -20   # Relocations
+
+# 2. Inspect modinfo
+modinfo loop
+modinfo -F vermagic loop     # Kernel version
+modinfo -F sig_key loop      # Signature
+
+# 3. Module list comparison
+lsmod | head -10
+cat /proc/modules | head -5
+diff &lt;(lsmod | awk &#39;NR&gt;1{print $1}&#39; | sort) \
+     &lt;(ls /sys/module | sort) 2&gt;/dev/null
+
+# 4. Symbol analysis
+sudo cat /proc/kallsyms | grep &#39; sys_call_table$&#39;
+sudo cat /proc/kallsyms | grep &#39;\[nvidia\]\|\[vboxdrv\]&#39; | head -5
+
+# 5. Module dependency tree
+cat /lib/modules/$(uname -r)/modules.dep | head -10
+modprobe --show-depends usb_storage
+
+# 6. Check module signature and lockdown
+cat /sys/kernel/security/lockdown 2&gt;/dev/null
+cat /sys/module/module/parameters/sig_enforce 2&gt;/dev/null
+zcat /proc/config.gz 2&gt;/dev/null | grep -E &#39;MODULE_SIG|LOCK_DOWN|MODVERSIONS&#39;
+
+# 7. Module parameters
+for m in loop; do
+    ls /sys/module/$m/parameters/ 2&gt;/dev/null &amp;&amp; \
+    grep . /sys/module/$m/parameters/* 2&gt;/dev/null
+done
+
+# 8. Auto-load aliases
+grep &#39;usb_storage&#39; /lib/modules/$(uname -r)/modules.alias | head -5
+
+# 9. Taint state
+cat /proc/sys/kernel/tainted
+cat /sys/module/*/taint 2&gt;/dev/null | sort | uniq -c
+
+# 10. Build a test module - see the Containerfile at
+# kernel-modules.Containerfile for a complete build-and-sign lab with a
+# custom module containing parameters, exported symbols, and versioning.
+
+# 11. Load and trace module init with ftrace
+sudo bash -c &#39;
+echo &#34;module:nf_tables:*&#34; &gt; /sys/kernel/debug/tracing/set_event
+echo 1 &gt; /sys/kernel/debug/tracing/tracing_on
+modprobe nf_tables 2&gt;/dev/null
+cat /sys/kernel/debug/tracing/trace | head -30
+echo 0 &gt; /sys/kernel/debug/tracing/tracing_on
+&#39;
+
+# 12. Check for hidden modules (orphan sysfs entries)
+comm -13 \
+    &lt;(lsmod | awk &#39;NR&gt;1{print $1}&#39; | sort) \
+    &lt;(ls /sys/module | sort) 2&gt;/dev/null | while read m; do
+        echo &#34;Module in sysfs but not lsmod: $m&#34;
+    done
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Build and run the module lab container. It compiles a module that declares parameters, exports
+							a symbol, and prints its relocation and versioning metadata.
+						</p>
+						<p><a href="/wiki/articles/sysinternals/kernel-modules.Containerfile">kernel-modules.Containerfile</a></p>
+						<pre class="bash">
+podman build -t kernel-modules-lab -f kernel-modules.Containerfile .
+podman run -it --rm --privileged kernel-modules-lab
+						</pre>
+						<p>Inside the container, build the module, inspect it, and load it:</p>
+						<pre class="bash">
+make
+modinfo ./demo_module.ko
+readelf -r ./demo_module.ko
+insmod ./demo_module.ko demo_count=3 demo_name=&#34;Student&#34;
+dmesg | tail -30
+rmmod demo_module
+						</pre>
+						<p>
+							Then compare
+							<code>readelf -r</code>
+							for a module built against the running kernel headers with one built
+							against mismatched headers. Which relocation or
+							<code>__versions</code>
+							CRC check fails first?
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/kernel/module/main.c" target="_blank">kernel/module/main.c - load_module()</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/include/linux/module.h" target="_blank">include/linux/module.h - struct module</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/include/linux/moduleparam.h" target="_blank">include/linux/moduleparam.h - module_param()</a></li>
+							<li><a class="icon-website" href="https://docs.kernel.org/admin-guide/module-signing.html" target="_blank">Kernel documentation: module signing</a></li>
+							<li><a class="icon-website" href="https://sysprog21.github.io/lkmpg/" target="_blank">Linux Kernel Module Programming Guide</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/insmod.8" target="_blank">man 8 insmod</a> , <a class="icon-website" href="https://man.archlinux.org/man/modprobe.8" target="_blank">man 8 modprobe</a> , <a class="icon-website" href="https://man.archlinux.org/man/depmod.8" target="_blank">man 8 depmod</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

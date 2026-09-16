@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Backup Strategy | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Backup Strategy">
+		<meta name="keywords" content="backup, blueteam, borg, disaster-recovery, immutability, restic, rpo-rto">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Backup Strategy">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Secure backup design with immutable storage, automated verification, and ransomware-resistant recovery planning.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/blueteam/backup-strategy.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Backup Strategy">
+		<meta name="twitter:description" itemprop="description" content="Secure backup design with immutable storage, automated verification, and ransomware-resistant recovery planning.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#concept">Concept</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-3-2-1-rule">The 3-2-1 Rule</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#backup-types">Backup Types</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#rpo-and-rto">RPO and RTO</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#linux-backup-tools">Linux Backup Tools</a></b>
+					<ul>
+						<li><a href="#borg">Borg</a></li>
+						<li><a href="#restic">Restic</a></li>
+						<li><a href="#rsync">rsync</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#immutable-backups">Immutable Backups</a></b>
+					<ul>
+						<li><a href="#s3-object-lock">S3 Object Lock</a></li>
+						<li><a href="#borg-append-only">Borg Append-Only</a></li>
+						<li><a href="#air-gapped-backups">Air-Gapped Backups</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#backup-encryption">Backup Encryption</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#backup-verification">Backup Verification</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#backup-access-control">Backup Access Control</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#disaster-recovery-plan">Disaster Recovery Plan</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tabletop-exercise">Tabletop Exercise</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/blueteam/index.html">Blueteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/blueteam/backup-strategy.html">Backup Strategy</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="backup-strategy">Backup Strategy</h2>
+					<p>
+						Secure backup design with immutable storage, automated verification, and ransomware-resistant
+						recovery planning.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							A backup is only useful if it can be restored after the exact failure you designed it for. Modern
+							ransomware targets backups first, so the design must assume the attacker already has administrator
+							access to production. After reading this article you can choose a recovery point and recovery
+							time objective, build an immutable repository with
+							<code>borg</code>
+							or
+							<code>restic</code>
+							, and prove a restore
+							actually works.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/filesystems.html">Filesystems</a> - mount options, snapshots, <abbr title="Copy-on-Write">CoW</abbr> filesystems (btrfs, ZFS)</li>
+							<li><a href="/wiki/articles/fundamentals/cryptography.html">Cryptography</a> - symmetric encryption, AEAD, key management</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="concept">Concept</h3>
+						<p>
+							A backup is not a copy of data. A backup is a tested, restorable, integrity-verified dataset
+							that survives the failure mode you designed it to survive. If you have not tested the restore,
+							you do not have a backup; you have a hope.
+						</p>
+						<p>
+							The adversaries have adapted: modern ransomware targets backups first. It deletes volume shadow
+							copies, steals credentials from backup consoles, and encrypts mounted backup volumes. Your backup
+							strategy must assume the attacker has admin access to your production network and is actively
+							trying to destroy your ability to recover.
+						</p>
+					</section>
+					<section>
+						<h3 id="the-3-2-1-rule">The 3-2-1 Rule</h3>
+						<pre class="plaintext">
+Classic 3-2-1:
+  3 copies of data
+  2 different media types
+  1 copy offsite
+
+Modern 3-2-1-1-0 (ransomware-hardened):
+  3 copies
+  2 different media types
+  1 copy offsite
+  1 copy immutable (WORM, append-only, air-gapped)
+  0 errors (verified by automated restore testing)
+						</pre>
+						<p>What counts as "different media"?</p>
+						<ul>
+							<li>Primary storage (SSD/HDD array).</li>
+							<li>External HDD or tape (different physical device).</li>
+							<li>Object storage such as S3 or Backblaze B2 (different failure domain).</li>
+							<li>Tape (LTO), which is a truly different technology and is immune to ransomware deletion.</li>
+						</ul>
+						<p>
+							Object storage with versioning and Object Lock is the practical sweet spot: cheap, accessible,
+							<abbr title="Application Programming Interface">API</abbr>
+							-driven, and able to enforce immutability.
+						</p>
+					</section>
+					<section>
+						<h3 id="backup-types">Backup Types</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Type</th>
+									<th align="center">What It Captures</th>
+									<th align="center">Speed</th>
+									<th align="center">Restore Complexity</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Full</td>
+									<td align="center">Everything</td>
+									<td align="center">Slowest</td>
+									<td align="center">Single restore set</td>
+								</tr>
+								<tr>
+									<td align="center">Incremental</td>
+									<td align="center">Changes since the last backup (any type)</td>
+									<td align="center">Fastest</td>
+									<td align="center">Combine all incrementals + full</td>
+								</tr>
+								<tr>
+									<td align="center">Differential</td>
+									<td align="center">Changes since the last full</td>
+									<td align="center">Medium</td>
+									<td align="center">Full + last differential</td>
+								</tr>
+								<tr>
+									<td align="center">Synthetic Full</td>
+									<td align="center">Server-side merge of the full and its incrementals into a new full</td>
+									<td align="center">Medium (server-side)</td>
+									<td align="center">Single restore set</td>
+								</tr>
+								<tr>
+									<td align="center">Snapshot-based</td>
+									<td align="center">Filesystem/btrfs/ZFS snapshot</td>
+									<td align="center">Instant (in place)</td>
+									<td align="center">Not a true backup unless replicated off-host</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Full backup with tar (simple, portable)
+sudo tar cvzf /backup/full-$(date +%Y%m%d).tar.gz \
+  --exclude=/proc --exclude=/sys --exclude=/dev --exclude=/tmp --exclude=/run \
+  --exclude=/mnt --exclude=/media --exclude=/lost+found \
+  /
+
+# Incremental with tar (using snapshot/listed-incremental)
+# First: full
+sudo tar cvzf /backup/full-base.tar.gz --listed-incremental=/backup/snar.snar /etc /home /var
+
+# Subsequent: incremental
+sudo tar cvzf /backup/incr-$(date +%Y%m%d).tar.gz --listed-incremental=/backup/snar.snar /etc /home /var
+						</pre>
+					</section>
+					<section>
+						<h3 id="rpo-and-rto">RPO and RTO</h3>
+						<pre class="plaintext">
+RPO (Recovery Point Objective): Maximum acceptable data loss measured in time.
+  RPO = 1 hour   -&gt; you can lose up to 1 hour of data
+  RPO = 24 hours -&gt; you can lose up to 24 hours of data
+
+RTO (Recovery Time Objective): Maximum acceptable time to restore service.
+  RTO = 4 hours  -&gt; service must be back within 4 hours
+  RTO = 15 min   -&gt; needs hot standby / automated failover
+						</pre>
+						<pre class="yaml">
+# Example RPO/RTO by service tier:
+
+Tier 1 - Customer-facing, revenue-impacting:
+  RPO: 1 hour (hourly incremental backups)
+  RTO: 30 minutes (automated failover to DR site)
+  Retention: 30 days hourly, 12 months daily, 7 years monthly
+
+Tier 2 - Internal business applications:
+  RPO: 24 hours (daily backups)
+  RTO: 8 hours (restore from backup during business day)
+  Retention: 90 days daily, 12 months monthly
+
+Tier 3 - Non-critical:
+  RPO: 7 days (weekly backups)
+  RTO: 72 hours
+  Retention: 6 months monthly
+						</pre>
+					</section>
+					<section>
+						<h3 id="linux-backup-tools">Linux Backup Tools</h3>
+						<h4 id="borg">Borg</h4>
+						<p>Borg is a deduplicating, compressing, and encrypting backup tool.</p>
+						<pre class="bash">
+sudo pacman -S borg
+
+# Initialize a repository (encrypted)
+borg init --encryption=repokey-blake2 /backup/borg-repo
+# Choose a strong passphrase - store it in a password manager or vault
+
+# Create a backup
+borg create --stats --progress --compression lz4 \
+  /backup/borg-repo::host-{now:%Y%m%d-%H%M} \
+  /etc /home /var/lib/postgresql /srv
+
+# List backups (archives)
+borg list /backup/borg-repo
+
+# Check data integrity
+borg check /backup/borg-repo
+
+# Restore a specific file
+borg extract /backup/borg-repo::host-20260626-0300 path/to/file
+
+# Prune old backups (keep daily, weekly, monthly)
+borg prune --keep-daily=7 --keep-weekly=4 --keep-monthly=12 \
+  /backup/borg-repo
+
+# Export the repo key for disaster recovery
+borg key export /backup/borg-repo &gt; /secure/location/borg-key-backup.txt
+						</pre>
+						<pre class="bash">
+#!/bin/bash
+# borg-backup.sh - automated daily backup script
+# Called by a systemd timer or cron
+
+export BORG_REPO=&#34;/backup/borg-repo&#34;
+export BORG_PASSPHRASE=&#34;$(vault kv get -field=passphrase secret/backup/borg)&#34;
+
+borg create --stats --compression lz4 \
+  --exclude &#39;/home/*/.cache&#39; \
+  --exclude &#39;*.pyc&#39; \
+  --exclude &#39;/var/tmp&#39; \
+  &#34;${BORG_REPO}::$(hostname)-{now:%Y%m%d-%H%M}&#34; \
+  /etc /home /var/lib /srv /opt
+
+borg prune --keep-daily=7 --keep-weekly=4 --keep-monthly=12 &#34;${BORG_REPO}&#34;
+
+# Check integrity weekly
+if [ &#34;$(date +%u)&#34; = &#34;7&#34; ]; then
+  borg check &#34;${BORG_REPO}&#34;
+fi
+						</pre>
+						<h4 id="restic">Restic</h4>
+						<p>
+							Restic is a cloud-native backup tool that speaks S3, B2,
+							<abbr title="SSH File Transfer Protocol">SFTP</abbr>
+							, and local repositories.
+						</p>
+						<pre class="bash">
+sudo pacman -S restic
+
+# Initialize repository (S3 example)
+export RESTIC_REPOSITORY=&#34;s3:s3.amazonaws.com/backup-bucket/myhost&#34;
+export RESTIC_PASSWORD=&#34;strong-password-from-vault&#34;
+export AWS_ACCESS_KEY_ID=&#34;AKIA...&#34;
+export AWS_SECRET_ACCESS_KEY=&#34;...&#34;
+
+restic init
+
+# Create a backup
+restic backup /etc /home /var/lib /srv
+
+# List snapshots
+restic snapshots
+
+# Restore
+restic restore latest --target /restore/path
+
+# Check integrity
+restic check
+
+# Prune old snapshots
+restic forget --keep-daily 7 --keep-weekly 4 --keep-monthly 12 --prune
+						</pre>
+						<h4 id="rsync">rsync</h4>
+						<p>
+							<code>rsync</code>
+							is a quick mirror for frequently-changing data.
+						</p>
+						<pre class="bash">
+# Mirror a directory to a remote server
+rsync -avz --delete /srv/data/ backup-server:/backup/srv-data/
+
+# With bandwidth limiting (don&#39;t saturate the link)
+rsync -avz --bwlimit=10000 --delete /srv/data/ backup-server:/backup/srv-data/
+
+# Snapshot-based rotation with rsync + hardlinks
+DIR=&#34;/backup/$(date +%Y%m%d-%H%M)&#34;
+LATEST=$(ls -1d /backup/20* 2&gt;/dev/null | tail -1)
+
+rsync -avz --delete --link-dest=&#34;$LATEST&#34; /srv/data/ &#34;$DIR/&#34;
+# --link-dest: unchanged files are hardlinked, only new/changed files take space
+						</pre>
+					</section>
+					<section>
+						<h3 id="immutable-backups">Immutable Backups</h3>
+						<p>
+							Immutability means that once data is written, it cannot be modified or deleted until the retention
+							period expires, even by administrators with full credentials.
+						</p>
+						<h4 id="s3-object-lock">S3 Object Lock</h4>
+						<p>Object Lock can only be enabled when a bucket is created; plan for it before you upload data.</p>
+						<pre class="bash">
+# Create a bucket with Object Lock enabled
+aws s3api create-bucket --bucket backup-bucket \
+  --object-lock-enabled-for-bucket
+
+# Configure a default retention rule
+aws s3api put-object-lock-configuration \
+  --bucket backup-bucket \
+  --object-lock-configuration &#39;{
+    &#34;ObjectLockEnabled&#34;: &#34;Enabled&#34;,
+    &#34;Rule&#34;: {
+      &#34;DefaultRetention&#34;: {
+        &#34;Mode&#34;: &#34;COMPLIANCE&#34;,
+        &#34;Days&#34;: 30
+      }
+    }
+  }&#39;
+
+# Restore from the immutable backup
+aws s3 cp s3://backup-bucket/myhost/2026-06-26/backup.tar.gz /restore/
+
+# Object Lock in COMPLIANCE mode: NO ONE can delete during retention
+# Governance mode: specific IAM permissions can override
+# Use COMPLIANCE for critical backups
+						</pre>
+						<h4 id="borg-append-only">Borg Append-Only</h4>
+						<pre class="bash">
+# On the backup server, restrict the borg repo to append-only
+# ~/.ssh/authorized_keys on the backup server:
+# command=&#34;borg serve --append-only --restrict-to-path /backup/borg-repo&#34;,restrict ssh-rsa AAA... host-key
+# This prevents the client from deleting or pruning archives
+# Pruning is done directly on the backup server with separate credentials
+						</pre>
+						<h4 id="air-gapped-backups">Air-Gapped Backups</h4>
+						<p>Air-gapped backups are offline and physically disconnected.</p>
+						<pre class="bash">
+# Rotate external drives: one is always disconnected
+# Mount -&gt; backup -&gt; unmount -&gt; physically disconnect
+sudo mount /dev/sdc1 /mnt/backup
+borg create /mnt/backup/borg-repo::airgap-$(date +%Y%m%d) /critical/data
+sudo umount /mnt/backup
+# The drive is now physically disconnected - no ransomware can touch it
+						</pre>
+						<p>
+							WORM (Write Once Read Many) storage options include LTO tape with its hardware write-protection
+							tab, S3 Object Lock in COMPLIANCE mode, ZFS snapshots with
+							<code>hold</code>
+							, and the
+							<code>chattr +i</code>
+							immutable
+							attribute (which root can still remove).
+						</p>
+					</section>
+					<section>
+						<h3 id="backup-encryption">Backup Encryption</h3>
+						<p>Backups contain your entire data corpus, so they must be encrypted both at rest and in transit.</p>
+						<pre class="bash">
+# Borg: built-in encryption (repokey or keyfile mode)
+borg init --encryption=repokey-blake2 /backup/repo
+# repokey: encryption key stored IN the repo (encrypted with passphrase)
+# keyfile: encryption key stored locally (keep this file safe!)
+
+# Restic: built-in AES-256-CTR with Poly1305 authentication
+export RESTIC_PASSWORD=&#34;$(vault kv get -field=password secret/backup/restic)&#34;
+
+# Manual encryption with GPG (for tar-based backups)
+tar cz /data | gpg --symmetric --cipher-algo AES256 --output backup.tar.gz.gpg
+# Decrypt: gpg --decrypt backup.tar.gz.gpg | tar xz
+
+# Manual encryption with OpenSSL
+tar cz /data | openssl enc -aes-256-gcm -pbkdf2 -iter 100000 \
+  -pass pass:&#34;$(cat /secure/backup-passphrase)&#34; -out backup.tar.gz.enc
+						</pre>
+						<p>
+							Critical rule: backup encryption keys must be stored separately from the backups themselves.
+							If the attacker has access to both your backup storage and your key storage, encryption provides
+							zero protection.
+						</p>
+						<pre class="bash">
+# Key management for backups:
+# 1. Primary key: in a password manager / vault
+# 2. Recovery copy: printed on paper, in a physical safe (offsite)
+# 3. Verification: quarterly test that you can decrypt a random backup using recovery materials
+						</pre>
+					</section>
+					<section>
+						<h3 id="backup-verification">Backup Verification</h3>
+						<p>Untested backups are not backups. Automated restore testing is non-negotiable.</p>
+						<pre class="bash">
+#!/bin/bash
+# verify-backups.sh - automated restore test
+# Run weekly
+
+BACKUP_DIR=&#34;/backup/borg-repo&#34;
+RESTORE_DIR=&#34;/tmp/restore-test-$$&#34;
+mkdir -p &#34;$RESTORE_DIR&#34;
+
+# 1. Check repository integrity
+borg check &#34;$BACKUP_DIR&#34; || { echo &#34;INTEGRITY CHECK FAILED&#34;; exit 1; }
+
+# 2. Test that we can list archives
+borg list &#34;$BACKUP_DIR&#34; &gt; /dev/null || { echo &#34;CANNOT LIST ARCHIVES&#34;; exit 1; }
+
+# 3. Restore a random sample of files
+LATEST=$(borg list --short &#34;$BACKUP_DIR&#34; | tail -1)
+borg extract &#34;$BACKUP_DIR::$LATEST&#34; &#34;$RESTORE_DIR&#34; --include &#39;etc/hostname&#39;
+# Verify the file exists and has content
+if [ -f &#34;$RESTORE_DIR/etc/hostname&#34; ] &amp;&amp; [ -s &#34;$RESTORE_DIR/etc/hostname&#34; ]; then
+  echo &#34;VERIFIED: $LATEST - $(cat &#34;$RESTORE_DIR/etc/hostname&#34;)&#34;
+else
+  echo &#34;RESTORE TEST FAILED&#34;
+  exit 1
+fi
+
+# 4. Cleanup
+rm -rf &#34;$RESTORE_DIR&#34;
+
+echo &#34;Backup verification: PASSED&#34;
+						</pre>
+						<pre class="bash">
+# Database backup verification (PostgreSQL example)
+#!/bin/bash
+# Check that DB dumps can actually be restored
+
+pg_dump -Fc production_db &gt; /tmp/test-dump-$$.dump
+
+# Restore to a temporary database
+createdb restore_test_$$
+pg_restore -d restore_test_$$ /tmp/test-dump-$$.dump
+
+# Run a query to verify data
+psql -d restore_test_$$ -c &#34;SELECT count(*) FROM critical_table;&#34;
+
+# Cleanup
+dropdb restore_test_$$
+rm /tmp/test-dump-$$.dump
+						</pre>
+					</section>
+					<section>
+						<h3 id="backup-access-control">Backup Access Control</h3>
+						<p>
+							Backup credentials must be separate from production credentials. The backup console is a prime
+							target because it has access to everything.
+						</p>
+						<pre class="plaintext">
+Principles:
+1. Dedicated backup service accounts - never reuse admin credentials
+2. MFA on the backup console - separate from production MFA
+3. Network segmentation - backup VLAN isolated from production
+4. Least privilege - the backup account can WRITE backups, cannot DELETE
+5. Pull model - the backup server initiates connections to clients, not vice versa
+						</pre>
+						<pre class="bash">
+# SSH-based pull backup (the backup server PULLS from clients)
+# The client authorized_keys entry restricts access to borg serve --append-only
+# The client has no access to the backup server
+
+# On the backup server:
+borg create \
+  ssh://borg-user@client-host/./borg-repo::client-{now:%Y%m%d-%H%M} \
+  /etc /home
+
+# On the client:
+# ~borg-user/.ssh/authorized_keys:
+# command=&#34;borg serve --append-only --restrict-to-path /data/borg-repo&#34;,restrict ssh-ed25519 AAA...
+						</pre>
+					</section>
+					<section>
+						<h3 id="disaster-recovery-plan">Disaster Recovery Plan</h3>
+						<p>A DR plan is a runbook that anyone on the team can execute under stress.</p>
+						<pre class="plaintext">
+Disaster Recovery Runbook - Critical DB Server
+
+Scenario: Production DB server unrecoverable
+RPO: 1 hour  |  RTO: 4 hours
+
+Prerequisites:
+- Backup console access (separate from prod) - console.backup.internal:8443
+- Backup passphrase - stored in Vault at secret/backup/borg
+- DR server ready - dr-db-01.internal (kept warm, regular package updates)
+
+Recovery Steps:
+1. Declare the incident - notify the team via the #incidents channel.
+2. Log into the backup console and verify the latest backup:
+     borg list /backup/db-prod/borg-repo | tail -1
+3. Verify backup integrity (about 5 min):
+     borg check --verify-data /backup/db-prod/borg-repo
+4. Prepare the DR server and confirm disks are mounted:
+     ssh dr-db-01.internal &#34;df -h /var/lib/postgresql&#34;
+5. Restore data (estimated 45 min for 500 GB):
+     borg extract /backup/db-prod/borg-repo::db-prod-20260626-0300 \
+       /var/lib/postgresql --progress
+6. Start the database and verify:
+     ssh dr-db-01.internal &#34;systemctl start postgresql&#34;
+     ssh dr-db-01.internal &#34;psql -c &#39;SELECT count(*) FROM critical_table;&#39;&#34;
+7. Update DNS/load balancer to point at dr-db-01.
+8. Validate application connectivity - run smoke tests.
+9. Declare recovery complete and notify the team.
+
+Communication Plan:
+- Primary: Slack #incidents
+- Escalation: phone tree (list in the password manager)
+- Status page: update status.company.com
+						</pre>
+					</section>
+					<section>
+						<h3 id="tabletop-exercise">Tabletop Exercise</h3>
+						<p>
+							Run tabletop exercises quarterly. Give the team a scenario and walk through the recovery steps
+							without actually executing them. Find gaps in documentation and assumptions.
+						</p>
+						<p>
+							Scenario: "It is Saturday 2 AM. The primary database server is encrypted by ransomware. The
+							attacker also deleted the production backup server volumes. What do you do?"
+						</p>
+						<ul>
+							<li>Can the on-call person access the offsite backups?</li>
+							<li>Does the offsite restore require credentials the on-call person has?</li>
+							<li>How long would an actual restore take? Test this.</li>
+							<li>Are the DR runbook links and addresses still correct? They changed during the last network re-architecture.</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that builds and verifies a backup manifest.
+							<code>manifest</code>
+							mode walks a directory
+							and writes a file of
+							<code>sha256&lt;TAB&gt;path</code>
+							lines.
+							<code>verify</code>
+							mode re-hashes every file and reports
+							missing, changed, and newly added files. This catches silent bit rot and tampering between backups.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;bufio&#34;
+	&#34;crypto/sha256&#34;
+	&#34;encoding/hex&#34;
+	&#34;fmt&#34;
+	&#34;io&#34;
+	&#34;os&#34;
+	&#34;path/filepath&#34;
+	&#34;sort&#34;
+	&#34;strings&#34;
+)
+
+func hashFile(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return &#34;&#34;, err
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return &#34;&#34;, err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func walk(root string) (map[string]string, error) {
+	files := make(map[string]string)
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.Mode().IsRegular() {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		sum, err := hashFile(path)
+		if err != nil {
+			return err
+		}
+		files[filepath.ToSlash(rel)] = sum
+		return nil
+	})
+	return files, err
+}
+
+func writeManifest(path string, files map[string]string) error {
+	names := make([]string, 0, len(files))
+	for name := range files {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	for _, name := range names {
+		fmt.Fprintf(f, &#34;%s\t%s\n&#34;, files[name], name)
+	}
+	return nil
+}
+
+func readManifest(path string) (map[string]string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	files := make(map[string]string)
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		parts := strings.SplitN(scanner.Text(), &#34;\t&#34;, 2)
+		if len(parts) == 2 {
+			files[parts[1]] = parts[0]
+		}
+	}
+	return files, scanner.Err()
+}
+
+func main() {
+	if len(os.Args) != 4 {
+		fmt.Fprintf(os.Stderr, &#34;usage: %s manifest|verify &lt;dir&gt; &lt;manifest&gt;\n&#34;, os.Args[0])
+		os.Exit(2)
+	}
+
+	mode, dir, manifestPath := os.Args[1], os.Args[2], os.Args[3]
+
+	files, err := walk(dir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	switch mode {
+	case &#34;manifest&#34;:
+		if err := writeManifest(manifestPath, files); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		fmt.Printf(&#34;wrote %d entries to %s\n&#34;, len(files), manifestPath)
+	case &#34;verify&#34;:
+		want, err := readManifest(manifestPath)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		bad := 0
+		for name, sum := range want {
+			got, ok := files[name]
+			if !ok {
+				fmt.Printf(&#34;MISSING %s\n&#34;, name)
+				bad++
+			} else if got != sum {
+				fmt.Printf(&#34;CHANGED %s\n&#34;, name)
+				bad++
+			}
+		}
+		for name := range files {
+			if _, ok := want[name]; !ok {
+				fmt.Printf(&#34;ADDED   %s\n&#34;, name)
+				bad++
+			}
+		}
+		if bad &gt; 0 {
+			fmt.Printf(&#34;%d differences found\n&#34;, bad)
+			os.Exit(1)
+		}
+		fmt.Println(&#34;manifest verified&#34;)
+	default:
+		fmt.Fprintln(os.Stderr, &#34;mode must be manifest or verify&#34;)
+		os.Exit(2)
+	}
+}
+						</pre>
+						<p>Test it against a small tree, then corrupt one file and confirm the verifier fails:</p>
+						<pre class="bash">
+mkdir -p /tmp/data &amp;&amp; echo hello &gt; /tmp/data/a.txt
+go run backup.go manifest /tmp/data /tmp/data.manifest
+echo tampered &gt; /tmp/data/a.txt
+go run backup.go verify /tmp/data /tmp/data.manifest
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://borgbackup.readthedocs.io/" target="_blank">BorgBackup Documentation</a></li>
+							<li><a class="icon-website" href="https://restic.readthedocs.io/" target="_blank">Restic Documentation</a></li>
+							<li><a class="icon-website" href="https://rsync.samba.org/" target="_blank">rsync Homepage</a></li>
+							<li><a class="icon-website" href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock.html" target="_blank">AWS S3 Object Lock</a></li>
+							<li><a class="icon-website" href="https://csrc.nist.gov/publications/detail/sp/800-34/rev-1/final" target="_blank">NIST SP 800-34: Contingency Planning Guide</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

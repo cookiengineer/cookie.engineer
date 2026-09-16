@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Least Privilege | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Least Privilege">
+		<meta name="keywords" content="acl, blueteam, capabilities, least-privilege, rbac, sudo">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Least Privilege">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Designing systems so processes and users operate with the minimum permissions necessary for their function.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/blueteam/least-privilege.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Least Privilege">
+		<meta name="twitter:description" itemprop="description" content="Designing systems so processes and users operate with the minimum permissions necessary for their function.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#concept">Concept</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#sudo-configuration">Sudo Configuration</a></b>
+					<ul>
+						<li><a href="#sudoers-architecture">Sudoers Architecture</a></li>
+						<li><a href="#principle-command-level-restrictions">Principle: Command-Level Restrictions</a></li>
+						<li><a href="#sudoedit-without-shell-access">Sudoedit Without Shell Access</a></li>
+						<li><a href="#commands-never-to-grant-via-sudo">Commands Never to Grant via Sudo</a></li>
+						<li><a href="#sudo-debugging-and-auditing">Sudo Debugging and Auditing</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#linux-capabilities">Linux Capabilities</a></b>
+					<ul>
+						<li><a href="#key-capabilities">Key Capabilities</a></li>
+						<li><a href="#querying-and-setting-capabilities">Querying and Setting Capabilities</a></li>
+						<li><a href="#capability-sets-explained">Capability Sets Explained</a></li>
+						<li><a href="#example-capability-aware-service">Example: Capability-Aware Service</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#service-accounts">Service Accounts</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#acls-granular-file-permissions">ACLs - Granular File Permissions</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#privilege-boundaries">Privilege Boundaries</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#polkit">Polkit</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#filesystem-permission-review">Filesystem Permission Review</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#detection-rules">Detection Rules</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/blueteam/index.html">Blueteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/blueteam/least-privilege.html">Least Privilege</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="least-privilege">Least Privilege</h2>
+					<p>
+						Designing systems so processes and users operate with the minimum permissions necessary for
+						their function.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							A subject (user, process, or service) should hold exactly the permissions required to do its
+							job and nothing more. This article audits the places where Linux hands out extra privilege:
+							<code>sudo</code>
+							rules, file capabilities, service accounts,
+							<code>POSIX</code>
+							
+							<abbr title="Access Control List">ACL</abbr>
+							s, polkit,
+							and filesystem permissions. After reading you can inspect each boundary, explain why it is dangerous,
+							and reduce it to a minimal grant.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/unix-permissions.html">Unix Permissions</a> - user/group/other, setuid, setgid, sticky bit</li>
+							<li><a href="/wiki/articles/fundamentals/capabilities.html">Capabilities</a> - Linux capabilities, bounding sets, ambient sets</li>
+							<li><a href="/wiki/articles/fundamentals/authorization.html">Authorization</a> - authorization models, <abbr title="Role-Based Access Control">RBAC</abbr> , ABAC, <abbr title="Mandatory Access Control">MAC</abbr></li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="concept">Concept</h3>
+						<p>
+							Least privilege means a subject (user, process, service) has exactly the permissions it needs
+							to perform its function, and nothing more. No "just in case" access. No "it worked during development
+							so we kept it." Every permission must be justified by a current operational requirement.
+						</p>
+						<p>
+							The failure mode of least privilege is not that it prevents functionality. It is that lazy administrators
+							grant broad access rather than diagnosing exactly what is needed. The correct approach: enable
+							audit logging for the failing operation, read the log to identify the denied permission, then
+							grant only that specific permission.
+						</p>
+					</section>
+					<section>
+						<h3 id="sudo-configuration">Sudo Configuration</h3>
+						<p>
+							Sudo is the most pervasively misconfigured privilege escalation mechanism on Linux systems.
+							The common
+							<code>ALL=(ALL:ALL) ALL</code>
+							rule grants every command as every user. This is a root shell
+							with extra steps.
+						</p>
+						<h4 id="sudoers-architecture">Sudoers Architecture</h4>
+						<p>
+							The main configuration lives in
+							<code>/etc/sudoers</code>
+							, but modern systems should use drop-in files
+							in
+							<code>/etc/sudoers.d/</code>
+							. On ArchLinux the default
+							<code>sudo</code>
+							package already includes the
+							<code>#includedir</code>
+							directive.
+						</p>
+						<pre class="bash">
+# Always use visudo to edit — it validates syntax before saving
+sudo visudo -f /etc/sudoers.d/web-team
+						</pre>
+						<h4 id="principle-command-level-restrictions">Principle: Command-Level Restrictions</h4>
+						<p>Never grant open-ended command access. Specify the exact binary with exact arguments:</p>
+						<pre class="plaintext">
+# WRONG — user can run any command as root
+alice ALL=(ALL:ALL) ALL
+
+# BAD — user can run systemctl restart anything
+alice ALL=(root) /usr/bin/systemctl restart *
+
+# CORRECT — only restart specific services
+alice ALL=(root) /usr/bin/systemctl restart nginx
+alice ALL=(root) /usr/bin/systemctl restart php-fpm
+						</pre>
+						<h4 id="sudoedit-without-shell-access">Sudoedit Without Shell Access</h4>
+						<p>
+							Granting
+							<code>vim</code>
+							,
+							<code>nano</code>
+							, or any editor via sudo gives the user a shell (all editors can execute
+							shell commands). Use
+							<code>sudoedit</code>
+							instead:
+						</p>
+						<pre class="plaintext">
+# CORRECT — edit specific config files without shell
+alice ALL=(root) sudoedit /etc/nginx/sites-available/*
+alice ALL=(root) sudoedit /etc/nginx/conf.d/*
+						</pre>
+						<p>
+							<code>sudoedit</code>
+							copies the file to a temporary location owned by the invoking user, runs the user's
+							<code>$EDITOR</code>
+							as the user (not root), and copies back on save. No root shell is ever accessible.
+						</p>
+						<h4 id="commands-never-to-grant-via-sudo">Commands Never to Grant via Sudo</h4>
+						<p>These commands can be trivially exploited to gain a root shell:</p>
+						<ul>
+							<li><b>Editors</b> : <code>vim</code> , <code>nano</code> , <code>emacs</code> , <code>ed</code> , <code>ex</code> - all have shell escapes ( <code>:shell</code> , <code>!bash</code> )</li>
+							<li><b>Pagers</b> : <code>less</code> , <code>more</code> , <code>most</code> - <code>!bash</code> from within pager</li>
+							<li><b>Shells</b> : <code>bash</code> , <code>sh</code> , <code>zsh</code> , <code>dash</code> - obviously</li>
+							<li><b>Script interpreters</b> : <code>python</code> , <code>perl</code> , <code>ruby</code> , <code>php</code> , <code>lua</code> , <code>node</code></li>
+							<li><b>File tools</b> : <code>cat</code> , <code>head</code> , <code>tail</code> - can read any file (leak <code>/etc/shadow</code> )</li>
+							<li><b>Package managers</b> : <code>apt</code> , <code>pacman</code> , <code>yum</code> - can install arbitrary packages</li>
+							<li><b>Service managers</b> : <code>systemctl</code> with no argument restriction - can start arbitrary units</li>
+							<li><b>Compressors</b> : <code>tar</code> with wildcards - can trigger path traversal</li>
+							<li><b>'find' with '-exec'</b> - arbitrary command execution</li>
+							<li><b>'awk' with 'system()'</b> - arbitrary command execution</li>
+						</ul>
+						<h4 id="sudo-debugging-and-auditing">Sudo Debugging and Auditing</h4>
+						<pre class="bash">
+# Test which commands a user can run
+sudo -l -U alice
+
+# Sudo logs all commands by default to journalctl
+sudo journalctl -u sudo -f
+
+# Enable detailed sudo logging (in sudoers):
+Defaults log_input, log_output
+Defaults iolog_dir=/var/log/sudo-io/%{user}
+						</pre>
+					</section>
+					<section>
+						<h3 id="linux-capabilities">Linux Capabilities</h3>
+						<p>
+							Capabilities split the monolithic root privilege into discrete units. Instead of running a process
+							as root to bind port 80, grant only
+							<code>CAP_NET_BIND_SERVICE</code>
+							.
+						</p>
+						<h4 id="key-capabilities">Key Capabilities</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Capability</th>
+									<th align="center">Allows</th>
+									<th align="center">Abuse Potential</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>CAP_SYS_ADMIN</code></td>
+									<td align="center">Near-root (mount, namespace, swapon)</td>
+									<td align="center">Extreme</td>
+								</tr>
+								<tr>
+									<td align="center"><code>CAP_SYS_PTRACE</code></td>
+									<td align="center">Debug arbitrary processes</td>
+									<td align="center">High (read memory)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>CAP_SYS_MODULE</code></td>
+									<td align="center">Load kernel modules</td>
+									<td align="center">Extreme (ring 0)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>CAP_NET_RAW</code></td>
+									<td align="center">Raw sockets, packet injection</td>
+									<td align="center">High</td>
+								</tr>
+								<tr>
+									<td align="center"><code>CAP_NET_ADMIN</code></td>
+									<td align="center">Interface config, firewall</td>
+									<td align="center">High</td>
+								</tr>
+								<tr>
+									<td align="center"><code>CAP_SYSLOG</code></td>
+									<td align="center">Read kernel log buffer</td>
+									<td align="center">Medium (info leak)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>CAP_DAC_OVERRIDE</code></td>
+									<td align="center">Bypass file permissions</td>
+									<td align="center">High</td>
+								</tr>
+								<tr>
+									<td align="center"><code>CAP_DAC_READ_SEARCH</code></td>
+									<td align="center">Bypass file read/search perms</td>
+									<td align="center">Medium</td>
+								</tr>
+								<tr>
+									<td align="center"><code>CAP_CHOWN</code></td>
+									<td align="center">Change file ownership</td>
+									<td align="center">Medium</td>
+								</tr>
+								<tr>
+									<td align="center"><code>CAP_SETUID</code></td>
+									<td align="center">Set arbitrary UID</td>
+									<td align="center">Extreme</td>
+								</tr>
+								<tr>
+									<td align="center"><code>CAP_SETGID</code></td>
+									<td align="center">Set arbitrary GID</td>
+									<td align="center">Medium</td>
+								</tr>
+								<tr>
+									<td align="center"><code>CAP_NET_BIND_SERVICE</code></td>
+									<td align="center">Bind ports < 1024</td>
+									<td align="center">Low</td>
+								</tr>
+								<tr>
+									<td align="center"><code>CAP_KILL</code></td>
+									<td align="center">Signal any process</td>
+									<td align="center">Medium</td>
+								</tr>
+								<tr>
+									<td align="center"><code>CAP_FOWNER</code></td>
+									<td align="center">Bypass file owner checks</td>
+									<td align="center">Medium</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="querying-and-setting-capabilities">Querying and Setting Capabilities</h4>
+						<pre class="bash">
+# Check capabilities of a running process
+getpcaps $(pgrep nginx)
+
+# Decode capability masks
+capsh --decode=0000000000003000
+
+# Set capabilities on a binary (alternative to setuid root)
+sudo setcap &#39;cap_net_bind_service=+ep&#39; /usr/bin/my-server
+
+# List all files with capabilities set
+sudo getcap -r / 2&gt;/dev/null
+
+# Remove unnecessary capabilities
+sudo setcap -r /usr/bin/some-binary
+						</pre>
+						<h4 id="capability-sets-explained">Capability Sets Explained</h4>
+						<pre class="plaintext">
+effective (e):  Currently active for the process
+permitted (p):  Can be made effective (upper bound)
+inheritable (i): Pass through execve()
+bounding (b):   Hard limit — cannot be added back
+ambient (a):    Preserved through execve() for non-SUID binaries
+						</pre>
+						<p>
+							For a binary with
+							<code>cap_net_bind_service=+ep</code>
+							:
+						</p>
+						<ul>
+							<li><code>+e</code> means the capability is in the effective set (active now).</li>
+							<li><code>+p</code> means it is in the permitted set (can be re-enabled after it is dropped).</li>
+							<li>Both are added to the binary's file-based capability set.</li>
+						</ul>
+						<h4 id="example-capability-aware-service">Example: Capability-Aware Service</h4>
+						<p>Instead of running as root to bind port 80, grant only the bind capability:</p>
+						<pre class="bash">
+sudo setcap &#39;cap_net_bind_service=+ep&#39; /usr/local/bin/web-server
+						</pre>
+						<p>And in the systemd unit:</p>
+						<pre class="ini">
+[Service]
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=yes
+						</pre>
+					</section>
+					<section>
+						<h3 id="service-accounts">Service Accounts</h3>
+						<p>Every service must have a dedicated user account with minimal permissions:</p>
+						<pre class="bash">
+# Create a system user — no login, no home directory, no shell
+sudo useradd -r -M -s /usr/sbin/nologin \
+  -c &#34;My Application Service&#34; \
+  -d /var/lib/myapp \
+  myapp
+
+# Restrict the service directory
+sudo chown -R myapp:myapp /var/lib/myapp
+sudo chmod 750 /var/lib/myapp
+
+# Verify the account
+sudo passwd -S myapp    # Should show &#34;L&#34; (locked)
+sudo chage -l myapp     # Check password aging
+						</pre>
+					</section>
+					<section>
+						<h3 id="acls-granular-file-permissions">ACLs - Granular File Permissions</h3>
+						<p>
+							Linux
+							<abbr title="Access Control List">ACL</abbr>
+							s extend the traditional owner/group/other model with per-user
+							and per-group rules.
+						</p>
+						<pre class="bash">
+# Install ACL tools
+sudo pacman -S acl
+
+# Grant specific user read access to a protected directory
+sudo setfacl -m u:alice:rx /var/log/myapp
+
+# Grant specific group write access
+sudo setfacl -m g:dev-team:rw /srv/shared
+
+# View ACLs
+getfacl /var/log/myapp
+
+# Remove a specific ACL entry
+sudo setfacl -x u:alice /var/log/myapp
+
+# Set default ACLs on a directory (inherited by new files)
+sudo setfacl -m d:g:dev-team:rwx /srv/shared
+						</pre>
+						<p>
+							Verify filesystem supports
+							<abbr title="Access Control List">ACL</abbr>
+							s:
+						</p>
+						<pre class="bash">
+# Check mount options — should not show &#34;noacl&#34;
+mount | grep &#34;$(df /path --output=source | tail -1)&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="privilege-boundaries">Privilege Boundaries</h3>
+						<p>
+							A privilege boundary is any interface where a lower-privilege subject interacts with a higher-privilege
+							one. Each boundary must be explicitly reviewed:
+						</p>
+						<pre class="plaintext">
+[ Internet ] → [ Nginx (nginx user) ] → [ App (app user) ] → [ DB (postgres) ]
+                    ↑                         ↑                    ↑
+              Boundary 1                  Boundary 2           Boundary 3
+						</pre>
+						<p>
+							<b>Boundary 1 (Nginx -> Internet)</b>
+							: Validate request size, rate-limit, drop malformed
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							.
+						</p>
+						<p>
+							<b>Boundary 2 (App -> Nginx)</b>
+							: Unix socket with restricted permissions. App user cannot write
+							to Nginx's config or cache.
+						</p>
+						<p>
+							<b>Boundary 3 (DB -> App)</b>
+							: App connects as a dedicated DB user with permissions only on its
+							schema. No
+							<code>SUPERUSER</code>
+							, no
+							<code>CREATE DATABASE</code>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="polkit">Polkit</h3>
+						<p>
+							Polkit controls system-wide privileges for desktop and system actions. Overly permissive polkit
+							rules are a common privilege escalation vector.
+						</p>
+						<pre class="bash">
+# List installed polkit actions
+pkaction --verbose
+
+# Check polkit rules
+ls /usr/share/polkit-1/rules.d/
+ls /etc/polkit-1/rules.d/
+
+# Example restrictive rule — only wheel group can manage systemd units
+						</pre>
+						<pre class="javascript">
+// /etc/polkit-1/rules.d/99-restrict-systemd.rules
+polkit.addRule(function(action, subject) {
+    if (action.id.indexOf(&#34;org.freedesktop.systemd1.manage-unit&#34;) === 0) {
+        if (subject.isInGroup(&#34;wheel&#34;)) {
+            return polkit.Result.YES;
+        }
+        return polkit.Result.AUTH_ADMIN;
+    }
+});
+						</pre>
+					</section>
+					<section>
+						<h3 id="filesystem-permission-review">Filesystem Permission Review</h3>
+						<p>Run a comprehensive permissions audit periodically:</p>
+						<pre class="bash">
+#!/bin/bash
+# perms-audit.sh — find permission anomalies
+
+echo &#34;=== World-writable files ===&#34;
+find / -xdev -type f -perm -002 ! -type l 2&gt;/dev/null | \
+  grep -vE &#39;^/(proc|sys|dev)&#39;
+
+echo &#34;=== World-writable directories ===&#34;
+find / -xdev -type d -perm -002 2&gt;/dev/null | \
+  grep -vE &#39;^/(proc|sys|dev)&#39;
+
+echo &#34;=== Files not owned by any package ===&#34;
+pacman -Qo $(find /usr/bin /usr/lib /usr/sbin -type f 2&gt;/dev/null) 2&gt;&amp;1 | \
+  grep -i &#39;no package owns&#39;
+
+echo &#34;=== SUID/SGID files ===&#34;
+find / -xdev -type f \( -perm -4000 -o -perm -2000 \) -ls 2&gt;/dev/null
+
+echo &#34;=== User accounts with a login shell ===&#34;
+awk -F: &#39;$7 !~ /(nologin|false)$/ {print $1, $7}&#39; /etc/passwd
+						</pre>
+					</section>
+					<section>
+						<h3 id="detection-rules">Detection Rules</h3>
+						<pre class="yaml">
+# Sigma rule — New Service Account Created
+title: New System Service Account Created
+status: experimental
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith: &#39;/useradd&#39;
+    CommandLine|contains: &#39;-r&#39;
+  condition: selection
+---
+# Auditd rule — monitor sudoers changes
+-w /etc/sudoers -p wa -k sudoers_change
+-w /etc/sudoers.d/ -p wa -k sudoers_change
+-w /etc/security/ -p wa -k pam_config_change
+
+# Auditd rule — monitor capability changes on binaries
+-w /usr/bin/ -p x -k binary_capability_check
+-a always,exit -F arch=b64 -S capset -k capability_change
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Audit the container, find every privilege escalation path, and fix each one. It starts with
+							an overly permissive sudoers file, a shell-capable SUID binary, a world-writable
+							<code>/etc/sudoers.d</code>
+							, and a world-readable home directory. Prove that
+							<code>alice</code>
+							and
+							<code>bob</code>
+							can no longer read
+							<code>/root/flag.txt</code>
+							.
+						</p>
+						<p><a href="/wiki/articles/blueteam/least-privilege.Containerfile">least-privilege.Containerfile</a></p>
+						<pre class="bash">
+podman build -t least-privilege -f least-privilege.Containerfile .
+podman run -it --rm least-privilege
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/sudoers.5" target="_blank">sudoers(5) - Linux manual</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/capabilities.7" target="_blank">capabilities(7) - Linux manual</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/setfacl.1" target="_blank">setfacl(1) - Linux manual</a></li>
+							<li><a class="icon-website" href="https://www.freedesktop.org/software/polkit/docs/latest/" target="_blank">Polkit documentation</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

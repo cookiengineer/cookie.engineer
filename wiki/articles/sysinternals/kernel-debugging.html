@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Kernel Debugging | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Kernel Debugging">
+		<meta name="keywords" content="crash, drgn, gdb, kasan, kdb, kdump, kernel-debugging, kgdb, oops, qemu, sysinternals, ubsan, vmcore">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Kernel Debugging">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="The kernel debugging stack covering KGDB, GDB with QEMU, kdump and crash, KDB, drgn, Oops analysis, debug symbols, KASAN, UBSAN, and KCSAN.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/sysinternals/kernel-debugging.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Kernel Debugging">
+		<meta name="twitter:description" itemprop="description" content="The kernel debugging stack covering KGDB, GDB with QEMU, kdump and crash, KDB, drgn, Oops analysis, debug symbols, KASAN, UBSAN, and KCSAN.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-kernel-debugging-landscape">The Kernel Debugging Landscape</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kdb-built-in-kernel-debugger">KDB: Built-in Kernel Debugger</a></b>
+					<ul>
+						<li><a href="#kdb-commands">KDB commands</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kgdb-remote-gdb-debugging">KGDB: Remote GDB Debugging</a></b>
+					<ul>
+						<li><a href="#setup-procedure">Setup procedure</a></li>
+						<li><a href="#kgdb-internals">KGDB internals</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#qemu-gdb-sandbox">QEMU + GDB Sandbox</a></b>
+					<ul>
+						<li><a href="#useful-gdb-commands-for-kernel-debugging">Useful GDB commands for kernel debugging</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#crash-dumps-kdump-kexec">Crash Dumps: kdump + kexec</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-crash-utility">The crash Utility</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#drgn-programmable-kernel-debugger">drgn: Programmable Kernel Debugger</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#live-debugging-prockcore-and-devmem">Live Debugging: /proc/kcore and /dev/mem</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#debug-symbols-and-vmlinux">Debug Symbols and vmlinux</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#oops-message-analysis">Oops Message Analysis</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#bug-warn-and-panic">BUG(), WARN(), and panic()</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kernel-sanitizers">Kernel Sanitizers</a></b>
+					<ul>
+						<li><a href="#kasan-kernel-address-sanitizer">KASAN (Kernel Address Sanitizer)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-kernel-log-buffer-and-dmesg">The Kernel Log Buffer and dmesg</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/sysinternals/index.html">Sysinternals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/sysinternals/kernel-debugging.html">Kernel Debugging</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="kernel-debugging">Kernel Debugging</h2>
+					<p>
+						The kernel debugging stack covering KGDB, GDB with QEMU, kdump and crash, KDB, drgn, Oops analysis,
+						debug symbols, and the KASAN, UBSAN, and KCSAN sanitizers.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							A kernel bug can halt the whole machine, so debugging it needs different tools than a user-space
+							program: an in-kernel debugger, a remote GDB stub, a reserved-memory crash dump, or a post-mortem
+							analyzer. This article covers all four, plus how to read an Oops, where to find debug symbols,
+							and which sanitizers catch memory and concurrency bugs early. After reading it you can stand
+							up a QEMU plus GDB session and triage a
+							<code>vmcore</code>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/sysinternals/kernel-architecture.html">Kernel Architecture</a> - kernel layout, compilation, entry points, K <abbr title="Penetration Test">PT</abbr> I, MSRs, ring transitions</li>
+							<li><a href="/wiki/articles/sysinternals/system-call-dispatch.html">System Call Dispatch</a> - syscall entry/exit, pt_regs, SYS <abbr title="Certificate Authority">CA</abbr> LL_DEFINE macros, kernel stack layout</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-kernel-debugging-landscape">The Kernel Debugging Landscape</h3>
+						<p>
+							Debugging a kernel is fundamentally different from debugging user-space programs. There is no
+							parent process, no core dump file by default, and a bug often means the machine is dead - no
+							interactive GDB, no remote procfs, nothing. The tooling must work either on a live but degraded
+							system (KDB), on a deliberately halted system (KGDB), or on a post-mortem memory image (crash/drgn
+							on vmcore).
+						</p>
+						<p>Debugging Approach Matrix:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Method</th>
+									<th align="center">Requires</th>
+									<th align="center">Best For</th>
+									<th align="center">Availability</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">KDB</td>
+									<td align="center">Serial/console</td>
+									<td align="center">Hung kernel</td>
+									<td align="center">Mainline</td>
+								</tr>
+								<tr>
+									<td align="center">KGDB + GDB</td>
+									<td align="center">Serial + 2nd machine</td>
+									<td align="center">Interactive step-debug</td>
+									<td align="center">Mainline</td>
+								</tr>
+								<tr>
+									<td align="center">Kdump + crash</td>
+									<td align="center">kexec + reserved RAM</td>
+									<td align="center">Post-mortem forensics</td>
+									<td align="center">Mainline</td>
+								</tr>
+								<tr>
+									<td align="center">QEMU + GDB</td>
+									<td align="center">QEMU + guest kernel</td>
+									<td align="center">Development + testing</td>
+									<td align="center">Always</td>
+								</tr>
+								<tr>
+									<td align="center">drgn</td>
+									<td align="center">/proc/kcore or vmcore</td>
+									<td align="center">Live inspection</td>
+									<td align="center">Mainline + external tool</td>
+								</tr>
+								<tr>
+									<td align="center">kgdb over USB/NET</td>
+									<td align="center">Special HW</td>
+									<td align="center">Embedded</td>
+									<td align="center">Kernel patch</td>
+								</tr>
+								<tr>
+									<td align="center">printk + dmesg</td>
+									<td align="center">Nothing</td>
+									<td align="center">Prod logs</td>
+									<td align="center">Always</td>
+								</tr>
+								<tr>
+									<td align="center">/proc/kcore</td>
+									<td align="center">Nothing</td>
+									<td align="center">Live read</td>
+									<td align="center">Often disabled</td>
+								</tr>
+								<tr>
+									<td align="center">bpftrace</td>
+									<td align="center">BPF kernel support</td>
+									<td align="center">Dynamic tracing</td>
+									<td align="center">4.x+</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="kdb-built-in-kernel-debugger">KDB: Built-in Kernel Debugger</h3>
+						<p>
+							KDB is built directly into the kernel. When the kernel hits a breakpoint, oops, or you trigger
+							it manually, KDB takes over the console. It's a single-threaded, assembly-level debugger that
+							runs on the bare metal.
+						</p>
+						<pre class="bash">
+# Enable KDB at boot (kernel command line):
+#   kdb=on   — KDB activated early
+#   kgdboc=ttyS0,115200 — KDB I/O over serial
+#   kgdbwait — halt at boot and wait for KGDB connection
+
+# Trigger the debugger on a running system:
+echo g &gt; /proc/sysrq-trigger        # Enter KGDB/KDB
+echo h &gt; /proc/sysrq-trigger        # Print the sysrq help
+
+# Enable sysrq-trigger:
+echo 1 &gt; /proc/sys/kernel/sysrq
+						</pre>
+						<h4 id="kdb-commands">KDB commands</h4>
+						<pre class="plaintext">
+KDB&gt; help                          # List all commands
+KDB&gt; bt                            # Backtrace current CPU
+KDB&gt; btc                           # Backtrace all CPUs
+KDB&gt; ps                            # Process list (KDB version)
+KDB&gt; dmesg                         # Dump kernel log buffer
+KDB&gt; md &lt;addr&gt;                     # Memory dump (hex)
+KDB&gt; mdw &lt;addr&gt;                    # Memory dump (words)
+KDB&gt; rd                            # Register dump
+KDB&gt; rmregs                        # Register dump for all CPUs
+KDB&gt; bp &lt;addr&gt;                     # Set breakpoint
+KDB&gt; bph &lt;addr&gt;                    # Set hardware breakpoint
+KDB&gt; bc &lt;num&gt;                      # Clear breakpoint
+KDB&gt; bl                            # List breakpoints
+KDB&gt; ss                            # Single step
+KDB&gt; go                            # Continue execution
+KDB&gt; reboot                        # Reboot immediately
+KDB&gt; sr &lt;proc&gt;                     # Switch to process context
+KDB&gt; summary                       # System summary
+KDB&gt; pid &lt;pid&gt;                     # Show task_struct for PID
+KDB&gt; bta                           # Backtrace for all tasks
+						</pre>
+						<pre class="bash">
+# Check if KDB is compiled in
+zcat /proc/config.gz 2&gt;/dev/null | grep CONFIG_KGDB
+grep CONFIG_KGDB /boot/config-$(uname -r) 2&gt;/dev/null
+
+# Serial console setup for KDB/KGDB
+sudo systemctl enable serial-getty@ttyS0.service 2&gt;/dev/null
+# Kernel cmdline: console=ttyS0,115200n8 kgdboc=ttyS0,115200
+						</pre>
+					</section>
+					<section>
+						<h3 id="kgdb-remote-gdb-debugging">KGDB: Remote GDB Debugging</h3>
+						<p>
+							KGDB exposes the kernel to GDB over a serial line (or
+							<abbr title="Universal Serial Bus">USB</abbr>
+							, or Ethernet).
+							You need two machines: the "target" running the kernel under test, and the "host" running GDB
+							connected via serial.
+						</p>
+						<pre class="plaintext">
+KGDB Architecture:
+══════════════════
+
+    Host Machine                         Target Machine
+    ─────────────                        ──────────────
+    GDB                                    Kernel
+      │                                      │
+      │  target remote /dev/ttyUSB0          │  kgdboc=ttyS0
+      │──────────────────────────────────────►│
+      │                                      │
+      │  break do_sys_openat2                │  patched int3 at addr
+      │──────────────────────────────────────►│
+      │                                      │
+      │  continue                             │
+      │──────────────────────────────────────►│
+      │                                      │  openat syscall → trap
+      │                            CPU halted │
+      │◄──────────────────────────────────────│
+      │                                      │
+      │  info registers                      │
+      │──────────────────────────────────────►│
+      │                                      │
+      │◄───────── reg dump ──────────────────│
+      │                                      │
+      │  x/20i $rip                          │
+      │──────────────────────────────────────►│
+      │◄───────── disassembly ───────────────│
+      │                                      │
+      │  continue                             │
+      │──────────────────────────────────────►│
+      │                                      │  All CPUs resume
+						</pre>
+						<h4 id="setup-procedure">Setup procedure</h4>
+						<pre class="bash">
+# Target kernel cmdline (add to GRUB/SD-boot):
+kgdbwait kgdboc=ttyS0,115200 nokaslr
+
+# Host — connect GDB:
+gdb /usr/lib/debug/boot/vmlinux-$(uname -r)
+(gdb) set serial baud 115200
+(gdb) target remote /dev/ttyUSB0
+(gdb) continue
+
+# Module debug symbols:
+gdb /usr/lib/debug/boot/vmlinux-$(uname -r)
+(gdb) add-symbol-file /path/to/module.ko &lt;text_addr&gt; \
+    -s .data &lt;data_addr&gt; -s .bss &lt;bss_addr&gt;
+# Get addresses from /sys/module/&lt;name&gt;/sections/.text
+						</pre>
+						<h4 id="kgdb-internals">KGDB internals</h4>
+						<pre class="c">
+// kernel/debug/kdb/kdb_main.c + kernel/debug/debug_core.c
+// When kgdb_handle_exception() is called (from break, NMI, or panic):
+
+static int kgdb_handle_exception(int evector, int signo,
+                                  int ecode, struct pt_regs *regs)
+{
+    // 1. Halt all other CPUs via IPI (NMI)
+    // 2. Enter KDB/KGDB prompt on primary CPU
+    // 3. Poll the I/O driver (serial, USB, eth) for GDB commands
+    // 4. Process GDB protocol: &#39;g&#39; (read regs), &#39;m&#39; (read mem),
+    //    &#39;Z0&#39; (set breakpoint), &#39;c&#39; (continue), &#39;s&#39; (step)
+    // 5. On continue: remove single-step flags, resume all CPUs
+    return 0;
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="qemu-gdb-sandbox">QEMU + GDB Sandbox</h3>
+						<p>
+							For kernel development, QEMU's built-in GDB stub is the gold standard. No serial cable needed
+							<ul>
+								<li><code>-s</code> opens a GDB server on <code>:1234</code> .</li>
+							</ul>
+						</p>
+						<pre class="plaintext">
+QEMU Debugging Setup:
+═════════════════════
+
+    Terminal 1:                         Terminal 2:
+    ───────────                         ───────────
+    qemu-system-x86_64                  gdb vmlinux
+      -kernel bzImage                     (gdb) target remote :1234
+      -s              ← GDB stub on :1234 (gdb) hbreak start_kernel
+      -S              ← Freeze at boot    (gdb) continue
+      -append &#34;nokaslr&#34;                (gdb) info threads
+      -initrd initramfs.img            (gdb) p *init_task
+      -enable-kvm                       (gdb) bt
+                                         (gdb) list
+                                         (gdb) stepi
+                                         (gdb) x/32i $rip
+						</pre>
+						<pre class="bash">
+# Minimal QEMU kernel debugging lab:
+# 1. Build or obtain a kernel
+ls /boot/vmlinuz-linux     # Arch default kernel
+cp /boot/vmlinuz-linux /tmp/bzImage
+
+# 2. Create a minimal initramfs
+mkdir -p /tmp/initramfs/{bin,dev,proc,sys}
+cp /usr/bin/busybox /tmp/initramfs/bin/
+cat &gt; /tmp/initramfs/init &lt;&lt; &#39;HEREDOC&#39;
+#!/bin/busybox sh
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+exec /bin/busybox sh
+HEREDOC
+chmod +x /tmp/initramfs/init
+(cd /tmp/initramfs &amp;&amp; find . | cpio -o -H newc | gzip &gt; /tmp/initramfs.img)
+
+# 3. Start QEMU with GDB stub
+qemu-system-x86_64 \
+    -kernel /tmp/bzImage \
+    -initrd /tmp/initramfs.img \
+    -append &#34;console=ttyS0 nokaslr earlyprintk=serial&#34; \
+    -nographic \
+    -s -S &amp;
+QEMU_PID=$!
+
+# 4. Connect GDB
+gdb /usr/lib/debug/boot/vmlinux-$(uname -r) \
+    -ex &#34;target remote :1234&#34; \
+    -ex &#34;hbreak start_kernel&#34; \
+    -ex &#34;continue&#34;
+# Kill QEMU when done:
+kill $QEMU_PID 2&gt;/dev/null
+						</pre>
+						<h4 id="useful-gdb-commands-for-kernel-debugging">Useful GDB commands for kernel debugging</h4>
+						<pre class="plaintext">
+(gdb) target remote :1234            # Connect to QEMU GDB stub
+(gdb) hbreak start_kernel             # Hardware breakpoint at boot
+(gdb) hbreak do_syscall_64           # Break on every syscall entry
+(gdb) break __x64_sys_openat         # Break on specific syscall
+(gdb) condition 1 $rdi==3            # Only when fd==3
+(gdb) info registers                  # Full register dump
+(gdb) info threads                    # List CPUs (one thread per VCPU)
+(gdb) thread 2                        # Switch to VCPU 2
+(gdb) bt                             # Kernel stack backtrace
+(gdb) p/x &amp;init_task                 # Print address of init_task
+(gdb) p *(struct task_struct *)0xffff12345 # Dump task struct
+(gdb) x/32wx $rsp                    # 32 words at stack pointer
+(gdb) monitor info cpus              # QEMU-specific: CPU info
+(gdb) monitor info mem               # QEMU: memory regions
+(gdb) monitor print $cr3             # QEMU: read control register
+(gdb) continue
+(gdb) stepi                          # Step one instruction
+(gdb) finish                         # Finish current function
+(gdb) info breakpoints
+(gdb) delete 1
+(gdb) disassemble /m __x64_sys_read  # Mixed source+asm
+						</pre>
+					</section>
+					<section>
+						<h3 id="crash-dumps-kdump-kexec">Crash Dumps: kdump + kexec</h3>
+						<p>
+							When the kernel panics, kdump uses
+							<code>kexec</code>
+							to boot a fresh "capture kernel" from a reserved
+							memory region. The capture kernel copies the crashed kernel's memory to disk as
+							<code>/proc/vmcore</code>
+							.
+						</p>
+						<pre class="plaintext">
+kdump Flow:
+══════════
+
+    Normal Kernel                          Crash
+    ─────────────                          ─────
+
+    ┌─────────────────┐                   ┌─────────────────┐
+    │  System RAM     │                   │ PANIC!          │
+    │                 │                   │                 │
+    │ ┌─────────────┐ │                   │ 1. panic()      │
+    │ │  reserved    │ │                   │ 2. smp_send_stop()
+    │ │  crashkernel │ │                   │ 3. machine_crash_
+    │ │  memory      │ │──────────────────►│    shutdown()   │
+    │ │              │ │                   │ 4. boot capture │
+    │ │  (e.g. 256M) │ │                   │    kernel from  │
+    │ └─────────────┘ │                   │    reserved mem  │
+    │                 │                   │                 │
+    │ ┌─────────────┐ │                   │ 5. capture kernel│
+    │ │  production  │ │                   │    finds crashed │
+    │ │  kernel +    │ │                   │    kernel&#39;s RAM  │
+    │ │  userspace   │ │                   │    via ELF header│
+    │ └─────────────┘ │                   │                 │
+    └─────────────────┘                   │ 6. makedumpfile: │
+                                          │    compress &amp;    │
+                                          │    copy to disk  │
+                                          │                 │
+                                          │ 7. reboot        │
+                                          └─────────────────┘
+                                          │
+                                          ▼
+                                    /var/crash/&lt;ts&gt;/vmcore
+						</pre>
+						<pre class="bash">
+# Install kdump on Arch
+sudo pacman -S kexec-tools
+# Configure crashkernel memory (add to GRUB_CMDLINE_LINUX):
+# crashkernel=256M
+sudo grub-mkconfig -o /boot/grub/grub.cfg
+
+# Enable kdump service
+sudo systemctl enable kdump.service
+sudo systemctl start kdump.service
+
+# Verify crash kernel is reserved
+cat /proc/cmdline | grep -o &#39;crashkernel=[^ ]*&#39;
+dmesg | grep -i crashkernel
+
+# Test kdump (CAREFUL — this WILL reboot the machine!)
+# sudo bash -c &#39;echo c &gt; /proc/sysrq-trigger&#39;
+# After reboot, find vmcore:
+ls -la /var/crash/
+
+# Inspect vmcore
+crash /usr/lib/debug/boot/vmlinux-$(uname -r) /var/crash/&lt;timestamp&gt;/vmcore
+						</pre>
+					</section>
+					<section>
+						<h3 id="the-crash-utility">The <code>crash</code> Utility</h3>
+						<p>
+							<code>crash</code>
+							is the standard tool for post-mortem crash dump analysis. It is built on top of GDB
+							but adds kernel-aware commands.
+						</p>
+						<pre class="plaintext">
+crash session — (crash&gt; prompt):
+
+crash&gt; bt                          # Backtrace of crashed task
+PID: 0      TASK: ffff888100000000 CPU: 2   COMMAND: &#34;swapper/2&#34;
+ #0 [fffffe0000008e88] panic at ffffffff81c12345
+ #1 [fffffe0000008f30] __list_del at ffffffff813a5600
+ #2 [fffffe0000008f58] do_exit at ffffffff810a1234
+ ...
+
+crash&gt; ps                          # Process list (from memory image)
+   PID    PPID  CPU  TASK         ST  %MEM  VSZ   RSS  COMM
+   1      0      0  ffff888100001000 IN   0.0   4096  1024 systemd
+   123    1      1  ffff888100002000 RU   0.1  16384  4096 sshd
+
+crash&gt; files &lt;pid&gt;                 # Open files of a process
+crash&gt; kmem -i                     # Memory usage summary
+crash&gt; kmem -s                     # Slab cache info
+crash&gt; mod                         # Loaded modules at crash time
+crash&gt; log                         # Kernel log buffer (dmesg at crash)
+crash&gt; mach                       # CPU / hardware info
+crash&gt; net                         # Network info
+crash&gt; dev                         # Block/char device list
+crash&gt; sys                         # System info (kernel ver, hostname, ...)
+crash&gt; foreach bt                  # Backtrace ALL tasks
+crash&gt; struct task_struct ffff888100001000  # Dump struct
+crash&gt; union thread_union ffff888100000000 # Dump union
+crash&gt; sig &lt;pid&gt;                   # Pending signals for process
+crash&gt; vm &lt;pid&gt;                    # Virtual memory mappings
+crash&gt; irq                         # IRQ statistics
+crash&gt; timer                       # Kernel timers
+crash&gt; runq                        # Runqueue contents
+crash&gt; help                        # HUGE list of commands
+						</pre>
+						<pre class="bash">
+# Install crash
+sudo pacman -S crash
+
+# Get debug kernel (Arch)
+sudo pacman -S linux-$(uname -r)-debug 2&gt;/dev/null || \
+    echo &#34;Debug kernel not in repos — build from source&#34;
+
+# Example: analyze your own /proc/kcore (live analysis)
+sudo crash /usr/lib/debug/boot/vmlinux-$(uname -r) /proc/kcore 2&gt;/dev/null
+# WARNING: /proc/kcore is often restricted on modern kernels (lockdown)
+						</pre>
+					</section>
+					<section>
+						<h3 id="drgn-programmable-kernel-debugger">drgn: Programmable Kernel Debugger</h3>
+						<p>
+							<code>drgn</code>
+							(pronounced "dragon") is a modern Python-based kernel debugger that works on both live
+							systems (via
+							<code>/proc/kcore</code>
+							) and vmcore files. It provides Python
+							<abbr title="Application Programming Interface">API</abbr>
+							s for kernel data structures, iterating tasks, and correlating memory.
+						</p>
+						<pre class="python">
+#!/usr/bin/env python3
+# drgn live inspection script
+import drgn
+from drgn.helpers.linux import (
+    for_each_task, find_task, list_for_each_entry,
+    pid, task_state_to_char, hlist_for_each_entry
+)
+from drgn.helpers.linux.mm import for_each_vma
+
+prog = drgn.program_from_kernel()  # Attach to live kernel
+
+# List all tasks
+for task in for_each_task(prog):
+    print(f&#34;PID {task.pid.value_():6d} {task.comm.string_().decode():16s} &#34;
+          f&#34;state={task_state_to_char(task)}&#34;)
+
+# Find a specific task by PID
+task = find_task(prog, 1)
+print(f&#34;systemd: {task.comm.string_().decode()}&#34;)
+
+# Explore data structures
+print(prog.type(&#39;struct task_struct&#39;))           # Layout
+print(prog[&#39;jiffies&#39;].value_())                  # Global variable
+
+# Walk dentry cache
+for dentry in for_each_task(prog):
+    break  # simplified — full examples in drgn docs
+
+# Access vmcore
+# prog = drgn.program_from_core_dump(vmlinux_path, vmcore_path)
+
+# Iterate loaded modules
+for mod in list_for_each_entry(
+    &#39;struct module&#39;, prog[&#39;modules&#39;].address_of_(), &#39;list&#39;
+):
+    print(f&#34;Module: {mod.name.string_().decode()}&#34;)
+						</pre>
+						<pre class="bash">
+# Install drgn
+sudo pacman -S drgn
+pip install drgn  # also available as Python module
+
+# Live inspection (root required)
+sudo drgn
+
+# Analyze a vmcore
+sudo drgn -s /usr/lib/debug/boot/vmlinux-$(uname -r) /var/crash/*/vmcore
+
+# Scripted analysis
+cat &gt; /tmp/tasks.py &lt;&lt; &#39;HEREDOC&#39;
+import drgn
+from drgn.helpers.linux import for_each_task, task_state_to_char
+
+prog = drgn.program_from_kernel()
+for task in for_each_task(prog):
+    print(f&#34;{task.pid.value_():6d} {task.comm.string_().decode():20s} {task_state_to_char(task)}&#34;)
+HEREDOC
+sudo python3 /tmp/tasks.py
+						</pre>
+					</section>
+					<section>
+						<h3 id="live-debugging-prockcore-and-devmem">Live Debugging: /proc/kcore and /dev/mem</h3>
+						<pre class="plaintext">
+/proc/kcore — the kernel&#39;s memory as a file
+════════════════════════════════════════════
+
+    /proc/kcore is an ELF core file that maps the entire physical
+    address space. Opening it gives read access to kernel memory
+    (subject to lockdown restrictions).
+
+    Size: equal to physical RAM + offset (appears enormous)
+    $ ls -lh /proc/kcore
+    -r-------- 1 root root 128T ... /proc/kcore
+
+    It&#39;s sparse: only pages in RAM are accessible. Attempting to
+    read unmapped physical addresses returns zeros.
+
+    Kernel lockdown (confidentiality mode) blocks access entirely.
+
+/dev/mem — physical memory device
+═════════════════════════════════
+
+    /dev/mem provides byte-addressable access to physical memory.
+    Modern kernels heavily restrict it:
+    - CONFIG_STRICT_DEVMEM: only first 1MB accessible (BIOS/legacy)
+    - CONFIG_DEVMEM: may not exist at all
+    - Kernel lockdown blocks it entirely
+						</pre>
+						<pre class="bash">
+# Check /proc/kcore access
+ls -la /proc/kcore
+sudo readelf -h /proc/kcore 2&gt;/dev/null | head -10
+# If &#34;Permission denied&#34;: lockdown is active
+
+# Check /dev/mem access
+ls -la /dev/mem
+sudo dd if=/dev/mem of=/tmp/first_mb bs=1024 count=1024 2&gt;&amp;1
+# If &#34;Operation not permitted&#34;: STRICT_DEVMEM or lockdown
+
+# Check lockdown level
+cat /sys/kernel/security/lockdown 2&gt;/dev/null
+						</pre>
+					</section>
+					<section>
+						<h3 id="debug-symbols-and-vmlinux">Debug Symbols and vmlinux</h3>
+						<p>
+							Debugging without symbols is near-impossible. The
+							<code>vmlinux</code>
+							file (uncompressed kernel ELF) contains
+							the full symbol table, DWARF debug info, and source line mappings.
+						</p>
+						<pre class="plaintext">
+Symbol availability chain:
+══════════════════════════
+
+    vmlinux (ELf, ~600MB with debug)
+        │
+        ├──► stripped → bzImage (compressed, no debug info)
+        │
+        ├──► debug info → /usr/lib/debug/boot/vmlinux-&lt;ver&gt;
+        │    Installed by linux-&lt;ver&gt;-debug package
+        │
+        └──► extract-vmlinux: decompress bzImage → vmlinux
+             (no debug info, just symbols from kallsyms)
+
+    Kernel config options:
+    CONFIG_DEBUG_INFO=y               DWARF4 debug info
+    CONFIG_DEBUG_INFO_DWARF4=y        (or DWARF5)
+    CONFIG_DEBUG_INFO_REDUCED=n        Full debug (bigger)
+    CONFIG_DEBUG_INFO_BTF=y            BPF Type Format (for CO-RE)
+    CONFIG_KALLSYMS=y                  /proc/kallsyms
+    CONFIG_KALLSYMS_ALL=y              All symbols, not just functions
+						</pre>
+						<pre class="bash">
+# Obtain debug kernel (Arch)
+sudo pacman -S linux-$(uname -r | sed &#39;s/\./-/g&#39;)-debug 2&gt;/dev/null
+# or: linux-zen-$(uname -r)-debug
+
+# Verify debug symbols exist
+file /usr/lib/debug/boot/vmlinux-$(uname -r) 2&gt;/dev/null
+readelf -S /usr/lib/debug/boot/vmlinux-$(uname -r) 2&gt;/dev/null | \
+    grep -E &#39;\.debug_&#39;
+
+# Check kallsyms availability
+sudo cat /proc/kallsyms | tail -5
+# t/T = text (function), lowercase = local, uppercase = global
+
+# Extract vmlinux from bzImage (no debug info)
+# Requires extract-vmlinux script from kernel source
+scripts/extract-vmlinux /boot/vmlinuz-linux &gt; /tmp/vmlinux-extracted
+file /tmp/vmlinux-extracted
+readelf -s /tmp/vmlinux-extracted | head -20
+						</pre>
+					</section>
+					<section>
+						<h3 id="oops-message-analysis">Oops Message Analysis</h3>
+						<p>
+							An "Oops" is the kernel's way of saying "something went wrong but we can try to limp forward."
+							A "panic" means "we cannot continue safely." Understanding the Oops output is a critical forensics
+							skill.
+						</p>
+						<pre class="plaintext">
+Anatomy of a Linux Kernel Oops:
+════════════════════════════════
+
+  BUG: unable to handle page fault at ffffdeadbeeffeed
+  #PF: supervisor read access in kernel mode
+  #PF: error_code(0x0000) - not-present page
+  PGD 0 P4D 0
+  Oops: 0000 [#1] PREEMPT SMP PTI         ← Oops number, config flags
+  CPU: 3 PID: 1234 Comm: my-driver Not tainted 6.1.0-arch1 #1
+  Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS 1.16.0
+  RIP: 0010:my_buggy_function+0x37/0x80 [my_module]
+  Code: 48 8b 07 48 8b 40 10 48 85 c0 74 0a ...
+  RSP: 0018:ffffc9000012fe38 EFLAGS: 00010246
+  RAX: ffffdeadbeeffeed RBX: ffff888100300000 RCX: 0000000000000000
+  RDX: 0000000000000000 RSI: ...
+  RBP: ...
+  R10: ... R11: ... R12: ... R13: ... R14: ...
+  FS: 00007f1234567890(0000) GS:ffff888123450000(0000) knlGS:0000000000000000
+  CS: 0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+  CR2: ffffdeadbeeffeed CR3: 0000000100a00001 CR4: 0000000000170ee0
+  Call Trace:
+   &lt;TASK&gt;
+   my_module_init+0x45/0x60 [my_module]
+   do_one_initcall+0x5a/0x1a0
+   do_init_module+0x4b/0x200
+   ...
+   &lt;/TASK&gt;
+  Modules linked in: my_module(O+) ...
+  ---[ end trace ]---
+
+Key fields:
+  RIP: faulting instruction address → [func]+offset/length [module]
+  Call Trace: stack walk — who called what?
+  CR2: address that caused the page fault
+  error_code: bit 0=protection (1=protection fault, 0=not present)
+              bit 1=write(1)/read(0), bit 2=user(1)/supervisor(0)
+              bit 3=reserved bit violation, bit 4=instruction fetch
+						</pre>
+						<pre class="bash">
+# Force an oops for testing
+echo 1 &gt; /proc/sys/kernel/panic_on_oops   # PANIC on oops (safer)
+echo 1 &gt; /proc/sys/kernel/panic           # Auto-reboot after N secs
+
+# Capture oops messages
+journalctl -k --no-pager | grep -A50 &#39;BUG:\|Oops:&#39;
+
+# Decode oops addresses to function names + line numbers
+sudo ./scripts/decode_stacktrace.sh vmlinux &lt; oops.txt
+# Requires: vmlinux with debug info, kernel source tree
+
+# Alternative: manual decode
+gdb /usr/lib/debug/boot/vmlinux-$(uname -r) \
+    -ex &#34;list *(my_buggy_function+0x37)&#34; -ex &#34;quit&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="bug-warn-and-panic">BUG(), WARN(), and panic()</h3>
+						<p>These three macros are the kernel's internal assertion mechanisms:</p>
+						<pre class="c">
+// include/asm-generic/bug.h
+
+// BUG() — unrecoverable error, kills the process or panics
+#define BUG() do {                                          \
+    instrumentation_begin();                                 \
+    __BUG_FLAGS(BUGFLAG_TAINT(BUGFLAG_TAINT_WARN) |         \
+                BUGFLAG_ONCE);                               \
+    unreachable();                                           \
+} while (0)
+// Behavior: if CONFIG_BUG_ON_DATA_CORRUPTION → WARN + try to continue
+//           else → panic (or kill current process if panic_on_oops=0)
+
+// WARN()/WARN_ON(condition) — recoverable anomaly, dump stack, continue
+#define WARN(condition, format...) ({                       \
+    int __ret_warn_on = !!(condition);                       \
+    if (unlikely(__ret_warn_on))                             \
+        __WARN_printf(TAINT_WARN, format);                   \
+    unlikely(__ret_warn_on);                                 \
+})
+// Prints a warning, stack trace, taints kernel with TAINT_WARN
+
+// WARN_ON_ONCE(condition) — only once per boot
+
+// panic() — unrecoverable: halt system
+void panic(const char *fmt, ...);
+// 1. smp_send_stop() — halt all other CPUs
+// 2. kmsg_dump — save kernel log to storage
+// 3. emergency_restart() or infinite loop
+						</pre>
+						<pre class="bash">
+# Kernel configuration for BUG/WARN behavior
+zcat /proc/config.gz 2&gt;/dev/null | grep -E &#39;PANIC_ON_OOPS|BUG_ON_DATA_CORRUPTION&#39;
+
+# BUG/WARN count since boot
+cat /proc/sys/kernel/oops_limit    # Max oops before panic (default: 10000)
+cat /proc/sys/kernel/warn_limit    # Max warnings before panic (default: 0=unlimited)
+
+# See recent bugs in kernel log
+dmesg | grep -E &#39;BUG:|WARNING:|Oops:|PANIC:&#39; | tail -20
+						</pre>
+					</section>
+					<section>
+						<h3 id="kernel-sanitizers">Kernel Sanitizers</h3>
+						<p>
+							Modern kernels can be compiled with runtime sanitizers that detect memory corruption, data races,
+							and undefined behavior:
+						</p>
+						<p>Kernel sanitizer overview:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Sanitizer</th>
+									<th align="center">Detects</th>
+									<th align="center">Slowdown</th>
+									<th align="center">Config</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">KASAN</td>
+									<td align="center">Out-of-bounds, use-after-free, double-free on heap/stack/global</td>
+									<td align="center">~2-5x</td>
+									<td align="center">CONFIG_KASAN=y</td>
+								</tr>
+								<tr>
+									<td align="center">KCSAN</td>
+									<td align="center">Data races (concurrency bugs)</td>
+									<td align="center">Variable (~10% idle)</td>
+									<td align="center">CONFIG_KCSAN=y</td>
+								</tr>
+								<tr>
+									<td align="center">UBSAN</td>
+									<td align="center">Undefined behavior: integer overflows, shift-out-of-bounds, misaligned access, null deref</td>
+									<td align="center">~1.2x</td>
+									<td align="center">CONFIG_UBSAN=y</td>
+								</tr>
+								<tr>
+									<td align="center">KFENCE</td>
+									<td align="center">Low-overhead KASAN alternative (sampling-based)</td>
+									<td align="center">~1%</td>
+									<td align="center">CONFIG_KFENCE=y</td>
+								</tr>
+								<tr>
+									<td align="center">KMSAN</td>
+									<td align="center">Uninitialized memory reads</td>
+									<td align="center">~3x</td>
+									<td align="center">CONFIG_KMSAN=y</td>
+								</tr>
+								<tr>
+									<td align="center">KTSAN</td>
+									<td align="center">Thread sanitizer (experimental)</td>
+									<td align="center">~5-10x</td>
+									<td align="center">Work-in-progress</td>
+								</tr>
+								<tr>
+									<td align="center">LOCKDEP</td>
+									<td align="center">Lock ordering violations, deadlock potential detection</td>
+									<td align="center">~2x</td>
+									<td align="center">CONFIG_LOCKDEP=y</td>
+								</tr>
+								<tr>
+									<td align="center">KMEMLEAK</td>
+									<td align="center">Unreferenced memory (leak detection)</td>
+									<td align="center">~1.1x</td>
+									<td align="center">CONFIG_DEBUG_KMEMLEAK=y</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="kasan-kernel-address-sanitizer">KASAN (Kernel Address Sanitizer)</h4>
+						<pre class="c">
+// How KASAN detects out-of-bounds:
+// Every slab allocation is surrounded by redzones (poisoned memory).
+// KASAN inserts checks before every memory access at compile time.
+
+// Original code:
+void buggy(char *buf) {
+    buf[256] = &#39;X&#39;;  // buf is only 128 bytes
+}
+
+// KASAN-instrumented (conceptual):
+void buggy(char *buf) {
+    if (kasan_check_write(buf + 256, 1))  // ← checks shadow byte
+        kasan_report(...);                 // ← reports bug if poisoned
+    buf[256] = &#39;X&#39;;
+}
+						</pre>
+						<pre class="bash">
+# Check if current kernel has KASAN
+zcat /proc/config.gz 2&gt;/dev/null | grep KASAN
+grep CONFIG_KASAN /boot/config-$(uname -r) 2&gt;/dev/null
+
+# KASAN output example in dmesg:
+dmesg | grep -A10 &#39;BUG: KASAN:&#39;
+# BUG: KASAN: slab-out-of-bounds in my_function+0x37/0x80
+# Write of size 1 at addr ffff88810a0a8000 by task test/1234
+
+# KFENCE samples
+dmesg | grep -i kfence
+
+# UBSAN reports
+dmesg | grep &#39;UBSAN:&#39;
+
+# LOCKDEP reports
+dmesg | grep &#39;possible circular locking dependency&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="the-kernel-log-buffer-and-dmesg">The Kernel Log Buffer and dmesg</h3>
+						<pre class="bash">
+# Kernel log buffer size and content
+cat /sys/module/printk/parameters/log_buf_len
+cat /proc/sys/kernel/printk
+# 4 values: console_loglevel, default_message_loglevel,
+#           minimum_console_loglevel, default_console_loglevel
+
+# Read kernel log (dmesg)
+dmesg --level=err,warn                    # Only errors and warnings
+dmesg --follow                            # Real-time tail
+dmesg --clear                             # Clear the kernel ring buffer
+dmesg --time-format iso                   # ISO 8601 timestamps
+dmesg --facility=kern                     # Kernel facility only
+
+# Through journalctl
+journalctl -k --no-pager                  # Kernel messages
+journalctl -k -b -1                       # Previous boot
+journalctl -k --since &#34;10 minutes ago&#34;
+
+# Direct access to the ring buffer
+cat /dev/kmsg                              # Follow new messages
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Build the container and bring up a QEMU plus GDB session. The image bundles
+							<code>qemu-system-x86</code>
+							,
+							<code>gdb</code>
+							, a
+							<code>/lab/.gdbinit</code>
+							with custom register helpers, and a quick-reference script at
+							<code>/lab/qemu_debug_guide.sh</code>
+							. Boot a debug kernel under QEMU with the stub frozen at startup, break at
+							<code>start_kernel</code>
+							,
+							and inspect the boot state.
+						</p>
+						<p><a href="/wiki/articles/sysinternals/kernel-debugging.Containerfile">kernel-debugging.Containerfile</a></p>
+						<pre class="bash">
+podman build -t kernel-debug-lab -f kernel-debugging.Containerfile .
+podman run -it --rm kernel-debug-lab
+						</pre>
+						<p>Inside the container:</p>
+						<pre class="bash">
+# 1. Read the built-in quick reference and GDB helpers
+/lab/qemu_debug_guide.sh
+cat /lab/.gdbinit
+
+# 2. Connect GDB to a VM started with -s -S
+gdb -x /lab/.gdbinit /path/to/vmlinux
+# (gdb) hbreak start_kernel
+# (gdb) continue
+# (gdb) info registers
+# (gdb) bt
+# (gdb) p/x $cr3
+# (gdb) p/x $cr2
+						</pre>
+						<p>
+							Extend the session: break on
+							<code>do_syscall_64</code>
+							, list
+							<code>/proc/kallsyms</code>
+							to find the address of
+							a handler, and set a hardware breakpoint on it.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a href="/wiki/articles/sysinternals/kernel-debugging.Containerfile">kernel-debugging.Containerfile</a> - QEMU + GDB setup with example crash dump</li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/kernel/debug" target="_blank">kernel/debug/</a> - KDB and KGDB source</li>
+							<li><a class="icon-website" href="https://docs.kernel.org/admin-guide/kdump/kdump.html" target="_blank">Documentation/admin-guide/kdump/</a></li>
+							<li><a class="icon-github" href="https://github.com/crash-utility/crash" target="_blank">crash-utility GitHub</a></li>
+							<li><a class="icon-github" href="https://github.com/osandov/drgn" target="_blank">drgn GitHub</a></li>
+							<li><a class="icon-website" href="https://docs.kernel.org/dev-tools/kgdb.html" target="_blank">Using kgdb, kdb and the kernel debugger internals</a></li>
+							<li><a class="icon-website" href="https://docs.kernel.org/dev-tools/kasan.html" target="_blank">KASAN documentation</a></li>
+							<li><a class="icon-website" href="https://docs.kernel.org/dev-tools/kcsan.html" target="_blank">KCSAN documentation</a></li>
+							<li><a class="icon-website" href="https://docs.kernel.org/admin-guide/bug-hunting.html" target="_blank">Linux Kernel Oops - debugging</a></li>
+							<li><a class="icon-website" href="https://docs.kernel.org/dev-tools/gdb-kernel-debugging.html" target="_blank">GDB with QEMU - kernel debugging</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

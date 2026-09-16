@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Logging | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Logging">
+		<meta name="keywords" content="auditd, blueteam, journald, logging, rsyslog, siem">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Logging">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Building useful logs for security investigations with systemd-journald, rsyslog, auditd, and applications.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/blueteam/logging.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Logging">
+		<meta name="twitter:description" itemprop="description" content="Building useful logs for security investigations with systemd-journald, rsyslog, auditd, and applications.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#systemd-journald">systemd-journald</a></b>
+					<ul>
+						<li><a href="#configuration">Configuration</a></li>
+						<li><a href="#journalctl-queries">Journalctl Queries</a></li>
+						<li><a href="#forward-sealing-fss">Forward Sealing (FSS)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#rsyslog">rsyslog</a></b>
+					<ul>
+						<li><a href="#facilities-and-priorities">Facilities and Priorities</a></li>
+						<li><a href="#rsyslog-configuration">rsyslog Configuration</a></li>
+						<li><a href="#remote-forwarding">Remote Forwarding</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#auditd">auditd</a></b>
+					<ul>
+						<li><a href="#audit-rules">Audit Rules</a></li>
+						<li><a href="#querying-auditd-logs">Querying auditd Logs</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#application-logging">Application Logging</a></b>
+					<ul>
+						<li><a href="#structured-logging">Structured Logging</a></li>
+						<li><a href="#what-not-to-log">What NOT to Log</a></li>
+						<li><a href="#common-logging-libraries">Common Logging Libraries</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#log-integrity">Log Integrity</a></b>
+					<ul>
+						<li><a href="#forward-sealing-with-journald">Forward Sealing with journald</a></li>
+						<li><a href="#write-once-storage">Write-Once Storage</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#log-retention">Log Retention</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#detection-examples">Detection Examples</a></b>
+					<ul>
+						<li><a href="#brute-force-detection-via-journald">Brute Force Detection via journald</a></li>
+						<li><a href="#suspicious-process-execution-via-auditd">Suspicious Process Execution via auditd</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/blueteam/index.html">Blueteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/blueteam/logging.html">Logging</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="logging">Logging</h2>
+					<p>
+						Building useful logs for security investigations with systemd-journald, rsyslog, auditd, and
+						applications.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Logs are the only record of what actually happened on a system. Without them, an incident becomes
+							a guessing game. A well-configured logging pipeline answers: who did what, from where, at what
+							time, and with what result. The goal is not to log everything - that burns storage and creates
+							noise. The goal is to log the right things, structured for machine querying, with integrity
+							guarantees.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - process creation, signals, capabilities</li>
+							<li><a href="/wiki/articles/fundamentals/system-calls.html">System Calls</a> - syscall interface, strace fundamentals</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="systemd-journald">systemd-journald</h3>
+						<p>
+							Modern Linux distributions run journald as the primary log collector. It captures kernel messages,
+							boot logs, stdout/stderr from services, and syslog messages. Unlike flat files, journald stores
+							structured binary logs with indexed fields.
+						</p>
+						<h4 id="configuration">Configuration</h4>
+						<pre class="bash">
+# /etc/systemd/journald.conf
+[Journal]
+Storage=persistent
+Compress=yes
+Seal=yes
+SystemMaxUse=2G
+SystemKeepFree=500M
+RuntimeMaxUse=200M
+RateLimitIntervalSec=5s
+RateLimitBurst=500
+ForwardToSyslog=yes
+MaxRetentionSec=90day
+						</pre>
+						<p>
+							Key parameters: -
+							<code>Storage=persistent</code>
+							- writes to
+							<code>/var/log/journal</code>
+							; survives reboots -
+							<code>Seal=yes</code>
+							<ul>
+								<li>Forward Secure Sealing (FSS) signs log entries to detect tampering - <code>RateLimitBurst</code> - drops messages if a service exceeds <code>N</code> messages per <code>RateLimitIntervalSec</code> ; critical for noisy services</li>
+								<li><code>MaxRetentionSec</code> - auto-purge logs older than this interval</li>
+							</ul>
+						</p>
+						<h4 id="journalctl-queries">Journalctl Queries</h4>
+						<pre class="bash">
+# View kernel messages since last boot
+journalctl -k -b
+
+# Show all logs from the sshd unit with priority err and above
+journalctl -u sshd -p err
+
+# JSON output for pipeline processing
+journalctl -u nginx --since &#34;2026-06-26 08:00:00&#34; --until &#34;2026-06-26 12:00:00&#34; -o json
+
+# Filter by binary path (all commands executed matching pattern)
+journalctl _COMM=sshd
+
+# Filter by SELinux context
+journalctl _SELINUX_CONTEXT=system_u:system_r:sshd_t:s0
+
+# Follow live, like tail -f
+journalctl -f -u auditd
+
+# Show logs with specific syslog identifier
+journalctl SYSLOG_IDENTIFIER=sshd
+
+# Kernel messages matching pattern
+journalctl -k -g &#34;firewall|netfilter|conntrack&#34;
+
+# Export all logs for forensic export
+journalctl --export &gt; /tmp/forensic-logs.journal
+
+# Check FSS verification status
+journalctl --verify
+						</pre>
+						<h4 id="forward-sealing-fss">Forward Sealing (FSS)</h4>
+						<p>
+							FSS prevents an attacker from modifying logs then claiming they were never written. journald
+							periodically signs the log file with a key pair. Any modification after sealing invalidates
+							the signature.
+						</p>
+						<pre class="bash">
+# Generate FSS key pair (store verification key securely offline)
+journalctl --setup-keys
+
+# Verify logs against FSS keys
+journalctl --verify --verify-key=/etc/verification-key
+
+# Show FSS status of journal files
+journalctl --header | grep -i seal
+						</pre>
+					</section>
+					<section>
+						<h3 id="rsyslog">rsyslog</h3>
+						<p>
+							rsyslog provides the traditional syslog server with modern extensions:
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							/
+							<abbr title="Transport Layer Security">TLS</abbr>
+							transport, message parsing, databases output, and queue-based
+							buffering.
+						</p>
+						<h4 id="facilities-and-priorities">Facilities and Priorities</h4>
+						<p>Syslog messages carry a facility (source subsystem) and priority (severity):</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Facility</th>
+									<th align="center">Code</th>
+									<th align="center">Purpose</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">auth/authpriv</td>
+									<td align="center">4/10</td>
+									<td align="center">Authentication, sudo</td>
+								</tr>
+								<tr>
+									<td align="center">cron</td>
+									<td align="center">9</td>
+									<td align="center">Scheduled jobs</td>
+								</tr>
+								<tr>
+									<td align="center">daemon</td>
+									<td align="center">3</td>
+									<td align="center">Background services</td>
+								</tr>
+								<tr>
+									<td align="center">kern</td>
+									<td align="center">0</td>
+									<td align="center">Kernel messages</td>
+								</tr>
+								<tr>
+									<td align="center">local0-local7</td>
+									<td align="center">16-23</td>
+									<td align="center">Application-defined</td>
+								</tr>
+								<tr>
+									<td align="center">mail</td>
+									<td align="center">2</td>
+									<td align="center">Mail subsystem</td>
+								</tr>
+								<tr>
+									<td align="center">syslog</td>
+									<td align="center">5</td>
+									<td align="center">syslogd itself</td>
+								</tr>
+								<tr>
+									<td align="center">user</td>
+									<td align="center">1</td>
+									<td align="center">User-level messages</td>
+								</tr>
+							</tbody>
+						</table>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Priority</th>
+									<th align="center">Value</th>
+									<th align="center">Meaning</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">emerg</td>
+									<td align="center">0</td>
+									<td align="center">System unusable</td>
+								</tr>
+								<tr>
+									<td align="center">alert</td>
+									<td align="center">1</td>
+									<td align="center">Immediate action</td>
+								</tr>
+								<tr>
+									<td align="center">crit</td>
+									<td align="center">2</td>
+									<td align="center">Critical condition</td>
+								</tr>
+								<tr>
+									<td align="center">err</td>
+									<td align="center">3</td>
+									<td align="center">Error condition</td>
+								</tr>
+								<tr>
+									<td align="center">warning</td>
+									<td align="center">4</td>
+									<td align="center">Warning</td>
+								</tr>
+								<tr>
+									<td align="center">notice</td>
+									<td align="center">5</td>
+									<td align="center">Normal but significant</td>
+								</tr>
+								<tr>
+									<td align="center">info</td>
+									<td align="center">6</td>
+									<td align="center">Informational</td>
+								</tr>
+								<tr>
+									<td align="center">debug</td>
+									<td align="center">7</td>
+									<td align="center">Debug messages</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="rsyslog-configuration">rsyslog Configuration</h4>
+						<pre class="bash">
+# /etc/rsyslog.conf — Central log server example
+
+# Modules
+module(load=&#34;imuxsock&#34;)          # local system logging
+module(load=&#34;imklog&#34;)            # kernel logging
+module(load=&#34;imtcp&#34;)             # TCP receiver
+input(type=&#34;imtcp&#34; port=&#34;514&#34;)
+
+# Templates — structured JSON output
+template(name=&#34;jsonFormat&#34; type=&#34;list&#34;) {
+    constant(value=&#34;{&#34;)
+    constant(value=&#34;\&#34;@timestamp\&#34;:\&#34;&#34;)  property(name=&#34;timereported&#34; dateFormat=&#34;rfc3339&#34;)
+    constant(value=&#34;\&#34;,\&#34;host\&#34;:\&#34;&#34;)     property(name=&#34;hostname&#34;)
+    constant(value=&#34;\&#34;,\&#34;facility\&#34;:\&#34;&#34;) property(name=&#34;syslogfacility-text&#34;)
+    constant(value=&#34;\&#34;,\&#34;severity\&#34;:\&#34;&#34;) property(name=&#34;syslogseverity-text&#34;)
+    constant(value=&#34;\&#34;,\&#34;program\&#34;:\&#34;&#34;)  property(name=&#34;programname&#34;)
+    constant(value=&#34;\&#34;,\&#34;message\&#34;:\&#34;&#34;)  property(name=&#34;msg&#34; format=&#34;json&#34;)
+    constant(value=&#34;\&#34;}\n&#34;)
+}
+
+# Ruleset — route by facility.priority
+# Log all auth messages at info+ to a dedicated file
+auth,authpriv.info    /var/log/auth.log
+
+# Log everything except mail at warn+ to syslog
+*.warn;mail.none      /var/log/syslog
+
+# Send all local6 (custom app) messages to SIEM via TCP
+local6.*  @@central-siem.example.com:514;jsonFormat
+
+# Drop noisy cron debug messages
+cron.debug  ~
+						</pre>
+						<h4 id="remote-forwarding">Remote Forwarding</h4>
+						<pre class="bash">
+# Send to remote rsyslog server over TCP/TLS
+# /etc/rsyslog.d/50-remote.conf
+
+$DefaultNetstreamDriverCAFile /etc/ssl/certs/ca-cert.pem
+$ActionSendStreamDriver gtls
+$ActionSendStreamDriverMode 1
+$ActionSendStreamDriverAuthMode x509/name
+$ActionSendStreamDriverPermittedPeer logserver.example.com
+
+*.* @@(o)logserver.example.com:6514;jsonFormat
+						</pre>
+					</section>
+					<section>
+						<h3 id="auditd">auditd</h3>
+						<p>
+							The Linux audit subsystem hooks into syscalls and records events based on user-defined rules.
+							Unlike syslog, auditd captures the precise arguments of every monitored operation.
+						</p>
+						<h4 id="audit-rules">Audit Rules</h4>
+						<pre class="bash">
+# /etc/audit/rules.d/99-security.rules
+
+# Delete all existing rules
+-D
+
+# Set buffer size (increase under heavy load)
+-b 8192
+
+# Fail closed — panic if audit daemon cannot write (for high-security)
+-f 2
+
+# Monitor all execve calls (process execution)
+-a always,exit -F arch=b64 -S execve -k process_execution
+-a always,exit -F arch=b32 -S execve -k process_execution
+
+# Monitor writes to /etc/passwd and /etc/shadow
+-w /etc/passwd -p wa -k identity_changes
+-w /etc/shadow -p wa -k identity_changes
+-w /etc/group -p wa -k group_changes
+-w /etc/sudoers -p wa -k sudoers_changes
+
+# Monitor privilege escalation syscalls
+-a always,exit -F arch=b64 -S setuid -S setgid -S setreuid -S setregid -k privilege_change
+
+# Monitor access to sensitive SSH keys
+-w /root/.ssh -p rwa -k ssh_key_access
+-w /home -p rwa -k home_access
+
+# Monitor changes to cron directories
+-w /etc/cron.d -p wa -k cron_changes
+-w /etc/cron.daily -p wa -k cron_changes
+-w /var/spool/cron -p wa -k cron_changes
+
+# Monitor suspicious kernel module loading
+-w /sbin/insmod -p x -k module_load
+-w /sbin/modprobe -p x -k module_load
+-w /sbin/rmmod -p x -k module_unload
+
+# Track 64-bit syscalls that modify file attributes
+-a always,exit -F arch=b64 -S chmod -S fchmod -S fchmodat -k file_permission_change
+
+# Network configuration changes
+-w /etc/hosts -p wa -k network_config
+-w /etc/resolv.conf -p wa -k network_config
+
+# Make rules immutable (requires reboot to change)
+-e 2
+						</pre>
+						<h4 id="querying-auditd-logs">Querying auditd Logs</h4>
+						<pre class="bash">
+# Search for execve events by key
+ausearch -k process_execution
+
+# Show events for a specific time range
+ausearch -ts 06/26/2026 08:00:00 -te 06/26/2026 12:00:00 -k process_execution
+
+# Filter by UID
+ausearch -ua root -k privilege_change
+
+# Find failed events (exit code != 0)
+ausearch --success no
+
+# Generate a summary report of authentication events
+aureport -au
+
+# Produce a report of all executable invocations
+aureport -x --summary
+
+# Show file access summary
+aureport -f --summary
+
+# List all syscall invocations for a PID
+ausearch -p 1234 --raw | grep &#34;type=SYSCALL&#34;
+
+# Parse audit.log with ausearch for failed exec attempts
+ausearch -m SYSCALL -sc execve --success no
+
+# JSON output (modern auditd)
+ausearch -k process_execution --format text
+						</pre>
+					</section>
+					<section>
+						<h3 id="application-logging">Application Logging</h3>
+						<h4 id="structured-logging">Structured Logging</h4>
+						<p>
+							Plain text logs are miserable to query. Use structured formats -
+							<abbr title="JavaScript Object Notation">JSON</abbr>
+							is the industry default. Every log entry should carry consistent fields:
+						</p>
+						<pre class="json">
+{
+  &#34;timestamp&#34;: &#34;2026-06-26T10:30:00.123Z&#34;,
+  &#34;severity&#34;: &#34;info&#34;,
+  &#34;service&#34;: &#34;auth-api&#34;,
+  &#34;correlation_id&#34;: &#34;a1b2c3d4-e5f6-7890-abcd-ef1234567890&#34;,
+  &#34;user_id&#34;: &#34;jdoe&#34;,
+  &#34;source_ip&#34;: &#34;192.168.1.100&#34;,
+  &#34;action&#34;: &#34;login&#34;,
+  &#34;result&#34;: &#34;success&#34;,
+  &#34;duration_ms&#34;: 45,
+  &#34;message&#34;: &#34;user jdoe authenticated via password&#34;
+}
+						</pre>
+						<p>
+							Key fields every log should include: -
+							<code>correlation_id</code>
+							- links log entries across services
+							for a single request -
+							<code>user_id</code>
+							/
+							<code>session_id</code>
+							- ties actions to an identity -
+							<code>source_ip</code>
+							<ul>
+								<li>origin of the request (respect privacy laws) - <code>action</code> - standard, machine-readable action name</li>
+								<li><code>result</code> - success, failure, denied, error</li>
+								<li><code>duration_ms</code> - performance metric that also reveals timing anomalies</li>
+							</ul>
+						</p>
+						<h4 id="what-not-to-log">What NOT to Log</h4>
+						<pre class="plaintext">
+// NEVER log these fields — they create a secondary secrets store:
+secrets, passwords, tokens, api_keys, session cookies, PII (SSN, credit cards),
+auth headers (Authorization: Bearer ...), private keys, biometric data
+						</pre>
+						<h4 id="common-logging-libraries">Common Logging Libraries</h4>
+						<pre class="c">
+// syslog(3) — POSIX standard
+#include &lt;syslog.h&gt;
+
+openlog(&#34;myapp&#34;, LOG_PID | LOG_NDELAY, LOG_LOCAL6);
+syslog(LOG_INFO, &#34;user %s authenticated from %s&#34;, username, source_ip);
+closelog();
+						</pre>
+						<pre class="python">
+import logging
+import json
+
+logger = logging.getLogger(&#34;auth-api&#34;)
+handler = logging.StreamHandler()
+formatter = logging.Formatter(
+    &#39;{&#34;timestamp&#34;:&#34;%(asctime)s&#34;,&#34;severity&#34;:&#34;%(levelname)s&#34;,&#39;
+    &#39;&#34;service&#34;:&#34;auth-api&#34;,&#34;message&#34;:%(message)s}&#39;
+)
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+
+logger.info(json.dumps({
+    &#34;action&#34;: &#34;login&#34;,
+    &#34;user_id&#34;: &#34;jdoe&#34;,
+    &#34;source_ip&#34;: &#34;192.168.1.100&#34;,
+    &#34;result&#34;: &#34;success&#34;
+}))
+						</pre>
+					</section>
+					<section>
+						<h3 id="log-integrity">Log Integrity</h3>
+						<h4 id="forward-sealing-with-journald">Forward Sealing with journald</h4>
+						<p>
+							Already covered above. The principle: once a log entry is sealed, any subsequent modification
+							is detectable. Combine with an offline verification key stored on a different system.
+						</p>
+						<h4 id="write-once-storage">Write-Once Storage</h4>
+						<p>For high-assurance environments, forward logs to write-once storage:</p>
+						<pre class="bash">
+# rsyslog → remote server that appends to WORM filesystem
+# ZFS snapshot with readonly flag prevents tampering
+zfs snapshot tank/logs@hourly-$(date +%Y%m%d-%H%M)
+zfs set readonly=on tank/logs
+
+# Or use a dedicated log server that immediately forwards to S3 with object lock
+aws s3 cp /var/log/audit/audit.log s3://log-archive/ \
+    --storage-class DEEP_ARCHIVE \
+    --object-lock-mode GOVERNANCE \
+    --object-lock-retain-until-date 2036-06-26
+						</pre>
+					</section>
+					<section>
+						<h3 id="log-retention">Log Retention</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Tier</th>
+									<th align="center">Retention</th>
+									<th align="center">Storage</th>
+									<th align="center">Purpose</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Hot</td>
+									<td align="center">7-30 days</td>
+									<td align="center">SSD, local</td>
+									<td align="center">Active investigation, dashboards</td>
+								</tr>
+								<tr>
+									<td align="center">Warm</td>
+									<td align="center">3-12 months</td>
+									<td align="center">HDD, NAS</td>
+									<td align="center">Retrospective hunting</td>
+								</tr>
+								<tr>
+									<td align="center">Cold</td>
+									<td align="center">1-7 years</td>
+									<td align="center">Object storage, tape</td>
+									<td align="center">Compliance, legal hold</td>
+								</tr>
+								<tr>
+									<td align="center">Frozen</td>
+									<td align="center">7+ years</td>
+									<td align="center">Offline tape, Glacier</td>
+									<td align="center">Regulatory minimums</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							Retention is dictated by regulatory frameworks (
+							<abbr title="Peripheral Component Interconnect">PCI</abbr>
+							-DSS:
+							1 year, H
+							<abbr title="Internet Protocol">IP</abbr>
+							AA: 6 years, GDPR: "no longer than necessary"). Over-retention
+							is a legal liability - if you don't have it, you can't be compelled to produce it.
+						</p>
+					</section>
+					<section>
+						<h3 id="detection-examples">Detection Examples</h3>
+						<h4 id="brute-force-detection-via-journald">Brute Force Detection via journald</h4>
+						<pre class="bash">
+# Count failed SSH attempts per IP in the last hour
+journalctl -u sshd --since &#34;1 hour ago&#34; | \
+    grep &#34;Failed password&#34; | \
+    awk &#39;{print $(NF-3)}&#39; | sort | uniq -c | sort -rn | head -20
+
+# Monitor for sudo failures
+journalctl _COMM=sudo --since &#34;1 hour ago&#34; | grep &#34;incorrect password&#34;
+						</pre>
+						<h4 id="suspicious-process-execution-via-auditd">Suspicious Process Execution via auditd</h4>
+						<pre class="bash">
+# Find execve calls from /tmp or /dev/shm (common malware staging)
+ausearch -k process_execution --raw | \
+    grep &#39;type=EXECVE&#39; | \
+    grep -E &#39;a[0-9]+=&#34;/tmp/|a[0-9]+=&#34;/dev/shm/&#39; | \
+    ausearch --format interpret
+
+# Detect reverse shells — processes with /bin/sh and socket in argv
+ausearch -k process_execution | grep -E &#34;bash -i|nc -e|/dev/tcp&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Practice log triage in the container: find the failed
+							<abbr title="Secure Shell">SSH</abbr>
+							authentications, the
+							auditd
+							<code>execve</code>
+							events from
+							<code>/tmp</code>
+							, and the privilege-escalation attempt.
+						</p>
+						<p><a href="/wiki/articles/blueteam/logging.Containerfile">logging.Containerfile</a></p>
+						<pre class="bash">
+podman build -t logging-ctf -f logging.Containerfile .
+podman run -it --rm --cap-add AUDIT_WRITE --cap-add AUDIT_CONTROL logging-ctf
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/journald.conf.5" target="_blank">man: journald.conf(5)</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/journalctl.1" target="_blank">man: journalctl(1)</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/auditd.8" target="_blank">man: auditd(8)</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/audit.rules.7" target="_blank">man: audit.rules(7)</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/rsyslog.conf.5" target="_blank">man: rsyslog.conf(5)</a></li>
+							<li><a class="icon-website" href="https://wiki.archlinux.org/title/Systemd-journald" target="_blank">Arch Wiki: systemd-journald</a></li>
+							<li><a class="icon-website" href="https://wiki.archlinux.org/title/Audit_framework" target="_blank">Arch Wiki: Audit framework</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

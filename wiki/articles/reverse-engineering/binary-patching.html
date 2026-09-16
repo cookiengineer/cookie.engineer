@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Binary Patching | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Binary Patching">
+		<meta name="keywords" content="binary-patching, elf, ghidra, hex-editing, radare2, reverse-engineering">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Binary Patching">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Modifying executable machine code to disable checks, redirect execution, inject code, and verify reverse engineering findings.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/reverse-engineering/binary-patching.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Binary Patching">
+		<meta name="twitter:description" itemprop="description" content="Modifying executable machine code to disable checks, redirect execution, inject code, and verify reverse engineering findings.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-offset-problem">The Offset Problem</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#opcode-construction">Opcode Construction</a></b>
+					<ul>
+						<li><a href="#assembly-machine-code-with-nasm">Assembly -> machine code with nasm</a></li>
+						<li><a href="#quick-single-instruction-encoding">Quick single-instruction encoding</a></li>
+						<li><a href="#tool-assisted-patching">Tool-Assisted Patching</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ghidra-patching">Ghidra Patching</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#radare2-patching">Radare2 Patching</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#manual-byte-patching">Manual Byte Patching</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#common-patch-patterns">Common Patch Patterns</a></b>
+					<ul>
+						<li><a href="#nop-sled">NOP Sled</a></li>
+						<li><a href="#corresponding-python-patch-commands">Corresponding python patch commands</a></li>
+						<li><a href="#conditional-jump-inversion">Conditional Jump Inversion</a></li>
+						<li><a href="#return-immediate">Return Immediate</a></li>
+						<li><a href="#jump-over">Jump Over</a></li>
+						<li><a href="#string-substitution">String Substitution</a></li>
+						<li><a href="#jump-table-modification">Jump Table Modification</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#adding-code-with-caves">Adding Code with Caves</a></b>
+					<ul>
+						<li><a href="#sources-of-usable-space">Sources of usable space</a></li>
+						<li><a href="#code-cave-injection-workflow">Code cave injection workflow</a></li>
+						<li><a href="#cave-locating-in-python">Cave locating in python</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#modifying-plt-and-got">Modifying PLT and GOT</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#patching-segment-permissions">Patching Segment Permissions</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification">Verification</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#common-pitfalls">Common Pitfalls</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#displacement-calculation">Displacement Calculation</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#patching-in-podman">Patching in Podman</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#patching-static-binaries">Patching Static Binaries</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#patching-go-binaries">Patching Go Binaries</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#patching-with-objcopy">Patching With objcopy</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#writing-a-patch-file-pwnf">Writing a Patch File (PWNF)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/reverse-engineering/index.html">Reverse Engineering</a></li>
+						<li aria-current="page"><a href="/wiki/articles/reverse-engineering/binary-patching.html">Binary Patching</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="binary-patching">Binary Patching</h2>
+					<p>
+						Modifying executable machine code to disable checks, redirect execution, inject code, and verify
+						reverse engineering findings.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Binary patching modifies a compiled executable's machine code to change its runtime behavior.
+							It is the definitive way to verify a reverse engineering hypothesis: if the patched binary behaves
+							exactly as predicted, the analysis was correct. After reading, you can translate a virtual address
+							to a file offset, build replacement opcodes, patch ELF binaries with Ghidra, radare2, or raw
+							bytes, inject code into caves, and confirm every change with objdump.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/elf.html">/wiki/articles/fundamentals/elf.html</a> - ELF binary structure, sections, segments, load addresses</li>
+							<li><a href="/wiki/articles/reverse-engineering/ghidra-fundamentals.html">articles/reverse-engineering/ghidra-fundamentals.html</a> - navigating and analyzing binaries in Ghidra</li>
+							<li><a href="/wiki/articles/reverse-engineering/reading-assembly.html">/wiki/articles/reverse-engineering/reading-assembly.html</a> - x86/x64 instruction encoding fundamentals</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-offset-problem">The Offset Problem</h3>
+						<p>
+							Disassemblers display virtual addresses (VAs) - addresses the code occupies when loaded into
+							memory. An ELF binary stores code at file offsets that differ from VAs. The mapping is defined
+							per
+							<code>PT_LOAD</code>
+							program header by its
+							<code>p_offset</code>
+							and
+							<code>p_vaddr</code>
+							:
+						</p>
+						<pre class="plaintext">
+file_offset = p_offset + (virtual_address - p_vaddr)
+						</pre>
+						<p>
+							A segment's p_offset (file offset) and p_vaddr (virtual address) define the mapping. The
+							<code>.text</code>
+							section typically has
+							<code>p_vaddr</code>
+							aligned to a page boundary while
+							<code>p_offset</code>
+							aligns to a smaller
+							sector boundary. For a typical binary:
+						</p>
+						<pre class="bash">
+$ readelf -l /bin/ls | grep -A1 LOAD
+  LOAD           0x0000000000000000 0x0000000000000000 0x0000000000000000
+                 0x0000000000003d40 0x0000000000003d40  R E    0x1000
+  LOAD           0x0000000000004000 0x0000000000004000 0x0000000000004000
+                 0x0000000000004b38 0x0000000000004b38  RW     0x1000
+						</pre>
+						<p>
+							The first LOAD segment (RE: read+execute) maps file offset 0x00 to virtual address 0x00. The
+							second LOAD segment maps file offset 0x4000 to virtual address 0x4000. Here
+							<code>p_offset</code>
+							equals
+							<code>p_vaddr</code>
+							for both segments, so the two addresses coincide. This binary is a non-PIE executable:
+						</p>
+						<pre class="bash">
+$ readelf -h /bin/ls | grep Type
+  Type:                              EXEC (Executable file)
+						</pre>
+						<p>
+							For PIE (Position Independent Executable) binaries the base virtual address is still typically
+							0x0, and the actual load address is chosen at runtime by ASLR. When patching, you always work
+							with the static mapping derived from the program headers, never the runtime address.
+						</p>
+						<p>Compute the file offset for a given virtual address:</p>
+						<pre class="bash">
+#!/bin/bash
+# offset_calc.sh - compute file offset from virtual address
+BINARY=&#34;$1&#34;
+VA=&#34;$2&#34;
+
+# Get .text section details
+readelf -S &#34;$BINARY&#34; | awk -v va=&#34;$VA&#34; &#39;
+/\.text/ {
+    file_off = strtonum(&#34;0x&#34; $5);
+    vaddr    = strtonum(&#34;0x&#34; $4);
+    offset   = file_off + (strtonum(va) - vaddr);
+    printf &#34;File offset: 0x%x\n&#34;, offset;
+    exit;
+}&#39;
+						</pre>
+						<p>
+							Ghidra automates this: Window -> Memory Map shows every section's file offset and
+							<abbr title="Virtual Machine">VM</abbr>
+							A mapping. Radare2 with
+							<code>iS</code>
+							lists sections;
+							<code>?v 0xaddress</code>
+							in conjunction with
+							<code>S</code>
+							gives you
+							offset calculations.
+						</p>
+					</section>
+					<section>
+						<h3 id="opcode-construction">Opcode Construction</h3>
+						<p>Once you know the target offset, you need replacement bytes. Several paths:</p>
+						<h4 id="assembly-machine-code-with-nasm">Assembly -> machine code with nasm</h4>
+						<pre class="bash">
+echo &#39;nop; nop; nop; nop; ret&#39; \
+  | nasm -f bin -o /dev/stdout - \
+  | xxd -p
+# Output: 90909090c3
+						</pre>
+						<p>
+							This produces raw opcodes without ELF headers (
+							<code>-f bin</code>
+							). The
+							<code>-f bin</code>
+							flag tells nasm to
+							emit flat binary output - exactly the bytes you will inject.
+						</p>
+						<h4 id="quick-single-instruction-encoding">Quick single-instruction encoding</h4>
+						<pre class="bash">
+nasm -f bin -o /dev/stdout - &lt;&lt;&lt; &#39;jmp short 0x04&#39;
+# Output: eb02
+						</pre>
+						<h4 id="tool-assisted-patching">Tool-Assisted Patching</h4>
+						<p>Tool-assisted patching avoids manual encoding:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Tool</th>
+									<th align="center">Patching Interface</th>
+									<th align="center">Output Format</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Ghidra</td>
+									<td align="center">Right-click -> Patch Instruction</td>
+									<td align="center">Export Program -> ELF</td>
+								</tr>
+								<tr>
+									<td align="center">radare2</td>
+									<td align="center"><code>r2 -w</code>,<code>wa</code>command</td>
+									<td align="center">In-place modification</td>
+								</tr>
+								<tr>
+									<td align="center">objcopy</td>
+									<td align="center"><code>--change-section-address</code>+<code>xxd</code></td>
+									<td align="center">External modification</td>
+								</tr>
+								<tr>
+									<td align="center">hexedit/bless</td>
+									<td align="center">Direct byte editing</td>
+									<td align="center">In-place modification</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="ghidra-patching">Ghidra Patching</h3>
+						<ol>
+							<li>Open binary in Ghidra and perform auto-analysis</li>
+							<li>Navigate to the instruction you want to modify in the Listing window</li>
+							<li>Right-click the instruction -> <b>Patch Instruction</b></li>
+							<li>Type the new assembly (e.g., <code>NOP; NOP; RET</code> or <code>JMP 0x401234</code> )</li>
+							<li>Ghidra encodes the instruction in real-time and shows the new bytes</li>
+							<li>Apply multiple patches as needed across the binary</li>
+							<li><b>File -> Export Program -> Original File</b> (select "ELF" as format)</li>
+							<li>Patched binary is written to the specified output path</li>
+						</ol>
+						<p>
+							Ghidra handles offset calculations and opcode encoding internally. It rejects invalid assembly
+							immediately. For conditional branch inversions, Ghidra supports the full GNU assembler syntax:
+						</p>
+						<pre class="x86asm">
+; Original: jne &lt;target&gt;   (0x75 0xXX)
+; Patch:    je  &lt;target&gt;   (0x74 0xXX)
+						</pre>
+						<p>
+							Since both instructions are two bytes, no size mismatch occurs. Ghidra preserves all section
+							headers, symbol tables, and relocation entries - the binary remains structurally valid.
+						</p>
+					</section>
+					<section>
+						<h3 id="radare2-patching">Radare2 Patching</h3>
+						<p>Radare2 operates directly on the file in write mode:</p>
+						<pre class="bash">
+# Open in write mode with analysis
+r2 -Aw ./target_binary
+
+# Inside r2:
+&gt; aaa                          # Analyze all
+&gt; s sym.check_license          # Seek to target function
+&gt; pdf                          # Print disassembly of function
+&gt; s 0x00401234                 # Seek to specific address
+&gt; wa nop;nop;nop;nop;nop      # Write assembly (5 NOPs)
+&gt; wx 9090909090                # Write raw hex bytes (alternative)
+&gt; wa jmp 0x00401250            # Write a jump
+&gt; q                            # Quit - file is patched in place
+						</pre>
+						<p>Key radare2 commands:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Command</th>
+									<th align="center">Purpose</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>wa &lt;assembly&gt;</code></td>
+									<td align="center">Write assembly instruction(s)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>wx &lt;hex&gt;</code></td>
+									<td align="center">Write raw hex bytes</td>
+								</tr>
+								<tr>
+									<td align="center"><code>woo &lt;value&gt;</code></td>
+									<td align="center">Write octal value</td>
+								</tr>
+								<tr>
+									<td align="center"><code>wv &lt;value&gt;</code></td>
+									<td align="center">Write value at offset</td>
+								</tr>
+								<tr>
+									<td align="center"><code>wz &lt;string&gt;</code></td>
+									<td align="center">Write zero-terminated string</td>
+								</tr>
+								<tr>
+									<td align="center"><code>ws &lt;string&gt;</code></td>
+									<td align="center">Write string at current offset</td>
+								</tr>
+								<tr>
+									<td align="center"><code>wxf &lt;file&gt; @ &lt;off&gt;</code></td>
+									<td align="center">Write file contents at offset</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							Radare2's
+							<code>wa</code>
+							command uses r2's internal assembler (rasm2). Test your assembly independently:
+						</p>
+						<pre class="bash">
+rasm2 -d 9090909090          # Disassemble: nop; nop; nop; nop; nop
+rasm2 &#39;push rbp&#39;             # Assemble: 55
+rasm2 -a x86 -b 64 &#39;nop; nop; ret&#39;
+# Output: 9090c3
+						</pre>
+					</section>
+					<section>
+						<h3 id="manual-byte-patching">Manual Byte Patching</h3>
+						<p>
+							For full control, patch at the byte level using
+							<code>dd</code>
+							or python. Compute the file offset, then
+							overwrite:
+						</p>
+						<pre class="bash">
+# xxd-based workflow - edit hex dump as text
+xxd target_binary &gt; hexdump.txt
+vim hexdump.txt               # Edit hex bytes manually
+xxd -r hexdump.txt &gt; patched_binary
+chmod +x patched_binary
+						</pre>
+						<p>
+							The xxd workflow is error-prone because you must keep the hex dump aligned. A python script
+							is safer:
+						</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;
+binary_patcher.py - apply hex patches to ELF binary by virtual address.
+
+Usage: python3 binary_patcher.py &lt;binary&gt; &lt;va&gt; &lt;hex_bytes&gt; [output]
+Example: python3 binary_patcher.py ./target 0x401234 909090 out
+&#34;&#34;&#34;
+
+import sys
+import struct
+
+def section_for_va(data, va):
+    &#34;&#34;&#34;Locate the segment header containing a given virtual address.&#34;&#34;&#34;
+    # ELF header: e_phoff at offset 0x20 (64-bit) or 0x1c (32-bit)
+    ei_class = data[4]  # 1=32-bit, 2=64-bit
+    if ei_class == 2:
+        (e_phoff, e_phentsize, e_phnum) = struct.unpack_from(&#39;&lt;QQH&#39;, data, 0x20)
+        phdr_size = 56
+        is_64 = True
+    else:
+        (e_phoff, e_phentsize, e_phnum) = struct.unpack_from(&#39;&lt;IIH&#39;, data, 0x1c)
+        phdr_size = 32
+        is_64 = False
+
+    for i in range(e_phnum):
+        off = e_phoff + i * e_phentsize
+        p_type = struct.unpack_from(&#39;&lt;I&#39;, data, off)[0]
+        if is_64:
+            (p_type, p_flags, p_offset, p_vaddr,
+             p_paddr, p_filesz, p_memsz, p_align) = struct.unpack_from(&#39;&lt;IIQQQQQQ&#39;, data, off)
+        else:
+            (p_type, p_offset, p_vaddr, p_paddr,
+             p_filesz, p_memsz, p_flags, p_align) = struct.unpack_from(&#39;&lt;IIIIIIII&#39;, data, off)
+
+        if p_type == 1:  # PT_LOAD
+            if p_vaddr &lt;= va &lt; p_vaddr + p_memsz:
+                return p_offset, p_vaddr, p_filesz, p_memsz
+
+    return None
+
+def patch_binary(filepath, va, hex_bytes, output_path):
+    with open(filepath, &#39;rb&#39;) as f:
+        data = bytearray(f.read())
+
+    payload = bytes.fromhex(hex_bytes)
+    result = section_for_va(data, va)
+
+    if result is None:
+        print(f&#34;[-] Virtual address 0x{va:x} not found in any PT_LOAD segment&#34;)
+        sys.exit(1)
+
+    p_offset, p_vaddr, p_filesz, p_memsz = result
+    file_offset = p_offset + (va - p_vaddr)
+
+    if file_offset + len(payload) &gt; len(data):
+        print(f&#34;[-] Patch extends beyond file end (offset 0x{file_offset:x}, len {len(payload)})&#34;)
+        sys.exit(1)
+
+    print(f&#34;[+] Patching VA 0x{va:x} -&gt; file offset 0x{file_offset:x}&#34;)
+    print(f&#34;[+] Original bytes: {data[file_offset:file_offset+len(payload)].hex()}&#34;)
+    print(f&#34;[+] New bytes:      {payload.hex()}&#34;)
+
+    data[file_offset:file_offset + len(payload)] = payload
+
+    with open(output_path, &#39;wb&#39;) as f:
+        f.write(data)
+
+    print(f&#34;[+] Patched binary written to {output_path}&#34;)
+
+if __name__ == &#39;__main__&#39;:
+    if len(sys.argv) &lt; 4:
+        print(f&#34;Usage: {sys.argv[0]} &lt;binary&gt; &lt;va&gt; &lt;hex&gt; [output]&#34;)
+        sys.exit(1)
+    va = int(sys.argv[2], 16)
+    out = sys.argv[4] if len(sys.argv) &gt; 4 else sys.argv[1] + &#39;.patched&#39;
+    patch_binary(sys.argv[1], va, sys.argv[3], out)
+						</pre>
+					</section>
+					<section>
+						<h3 id="common-patch-patterns">Common Patch Patterns</h3>
+						<h4 id="nop-sled">NOP Sled</h4>
+						<p>
+							Replace one or more instructions with
+							<code>NOP</code>
+							(0x90). Use when you want to eliminate a check without
+							altering control flow. For multi-byte instructions, use multi-byte NOPs:
+						</p>
+						<pre class="asm">
+; Single-byte NOP
+nop              ; 90
+
+; Multi-byte NOPs (x86_64):
+xchg eax, eax    ; 87 c0     (2 bytes, register swap NOP)
+lea rax, [rax+0] ; 48 8d 04 25 00 00 00 00  (8 bytes)
+; Intel multi-byte NOP sequence:
+; 66 90           (2 bytes)
+; 0f 1f 00        (3 bytes)
+; 0f 1f 40 00     (4 bytes)
+; 0f 1f 44 00 00  (5 bytes)
+; 66 0f 1f 44 00 00 (6 bytes)
+; 0f 1f 80 00 00 00 00 (7 bytes)
+						</pre>
+						<p>Example: neutralizing a license check:</p>
+						<pre class="asm">
+; Before patching:
+0x401200:  call   check_license   ; e8 ab fe ff ff (5 bytes)
+0x401205:  test   eax, eax        ; 85 c0
+0x401207:  je     0x401300        ; 0f 84 f3 00 00 00 (license invalid jump)
+
+; After NOP sled + force success:
+; Patch call to mov eax,1; nop (3 bytes NOP for remaining):
+0x401200:  mov    eax, 0x1        ; b8 01 00 00 00 (5 bytes)
+0x401205:  test   eax, eax        ; 85 c0 (unchanged)
+0x401207:  jne    0x401300        ; 0f 85 f3 00 00 00 (flip je-&gt;jne)
+						</pre>
+						<h4 id="corresponding-python-patch-commands">Corresponding python patch commands</h4>
+						<pre class="bash">
+python3 binary_patcher.py ./target 0x401200 b801000000 out1
+python3 binary_patcher.py out1 0x401207 0f85f3000000 out2
+						</pre>
+						<h4 id="conditional-jump-inversion">Conditional Jump Inversion</h4>
+						<p>
+							Flip the branch condition - the most surgically precise patch. Since conditional jumps have
+							the same instruction length as their inverses, this never causes offset misalignment.
+						</p>
+						<pre class="x86asm">
+JE  (0x74) &lt;-&gt; JNE (0x75)
+JG  (0x7F) &lt;-&gt; JLE (0x7E)
+JL  (0x7C) &lt;-&gt; JGE (0x7D)
+JA  (0x77) &lt;-&gt; JBE (0x76)
+JB  (0x72) &lt;-&gt; JAE (0x73)
+JS  (0x78) &lt;-&gt; JNS (0x79)
+JO  (0x70) &lt;-&gt; JNO (0x71)
+JP  (0x7A) &lt;-&gt; JNP (0x7B)
+						</pre>
+						<p>Near variants (multi-byte, 0x0F prefix):</p>
+						<pre class="x86asm">
+JNE near  (0x0F 0x85) &lt;-&gt; JE near  (0x0F 0x84)
+JLE near  (0x0F 0x8E) &lt;-&gt; JG near  (0x0F 0x8F)
+JGE near  (0x0F 0x8D) &lt;-&gt; JL near  (0x0F 0x8C)
+JBE near  (0x0F 0x86) &lt;-&gt; JA near  (0x0F 0x87)
+JAE near  (0x0F 0x83) &lt;-&gt; JB near  (0x0F 0x82)
+						</pre>
+						<p>Example - anti-debugging check:</p>
+						<pre class="asm">
+; Before (PTRACE_TRACEME check aborts if debugger present):
+0x401250:  call   ptrace        ; syscall wrapper returns 0 on success
+0x401255:  test   eax, eax
+0x401257:  jns    0x401280      ; if PTRACE failed, jump to abort
+                                 ; (ptrace returns 0 if NOT debugged, -1 if debugged)
+; Patch: flip jns -&gt; js
+0x401257:  js     0x401280      ; now only aborts if NOT debugged
+						</pre>
+						<p>
+							The patch is a single byte: 0x79 -> 0x78 at file offset. This makes the anti-debug check a no-op
+							since the normal path now leads to abort when no debugger is attached.
+						</p>
+						<h4 id="return-immediate">Return Immediate</h4>
+						<p>Force a function to return a specific value by replacing its first instruction:</p>
+						<pre class="asm">
+; Function returning success (1):
+mov  eax, 0x1      ; b8 01 00 00 00
+ret                ; c3
+
+; 6 bytes total. If the original function prologue was:
+push rbp           ; 55
+mov  rbp, rsp      ; 48 89 e5
+; ...
+; Replace first 6 bytes with b8 01 00 00 00 c3
+
+; Function returning failure (0):
+xor  eax, eax      ; 31 c0 (or b8 00 00 00 00)
+ret                ; c3
+						</pre>
+						<p>
+							This is the most common patch for license/auth checks - make
+							<code>check_serial()</code>
+							always return
+							<ol>
+								<li>The remaining function bytes (after the prologue replacement) become dead code that never</li>
+							</ol>
+						</p>
+						<p>executes.</p>
+						<h4 id="jump-over">Jump Over</h4>
+						<p>Insert an unconditional JMP to skip a block of harmful instructions:</p>
+						<pre class="asm">
+; Before - calls dangerous function, then executes normally:
+0x401300:  call   delete_files       ; e8 XX XX XX XX (5 bytes)
+0x401305:  call   exfiltrate_data    ; e8 YY YY YY YY (5 bytes)
+0x40130A:  call   normal_operation   ; e8 ZZ ZZ ZZ ZZ (5 bytes)
+
+; After - JMP straight to normal_operation:
+0x401300:  jmp    0x40130A           ; eb 08 (2 bytes)
+0x401302:  nop                        ; 90
+0x401303:  nop                        ; 90
+0x401304:  nop                        ; 90
+0x401305:  call   exfiltrate_data    ; dead code - never reached
+0x40130A:  call   normal_operation   ; executes directly after jmp
+						</pre>
+						<p>
+							The JMP short (0xEB) displacement = target - (JMP_address + 2). Here: 0x40130A - (0x401300 +
+							2) = 0x08.
+						</p>
+						<h4 id="string-substitution">String Substitution</h4>
+						<p>Replace an inlined string constant to alter behavior:</p>
+						<pre class="asm">
+; Ghidra decompilation reveals:
+execve(&#34;/bin/sh&#34;, argv, envp);
+
+; The string &#34;/bin/sh&#34; sits in .rodata at VA 0x402000.
+; Patch to run a different command (must be same or shorter length):
+; Replace &#34;/bin/sh&#34; -&gt; &#34;/bin/ls&#34; (same 8 bytes with null terminator)
+
+python3 binary_patcher.py ./target 0x402000 2f62696e2f6c7300 ./patched
+						</pre>
+						<p>If the replacement is shorter, pad with nulls. If longer, you need a code cave (see below).</p>
+						<h4 id="jump-table-modification">Jump Table Modification</h4>
+						<p>Switch statements compile to jump tables. Modifying an entry redirects one case:</p>
+						<pre class="asm">
+; Jump table at 0x403000:
+0x403000:  .quad 0x401100  ; case 0
+0x403008:  .quad 0x401200  ; case 1 - the handler you want to skip
+0x403010:  .quad 0x401300  ; case 2
+
+; Redirect case 1 to case 2&#39;s handler:
+python3 binary_patcher.py ./target 0x403008 0030010000000000 ./patched
+						</pre>
+					</section>
+					<section>
+						<h3 id="adding-code-with-caves">Adding Code with Caves</h3>
+						<p>
+							Sometimes you need more space than the original instruction footprint. A code cave is unused
+							space (or newly allocated space) where you place your injected code, then redirect execution
+							to it.
+						</p>
+						<h4 id="sources-of-usable-space">Sources of usable space</h4>
+						<ol>
+							<li><b>Segment padding</b> : ELF segments are page-aligned (0x1000). The gap between section end and page boundary is usable:</li>
+						</ol>
+						<pre class="bash">
+   readelf -S ./target | grep -E &#39;\.text|\.rodata&#39; | awk &#39;{print &#34;0x&#34;$5,&#34;0x&#34;$6}&#39;
+   # If .text ends at 0x1234 and page boundary is 0x2000, the range 0x1234-0x1FFF is padding
+						</pre>
+						<ol>
+							<li><b>Between sections</b> : ELF headers, section header table, and <code>.init</code> often have gaps</li>
+						</ol>
+						<ol>
+							<li><b>Segment expansion</b> : Add a new <abbr title="Penetration Test">PT</abbr> _LOAD segment (requires offset recalculation - advanced)</li>
+						</ol>
+						<ol>
+							<li><b>Section header padding</b> : The <code>.note.gnu.build-id</code> or <code>.comment</code> section can be overwritten (they're informational only)</li>
+						</ol>
+						<h4 id="code-cave-injection-workflow">Code cave injection workflow</h4>
+						<pre class="bash">
+# 1. Find a cave - any region of zero or unused bytes in a PT_LOAD segment:
+r2 -A ./target
+&gt; iS                          # list sections
+&gt; /x 0000000000000000        # find zero-filled regions
+
+# 2. Write your payload at the cave location:
+&gt; s 0x00400180               # seek to cave
+&gt; wa call sym.check_license  # write your injected code
+&gt; wa test eax, eax
+&gt; wa jne 0x00401200
+
+# 3. Redirect original code to jump to cave:
+&gt; s sym.main+0x15            # original call site
+&gt; wa jmp 0x00400180           # redirect to cave
+						</pre>
+						<h4 id="cave-locating-in-python">Cave locating in python</h4>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;find_caves.py - locate code caves in an ELF binary.&#34;&#34;&#34;
+
+import sys
+import struct
+
+def find_caves(filepath, min_size=32):
+    with open(filepath, &#39;rb&#39;) as f:
+        data = f.read()
+
+    # Parse program headers to find PT_LOAD segments
+    ei_class = data[4]
+    if ei_class == 2:  # 64-bit
+        e_phoff = struct.unpack_from(&#39;&lt;Q&#39;, data, 0x20)[0]
+        e_phentsize = struct.unpack_from(&#39;&lt;H&#39;, data, 0x36)[0]
+        e_phnum = struct.unpack_from(&#39;&lt;H&#39;, data, 0x38)[0]
+        phdr_size = 56
+        is_64 = True
+    else:
+        e_phoff = struct.unpack_from(&#39;&lt;I&#39;, data, 0x1c)[0]
+        e_phentsize = struct.unpack_from(&#39;&lt;H&#39;, data, 0x2a)[0]
+        e_phnum = struct.unpack_from(&#39;&lt;H&#39;, data, 0x2c)[0]
+        phdr_size = 32
+        is_64 = False
+
+    for i in range(e_phnum):
+        off = e_phoff + i * e_phentsize
+        p_type = struct.unpack_from(&#39;&lt;I&#39;, data, off)[0]
+        if p_type != 1:  # PT_LOAD only
+            continue
+
+        if is_64:
+            p_offset, p_vaddr, p_filesz = struct.unpack_from(&#39;&lt;QQQ&#39;, data, off + 8)
+            p_flags = struct.unpack_from(&#39;&lt;I&#39;, data, off + 4)[0]
+        else:
+            p_offset, p_vaddr, p_filesz = struct.unpack_from(&#39;&lt;III&#39;, data, off + 4)
+            p_flags = struct.unpack_from(&#39;&lt;I&#39;, data, off + 28)[0]
+
+        # Only executable segments (PF_X = 1)
+        if not (p_flags &amp; 1):
+            continue
+
+        segment_data = data[p_offset:p_offset + p_filesz]
+        # Find zero sequences longer than min_size
+        run = 0
+        for j, byte in enumerate(segment_data):
+            if byte == 0:
+                run += 1
+            else:
+                if run &gt;= min_size:
+                    cave_start = p_offset + j - run
+                    cave_va = p_vaddr + (cave_start - p_offset)
+                    print(f&#34;[+] Cave at VA 0x{cave_va:x}, &#34;
+                          f&#34;file offset 0x{cave_start:x}, &#34;
+                          f&#34;size {run} bytes&#34;)
+                run = 0
+        if run &gt;= min_size:
+            cave_start = p_offset + len(segment_data) - run
+            cave_va = p_vaddr + (cave_start - p_offset)
+            print(f&#34;[+] Cave at VA 0x{cave_va:x}, &#34;
+                  f&#34;file offset 0x{cave_start:x}, &#34;
+                  f&#34;size {run} bytes&#34;)
+
+if __name__ == &#39;__main__&#39;:
+    find_caves(sys.argv[1] if len(sys.argv) &gt; 1 else &#39;a.out&#39;)
+						</pre>
+					</section>
+					<section>
+						<h3 id="modifying-plt-and-got">Modifying PLT and GOT</h3>
+						<p>
+							The Procedure Linkage Table (PLT) and Global Offset Table (GOT) are the dynamic linking trampolines.
+							Patching GOT entries redirects all future calls to a dynamically linked function:
+						</p>
+						<pre class="bash">
+# Find the GOT entry for puts():
+objdump -R ./target | grep puts
+# 0000000000404018 R_X86_64_JUMP_SLOT  puts@GLIBC_2.2.5
+
+# The GOT entry at 0x404018 initially points to the PLT stub resolver.
+# After first call, it holds the actual libc puts address.
+# Patch it to point to a different function (e.g., system):
+
+# Patch: overwrite GOT entry with address of system@plt
+r2 -w ./target
+&gt; s 0x404018
+&gt; wv 0x401040               # write 8-byte little-endian address of system@PLT
+&gt; q
+
+# Now every puts() call in the binary invokes system() instead.
+# puts(&#34;/bin/sh&#34;) -&gt; system(&#34;/bin/sh&#34;)
+						</pre>
+					</section>
+					<section>
+						<h3 id="patching-segment-permissions">Patching Segment Permissions</h3>
+						<p>
+							Some binaries have self-modifying code that reads its own .text via mprotect. You can pre-patch
+							segment flags to RWX to simplify analysis:
+						</p>
+						<pre class="bash">
+# readelf -l target | grep -A1 LOAD
+# LOAD  ... RE  (Read + Execute)
+# Patch the p_flags field: R=4, W=2, X=1. RE=5, RWX=7.
+
+python3 -c &#34;
+import sys
+data = bytearray(open(sys.argv[1], &#39;rb&#39;).read())
+# Find PT_LOAD with PF_X in phdr flags
+# For 64-bit ELF at offset 0x20: e_phoff
+import struct
+phoff = struct.unpack_from(&#39;&lt;Q&#39;, data, 0x20)[0]
+phnum = struct.unpack_from(&#39;&lt;H&#39;, data, 0x38)[0]
+for i in range(phnum):
+    off = phoff + i * 56
+    p_type = struct.unpack_from(&#39;&lt;I&#39;, data, off)[0]
+    p_flags = struct.unpack_from(&#39;&lt;I&#39;, data, off + 4)[0]
+    if p_type == 1 and (p_flags &amp; 1):  # PT_LOAD + executable
+        data[off+4] = 7  # RWX
+        print(f&#39;Patched phdr {i} flags: {p_flags} -&gt; 7 (RWX)&#39;)
+open(sys.argv[2], &#39;wb&#39;).write(data)
+&#34; ./target ./target.rwx
+chmod +x ./target.rwx
+						</pre>
+					</section>
+					<section>
+						<h3 id="verification">Verification</h3>
+						<p>After patching, verify the change took effect and loading integrity remains:</p>
+						<pre class="bash">
+# 1. Dump the patched instruction bytes:
+objdump -d --start-address=0x401200 --stop-address=0x401210 ./patched
+
+# 2. Verify strings are replaced:
+strings ./patched | grep &#39;/bin/&#39;
+
+# 3. Check ELF structural integrity:
+readelf -h ./patched    # ELF header valid?
+readelf -l ./patched    # Program headers OK?
+readelf -S ./patched    # Section headers OK?
+
+# 4. Check the file still loads:
+file ./patched          # Should say &#34;ELF 64-bit executable&#34;
+
+# 5. Run it:
+./patched               # Observe changed behavior
+						</pre>
+					</section>
+					<section>
+						<h3 id="common-pitfalls">Common Pitfalls</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Problem</th>
+									<th align="center">Cause</th>
+									<th align="center">Fix</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Immediate crash (SIGILL)</td>
+									<td align="center">Invalid opcode at patched location</td>
+									<td align="center">Verify hex encoding; run<code>objdump -d</code>on patched binary</td>
+								</tr>
+								<tr>
+									<td align="center">SIGSEGV</td>
+									<td align="center">Jump targets incorrect, or NOP sled too large</td>
+									<td align="center">Check jump displacement calculation</td>
+								</tr>
+								<tr>
+									<td align="center">Patch has no effect</td>
+									<td align="center">Wrong offset; patched dead code or wrong VMA</td>
+									<td align="center">Verify VA-to-offset mapping with readelf sections</td>
+								</tr>
+								<tr>
+									<td align="center">Binary fails to load</td>
+									<td align="center">Corrupted ELF headers or oversized patch</td>
+									<td align="center">Check that patch doesn't extend beyond segment bounds</td>
+								</tr>
+								<tr>
+									<td align="center">Instruction overwritten</td>
+									<td align="center">Patch longer than original instruction</td>
+									<td align="center">Use code cave or multi-byte NOP padding</td>
+								</tr>
+								<tr>
+									<td align="center">Relative jump lands wrong</td>
+									<td align="center">Displacement not recalculated after code shift</td>
+									<td align="center">Recalculate:<code>disp = target - (jmp_addr + jmp_size)</code></td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="displacement-calculation">Displacement Calculation</h3>
+						<p>For relative jumps and calls, the displacement = target_address - (instruction_address + instruction_length):</p>
+						<pre class="python">
+def calc_displacement(target_va, instruction_va, instruction_len):
+    &#34;&#34;&#34;Calculate jmp/call displacement for x86/x86_64.&#34;&#34;&#34;
+    return target_va - (instruction_va + instruction_len)
+
+def encode_jmp32(target_va, instruction_va):
+    &#34;&#34;&#34;Encode a 32-bit relative JMP (5 bytes: E9 + 4-byte displacement).&#34;&#34;&#34;
+    disp = calc_displacement(target_va, instruction_va, 5)
+    if disp &lt; -2147483648 or disp &gt; 2147483647:
+        raise ValueError(&#34;Displacement out of 32-bit range&#34;)
+    return b&#39;\xe9&#39; + struct.pack(&#39;&lt;i&#39;, disp)
+
+def encode_jmp8(target_va, instruction_va):
+    &#34;&#34;&#34;Encode an 8-bit relative JMP (2 bytes: EB + 1-byte displacement).&#34;&#34;&#34;
+    disp = calc_displacement(target_va, instruction_va, 2)
+    if disp &lt; -128 or disp &gt; 127:
+        raise ValueError(&#34;Displacement out of 8-bit range&#34;)
+    return b&#39;\xeb&#39; + struct.pack(&#39;&lt;b&#39;, disp)
+						</pre>
+					</section>
+					<section>
+						<h3 id="patching-in-podman">Patching in Podman</h3>
+						<p>When reversing malware in a podman container, your patched binary is safely contained:</p>
+						<pre class="bash">
+# Create a writable container from a snapshot image
+podman run --rm -it --name malbox alpine:latest /bin/sh
+
+# Inside container: copy binary, patch, test
+cp /tmp/sample /tmp/sample.patched
+xxd /tmp/sample.patched | sed &#39;s/74 05/75 05/&#39; | xxd -r &gt; /tmp/patched
+chmod +x /tmp/patched
+
+# Run and observe in strace
+strace -f -o /tmp/trace.log /tmp/patched
+						</pre>
+						<p>
+							The container isolates filesystem operations and network - if your patch fails and the binary
+							goes haywire, it cannot escape the container namespace.
+						</p>
+					</section>
+					<section>
+						<h3 id="patching-static-binaries">Patching Static Binaries</h3>
+						<p>
+							Stripped binaries lack symbol tables. Ghidra still provides meaningful function labels (FUN_00401200).
+							Radare2 requires address-based navigation:
+						</p>
+						<pre class="bash">
+r2 -Aw ./stripped_binary
+&gt; aaa
+&gt; s 0x00401200     # navigate by address
+&gt; pdf              # disassemble the function
+&gt; wa ret           # patch it
+						</pre>
+					</section>
+					<section>
+						<h3 id="patching-go-binaries">Patching Go Binaries</h3>
+						<p>
+							Go binaries are statically linked with a large runtime. Their function prologues differ (no
+							frame pointer by default). Go uses its own calling convention (stack-based arguments on x86,
+							register-based on ARM64). Patching Go binaries:
+						</p>
+						<pre class="bash">
+# Go binary has a unique section layout
+readelf -S ./go-binary | grep -E &#39;\.text|\.rodata|\.gopclntab&#39;
+
+# Ghidra handles Go ABI natively; patch as usual but test thoroughly
+# Go&#39;s gopclntab is critical for stack unwinding - leave it intact
+						</pre>
+						<p>
+							Patching goroutine-governed functions is safe since goroutines share a flat address space -
+							there are no thread-local complications.
+						</p>
+					</section>
+					<section>
+						<h3 id="patching-with-objcopy">Patching With objcopy</h3>
+						<p>
+							<code>objcopy</code>
+							can extract, modify, and re-insert sections:
+						</p>
+						<pre class="bash">
+# Extract .text section
+objcopy -O binary --only-section=.text ./target text.bin
+
+# Edit text.bin with a hex editor, then reinsert:
+objcopy --update-section .text=text.bin ./target ./patched
+
+# Caveat: objcopy rewrites section table offsets; if your patch
+# changes section size, everything downstream shifts.
+						</pre>
+					</section>
+					<section>
+						<h3 id="writing-a-patch-file-pwnf">Writing a Patch File (PWNF)</h3>
+						<p>For distribution, represent patches as a sequence of offset+bytes:</p>
+						<pre class="plaintext">
+# pwnf format - comment
+@0x401200: b801000000  # mov eax, 1
+@0x401207: 75           # jne (flip from je)
+@0x402000: 2f62696e2f6c7300  # &#34;/bin/ls\0&#34;
+						</pre>
+						<p>A python loader applies these:</p>
+						<pre class="python">
+import re, sys
+
+def apply_pwnf(binary_path, pwnf_path, output_path):
+    with open(binary_path, &#39;rb&#39;) as f:
+        data = bytearray(f.read())
+
+    with open(pwnf_path) as f:
+        for line in f:
+            line = line.split(&#39;#&#39;)[0].strip()
+            if not line or not line.startswith(&#39;@&#39;):
+                continue
+            m = re.match(r&#39;@(0x[0-9a-fA-F]+):\s*([0-9a-fA-F]+)&#39;, line)
+            if not m:
+                continue
+            offset = int(m.group(1), 16)
+            payload = bytes.fromhex(m.group(2))
+            data[offset:offset + len(payload)] = payload
+            print(f&#34;[+] Patched 0x{offset:x}: {payload.hex()}&#34;)
+
+    with open(output_path, &#39;wb&#39;) as f:
+        f.write(data)
+
+if __name__ == &#39;__main__&#39;:
+    apply_pwnf(sys.argv[1], sys.argv[2], sys.argv[3])
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that applies a patch by virtual address. Parse the ELF header and the
+							<code>PT_LOAD</code>
+							program headers, translate the target
+							<code>VA</code>
+							into a file offset, and overwrite the first six bytes
+							of the function with
+							<code>mov eax, 1; ret</code>
+							(
+							<code>b8 01 00 00 00 c3</code>
+							) so it always returns success.
+							Print the original and patched bytes, then verify with
+							<code>objdump -d</code>
+							and run the binary.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;encoding/binary&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+)
+
+type segment struct {
+	offset uint64
+	vaddr  uint64
+	filesz uint64
+}
+
+func loadSegments(data []byte) ([]segment, error) {
+	if len(data) &lt; 64 || string(data[:4]) != &#34;\x7fELF&#34; {
+		return nil, fmt.Errorf(&#34;not an ELF file&#34;)
+	}
+	little := data[5] == 1
+	var order binary.ByteOrder = binary.LittleEndian
+	if !little {
+		order = binary.BigEndian
+	}
+	class := data[4]
+	var phoff uint64
+	var phentsize, phnum uint16
+	if class == 2 {
+		phoff = order.Uint64(data[0x20:0x28])
+		phentsize = order.Uint16(data[0x36:0x38])
+		phnum = order.Uint16(data[0x38:0x3a])
+	} else {
+		phoff = uint64(order.Uint32(data[0x1c:0x20]))
+		phentsize = order.Uint16(data[0x2a:0x2c])
+		phnum = order.Uint16(data[0x2c:0x2e])
+	}
+	segments := make([]segment, 0)
+	for i := 0; i &lt; int(phnum); i++ {
+		base := int(phoff) + i*int(phentsize)
+		if class == 2 {
+			pType := order.Uint32(data[base : base+4])
+			if pType != 1 {
+				continue
+			}
+			segments = append(segments, segment{
+				offset: order.Uint64(data[base+8 : base+16]),
+				vaddr:  order.Uint64(data[base+16 : base+24]),
+				filesz: order.Uint64(data[base+32 : base+40]),
+			})
+		} else {
+			pType := order.Uint32(data[base : base+4])
+			if pType != 1 {
+				continue
+			}
+			segments = append(segments, segment{
+				offset: uint64(order.Uint32(data[base+4 : base+8])),
+				vaddr:  uint64(order.Uint32(data[base+8 : base+12])),
+				filesz: uint64(order.Uint32(data[base+16 : base+20])),
+			})
+		}
+	}
+	return segments, nil
+}
+
+func vaToOffset(segments []segment, va uint64) (uint64, error) {
+	for _, seg := range segments {
+		if va &gt;= seg.vaddr &amp;&amp; va &lt; seg.vaddr+seg.filesz {
+			return seg.offset + (va - seg.vaddr), nil
+		}
+	}
+	return 0, fmt.Errorf(&#34;VA 0x%x not in a PT_LOAD segment&#34;, va)
+}
+
+func main() {
+	if len(os.Args) != 3 {
+		fmt.Fprintf(os.Stderr, &#34;usage: %s &lt;binary&gt; &lt;va&gt;\n&#34;, os.Args[0])
+		os.Exit(1)
+	}
+	data, err := os.ReadFile(os.Args[1])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	var va uint64
+	if _, err := fmt.Sscanf(os.Args[2], &#34;%v&#34;, &amp;va); err != nil {
+		fmt.Fprintln(os.Stderr, &#34;invalid address&#34;)
+		os.Exit(1)
+	}
+	segments, err := loadSegments(data)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	offset, err := vaToOffset(segments, va)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	patch := []byte{0xb8, 0x01, 0x00, 0x00, 0x00, 0xc3}
+	fmt.Printf(&#34;VA 0x%x -&gt; file offset 0x%x\n&#34;, va, offset)
+	fmt.Printf(&#34;original: % x\n&#34;, data[offset:offset+uint64(len(patch))])
+	copy(data[offset:], patch)
+	fmt.Printf(&#34;patched:  % x\n&#34;, patch)
+	if err := os.WriteFile(&#34;patched.bin&#34;, data, 0o755); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	fmt.Println(&#34;wrote patched.bin&#34;)
+}
+						</pre>
+						<p>
+							Build a small test program, patch its
+							<code>check()</code>
+							function to always return 1, and confirm the
+							behavior change with
+							<code>objdump -d patched.bin</code>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man5/elf.5.html" target="_blank">elf(5) - ELF file format</a> - segment, section, and program header layout</li>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man1/objdump.1.html" target="_blank">objdump(1) - display object file information</a> - disassembly and section inspection</li>
+							<li><a class="icon-website" href="https://ghidra-sre.org/" target="_blank">Ghidra Documentation</a> - reverse engineering suite with an integrated patcher</li>
+							<li><a class="icon-website" href="https://book.rada2.org/" target="_blank">The radare2 Book</a> - radare2 write mode and the <code>wa</code> command</li>
+							<li><a class="icon-download" href="https://refspecs.linuxfoundation.org/elf/x86-64-abi-0.99.pdf" target="_blank">System V ABI - x86-64 Supplement</a> - instruction encoding and relocation rules</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

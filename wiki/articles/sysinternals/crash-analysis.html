@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Crash Analysis | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Crash Analysis">
+		<meta name="keywords" content="bugcheck, crash-analysis, crash-utility, kasan, kaslr, kdump, kernel-debugging, kernel-panic, lockdep, oops, sysinternals">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Crash Analysis">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Linux kernel panic/oops anatomy - register dumps, crash dump formats, the crash utility, stack reconstruction, memory corruption root cause identification, and Windows bugcheck analysis.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/sysinternals/crash-analysis.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Crash Analysis">
+		<meta name="twitter:description" itemprop="description" content="Linux kernel panic/oops anatomy - register dumps, crash dump formats, the crash utility, stack reconstruction, memory corruption root cause identification, and Windows bugcheck analysis.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#anatomy-of-a-kernel-crash">Anatomy of a Kernel Crash</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#linux-kernel-panicoops-output">Linux Kernel Panic/Oops Output</a></b>
+					<ul>
+						<li><a href="#decoding-the-oops">Decoding the oops</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#crash-dump-formats">Crash Dump Formats</a></b>
+					<ul>
+						<li><a href="#setting-up-kdump-on-arch-linux">Setting up kdump on Arch Linux</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-crash-utility-deep-dive">The Crash Utility Deep Dive</a></b>
+					<ul>
+						<li><a href="#practical-crash-analysis-session">Practical crash analysis session</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#memory-corruption-analysis">Memory Corruption Analysis</a></b>
+					<ul>
+						<li><a href="#reading-a-kasan-report">Reading a KASAN report</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#race-condition-crashes">Race Condition Crashes</a></b>
+					<ul>
+						<li><a href="#kcsan-report">KCSAN Report</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#root-cause-identification-workflow">Root Cause Identification Workflow</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#windows-bugcheck-analysis">Windows Bugcheck Analysis</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#common-crash-patterns">Common Crash Patterns</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#controlled-crash-testing">Controlled Crash Testing</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/sysinternals/index.html">Sysinternals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/sysinternals/crash-analysis.html">Crash Analysis</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="crash-analysis">Crash Analysis</h2>
+					<p>
+						Linux kernel panic/oops anatomy - register dumps, crash dump formats, the crash utility, stack
+						reconstruction, memory corruption root cause identification, and Windows bugcheck analysis.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							A kernel crash leaves behind a register dump, a stack trace, and often a memory dump that must
+							be read after reboot. This article decodes the fields of a Linux oops or panic, explains how
+							kdump captures a vmcore, and shows how to reconstruct the faulting object with the
+							<code>crash</code>
+							utility.
+							It also covers the sanitizer reports (KASAN, KCSAN) that catch memory corruption and races before
+							they become crashes, and the equivalent Windows bugcheck workflow.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/sysinternals/kernel-debugging.html">Kernel Debugging</a> - kgdb, kdb, printk, ftrace</li>
+							<li><a href="/wiki/articles/sysinternals/kernel-memory.html">Kernel Memory</a> - SLUB/SLAB allocators, page allocator, DMA</li>
+							<li><a href="/wiki/articles/sysinternals/synchronization.html">Synchronization</a> - spinlocks, mutexes, RCU, lockdep</li>
+							<li><a href="/wiki/articles/fundamentals/virtual-memory.html">Virtual Memory</a> - page tables, TLB, address translation</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="anatomy-of-a-kernel-crash">Anatomy of a Kernel Crash</h3>
+						<p>
+							A kernel crash on Linux comes in two severities: an
+							<b>oops</b>
+							(the kernel continues but the offending
+							process is killed) and a
+							<b>panic</b>
+							(the kernel halts, all processor cores stop, and the system
+							must reboot). On Windows, the equivalent is a
+							<b>bugcheck</b>
+							(Blue Screen of Death).
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">OS</th>
+									<th align="center">Severity</th>
+									<th align="center">Description</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Linux</td>
+									<td align="center">Oops</td>
+									<td align="center">Kernel fault, process killed, system may continue in degraded state. Kernel tainted.</td>
+								</tr>
+								<tr>
+									<td align="center">Linux</td>
+									<td align="center">Panic</td>
+									<td align="center">Unrecoverable error. System halts. Configurable: panic_on_oops, panic_on_warn, panic_timeout.</td>
+								</tr>
+								<tr>
+									<td align="center">Windows</td>
+									<td align="center">Bugcheck 0xD1</td>
+									<td align="center">DRIVER_IRQL_NOT_LESS_OR_EQUAL</td>
+								</tr>
+								<tr>
+									<td align="center">Windows</td>
+									<td align="center">Bugcheck 0x50</td>
+									<td align="center">PAGE_FAULT_IN_NONPAGED_AREA</td>
+								</tr>
+								<tr>
+									<td align="center">Windows</td>
+									<td align="center">Bugcheck 0x1E</td>
+									<td align="center">KMODE_EXCEPTION_NOT_HANDLED</td>
+								</tr>
+								<tr>
+									<td align="center">Windows</td>
+									<td align="center">Bugcheck 0x7E</td>
+									<td align="center">SYSTEM_THREAD_EXCEPTION_NOT_HANDLED</td>
+								</tr>
+								<tr>
+									<td align="center">Windows</td>
+									<td align="center">Bugcheck 0x3B</td>
+									<td align="center">SYSTEM_SERVICE_EXCEPTION</td>
+								</tr>
+								<tr>
+									<td align="center">Windows</td>
+									<td align="center">Bugcheck 0x8E</td>
+									<td align="center">KERNEL_MODE_EXCEPTION_NOT_HANDLED</td>
+								</tr>
+								<tr>
+									<td align="center">Windows</td>
+									<td align="center">Bugcheck 0x9F</td>
+									<td align="center">DRIVER_POWER_STATE_FAILURE</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="linux-kernel-panicoops-output">Linux Kernel Panic/Oops Output</h3>
+						<p>
+							When a kernel oops occurs, the kernel prints a detailed register and stack dump to the console
+							(and kernel log buffer). Understanding every field in this output is essential for crash analysis.
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                    KERNEL OOPS ANATOMY (ANNOTATED)                     │
+│                                                                      │
+│  BUG: unable to handle kernel NULL pointer dereference at 0000000000000010
+│  #1                                                                   │
+│  ↓                                                                   │
+│  ┌─ The dereference address (often 0, or 0+N where N = struct offset)│
+│  └─ 0x10 means: dereferenced member at offset 0x10 of a NULL struct   │
+│                                                                      │
+│  PGD 0 P4D 0 PUD 0 PMD 0 PTE 0                                      │
+│  └─ Page table walk: all zero → virtual address not mapped            │
+│     PGD = Page Global Directory    PUD = Page Upper Directory          │
+│     P4D = Page 4th-level Dir       PMD = Page Middle Directory        │
+│     PTE = Page Table Entry                                           │
+│                                                                      │
+│  Oops: 0000 [#1] PREEMPT SMP PTI                                     │
+│  └─ [#1] = first oops since boot                                     │
+│     PREEMPT = CONFIG_PREEMPT enabled                                  │
+│     SMP = Symmetric Multi-Processing kernel                           │
+│     PTI = Page Table Isolation (KPTI/Meltdown mitigation) active       │
+│                                                                      │
+│  CPU: 0 PID: 1234 Comm: mydriver Not tainted 5.15.0-arch1-1         │
+│  └─ CPU that faulted, PID, command name, kernel version               │
+│     &#34;Tainted&#34; flags decode: P=proprietary, F=force-loaded,           │
+│     O=out-of-tree, W=warning, etc. See: Documentation/admin-guide/    │
+│     tainted-kernels.rst                                              │
+│                                                                      │
+│  RIP: 0010:my_write_handler+0x3a/0x50 [mydriver]                     │
+│  └─ Code segment+offset within function/total function size           │
+│     0010 = CS (code segment = 0x10 for kernel, x86-64 long mode)     │
+│     +0x3a = 58 bytes into my_write_handler                           │
+│     /0x50 = function is 80 bytes total                                │
+│     [mydriver] = crash in a loadable kernel module                    │
+│                                                                      │
+│  Code: 48 8b 47 10 48 8b 40 18 48 89 45 d0 e8 ...                   │
+│  └─ Hex bytes of the faulting instruction + surrounding code          │
+│     The faulting instruction is at RIP+offset in this dump            │
+│                                                                      │
+│  RSP: 0018:ffffc900002a3e10  EFLAGS: 00010246                        │
+│  RAX: 0000000000000000 RBX: ffff888100a3c000 RCX: 0000000000000000   │
+│  RDX: 0000000000000000 RSI: ffff888100a3c160 RDI: 0000000000000000   │
+│  RBP: ffffc900002a3e40 R08: 0000000000000000 R09: ffff888100000000   │
+│  R10: 0000000000000000 R11: 0000000000000000 R12: ffff888100c2e0c0   │
+│  R13: ffff888100a3c178 R14: ffff888100c2e0d8 R15: ffff888100a3c160   │
+│  └─ Register dump at time of fault                                   │
+│     Key: RDI=0000000000000000 (first argument was NULL)              │
+│          RAX=0000000000000000 (return of prior call was NULL)        │
+│                                                                      │
+│  FS: 00007f1234567700(0000) GS:ffff8883bc800000(0000)               │
+│     knlGS:0000000000000000                                           │
+│  CS: 0010 DS: 0000 ES: 0000 CR0: 0000000080050033                    │
+│  CR2: 0000000000000010 CR3: 0000000100a3c000 CR4: 00000000003706e0   │
+│  └─ CR2 = address that caused the page fault = 0x10                  │
+│  └─ CR3 = page table root (can correlate with mm_struct)             │
+│                                                                      │
+│  Call Trace:                                                         │
+│   &lt;TASK&gt;                                                             │
+│   my_write_handler+0x3a/0x50 [mydriver]          ← direct crash     │
+│   dev_attr_store+0x17/0x30                                        │
+│   sysfs_kf_write+0x3c/0x50                                        │
+│   kernfs_fop_write_iter+0x130/0x1d0                               │
+│   new_sync_write+0x136/0x1e0                                      │
+│   vfs_write+0x1f0/0x270                                          │
+│   ksys_write+0x67/0xf0                                           │
+│   do_syscall_64+0x3b/0x90                                        │
+│   entry_SYSCALL_64_after_hwframe+0x44/0xae                       │
+│   &lt;/TASK&gt;                                                          │
+│                                                                      │
+│  Modules linked in: mydriver(O) ext4 mbcache jbd2 ...                │
+│  └─ (O) = out-of-tree module (taints kernel with O flag)             │
+│                                                                      │
+│  CR2: 0000000000000010                                               │
+│  └─ The virtual address that was accessed when the page fault        │
+│     occurred. CR2 = 0x10 → NULL pointer + offset 0x10.              │
+│                                                                      │
+│  ---[ end trace 0000000000000000 ]---                                │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+						<h4 id="decoding-the-oops">Decoding the oops</h4>
+						<pre class="bash">
+# The crash happened at: my_write_handler+0x3a/0x50 [mydriver]
+# Let&#39;s decode what instruction that is:
+
+# 1. Find the module base address from the oops or /proc/modules
+# 2. Disassemble the function
+objdump -d mydriver.ko | grep -A30 &#39;&lt;my_write_handler&gt;:&#39;
+# Look at offset 0x3a (58 bytes in)
+# Matches: 48 8b 47 10 → mov rax, [rdi+0x10]
+# Ah — RDI was 00000000, so [0x0 + 0x10] = address 0x10 → page fault!
+
+# The fix: check if rdi is NULL before dereferencing
+
+# For in-kernel crashes, use addr2line:
+addr2line -e /usr/lib/debug/boot/vmlinux-$(uname -r) \
+  -i ffffffff8123abc0
+# Shows file:line for the crash address
+						</pre>
+					</section>
+					<section>
+						<h3 id="crash-dump-formats">Crash Dump Formats</h3>
+						<p>
+							To analyze a crash offline (after reboot), the system must save the kernel memory to persistent
+							storage. Linux uses kexec + kdump for this; Windows uses memory.dmp.
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                    CRASH DUMP ARCHITECTURE                             │
+│                                                                      │
+│  Normal boot:                                                         │
+│    GRUB → kernel (production) → system runs                           │
+│                                                                      │
+│  Kdump/crash kernel boot:                                             │
+│    GRUB → kernel (production) + crashkernel=256M                      │
+│       │                                                               │
+│       │  Kernel reserves 256 MB of RAM for crash kernel               │
+│       │  (not usable by production kernel)                            │
+│       ▼                                                               │
+│    [System runs normally]                                             │
+│       │                                                               │
+│       │  Kernel panic!                                                │
+│       ▼                                                               │
+│    kexec loads crash kernel into reserved memory                      │
+│    Crash kernel boots (minimal kernel, no hardware init)              │
+│    Crash kernel saves /proc/vmcore → /var/crash/&lt;timestamp&gt;/vmcore   │
+│    System reboots into production kernel                              │
+│                                                                      │
+│  Dump formats:                                                        │
+│  ┌─────────────────+────────────────────────────────────────────--─┐ │
+│  │  Format          │  Description                                  │ │
+│  ├─────────────────+────────────────────────────────────────────--─┤ │
+│  │  ELF vmcore      │  Full memory dump in ELF format               │ │
+│  │                  │  Contains ELF headers + PT_LOAD segments       │ │
+│  │                  │  Each PT_LOAD = a physical memory range        │ │
+│  │                  │  Can be opened directly by &#39;crash&#39; utility    │ │
+│  ├─────────────────+────────────────────────────────────────────--─┤ │
+│  │  makedumpfile    │  Compressed/filtered dump                      │ │
+│  │  compressed      │  - zlib/lzo/snappy/zstd compression           │ │
+│  │                  │  - Page filtering: zero pages, free pages,      │ │
+│  │                  │    cache pages, user pages (excludable)         │ │
+│  │                  │  - Typically 90%+ smaller than full dump        │ │
+│  ├─────────────────+────────────────────────────────────────────--─┤ │
+│  │  Kdump (flat)    │  Raw dump format (legacy)                      │ │
+│  │                  │  Header + raw physical memory pages            │ │
+│  └─────────────────+────────────────────────────────────────────--─┘ │
+│                                                                      │
+│  Windows dump types:                                                  │
+│  ┌──────────────────+────────────────────────────────────────────┐   │
+│  │  Complete memory │  All physical memory (size of RAM)          │   │
+│  │  Kernel memory   │  Kernel-mode pages only (typically 100s MB) │   │
+│  │  Small (minidump)│  64/128/256 KB containing: bugcheck info,   │   │
+│  │                  │  loaded drivers, current thread stack, etc. │   │
+│  │  Active memory   │  Kernel + user pages assigned to active    │   │
+│  │                  │  processes (filtered by working set)       │   │
+│  └──────────────────+────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+						<h4 id="setting-up-kdump-on-arch-linux">Setting up kdump on Arch Linux</h4>
+						<pre class="bash">
+# 1. Install kexec-tools and kdump
+sudo pacman -S kexec-tools
+
+# 2. Configure crashkernel memory reservation
+# Add to kernel command line in /etc/default/grub:
+# crashkernel=256M (or 512M for systems with lots of RAM)
+sudo vim /etc/default/grub
+# GRUB_CMDLINE_LINUX_DEFAULT=&#34;... crashkernel=256M&#34;
+sudo grub-mkconfig -o /boot/grub/grub.cfg
+
+# 3. Enable kdump service
+sudo systemctl enable kdump.service
+sudo systemctl start kdump.service
+
+# 4. Check crash kernel memory reservation
+cat /proc/cmdline | grep crashkernel
+dmesg | grep -i crashkernel
+# crashkernel reservation: 0x0000000058000000 - 0x0000000068000000 (256 MB)
+
+# 5. Check crash kernel is loaded
+cat /sys/kernel/kexec_crash_loaded
+# 1 = crash kernel loaded and ready
+
+# 6. Test crash kernel (WARNING: triggers kernel crash!)
+echo c | sudo tee /proc/sysrq-trigger
+# System will panic, crash kernel boots, saves vmcore, reboots
+
+# 7. After reboot, find the crash dump
+sudo ls /var/crash/
+sudo ls /var/crash/&lt;timestamp&gt;/
+# vmcore  vmcore-dmesg.txt
+						</pre>
+					</section>
+					<section>
+						<h3 id="the-crash-utility-deep-dive">The Crash Utility Deep Dive</h3>
+						<p>
+							The
+							<code>crash</code>
+							utility is the primary tool for analyzing Linux kernel crash dumps. It provides
+							a gdb-like interface for examining kernel data structures, backtraces, and memory.
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                     CRASH UTILITY ARCHITECTURE                         │
+│                                                                      │
+│  crash requires two inputs:                                           │
+│    - vmlinux: uncompressed kernel with debug symbols                  │
+│    - vmcore:  kernel memory dump (ELF or compressed format)          │
+│                                                                      │
+│  $ sudo crash /usr/lib/debug/boot/vmlinux-$(uname -r) vmcore         │
+│                                                                      │
+│  crash&gt; bt              ← backtrace of the active task                │
+│  crash&gt; bt -a            ← backtraces of ALL tasks                    │
+│  crash&gt; log              ← kernel log buffer (dmesg)                  │
+│  crash&gt; ps               ← process listing                           │
+│  crash&gt; files &lt;PID&gt;      ← open file descriptors for a process        │
+│  crash&gt; vm &lt;PID&gt;         ← virtual memory map (like /proc/PID/maps)  │
+│  crash&gt; kmem -i          ← kernel memory usage summary               │
+│  crash&gt; struct task_struct &lt;addr&gt;  ← display a kernel struct         │
+│  crash&gt; p &lt;variable&gt;     ← print value of a kernel variable          │
+│  crash&gt; sym &lt;addr&gt;       ← translate address to symbol               │
+│  crash&gt; rd &lt;addr&gt; &lt;count&gt; ← read raw memory at address               │
+│  crash&gt; dis &lt;addr&gt;       ← disassemble instructions                  │
+│  crash&gt; mod              ← list loaded modules                       │
+│  crash&gt; dev              ← list character/block devices              │
+│  crash&gt; irq              ← interrupt statistics                      │
+│  crash&gt; timer            ← kernel timers                            │
+│  crash&gt; runq             ← scheduler runqueue                        │
+│  crash&gt; mount            ← mounted filesystems                       │
+│  crash&gt; net              ← network device list                       │
+│  crash&gt; sys              ← system configuration info                 │
+│  crash&gt; mach             ← machine-specific info (CPU, memory)       │
+│                                                                      │
+│  gdb commands also available:                                         │
+│  crash&gt; whatis task_struct  ← type definition                        │
+│  crash&gt; print sizeof(struct file)  ← struct sizes                   │
+│  crash&gt; list *(my_function+0x20)  ← source code at address          │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+						<h4 id="practical-crash-analysis-session">Practical crash analysis session</h4>
+						<pre class="plaintext">
+# Example crash analysis workflow in the crash utility
+crash&gt; sys
+      KERNEL: /usr/lib/debug/boot/vmlinux-5.15.0-arch1-1
+    DUMPFILE: vmcore  [PARTIAL DUMP]
+        CPUS: 8
+        DATE: Thu Jun 25 14:30:22 2026
+      UPTIME: 3 days, 12:45:32
+LOAD AVERAGE: 2.34, 1.98, 1.56
+       TASKS: 342
+    NODENAME: archbox
+     RELEASE: 5.15.0-arch1-1
+     VERSION: #1 SMP PREEMPT ...
+     MACHINE: x86_64
+
+crash&gt; log | tail -40
+# Shows kernel log leading up to the crash
+
+crash&gt; bt
+PID: 0      TASK: ffff888100a3c000  CPU: 2   COMMAND: &#34;swapper/2&#34;
+ #0 [fffffe0000008e88] __crash_kexec at ffffffff810abcde
+ #1 [fffffe0000008ef0] panic at ffffffff81a12345
+ #2 [fffffe0000008f70] do_page_fault at ffffffff81b67890
+ #3 [fffffe0000009000] page_fault at ffffffff820011ba
+    RIP: ffffffffc0123456  RSP: ffffe000000090c0  RFLAGS: 00010246
+    ...
+
+crash&gt; bt -a | grep -A5 &#34;PANIC&#34;
+# Find which task was executing when panic occurred
+
+crash&gt; dis -r ffffffffc0123456 10
+# Disassemble the crash location and surrounding code
+
+# Examine the faulting instruction&#39;s context
+crash&gt; struct file ffff888100a3c160
+struct file {
+  f_u = {fu_llist = {next = 0x0}, ...}
+  f_path = {mnt = 0xffff888100b54000, dentry = 0xffff888100c2e0c0}
+  f_op = 0xffff888100d80000,  ← THIS IS WHAT WE WANT
+  ...
+}
+
+crash&gt; struct file_operations 0xffff888100d80000
+struct file_operations {
+  owner = 0xffffffffa0012340,
+  llseek = 0x0,  ← NULL! This is why we crashed
+  read = 0xffffffffa0012500,
+  write = 0xffffffffa0012600,
+  ...
+}
+# The file_operations had a NULL llseek — missing initialization
+						</pre>
+					</section>
+					<section>
+						<h3 id="memory-corruption-analysis">Memory Corruption Analysis</h3>
+						<p>
+							Kernel memory corruption comes in several classic patterns. KASAN (Kernel Address Sanitizer)
+							detects many of these dynamically:
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                    MEMORY CORRUPTION PATTERNS                          │
+│                                                                      │
+│  1. Use-After-Free (UAF):                                            │
+│     Object freed, but pointer still used.                             │
+│     KASAN report: &#34;use-after-free in function_name+0xNN/0xYY&#34;        │
+│     SLUB debug: freed object with POISON_FREE pattern overwritten     │
+│                                                                      │
+│  2. Double Free:                                                     │
+│     Same object freed twice.                                          │
+│     KASAN: &#34;double-free&#34; + stack trace of first free + second free   │
+│     SLUB: freelist corruption, slab corruption                        │
+│                                                                      │
+│  3. Buffer Overflow (out-of-bounds write):                           │
+│     Writing past end of allocated object.                             │
+│     KASAN: &#34;out-of-bounds write&#34; + object info + redzone info        │
+│     SLUB redzone: redzone bytes overwritten (detected on free)       │
+│                                                                      │
+│  4. Buffer Underflow (out-of-bounds read before object):              │
+│     Reading from before start of allocation.                          │
+│     KASAN: &#34;out-of-bounds read&#34;                                       │
+│                                                                      │
+│  5. Invalid Free:                                                    │
+│     Freeing a pointer not from the slab allocator.                    │
+│     SLUB: &#34;invalid free of non-slab object&#34;                          │
+│     kmem_cache_free() called with wrong cache or stack pointer        │
+│                                                                      │
+│  6. Stale Stack Reference:                                           │
+│     Returning pointer to stack-allocated variable.                    │
+│     KASAN: &#34;stack-out-of-bounds&#34; or &#34;use-after-scope&#34;                │
+│                                                                      │
+│  SLUB debugging features:                                             │
+│  ┌─────────────────+────────────────────────────────────────────┐    │
+│  │  Feature         │  What It Detects                           │    │
+│  ├─────────────────+────────────────────────────────────────────┤    │
+│  │  Redzoning       │  Buffer overflow (pad object with guard    │    │
+│  │                  │  bytes, check on free)                      │    │
+│  │  Poisoning       │  Use-after-free (write magic pattern to    │    │
+│  │                  │  freed memory, check on next allocation)   │    │
+│  │  Sanity checks   │  Double-free, invalid free, corrupt slab   │    │
+│  │  Tracing/Ftrace  │  Track allocation/free call sites          │    │
+│  │  Object padding  │  Detect off-by-one errors (extra byte pad) │    │
+│  └─────────────────+────────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+						<h4 id="reading-a-kasan-report">Reading a KASAN report</h4>
+						<pre class="bash">
+# Example KASAN report:
+# ==================================================================
+# BUG: KASAN: slab-out-of-bounds in my_driver_write+0x42/0x80
+# Write of size 8 at addr ffff888100a3c020 by task writer/1234
+#
+# CPU: 3 PID: 1234 Comm: writer Not tainted 5.15.0+
+# Call Trace:
+#  dump_stack_lvl+0x34/0x48
+#  print_address_description.constprop.0+0x2e/0x2b0
+#  kasan_report+0x1a0/0x1d0
+#  my_driver_write+0x42/0x80 [mydriver]    &lt;- WHERE THE BUG IS
+#  dev_attr_store+0x17/0x30
+#  ...
+#
+# The buggy address belongs to the object at ffff888100a3c000
+#  which belongs to the cache kmalloc-32 of size 32
+# The buggy address is located 0 bytes to the right of 32-byte region
+#  [ffff888100a3c000, ffff888100a3c020)
+# The buggy address belongs to the page:
+#  page:00000000a1b2c3d4 refcount:1 mapcount:0 ...
+#
+# Memory state around the buggy address:
+#  ffff888100a3bf00: fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc
+#  ffff888100a3bf80: fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc
+#  ffff888100a3c000: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+# &gt;ffff888100a3c020: fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc
+#                    ^^
+#  ffff888100a3c040: fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc
+#
+# Key: fc = redzone (guard), 00 = allocated and zeroed
+# The object spans [0x000, 0x020), so the 8-byte write that starts at
+# 0x020 begins one byte past the end of the allocation. KASAN flags any
+# write whose first byte falls in the redzone, which is why the report
+# points at 0x020 and says &#34;0 bytes to the right of the region&#34;.
+						</pre>
+					</section>
+					<section>
+						<h3 id="race-condition-crashes">Race Condition Crashes</h3>
+						<p>Race conditions and deadlocks produce distinctive crash patterns:</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                     RACE CONDITION CRASH PATTERNS                      │
+│                                                                      │
+│  Lockdep output (deadlock):                                           │
+│                                                                      │
+│  ======================================================              │
+│  WARNING: possible circular locking dependency detected              │
+│  5.15.0-arch1-1 #1 Not tainted                                       │
+│  ------------------------------------------------------              │
+│  kworker/0:1/42 is trying to acquire lock:                           │
+│  ffff888100a3c178 (&amp;obj-&gt;lock){+.+.}-{3:3}, at: obj_free+0x20/0x50  │
+│                                                                      │
+│  but task is already holding lock:                                    │
+│  ffff888100a3c190 (&amp;obj-&gt;other_lock){+.+.}-{3:3}, at: obj_release   │
+│                                                                      │
+│  which lock already depends on the new lock.                         │
+│                                                                      │
+│  Chain exists:                                                       │
+│    &amp;obj-&gt;other_lock → &amp;something_lock → &amp;obj-&gt;lock                │
+│                                                                      │
+│  stack backtrace of the chain formation: ...                          │
+│                                                                      │
+│  Lockdep class annotation:                                            │
+│    {+.+.} = state:                                                    │
+│      + = lock acquired with IRQs enabled (unlikely locked in IRQ)    │
+│      . = lock acquired in process context (not IRQ context)           │
+│    {3:3} = lockdep nesting:                                           │
+│      Lock acquired at depth 3 (statistics)                            │
+│                                                                      │
+│  Common race patterns in crash dumps:                                 │
+│  ┌───────────────────+──────────────────────────────────────────┐    │
+│  │  Pattern           │  Indicators                               │    │
+│  ├───────────────────+──────────────────────────────────────────┤    │
+│  │  Use-After-Free    │  Slab poison pattern in freed object     │    │
+│  │  (race with free)  │  KASAN: use-after-free                   │    │
+│  │                    │  Double free or stale pointer            │    │
+│  ├───────────────────+──────────────────────────────────────────┤    │
+│  │  List corruption   │  list_del corruption, next/prev poisoned │    │
+│  │  (concurrent add)  │  Oops at list_del()/list_add()           │    │
+│  │  (concurrent del)  │  NULL pointer in list iterators          │    │
+│  ├───────────────────+──────────────────────────────────────────┤    │
+│  │  Refcount overflow │  refcount_t: saturated; leaking memory    │    │
+│  │  (too many gets)   │  Kernel warning: refcount_t: underflow   │    │
+│  │  (too many puts)   │  use-after-free after premature free     │    │
+│  ├───────────────────+──────────────────────────────────────────┤    │
+│  │  Data race         │  KCSAN: data race report                  │    │
+│  │  (unsync access)   │  Inconsistent struct fields in dump      │    │
+│  │                    │  Non-deterministic crash behavior         │    │
+│  └───────────────────+──────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+						<h4 id="kcsan-report">KCSAN Report</h4>
+						<pre class="plaintext">
+==================================================================
+BUG: KCSAN: data-race in mydriver_read / mydriver_write
+
+write to 0xffff888100a3c160 of 4 bytes by task 12345 on cpu 2:
+ mydriver_write+0x50/0x80 [mydriver]
+ dev_attr_store+0x17/0x30
+ ...
+
+read to 0xffff888100a3c160 of 4 bytes by task 12346 on cpu 3:
+ mydriver_read+0x30/0x60 [mydriver]
+ dev_attr_show+0x1a/0x40
+ ...
+
+Reported by Kernel Concurrency Sanitizer on:
+CPU: 3 PID: 12346 Comm: reader Not tainted 5.15.0+
+==================================================================
+
+# Fix: add spin_lock(&amp;lock) around both the read and write
+						</pre>
+					</section>
+					<section>
+						<h3 id="root-cause-identification-workflow">Root Cause Identification Workflow</h3>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                   ROOT CAUSE IDENTIFICATION FLOWCHART                    │
+│                                                                      │
+│  Step 1: Identify the crashing instruction from RIP                   │
+│    ┌──────────────────────────────────────────────────────┐         │
+│    │  crash&gt; dis -r &lt;RIP&gt; 5                                │         │
+│    │  → What instruction faulted?                          │         │
+│    │  → Is it a memory access? Register-to-register?       │         │
+│    └──────────────────────────────────────────────────────┘         │
+│             │                                                        │
+│             ▼                                                        │
+│  Step 2: Determine the access type                                    │
+│    ┌──────────────────────────────────────────────────────┐         │
+│    │  Null pointer dereference:    CR2 ≈ 0x0-0xFFF        │         │
+│    │  Invalid pointer:             CR2 = garbage value    │         │
+│    │  Read fault:                  instruction loads      │         │
+│    │  Write fault:                 instruction stores     │         │
+│    │  Execute fault:               NX page (SMEP)         │         │
+│    │  KPTI violation:              user addr in kernel    │         │
+│    └──────────────────────────────────────────────────────┘         │
+│             │                                                        │
+│             ▼                                                        │
+│  Step 3: Find the target address and reason                           │
+│    ┌──────────────────────────────────────────────────────┐         │
+│    │  crash&gt; rd &lt;CR2&gt; 1     ← read address to verify      │         │
+│    │  crash&gt; vtop &lt;CR2&gt;     ← virtual→physical translation │         │
+│    │  crash&gt; kmem &lt;CR2&gt;     ← is page allocated? freed?    │         │
+│    │  crash&gt; p &lt;reg&gt;        ← what does source reg contain?│         │
+│    └──────────────────────────────────────────────────────┘         │
+│             │                                                        │
+│             ▼                                                        │
+│  Step 4: Trace the object lifetime (if applicable)                    │
+│    ┌──────────────────────────────────────────────────────┐         │
+│    │  If the object is from a slab cache:                  │         │
+│    │  crash&gt; kmem &lt;addr&gt;                                   │         │
+│    │  → Shows: cache name, allocation site (if ftrace),    │         │
+│    │    free status, redzone integrity                     │         │
+│    │                                                        │         │
+│    │  If SLUB_DEBUG was enabled:                            │         │
+│    │  → Look at free_stack / alloc_stack traces            │         │
+│    │  → Who allocated this? Who freed it? When?            │         │
+│    └──────────────────────────────────────────────────────┘         │
+│             │                                                        │
+│             ▼                                                        │
+│  Step 5: Identify the race partner (if applicable)                    │
+│    ┌──────────────────────────────────────────────────────┐         │
+│    │  Lockdep: was correct locking used?                   │         │
+│    │  KCSAN: was there a concurrent access?                │         │
+│    │  Crash dump: find other tasks accessing same address  │         │
+│    │  crash&gt; search &lt;addr&gt;    ← find other tasks referencing│         │
+│    └──────────────────────────────────────────────────────┘         │
+│             │                                                        │
+│             ▼                                                        │
+│  Step 6: Formulate the root cause                                     │
+│    ┌──────────────────────────────────────────────────────┐         │
+│    │  &#34;Thread A freed object X while thread B still had   │         │
+│    │   a pointer to it. Thread B dereferenced the freed   │         │
+│    │   object at ffff888100a3c000+0x10. The free occurred │         │
+│    │   in obj_release+0x35, the use in obj_handler+0x42. │         │
+│    │   No lock protected the pointer between the two      │         │
+│    │   threads. Fix: add refcounting or proper locking.&#34;  │         │
+│    └──────────────────────────────────────────────────────┘         │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="windows-bugcheck-analysis">Windows Bugcheck Analysis</h3>
+						<p>Windows kernel crashes produce bugcheck codes and memory dumps that can be analyzed with WinDbg:</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                    WINDOWS BUGCHECK ANALYSIS                            │
+│                                                                      │
+│  WinDbg commands for crash dump analysis:                             │
+│                                                                      │
+│  kd&gt; !analyze -v        ← Automated analysis (USE THIS FIRST!)       │
+│  kd&gt; .bugcheck          ← Show bugcheck code and parameters          │
+│  kd&gt; kb                 ← Stack backtrace (current thread)           │
+│  kd&gt; !thread            ← Current thread info                        │
+│  kd&gt; !process 0 0       ← List all processes                         │
+│  kd&gt; !process &lt;addr&gt; 7  ← Detailed process info                      │
+│  kd&gt; !irql              ← Current IRQL level                         │
+│  kd&gt; !locks             ← All held kernel locks                      │
+│  kd&gt; !devobj &lt;addr&gt;     ← Device object info                         │
+│  kd&gt; !drvobj &lt;addr&gt; 7   ← Driver object + dispatch routines          │
+│  kd&gt; dt nt!_EPROCESS &lt;addr&gt;  ← Dump EPROCESS structure              │
+│  kd&gt; dt nt!_ETHREAD &lt;addr&gt;   ← Dump ETHREAD structure               │
+│  kd&gt; !pool &lt;addr&gt;        ← Check pool allocation (Windows heap)      │
+│  kd&gt; !vm                 ← Virtual memory summary                    │
+│  kd&gt; lm                  ← List loaded modules                       │
+│  kd&gt; lmvm &lt;module_name&gt;  ← Detailed module info                     │
+│  kd&gt; !sysinfo machineid  ← System info                               │
+│  kd&gt; !sysinfo cpus       ← CPU info                                  │
+│  kd&gt; !sysinfo smbios     ← SMBIOS/DMI info                          │
+│                                                                      │
+│  Sample !analyze -v output (annotated):                               │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │ DRIVER_IRQL_NOT_LESS_OR_EQUAL (d1)                           │   │
+│  │ An attempt was made to access a pageable (or completely      │   │
+│  │ invalid) address at an interrupt request level (IRQL) that   │   │
+│  │ is too high. This is usually caused by drivers using improper│   │
+│  │ addresses.                                                    │   │
+│  │ Arguments:                                                    │   │
+│  │ Arg1: fffff88001234000, memory referenced                     │   │
+│  │ Arg2: 0000000000000002, IRQL at time of fault (DISPATCH_LEVEL)│   │
+│  │ Arg3: 0000000000000000, 0 = read, 1 = write                   │   │
+│  │ Arg4: fffff88005678012, address that referenced memory        │   │
+│  │                                                               │   │
+│  │ DEFAULT_BUCKET_ID: WIN8_DRIVER_FAULT                        │   │
+│  │ BUCKET_ID: AV_myfaultydriver!FooHandler                      │   │
+│  │ FAILURE_BUCKET_ID: 0xD1_myfaultydriver!FooHandler            │   │
+│  │                                                               │   │
+│  │ STACK_TEXT:                                                   │   │
+│  │ nt!KeBugCheckEx                                              │   │
+│  │ nt!KiBugCheckDispatch                                        │   │
+│  │ nt!KiPageFault                                               │   │
+│  │ myfaultydriver!FooHandler+0x23   ← CRASH HERE                │   │
+│  │ nt!IofCallDriver                                              │   │
+│  │ ...                                                          │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="common-crash-patterns">Common Crash Patterns</h3>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────────────────────────────┐
+│                    NULL POINTER DEREFERENCE                            │
+│                                                                      │
+│  struct my_obj *obj = NULL;  // forgot to allocate or check          │
+│  obj-&gt;field = value;        // CRASH at offsetof(my_obj, field)     │
+│                                                                      │
+│  CR2 = 0x0000000000000028  (struct member at offset 0x28 was NULL)  │
+│  Oops: unable to handle kernel NULL pointer dereference at 0x28     │
+│  Fix: if (!obj) return -EINVAL;                                      │
+│                                                                      │
+├──────────────────────────────────────────────────────────────────────┤
+│                    USE-AFTER-FREE                                     │
+│                                                                      │
+│  Thread A:        Thread B:                                          │
+│  obj = kmalloc()  ...                                                │
+│  ptr = obj;       ...                                                │
+│  ...              kfree(obj);                                        │
+│  ...              ...                                                │
+│  ptr-&gt;field = x;  ← CRASH (ptr is now freed memory)                 │
+│                                                                      │
+│  KASAN: use-after-free in my_handler+0x42/0x70                      │
+│  Memory at ffff888100a3c000 was freed in obj_release+0x35/0x60      │
+│  Fix: add refcounting (kref) or use RCU                              │
+│                                                                      │
+├──────────────────────────────────────────────────────────────────────┤
+│                    SLAB CORRUPTION (BUFFER OVERFLOW)                  │
+│                                                                      │
+│  char *buf = kmalloc(16, GFP_KERNEL);                                │
+│  strcpy(buf, &#34;This is way more than 16 bytes!&#34;);                     │
+│  kfree(buf);  ← SLUB detects corrupted redzone → Oops               │
+│                                                                      │
+│  SLUB: slab corruption in kmalloc-32 cache                            │
+│  Redzone 0x00-0x0f: 54 68 69 73 20 69 73 20 77 61 79 20 6d 6f 72 65 │
+│  (Overwrote redzone bytes — buffer excess visible in hex)            │
+│  Fix: use correct size, strlcpy/strscpy, or kmalloc(strlen+1)        │
+│                                                                      │
+├──────────────────────────────────────────────────────────────────────┤
+│                    LIST CORRUPTION                                     │
+│                                                                      │
+│  list_del(&amp;node);  // Thread A                                       │
+│  list_del(&amp;node);  // Thread B (double-unlink)                       │
+│                                                                      │
+│  list_del corruption: next-&gt;prev should be node, but was LIST_POISON2│
+│  (LIST_POISON2 = 0x00200200, indicating already-freed list entry)    │
+│  Fix: check list_empty() or protect with lock                        │
+│                                                                      │
+├──────────────────────────────────────────────────────────────────────┤
+│                    PAGE FAULT IN NON-MAPPED REGION                     │
+│                                                                      │
+│  mmaped a device&#39;s MMIO region, then device is removed               │
+│  Driver still tries to access the MMIO region → page fault           │
+│                                                                      │
+│  CR2 = 0xffffc90000123000 (vmalloc area, but unmapped)               │
+│  Fix: check that the mapping is still valid before access             │
+│                                                                      │
+├──────────────────────────────────────────────────────────────────────┤
+│                    DEADLOCK (CANNOT CRASH, BUT FREEZES)               │
+│                                                                      │
+│  No panic — system hangs.                                            │
+│  sysrq-t shows blocked tasks in D state (uninterruptible sleep)      │
+│  /proc/PID/stack shows stuck on mutex_lock()                         │
+│  Lockdep output (if enabled) shows circular dependency               │
+│  Fix: consistent lock ordering                                       │
+└──────────────────────────────────────────────────────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="controlled-crash-testing">Controlled Crash Testing</h3>
+						<pre class="bash">
+# WARNING: These commands crash your system. Use on a test VM only!
+
+# 1. Trigger a controlled kernel panic via sysrq
+echo c | sudo tee /proc/sysrq-trigger
+# This causes a deliberate NULL pointer dereference in the kernel
+# If kdump is configured, vmcore is saved.
+
+# 2. Trigger via panic_on_oops + BUG()
+# First, create a test kernel module with a BUG() call
+# Loading it triggers the panic
+
+# 3. Trigger with Magic SysRq key combinations
+# Alt+SysRq+c — Immediate crash (if enabled)
+# echo 1 &gt; /proc/sys/kernel/sysrq  (enable sysrq)
+# Then: Alt+SysRq+c
+
+# 4. Soft lockup detection (hung task watchdog)
+echo 1 | sudo tee /proc/sys/kernel/softlockup_panic
+# Then: a kernel thread spinning without scheduling will cause panic
+
+# 5. Kernel module with intentional NULL dereference
+# Educational module demonstrating crash analysis:
+# static int __init panic_init(void) {
+#     int *p = NULL;
+#     *p = 42;  // DELIBERATE CRASH
+#     return 0;
+# }
+
+# After crash, on reboot:
+sudo crash /usr/lib/debug/boot/vmlinux-$(uname -r) /var/crash/*/vmcore
+# crash&gt; bt       ← backtrace of crashing task
+# crash&gt; log      ← kernel log (shows oops message)
+# crash&gt; dis -r RIP  ← see the crash instruction
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that reads a kernel log from standard input and extracts every crash record
+							by looking for the BUG, Oops, and Kernel panic markers, followed by the
+							<code>RIP</code>
+							line that names
+							the faulting instruction. Feed it live kernel output and confirm the extracted addresses match
+							the raw log.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;bufio&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;strings&#34;
+)
+
+func main() {
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+
+	inCrash := false
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if strings.Contains(line, &#34;BUG:&#34;) ||
+			strings.Contains(line, &#34;Oops:&#34;) ||
+			strings.Contains(line, &#34;Kernel panic&#34;) {
+			inCrash = true
+			fmt.Println(&#34;CRASH:&#34;, line)
+			continue
+		}
+
+		if inCrash &amp;&amp; strings.HasPrefix(strings.TrimSpace(line), &#34;RIP:&#34;) {
+			fmt.Println(&#34;  &#34;, line)
+		}
+	}
+}
+						</pre>
+						<p>Build it and run it against the current kernel log:</p>
+						<pre class="bash">
+go build -o crashscan crashscan.go
+dmesg | ./crashscan
+journalctl -k | ./crashscan
+						</pre>
+						<p>Then inspect the crash configuration and available dumps by hand:</p>
+						<pre class="bash">
+# 1. Check if kdump is configured
+cat /proc/cmdline | grep -o &#39;crashkernel=[^ ]*&#39;
+cat /sys/kernel/kexec_crash_loaded
+systemctl status kdump 2&gt;/dev/null || echo &#34;kdump service not found&#34;
+
+# 2. Check panic-related kernel parameters
+cat /proc/sys/kernel/panic          # seconds before auto-reboot (0=hang)
+cat /proc/sys/kernel/panic_on_oops  # 0=continue, 1=panic on oops
+cat /proc/sys/kernel/panic_on_warn  # 0=no panic on WARN, 1=panic on WARN
+cat /proc/sys/kernel/softlockup_panic
+cat /proc/sys/kernel/hung_task_panic
+cat /proc/sys/kernel/panic_print
+
+# 3. Find debug kernel for crash analysis
+ls /usr/lib/debug/boot/ 2&gt;/dev/null || echo &#34;No debug kernel installed&#34;
+# Install on Arch: sudo pacman -S linux-debug (optional, large)
+
+# 4. List recent kernel crashes
+sudo ls /var/crash/ 2&gt;/dev/null || echo &#34;No crash dumps found&#34;
+sudo find /var/crash -name vmcore -ls 2&gt;/dev/null
+
+# 5. Check kernel taint status
+cat /proc/sys/kernel/tainted
+# 0 = not tainted
+# Non-zero: decode with: dmesg | grep -i taint
+
+# 6. Check for BUG/Oops in current kernel log
+dmesg | grep -i -E &#39;BUG:|Oops:|WARNING:|Call Trace|RIP:&#39;
+
+# 7. Check previously saved crash dumps
+ls -lh /var/log/dmesg.* 2&gt;/dev/null
+sudo journalctl -k --grep=&#34;Oops&#34; --no-pager 2&gt;/dev/null | tail -20
+
+# 8. Examine the current kernel&#39;s stack on each CPU
+sudo cat /proc/sysrq-trigger &lt;&lt;&lt; &#34;l&#34;  # Show stacks on all CPUs (via dmesg)
+# Check output with: dmesg | tail -200
+
+# 9. Inspect SLUB debugging information
+sudo cat /sys/kernel/slab/kmalloc-*/slabs 2&gt;/dev/null | head -20
+
+# 10. Check if KASAN is enabled
+dmesg | grep -i kasan 2&gt;/dev/null | head -5
+# KASAN requires kernel recompilation — not in stock kernels
+
+# 11. Inspect lockdep output (if enabled)
+dmesg | grep -i lockdep 2&gt;/dev/null | head -10
+# echo 1 &gt; /proc/sys/kernel/lock_stat  (enable lock statistics, if compiled)
+
+# 12. Trigger a controlled crash (WARNING: CRASHES SYSTEM!)
+# ONLY run on a test VM with kdump configured:
+# sudo bash -c &#39;echo c &gt; /proc/sysrq-trigger&#39;
+# After reboot, analyze with:
+# sudo crash /usr/lib/debug/boot/vmlinux-$(uname -r) /var/crash/*/vmcore
+
+# 13. Windows crash dump analysis (cross-reference)
+# If you have a Windows VM crash dump:
+# file /path/to/MEMORY.DMP
+# strings /path/to/MEMORY.DMP | grep -i &#39;bugcheck\|driver&#39;
+# Or open with WinDbg on Windows
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://www.kernel.org/doc/html/latest/admin-guide/kdump/kdump.html" target="_blank">Linux kernel: Documentation/admin-guide/kdump/kdump.rst</a></li>
+							<li><a class="icon-website" href="https://www.kernel.org/doc/html/latest/admin-guide/tainted-kernels.html" target="_blank">Linux kernel: Documentation/admin-guide/tainted-kernels.rst</a></li>
+							<li><a class="icon-website" href="https://www.kernel.org/doc/html/latest/dev-tools/kasan.html" target="_blank">Linux kernel: Documentation/dev-tools/kasan.rst</a></li>
+							<li><a class="icon-website" href="https://www.kernel.org/doc/html/latest/dev-tools/kcsan.html" target="_blank">Linux kernel: Documentation/dev-tools/kcsan.rst</a></li>
+							<li><a class="icon-website" href="https://www.kernel.org/doc/html/latest/admin-guide/sysrq.html" target="_blank">Linux kernel: Documentation/admin-guide/sysrq.rst</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/lib/list_debug.c" target="_blank">Linux kernel: lib/list_debug.c - list debugging</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/mm/slub.c" target="_blank">Linux kernel: mm/slub.c - SLUB debug features</a></li>
+							<li><a class="icon-website" href="https://crash-utility.github.io/" target="_blank">crash utility - White Paper</a></li>
+							<li><a class="icon-website" href="https://crash-utility.github.io/crash_whitepaper.html" target="_blank">crash utility - Command Reference</a></li>
+							<li><a class="icon-website" href="https://wiki.archlinux.org/title/Kdump" target="_blank">Arch Wiki: Kdump</a></li>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-code-reference2" target="_blank">Windows Debugging: Bug Check Code Reference</a></li>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/-analyze" target="_blank">WinDbg: !analyze extension</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/sysrq.8" target="_blank">sysrq(8) - Linux Magic System Request Key</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

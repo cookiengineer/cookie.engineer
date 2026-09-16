@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>I/O Manager | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="I/O Manager">
+		<meta name="keywords" content="blktrace, block-layer, device-drivers, io-manager, iostat, irp, linux, sysinternals">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="I/O Manager">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Windows I/O Manager architecture covering IRPs, device stacks, dispatch routines, IOCP, and buffering strategies, plus the Linux block layer comparison.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/sysinternals/io-manager.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="I/O Manager">
+		<meta name="twitter:description" itemprop="description" content="Windows I/O Manager architecture covering IRPs, device stacks, dispatch routines, IOCP, and buffering strategies, plus the Linux block layer comparison.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-io-problem">The I/O Problem</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#windows-irp-io-request-packet">Windows IRP - I/O Request Packet</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#device-stacks-layered-driver-model">Device Stacks - Layered Driver Model</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#dispatch-routines-major-function-codes">Dispatch Routines: Major Function Codes</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#io-completion-and-iocp">I/O Completion and IOCP</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#buffering-strategies">Buffering Strategies</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#fast-io-path">Fast I/O Path</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#cancel-routines-and-irp-cancellation">Cancel Routines and IRP Cancellation</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#wdf-windows-driver-framework">WDF - Windows Driver Framework</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#linux-io-stack-in-depth-trace">Linux I/O Stack: In-Depth Trace</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#linux-io-schedulers">Linux I/O Schedulers</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/sysinternals/index.html">Sysinternals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/sysinternals/io-manager.html">Io Manager</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="io-manager">I/O Manager</h2>
+					<p>
+						Windows I/O Manager architecture covering
+						<abbr title="I/O Request Packet">IRP</abbr>
+						s, device stacks, dispatch
+						routines,
+						<abbr title="I/O Completion Port">IOCP</abbr>
+						, and buffering strategies, plus the Linux block layer
+						comparison.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Every I/O request crosses a common subsystem before it reaches a device driver. Windows routes
+							requests through the I/O Manager as I/O Request Packets; Linux routes them through the VFS and
+							the block layer. This article dissects both paths, explains buffering and completion models,
+							and shows how to observe them with
+							<code>iostat</code>
+							,
+							<code>iotop</code>
+							, and
+							<code>blktrace</code>
+							. After reading it you
+							can trace a single write from the system call to the device.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/system-calls.html">System Calls</a> - syscall mechanism, Linux syscall table, strace</li>
+							<li><a href="/wiki/articles/sysinternals/kernel-architecture.html">Kernel Architecture</a> - kernel architecture, subsystems, executive services</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-io-problem">The I/O Problem</h3>
+						<p>
+							Every operating system must mediate access to hardware - disks, network cards, keyboards,
+							<abbr title="Graphical Processing Unit">GPU</abbr>
+							s. Without a centralized I/O subsystem, every driver would independently handle buffer management,
+							asynchronous completion, cancellation, and access checks. Heterogeneous drivers lead to inconsistent
+							behavior, deadlocks, and security vulnerabilities.
+						</p>
+						<p>
+							Windows solves this with the
+							<b>I/O Manager</b>
+							(
+							<code>ntoskrnl.exe</code>
+							, source in
+							<code>io/</code>
+							). Linux solves
+							it through the
+							<b>block layer</b>
+							(
+							<code>block/</code>
+							),
+							<b>character device framework</b>
+							(
+							<code>drivers/char/</code>
+							), and
+							<b>VFS</b>
+							(
+							<code>fs/</code>
+							). Both designs share a fundamental insight: I/O is inherently asynchronous,
+							and the OS must provide a uniform abstraction across diverse device types.
+						</p>
+						<pre class="plaintext">
+User Application
+      │
+      │  read(fd, buf, 4096)
+      ▼
+┌──────────────────────────────────────┐
+│  POSIX / Win32 API Layer             │
+│  (libc, kernel32.dll, ntdll.dll)     │
+└────────────────+─────────────────────┘
+                 │
+                 ▼
+┌──────────────────────────────────────┐
+│  I/O Manager / VFS Layer             │
+│  - Dispatch to correct driver stack  │
+│  - Handle buffering strategy          │
+│  - Manage async completion           │
+│  - Validate access rights            │
+└────────────────+─────────────────────┘
+                 │
+     ┌───────────+───────────┐
+     ▼           ▼           ▼
+┌─────────┐ ┌─────────┐ ┌─────────┐
+│ Disk    │ │ Network │ │ USB     │
+│ Driver  │ │ Driver  │ │ Driver  │
+│ Stack   │ │ Stack   │ │ Stack   │
+└────+────┘ └────+────┘ └────+────┘
+     ▼           ▼           ▼
+┌──────────────────────────────────────┐
+│  Hardware Abstraction Layer (HAL)    │
+│  - Program device registers          │
+│  - Handle interrupts                 │
+│  - DMA setup                         │
+└──────────────────────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="windows-irp-io-request-packet">Windows IRP - I/O Request Packet</h3>
+						<p>
+							The fundamental unit of I/O in Windows is the
+							<b>IRP</b>
+							(I/O Request Packet). Every I/O operation
+							<ul>
+								<li>read, write, device control - is represented by an <abbr title="Incident Response">IR</abbr> P allocated</li>
+							</ul>
+							from
+							non-paged pool. The
+							<abbr title="Incident Response">IR</abbr>
+							P travels down the device stack, with each driver
+							adding its own parameters via an
+							<b>I/O stack location</b>
+							.
+						</p>
+						<pre class="plaintext">
+IRP Structure:
+┌──────────────────────────────────────────────────────┐
+│  IRP Header                                          │
+│  ├── Type            (UINT16)       = IO_TYPE_IRP    │
+│  ├── Size            (UINT16)                        │
+│  ├── MdlAddress      (PMDL)         ← DMA buffer desc│
+│  ├── Flags           (ULONG)                         │
+│  ├── AssociatedIrp   (union)        ← master IRP link│
+│  ├── ThreadListEntry (LIST_ENTRY)                    │
+│  ├── IoStatus        (IO_STATUS_BLOCK)               │
+│  │   ├── Status      (NTSTATUS)                      │
+│  │   └── Information (ULONG_PTR)   ← bytes transferred│
+│  ├── RequestorMode   (KPROCESSOR_MODE)               │
+│  ├── PendingReturned (BOOLEAN)                       │
+│  ├── StackCount      (CHAR)                          │
+│  ├── CurrentLocation (CHAR)         ← current stack index│
+│  ├── Cancel          (BOOLEAN)                       │
+│  ├── CancelRoutine   (PDRIVER_CANCEL)                │
+│  ├── UserBuffer      (PVOID)        ← user&#39;s buffer  │
+│  └── Tail            (union)                         │
+│      └── Overlay (contains:                          │
+│          ├── Thread  (PETHREAD)      ← issuing thread │
+│          ├── AuxiliaryBuffer (char*)                  │
+│          └── DriverContext[4] (PVOID))                │
+│                                                       │
+│  IO_STACK_LOCATION[]  (one per driver in stack)       │
+│  ├── StackLocation[0]          ← top of stack         │
+│  │   ├── MajorFunction (UCHAR) (IRP_MJ_READ, etc.)   │
+│  │   ├── MinorFunction (UCHAR)                        │
+│  │   ├── Flags         (UCHAR)                        │
+│  │   ├── Control       (UCHAR)                        │
+│  │   ├── Parameters (union):                          │
+│  │   │   ├── Create: SecurityContext, Options         │
+│  │   │   ├── Read: Length, ByteOffset, Key            │
+│  │   │   ├── Write: Length, ByteOffset, Key           │
+│  │   │   └── DeviceIoControl: IoControlCode, ...      │
+│  │   ├── DeviceObject  (PDEVICE_OBJECT)               │
+│  │   ├── FileObject    (PFILE_OBJECT)                 │
+│  │   └── CompletionRoutine (PIO_COMPLETION_ROUTINE)   │
+│  ├── StackLocation[1]          ← middle driver(s)     │
+│  └── StackLocation[N]          ← bottom (PDO)         │
+└──────────────────────────────────────────────────────┘
+						</pre>
+						<p>
+							The
+							<abbr title="Incident Response">IR</abbr>
+							P is processed top-down (highest driver first) and completed bottom-up.
+							<code>CurrentLocation</code>
+							tracks which stack entry is active.
+						</p>
+						<p>
+							Linux equivalent -
+							<code>struct bio</code>
+							and
+							<code>struct request</code>
+							:
+						</p>
+						<pre class="c">
+// Linux block I/O structures (include/linux/blk_types.h)
+
+struct bio {
+    struct bio          *bi_next;       // request queue link
+    struct block_device *bi_bdev;       // target block device
+    blk_opf_t            bi_opf;        // operation + flags (READ/WRITE/SYNC...)
+    unsigned short       bi_flags;
+    unsigned short       bi_ioprio;
+    blk_status_t         bi_status;     // completion status
+    struct bvec_iter     bi_iter;       // current segment info
+    unsigned int         bi_phys_segments;
+    unsigned int         bi_seg_front_size;
+    unsigned int         bi_seg_back_size;
+    atomic_t             __bi_remaining;
+    bio_end_io_t        *bi_end_io;     // completion callback
+    void                *bi_private;
+    struct bio_vec       bi_inline_vecs[];
+    // bi_io_vec[N]: scatter-gather list
+};
+
+struct request {
+    struct request_queue *q;            // owning queue
+    struct blk_mq_ctx    *mq_ctx;
+    struct blk_mq_hw_ctx *mq_hctx;
+    blk_opf_t             cmd_flags;    // REQ_OP_READ, REQ_OP_WRITE, ...
+    struct bio           *bio;          // submitted bio chain
+    struct bio           *biotail;
+    blk_status_t          status;
+    sector_t              __sector;     // sector cursor
+    unsigned int          __data_len;   // total data length
+    struct list_head      queuelist;
+    // ...
+};
+						</pre>
+					</section>
+					<section>
+						<h3 id="device-stacks-layered-driver-model">Device Stacks - Layered Driver Model</h3>
+						<p>
+							Windows drivers are layered - each layer adds or transforms functionality. A disk I/O might
+							pass through five drivers:
+						</p>
+						<pre class="plaintext">
+User Application
+      │  NtWriteFile(hFile, buf, len, offset, ...)
+      ▼
+┌────────────────────────────────────────────────┐
+│  I/O Manager — Creates IRP, locates device stack│
+└───────────────────────+────────────────────────┘
+                        │
+                        ▼  IRP_MJ_WRITE
+┌────────────────────────────────────────────────┐
+│  File System Driver (NTFS.sys)                 │  FDO
+│  - Translate file offset → volume cluster       │
+│  - Cache management                             │
+│  - Journaling                                   │
+│  - IoCallDriver(lowerDevice, irp)               │
+└───────────────────────+────────────────────────┘
+                        │
+                        ▼  IRP_MJ_WRITE
+┌────────────────────────────────────────────────┐
+│  Volume Snapshot Driver (volsnap.sys)           │  FiDO
+│  - Copy-on-write for volume snapshots           │
+│  - IoCallDriver(lowerDevice, irp)               │
+└───────────────────────+────────────────────────┘
+                        │
+                        ▼  IRP_MJ_WRITE
+┌────────────────────────────────────────────────┐
+│  Partition Manager (partmgr.sys)                │  FiDO
+│  - Offset adjustment for partition boundaries   │
+│  - IoCallDriver(lowerDevice, irp)               │
+└───────────────────────+────────────────────────┘
+                        │
+                        ▼  IRP_MJ_WRITE
+┌────────────────────────────────────────────────┐
+│  Disk Class Driver (disk.sys)                   │  FDO
+│  - I/O scheduling, request queuing              │
+│  - IoCallDriver(lowerDevice, irp)               │
+└───────────────────────+────────────────────────┘
+                        │
+                        ▼  IRP_MJ_SCSI (via SCSI miniport)
+┌────────────────────────────────────────────────┐
+│  Storage Port Driver (storport.sys)             │  PDO
+│  - SCSI/ATA/NVMe command translation            │
+│  - DMA programming                              │
+│  - Interrupt handling                           │
+│  - IoCompleteRequest(irp) → bubbles up stack    │
+└────────────────────────────────────────────────┘
+
+  FDO  = Functional Device Object (top of stack, primary function)
+  FiDO = Filter Device Object (intermediate, adds functionality)
+  PDO  = Physical Device Object (bottom, talks to hardware)
+						</pre>
+						<p>Linux uses a similar stacking model but with different abstractions:</p>
+						<pre class="bash">
+# Linux I/O stack for a write(2) to an ext4 file on an NVMe drive:
+
+# User: write(fd, buf, 4096)
+#   │
+#   ▼ sys_write() → vfs_write()
+# VFS Layer (fs/read_write.c)
+#   │
+#   ▼ file→f_op→write_iter() → ext4_file_write_iter()
+# ext4 (fs/ext4/file.c)
+#   │  → allocates blocks, updates metadata
+#   ▼ ext4_writepages() → submit_bio()
+# Block Layer (block/blk-mq.c)
+#   │  → blk_mq_submit_bio() → plugs, merges, schedules
+#   ▼ nvme_queue_rq()
+# NVMe Driver (drivers/nvme/host/pci.c)
+#   │  → programs NVMe submission queue entry
+#   ▼ Hardware rings doorbell
+# NVMe Controller
+#   │  → DMA reads command, performs I/O
+#   ▼ MSI-X interrupt → nvme_irq()
+# NVMe Driver (completion)
+#   │  → blk_mq_complete_request() → bio_endio()
+#   ▼ ext4 completes write
+# VFS → user: write() returns 4096
+						</pre>
+						<pre class="bash">
+# Visualize the device stack with lsblk
+lsblk -o NAME,KNAME,MAJ:MIN,TYPE,SIZE,MOUNTPOINTS
+# NAME        KNAME  MAJ:MIN TYPE   SIZE MOUNTPOINTS
+# nvme0n1     nvme0n1 259:0  disk 476.9G
+# ├─nvme0n1p1 nvme0n1p1 259:1 part   512M /boot
+# ├─nvme0n1p2 nvme0n1p2 259:2 part 460.4G /
+# └─nvme0n1p3 nvme0n1p3 259:3 part    16G [SWAP]
+
+# Show the I/O scheduler for a block device
+cat /sys/block/nvme0n1/queue/scheduler
+# [mq-deadline] kyber none bfq
+						</pre>
+					</section>
+					<section>
+						<h3 id="dispatch-routines-major-function-codes">Dispatch Routines: Major Function Codes</h3>
+						<p>
+							Every Windows driver registers dispatch routines for standard I/O operations. The
+							<code>MajorFunction</code>
+							field in the
+							<abbr title="Incident Response">IR</abbr>
+							P stack location determines which dispatch routine handles
+							the
+							<abbr title="Incident Response">IR</abbr>
+							P:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">MajorFunction</th>
+									<th align="center">Code</th>
+									<th align="center">Triggered By</th>
+									<th align="center">Purpose</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>IRP_MJ_CREATE</code></td>
+									<td align="center">0x00</td>
+									<td align="center"><code>NtCreateFile()</code></td>
+									<td align="center">Open/create file or device</td>
+								</tr>
+								<tr>
+									<td align="center"><code>IRP_MJ_CREATE_NAMED_PIPE</code></td>
+									<td align="center">0x01</td>
+									<td align="center"><code>CreateNamedPipe()</code></td>
+									<td align="center">Create named pipe</td>
+								</tr>
+								<tr>
+									<td align="center"><code>IRP_MJ_CLOSE</code></td>
+									<td align="center">0x02</td>
+									<td align="center"><code>NtClose()</code></td>
+									<td align="center">Close handle</td>
+								</tr>
+								<tr>
+									<td align="center"><code>IRP_MJ_READ</code></td>
+									<td align="center">0x03</td>
+									<td align="center"><code>NtReadFile()</code></td>
+									<td align="center">Read data</td>
+								</tr>
+								<tr>
+									<td align="center"><code>IRP_MJ_WRITE</code></td>
+									<td align="center">0x04</td>
+									<td align="center"><code>NtWriteFile()</code></td>
+									<td align="center">Write data</td>
+								</tr>
+								<tr>
+									<td align="center"><code>IRP_MJ_QUERY_INFORMATION</code></td>
+									<td align="center">0x05</td>
+									<td align="center"><code>NtQueryInformationFile()</code></td>
+									<td align="center">Get metadata</td>
+								</tr>
+								<tr>
+									<td align="center"><code>IRP_MJ_SET_INFORMATION</code></td>
+									<td align="center">0x06</td>
+									<td align="center"><code>NtSetInformationFile()</code></td>
+									<td align="center">Set metadata</td>
+								</tr>
+								<tr>
+									<td align="center"><code>IRP_MJ_QUERY_EA</code></td>
+									<td align="center">0x07</td>
+									<td align="center"><code>NtQueryEaFile()</code></td>
+									<td align="center">Query extended attributes</td>
+								</tr>
+								<tr>
+									<td align="center"><code>IRP_MJ_SET_EA</code></td>
+									<td align="center">0x08</td>
+									<td align="center"><code>NtSetEaFile()</code></td>
+									<td align="center">Set extended attributes</td>
+								</tr>
+								<tr>
+									<td align="center"><code>IRP_MJ_FLUSH_BUFFERS</code></td>
+									<td align="center">0x09</td>
+									<td align="center"><code>NtFlushBuffersFile()</code></td>
+									<td align="center">Flush caches</td>
+								</tr>
+								<tr>
+									<td align="center"><code>IRP_MJ_QUERY_VOLUME_INFORMATION</code></td>
+									<td align="center">0x0A</td>
+									<td align="center"><code>GetVolumeInformation()</code></td>
+									<td align="center">Volume metadata</td>
+								</tr>
+								<tr>
+									<td align="center"><code>IRP_MJ_SET_VOLUME_INFORMATION</code></td>
+									<td align="center">0x0B</td>
+									<td align="center"><code>SetVolumeInformation()</code></td>
+									<td align="center">Set volume metadata</td>
+								</tr>
+								<tr>
+									<td align="center"><code>IRP_MJ_DIRECTORY_CONTROL</code></td>
+									<td align="center">0x0C</td>
+									<td align="center"><code>NtQueryDirectoryFile()</code></td>
+									<td align="center">Enumerate directory</td>
+								</tr>
+								<tr>
+									<td align="center"><code>IRP_MJ_FILE_SYSTEM_CONTROL</code></td>
+									<td align="center">0x0D</td>
+									<td align="center"><code>FSCTL_*</code></td>
+									<td align="center">File system control</td>
+								</tr>
+								<tr>
+									<td align="center"><code>IRP_MJ_DEVICE_CONTROL</code></td>
+									<td align="center">0x0E</td>
+									<td align="center"><code>DeviceIoControl()</code></td>
+									<td align="center">Device-specific IOCTL</td>
+								</tr>
+								<tr>
+									<td align="center"><code>IRP_MJ_SHUTDOWN</code></td>
+									<td align="center">0x10</td>
+									<td align="center">System shutdown</td>
+									<td align="center">Cleanup before power-off</td>
+								</tr>
+								<tr>
+									<td align="center"><code>IRP_MJ_PNP</code></td>
+									<td align="center">0x1B</td>
+									<td align="center">PnP Manager</td>
+									<td align="center">Plug and play events</td>
+								</tr>
+								<tr>
+									<td align="center"><code>IRP_MJ_POWER</code></td>
+									<td align="center">0x16</td>
+									<td align="center">Power Manager</td>
+									<td align="center">Power state transitions</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							Linux equivalents - each driver registers
+							<code>struct file_operations</code>
+							or
+							<code>struct block_device_operations</code>
+							:
+						</p>
+						<pre class="bash">
+# Linux file_operations — analogous to Windows dispatch table
+# Defined in include/linux/fs.h
+
+# View the available file operations for a loaded filesystem module
+cat /proc/kallsyms | grep -E &#34;ext4_file_operations\|ext4_dir_operations&#34; | head -5
+
+# The Linux block_device_operations handles I/O at the block level:
+#   submit_bio — analogous to IRP_MJ_READ/IRP_MJ_WRITE dispatch
+#   open       — analogous to IRP_MJ_CREATE
+#   release    — analogous to IRP_MJ_CLOSE
+#   ioctl      — analogous to IRP_MJ_DEVICE_CONTROL
+
+# Trace IOCTL-equivalent calls in Linux
+sudo bpftrace -e &#39;
+kprobe:vfs_ioctl {
+    $file = (struct file *)arg0;
+    $cmd = arg1;
+    printf(&#34;ioctl: comm=%s file=%p cmd=0x%x\n&#34;, comm, $file, $cmd);
+}
+&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="io-completion-and-iocp">I/O Completion and IOCP</h3>
+						<p>Windows supports two completion models for asynchronous I/O:</p>
+						<ol>
+							<li><b>Completion Routines</b> - a callback function registered in the <abbr title="Incident Response">IR</abbr> P stack location. When a lower driver completes the <abbr title="Incident Response">IR</abbr> P, the I/O Manager invokes the completion routine as the <abbr title="Incident Response">IR</abbr> P bubbles back up the stack.</li>
+						</ol>
+						<ol>
+							<li><b>I/O Completion Ports (IOCP)</b> - a scalable, queue-based mechanism. Threads post completion packets to a port, and worker threads dequeue them. <abbr title="Indicator of Compromise">IOC</abbr> P is the foundation of high-performance servers (IIS, <abbr title="Structured Query Language">SQL</abbr> Server).</li>
+						</ol>
+						<pre class="plaintext">
+IOCP Architecture:
+══════════════════════════════════════════════════════════════
+
+  I/O Worker Threads       Application Threads
+  ┌────────────────┐      ┌────────────────┐
+  │ Thread 1       │      │ Main Thread    │
+  │ GetQueuedComp- │      │                │
+  │ letionStatus() │      │ CreateIoComp-  │
+  │   → process    │      │ letionPort()   │
+  └────────────────┘      │                │
+  ┌────────────────┐      │ CreateFile() + │
+  │ Thread 2       │      │   FILE_FLAG_   │
+  │ GetQueuedComp- │      │   OVERLAPPED   │
+  │ letionStatus() │      │                │
+  │   → process    │      │ CreateIoComp-  │
+  └────────────────┘      │ letionPort() + │
+  ┌────────────────┐      │   BindIoComp-  │
+  │ Thread N       │      │   letionCallback│
+  │ (waiting on    │      └────────────────┘
+  │  completion    │              │
+  │  port)         │              │
+  └────────────────┘              ▼
+         ▲              ┌────────────────────────┐
+         │              │   I/O Completion Port   │
+         └──────────────│   ┌──────────────────┐ │
+    Threads released    │   │ Completion Queue  │ │
+    when completions    │   │ [COMPLETE][COMPL.]│ │
+    arrive (concurrency │   │ [COMPLETE] ...    │ │
+    limited by          │   └──────────────────┘ │
+    NumberOfConcurrent  └────────────────────────┘
+    Threads param)
+						</pre>
+						<p>
+							Linux equivalent:
+							<code>libaio</code>
+							(native AIO),
+							<code>io_uring</code>
+							, and
+							<code>epoll</code>
+							:
+						</p>
+						<pre class="bash">
+# Linux async I/O mechanisms comparison:
+#
+# epoll        — readiness notification (not completion)
+# libaio       — AIO syscalls: io_submit, io_getevents
+# io_uring     — submission + completion ring buffers (modern, fast)
+
+# io_uring is the Linux analogue of IOCP:
+#  - Shared ring buffers between kernel and userspace
+#  - Submission Queue (SQ): user → kernel
+#  - Completion Queue (CQ): kernel → user
+#  - No syscall overhead for polling mode
+
+# Trace io_uring operations
+sudo bpftrace -e &#39;
+kprobe:io_uring_submit { printf(&#34;io_uring submit: pid=%d\n&#34;, pid); }
+kprobe:io_uring_complete { printf(&#34;io_uring complete: pid=%d\n&#34;, pid); }
+&#39;
+
+# Check whether io_uring is enabled for unprivileged users
+cat /proc/sys/kernel/io_uring_disabled
+ls /sys/kernel/debug/tracing/events/io_uring/
+						</pre>
+					</section>
+					<section>
+						<h3 id="buffering-strategies">Buffering Strategies</h3>
+						<p>
+							Windows supports three I/O buffering strategies, selected by the driver when creating its device
+							object:
+						</p>
+						<pre class="plaintext">
+1. Buffered I/O (METHOD_BUFFERED)
+══════════════════════════════════════════════════════════════
+
+User Buffer (user space)        System Buffer (non-paged pool)
+┌──────────────────────┐       ┌──────────────────────┐
+│    buf[4096]         │       │  Irp→AssociatedIrp.  │
+│                      │ copy  │  SystemBuffer        │
+│                      │◄─────►│                      │
+└──────────────────────┘       └──────────────────────┘
+  - I/O Manager copies between user buffer and system buffer
+  - Driver works only with SystemBuffer
+  - Safe: user cannot free/munmap the buffer during I/O
+  - Overhead: double copy for reads (device→sys→user)
+  - Used by: most simple drivers, serial, keyboard
+
+2. Direct I/O (METHOD_IN_DIRECT / METHOD_OUT_DIRECT)
+══════════════════════════════════════════════════════════════
+
+User Buffer (user space)        MDL → Physical Pages
+┌──────────────────────┐       ┌──────────────────────┐
+│    buf[4096]         │ lock  │  Pfn0: 0x1234        │
+│  (virtual address)   │──────►│  Pfn1: 0x5678        │
+│                      │  MDL  │  Pfn2: 0x9ABC        │
+└──────────────────────┘       └──────────────────────┘
+  - I/O Manager locks user pages in memory (ProbeAndLockPages)
+  - Creates Memory Descriptor List (MDL) with physical page numbers
+  - Driver or DMA engine uses MDL for direct access
+  - No copy overhead (device DMAs directly to/from user buffer)
+  - Used by: disk and network drivers
+
+3. Neither I/O (METHOD_NEITHER)
+══════════════════════════════════════════════════════════════
+
+User Buffer (user space)        Driver sees raw pointer
+┌──────────────────────┐       ┌──────────────────────┐
+│    buf[4096]         │ raw   │  Irp→UserBuffer      │
+│  (virtual address)   │ ptr   │  = buf (va)          │
+└──────────────────────┘       └──────────────────────┘
+  - I/O Manager passes raw user virtual address to driver
+  - Driver must call ProbeForRead/ProbeForWrite to validate
+  - Driver must be in context of requesting thread (no DPC!)
+  - Fastest: zero copy overhead, zero lock overhead
+  - Dangerous if not properly validated
+  - Used by: filesystem drivers (they do their own buffer management)
+						</pre>
+						<p>Linux buffering strategies comparison:</p>
+						<pre class="bash">
+# Linux I/O buffering methods:
+
+# 1. Buffered I/O (default) — kernel page cache
+echo &#34;hello&#34; &gt; /tmp/test_buf        # write() → page cache → (later) disk
+cat /tmp/test_buf                    # read() → page cache
+
+# 2. Direct I/O (O_DIRECT) — bypass page cache, DMA directly
+dd if=/dev/zero of=/tmp/test_direct bs=4096 count=100 oflag=direct
+
+# 3. Memory-mapped I/O (mmap) — pages mapped directly into address space
+python3 -c &#34;
+import mmap, os
+fd = os.open(&#39;/tmp/test_mmap&#39;, os.O_RDWR | os.O_CREAT)
+os.ftruncate(fd, 4096)
+m = mmap.mmap(fd, 4096, mmap.MAP_SHARED, mmap.PROT_WRITE)
+m[0:11] = b&#39;hello world&#39;     # Write directly to memory
+m.flush()                     # Force to disk
+m.close()
+os.close(fd)
+&#34;
+
+# 4. Vectored I/O (readv/writev) — scatter/gather like MDL
+# Multiple non-contiguous buffers in one syscall
+python3 -c &#34;
+import os, struct
+# writev: gather from multiple buffers into one operation
+bufs = [b&#39;hello &#39;, b&#39;world&#39;, b&#39;!\\n&#39;]
+# In C: struct iovec iov[3] = {...}; writev(fd, iov, 3)
+&#34;
+
+# Show kernel&#39;s I/O mode for a specific fd
+cat /proc/$$/fdinfo/3
+# flags: 0100001  ← bit 0 = O_WRONLY, upper bits = O_DIRECT etc.
+
+# Monitor direct I/O usage
+sudo bpftrace -e &#39;
+kprobe:do_direct_IO { printf(&#34;Direct I/O: pid=%d comm=%s\n&#34;, pid, comm); }
+&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="fast-io-path">Fast I/O Path</h3>
+						<p>
+							Windows provides a
+							<b>Fast I/O</b>
+							path that bypasses full
+							<abbr title="Incident Response">IR</abbr>
+							P creation for
+							cached, synchronous I/O. Instead of allocating an
+							<abbr title="Incident Response">IR</abbr>
+							P, the I/O Manager
+							directly calls the filesystem driver's FastIoRead/FastIoWrite routines:
+						</p>
+						<pre class="plaintext">
+Slow Path (Full IRP):              Fast Path:
+══════════════════════              ═════════
+
+NtReadFile()                       NtReadFile()
+  │                                  │
+  ▼                                  ▼
+IoAllocateIrp() ← alloc              IoCheckFastIoRead()
+  │                                  │
+  ▼                                  ├── Hit: FsRtlCopyRead()
+IoCallDriver(device, irp)            │     → copy from cache
+  │                                  │     → return data
+  ▼                                  │
+driver→DispatchRead()                └── Miss: fall through to slow path
+  │
+  ▼
+IoCompleteRequest(irp)
+  │
+  ▼
+IoFreeIrp(irp)
+						</pre>
+						<p>
+							Linux equivalent: the
+							<b>page cache hit path</b>
+							. When data is cached,
+							<code>read()</code>
+							returns directly
+							from memory without going through the block layer:
+						</p>
+						<pre class="bash">
+# Trace fast vs slow I/O paths in Linux
+sudo bpftrace -e &#39;
+kprobe:generic_file_read_iter {
+    printf(&#34;VFS read (slow path entry): pid=%d\n&#34;, pid);
+}
+kprobe:filemap_read {
+    printf(&#34;Page cache read: pid=%d\n&#34;, pid);
+}
+kprobe:submit_bio {
+    printf(&#34;BLOCK LAYER (disk access): pid=%d comm=%s\n&#34;, pid, comm);
+}
+kretprobe:submit_bio /retval &gt; 0/ {
+    printf(&#34;  → submitted OK\n&#34;);
+}
+&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="cancel-routines-and-irp-cancellation">Cancel Routines and IRP Cancellation</h3>
+						<p>
+							Windows supports cancelling in-progress I/O. Threads call
+							<code>CancelIo()</code>
+							or
+							<code>CancelSynchronousIo()</code>
+							, which sets
+							<code>Irp-&gt;Cancel = TRUE</code>
+							and invokes the driver's cancel routine:
+						</p>
+						<pre class="plaintext">
+Cancellation Flow:
+══════════════════════════════════════════════════════════════
+
+User Thread                          I/O Manager        Driver
+    │                                    │                 │
+    │ CancelIoEx(hFile, &amp;overlapped)     │                 │
+    ├───────────────────────────────────►│                 │
+    │                                    │                 │
+    │                                    │ IoCancelIrp()   │
+    │                                    ├────────────────►│
+    │                                    │  (calls driver&#39;s│
+    │                                    │  CancelRoutine) │
+    │                                    │                 │
+    │                                    │         ┌───────┤
+    │                                    │         │ Mark  │
+    │                                    │         │ IRP   │
+    │                                    │         │ canceled│
+    │                                    │         │ Release│
+    │                                    │         │ queue │
+    │                                    │         └───+───┤
+    │                                    │             │
+    │                                    │◄────────────┘
+    │                                    │  IRP completed
+    │◄───────────────────────────────────┤  with STATUS_CANCELLED
+						</pre>
+						<p>Linux has per-thread cancellation via signals, and io_uring supports request cancellation:</p>
+						<pre class="bash">
+# Linux I/O cancellation mechanisms
+
+# 1. Signals can interrupt blocking I/O
+timeout 3 cat /dev/urandom &gt; /dev/null  # Kills after 3s (SIGTERM)
+
+# 2. aio_cancel() for POSIX AIO
+# 3. io_uring_cqe_seen + IORING_OP_ASYNC_CANCEL in io_uring
+
+# 4. Most block I/O operations are NOT interruptible in D state
+# If in uninterruptible sleep (D state), signals are ignored
+ps aux | awk &#39;$8 ~ /D/ {print &#34;Uninterruptible:&#34;, $2, $11}&#39;
+
+# 5. Cancel a stuck I/O (may not always work)
+sudo kill -9 $(ps aux | awk &#39;$8 ~ /D/ {print $2}&#39; | head -1) 2&gt;/dev/null
+						</pre>
+					</section>
+					<section>
+						<h3 id="wdf-windows-driver-framework">WDF - Windows Driver Framework</h3>
+						<p>
+							Modern Windows drivers use WDF instead of the legacy WDM (Windows Driver Model). WDF provides
+							two frameworks:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Framework</th>
+									<th align="center">Purpose</th>
+									<th align="center">Key Abstraction</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><b>KMDF</b>(Kernel-Mode Driver Framework)</td>
+									<td align="center">Kernel drivers</td>
+									<td align="center">State machines, power management defaults</td>
+								</tr>
+								<tr>
+									<td align="center"><b>UMDF</b>(User-Mode Driver Framework)</td>
+									<td align="center">User-mode drivers</td>
+									<td align="center">Isolated, cannot crash kernel</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							KMDF wraps
+							<abbr title="Incident Response">IR</abbr>
+							P handling - the driver doesn't see
+							<abbr title="Incident Response">IR</abbr>
+							Ps directly. Instead, KMDF converts
+							<abbr title="Incident Response">IR</abbr>
+							Ps into WDFREQUEST objects and calls
+							the driver's
+							<code>EvtIoRead</code>
+							/
+							<code>EvtIoWrite</code>
+							callbacks. This eliminates boilerplate and prevents
+							common bugs like: - Forgetting to complete an
+							<abbr title="Incident Response">IR</abbr>
+							P - Completing an
+							<abbr title="Incident Response">IR</abbr>
+							P from the wrong
+							<abbr title="Incident Response">IR</abbr>
+							QL - Mishandling cancellation
+						</p>
+					</section>
+					<section>
+						<h3 id="linux-io-stack-in-depth-trace">Linux I/O Stack: In-Depth Trace</h3>
+						<pre class="bash">
+# Generate I/O workload and trace the full Linux I/O stack
+# ── Terminal 1: Generate workload ──
+dd if=/dev/zero of=/tmp/iotest bs=1M count=200 oflag=direct status=progress
+
+# ── Terminal 2: I/O statistics ──
+iostat -x 1 5 /dev/nvme0n1
+# Output columns:
+# r/s  w/s  rkB/s  wkB/s  rrqm/s wrqm/s  %rrqm %wrqm r_await w_await aqu-sz rareq-sz wareq-sz svctm %util
+#  0   200     0  204800   0.00   0.00   0.00  0.00    0.00    0.42   0.84     0.00     1024.00   0.38  7.60
+
+# r/s,w/s     — reads/writes per second
+# rkB/s,wkB/s — kilobytes read/written per second
+# r_await     — average read wait time (ms)
+# aqu-sz      — average queue size
+# %util       — device busy percentage
+
+# ── Terminal 3: Per-process I/O ──
+sudo iotop -o -b -n 3
+
+# ── Terminal 4: Block trace ──
+sudo blktrace -d /dev/nvme0n1 -o - | blkparse -i -
+# Detailed output:
+# 259,0    0        1     0.000000000  1234  D  WS 2097152 + 256 [dd]
+# 259,0    0        2     0.000042310  1234  C  WS 2097152 + 256 [0]
+# D = issued to driver, C = completed
+# WS = Write Sync (or W = write, R = read, WM = write metadata)
+# 2097152 = sector number, 256 = sector count (128KB)
+
+# ── Terminal 5: Syscall trace ──
+strace -e trace=write,read -p $(pgrep dd)
+						</pre>
+					</section>
+					<section>
+						<h3 id="linux-io-schedulers">Linux I/O Schedulers</h3>
+						<p>
+							The Linux block layer includes I/O schedulers that reorder, merge, and prioritize requests.
+							This is analogous to Windows's Storport I/O prioritization:
+						</p>
+						<pre class="bash">
+# List available I/O schedulers
+cat /sys/block/nvme0n1/queue/scheduler
+# Output: [mq-deadline] kyber none bfq
+
+# NVMe devices typically use &#34;none&#34; (no software scheduling — let hardware do it)
+# SATA HDDs benefit from mq-deadline or bfq
+
+# Scheduler characteristics:
+# ───────────────────────────────────────────────────────
+# none/mq-deadline: simple, low latency, good for SSDs
+# kyber: latency target-based, self-tuning
+# bfq: proportional share, fairness-focused (good for desktops)
+
+# Change scheduler at runtime
+echo kyber | sudo tee /sys/block/nvme0n1/queue/scheduler
+
+# View scheduler-specific tunables
+ls /sys/block/nvme0n1/queue/iosched/
+
+# I/O merging statistics
+cat /sys/block/nvme0n1/stat
+# &lt;reads&gt; &lt;reads_merged&gt; &lt;sectors_read&gt; &lt;read_ms&gt;
+# &lt;writes&gt; &lt;writes_merged&gt; &lt;sectors_written&gt; &lt;write_ms&gt;
+# &lt;io_in_progress&gt; &lt;io_ms&gt; &lt;weighted_io_ms&gt;
+# &lt;discards&gt; &lt;discards_merged&gt; &lt;sectors_discarded&gt; &lt;discard_ms&gt;
+# &lt;flush&gt; &lt;flush_ms&gt;
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Build the tracing container and follow one I/O request from the
+							<code>write(2)</code>
+							call down to the
+							block device. Run a sequential
+							<code>fio</code>
+							workload, capture it with
+							<code>blktrace</code>
+							, and correlate the
+							<code>D</code>
+							(issued) and
+							<code>C</code>
+							(completed) events with the scheduler and
+							<code>iostat</code>
+							output. Then switch
+							the scheduler and compare the latency distribution.
+						</p>
+						<p><a href="/wiki/articles/sysinternals/io-manager.Containerfile">io-manager.Containerfile</a></p>
+						<pre class="bash">
+podman build -t io-manager-lab -f io-manager.Containerfile .
+podman run -it --rm --privileged io-manager-lab
+						</pre>
+						<p>Inside the container:</p>
+						<pre class="bash">
+# 1. Inspect the block device stack and scheduler
+lsblk -o NAME,KNAME,SCHED,TYPE,SIZE,MOUNTPOINTS
+cat /sys/block/*/queue/scheduler
+
+# 2. Sequential read workload
+fio /workloads/seqread.fio
+
+# 3. Random 4K writes in another terminal
+fio /workloads/randwrite.fio
+
+# 4. Trace the block layer for the first device
+DEV=$(lsblk -nd -o NAME | head -1)
+blktrace -d /dev/$DEV -o - | blkparse -i -
+
+# 5. Compare schedulers
+echo kyber | sudo tee /sys/block/$DEV/queue/scheduler
+fio /workloads/mixed.fio
+						</pre>
+						<p>
+							The container ships
+							<code>fio</code>
+							,
+							<code>iostat</code>
+							,
+							<code>iotop</code>
+							,
+							<code>blktrace</code>
+							, and
+							<code>bpftrace</code>
+							, plus the
+							<code>/workloads/trace_io.sh</code>
+							helper that walks a command through
+							<code>strace</code>
+							,
+							<code>iostat</code>
+							, and the per-device
+							<code>/sys/block</code>
+							statistics.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/sysinternals/resources/windows-internals" target="_blank">Windows Internals, Part 1 - Chapter 8: I/O System</a></li>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/irp-major-function-codes" target="_blank">Windows Driver Kit - IRP Major Function Codes</a></li>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/windows-hardware/drivers/wdf/" target="_blank">Windows WDF - Kernel-Mode Driver Framework</a></li>
+							<li><a class="icon-website" href="https://www.kernel.org/doc/Documentation/block/" target="_blank">Linux Block Layer - Documentation/block/</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/blktrace.8" target="_blank">blktrace(8) - block layer I/O tracing</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/iostat.1" target="_blank">iostat(1) - report CPU and I/O statistics</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/iotop.8" target="_blank">iotop(8) - simple top-like I/O monitor</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/fio.1" target="_blank">fio(1) - flexible I/O tester</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/include/linux/blk_types.h" target="_blank">Linux Elixir - struct bio</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/include/linux/blk-mq.h" target="_blank">Linux Elixir - struct request</a></li>
+							<li><a class="icon-website" href="https://www.kernel.org/doc/html/latest/block/blk-mq.html" target="_blank">Linux kernel - blk-mq (multi-queue block layer)</a></li>
+							<li><a href="/wiki/articles/sysinternals/io-manager.Containerfile">io-manager.Containerfile</a> - I/O workload tracing lab container</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

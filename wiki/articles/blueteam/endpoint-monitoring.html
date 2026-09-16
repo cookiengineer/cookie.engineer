@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Endpoint Monitoring | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Endpoint Monitoring">
+		<meta name="keywords" content="auditd, blueteam, bpftrace, ebpf, endpoint-monitoring, falco">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Endpoint Monitoring">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Monitoring host activity and process execution with auditd, bpftrace, Falco, and osquery.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/blueteam/endpoint-monitoring.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Endpoint Monitoring">
+		<meta name="twitter:description" itemprop="description" content="Monitoring host activity and process execution with auditd, bpftrace, Falco, and osquery.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#why-endpoint-monitoring">Why Endpoint Monitoring</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#auditd-deep-dive">auditd Deep Dive</a></b>
+					<ul>
+						<li><a href="#rule-syntax">Rule Syntax</a></li>
+						<li><a href="#advanced-rule-set">Advanced Rule Set</a></li>
+						<li><a href="#querying-with-ausearch-and-aureport">Querying with ausearch and aureport</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#bpftrace">bpftrace</a></b>
+					<ul>
+						<li><a href="#installation">Installation</a></li>
+						<li><a href="#live-tracing-recipes">Live Tracing Recipes</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#falco">Falco</a></b>
+					<ul>
+						<li><a href="#installation-arch">Installation (Arch)</a></li>
+						<li><a href="#key-configuration">Key Configuration</a></li>
+						<li><a href="#default-rule-examples">Default Rule Examples</a></li>
+						<li><a href="#custom-rule-detect-reverse-shell">Custom Rule: Detect Reverse Shell</a></li>
+						<li><a href="#rule-writing-syntax">Rule Writing Syntax</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#osquery-introduction">osquery Introduction</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#comparing-approaches">Comparing Approaches</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ebpf-based-monitoring">eBPF-based Monitoring</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#detection-process-injection">Detection: Process Injection</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/blueteam/index.html">Blueteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/blueteam/endpoint-monitoring.html">Endpoint Monitoring</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="endpoint-monitoring">Endpoint Monitoring</h2>
+					<p>Monitoring host activity and process execution with auditd, bpftrace, Falco, and osquery.</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Endpoint monitoring instruments the syscalls and process events that a compromised host leaves
+							behind. This article covers the Linux audit subsystem, bpftrace, Falco, and osquery, compares
+							their event sources and overhead, and shows how to turn each into a detection. After reading,
+							you can write auditd rules, trace syscalls live, and query host state on a schedule.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/processes.html">/wiki/articles/fundamentals/processes.html</a> - process lifecycle, fork/exec semantics, signals</li>
+							<li><a href="/wiki/articles/fundamentals/system-calls.html">/wiki/articles/fundamentals/system-calls.html</a> - syscall interface, user/kernel transition</li>
+							<li><a href="/wiki/articles/fundamentals/virtual-memory.html">/wiki/articles/fundamentals/virtual-memory.html</a> - address spaces, mmap, shared memory</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="why-endpoint-monitoring">Why Endpoint Monitoring</h3>
+						<p>
+							Network monitoring catches traffic crossing boundaries. Endpoint monitoring catches the activity
+							that generates that traffic - process creation, file access, privilege changes, and memory manipulation.
+							An attacker who compromises a host leaves traces in syscalls. Endpoint monitoring instruments
+							those syscalls.
+						</p>
+					</section>
+					<section>
+						<h3 id="auditd-deep-dive">auditd Deep Dive</h3>
+						<p>
+							The audit subsystem hooks kernel syscall entry/exit points. It is the most battle-tested Linux
+							endpoint monitoring tool. Rules are additive - the kernel evaluates all rules per syscall and
+							fires events when criteria match.
+						</p>
+						<h4 id="rule-syntax">Rule Syntax</h4>
+						<pre class="plaintext">
+-a action,list -F field=value -S syscall -k key
+-w path -p permissions -k key
+						</pre>
+						<p>
+							Actions:
+							<code>always</code>
+							(always log),
+							<code>never</code>
+							(never log). Lists:
+							<code>task</code>
+							(process creation),
+							<code>entry</code>
+							(syscall entry),
+							<code>exit</code>
+							(syscall exit - most useful),
+							<code>user</code>
+							(userspace messages).
+						</p>
+						<h4 id="advanced-rule-set">Advanced Rule Set</h4>
+						<pre class="bash">
+# /etc/audit/rules.d/99-endpoint-monitoring.rules
+-D
+-b 8192
+-f 1
+
+# === Process Creation ===
+# Capture full command line of every new process
+-a always,exit -F arch=b64 -S execve -F key=proc_creation
+-a always,exit -F arch=b32 -S execve -F key=proc_creation
+
+# Capture child process creation (fork/clone)
+-a always,exit -F arch=b64 -S fork -S vfork -S clone -F key=proc_fork
+
+# === File Integrity Monitoring ===
+# System configuration files
+-w /etc/passwd -p wa -k etc_passwd
+-w /etc/shadow -p wa -k etc_shadow
+-w /etc/group -p wa -k etc_group
+-w /etc/sudoers -p wa -k etc_sudoers
+-w /etc/crontab -p wa -k cron_config
+-w /etc/cron.d -p wa -k cron_config
+-w /etc/ssh/sshd_config -p wa -k sshd_config
+
+# Web shells — PHP file creation in web root
+-w /var/www/html -p wa -k webroot_write
+
+# Setuid/setgid binary creation
+-a always,exit -F arch=b64 -S chmod -F a1=04777 -F key=setuid_creation
+-a always,exit -F arch=b64 -S chmod -F a1=02777 -F key=setgid_creation
+
+# === Privilege Operations ===
+-a always,exit -F arch=b64 -S setuid -S setreuid -S setresuid -k priv_escalation
+-a always,exit -F arch=b64 -S setgid -S setregid -S setresgid -k priv_escalation
+-a always,exit -F arch=b64 -S capset -S prctl -k capability_change
+
+# === Network Activity ===
+-a always,exit -F arch=b64 -S socket -S bind -S connect -S accept -k socket_activity
+
+# === Suspicious Paths ===
+# Execution from temporary directories
+-a always,exit -F arch=b64 -S execve -F dir=/tmp -k tmp_exec
+-a always,exit -F arch=b64 -S execve -F dir=/dev/shm -k shm_exec
+-a always,exit -F arch=b64 -S execve -F dir=/var/tmp -k vartmp_exec
+
+# === Persistence Mechanisms ===
+-w /etc/systemd/system -p wa -k systemd_unit
+-w /etc/init.d -p wa -k init_script
+-w /root/.ssh/authorized_keys -p wa -k ssh_persistence
+-w /home -p wa -k home_ssh_keys -F dir=.ssh
+
+# === Kernel Module Loading ===
+-w /sbin/insmod -p x -k kernel_module
+-w /sbin/rmmod -p x -k kernel_module
+-w /sbin/modprobe -p x -k kernel_module
+-a always,exit -F arch=b64 -S init_module -S finit_module -S delete_module -k kernel_module
+
+-e 2
+						</pre>
+						<h4 id="querying-with-ausearch-and-aureport">Querying with ausearch and aureport</h4>
+						<pre class="bash">
+# All process creations with command arguments
+ausearch -k proc_creation --raw | ausearch --format interpret
+
+# Failed execve attempts (nonexistent binaries, permission denied)
+ausearch -m SYSCALL -sc execve --success no
+
+# Summary report: executable invocations per user
+aureport -x --summary
+
+# Summary report: authentication events
+aureport -au
+
+# Summary report: file access
+aureport -f --summary
+
+# Summary report: anomalies (failed syscalls with unusual patterns)
+aureport -a --summary
+
+# Filter by time window
+ausearch -ts 06/26/2026 00:00:00 -te 06/26/2026 23:59:59 -k proc_creation
+
+# Filter by user
+ausearch -ua 1000 -k proc_creation
+
+# Filter by executable name
+ausearch -x /usr/bin/python3 -k proc_creation
+
+# Interpret raw audit events as readable strings
+ausearch -k proc_creation --format interpret | head -50
+
+# Real-time tail of audit events
+ausearch -k proc_creation -i --format interpret -w
+						</pre>
+					</section>
+					<section>
+						<h3 id="bpftrace">bpftrace</h3>
+						<p>
+							bpftrace compiles BPF programs from a high-level awk-like language and attaches them to kernel
+							tracepoints. It provides live visibility without kernel modules.
+						</p>
+						<h4 id="installation">Installation</h4>
+						<pre class="bash">
+pacman -S bpftrace bcc-tools
+						</pre>
+						<h4 id="live-tracing-recipes">Live Tracing Recipes</h4>
+						<pre class="bash">
+# Trace all execve calls with command and arguments
+bpftrace -e &#39;
+tracepoint:syscalls:sys_enter_execve {
+    printf(&#34;PID %-6d UID %-6d %s\n&#34;, pid, uid, str(args-&gt;filename));
+}&#39;
+
+# Trace processes creating network connections
+bpftrace -e &#39;
+tracepoint:syscalls:sys_enter_connect {
+    $fd = args-&gt;fd;
+    printf(&#34;PID %-6d EXE %-20s UID %-6d connect(fd=%d)\n&#34;,
+        pid, comm, uid, $fd);
+}&#39;
+
+# Trace file open operations (excluding noise)
+bpftrace -e &#39;
+tracepoint:syscalls:sys_enter_openat {
+    if (args-&gt;flags &amp; O_CREAT) {
+        printf(&#34;PID %-6d EXE %-20s creates %s\n&#34;,
+            pid, comm, str(args-&gt;filename));
+    }
+}&#39;
+
+# Trace process tree (follow fork/exec)
+bpftrace -e &#39;
+tracepoint:sched:sched_process_fork {
+    printf(&#34;PARENT PID %-6d -&gt; CHILD PID %-6d %s\n&#34;,
+        pid, args-&gt;child_pid, comm);
+}&#39;
+
+# Trace privilege escalation (setuid calls)
+bpftrace -e &#39;
+tracepoint:syscalls:sys_enter_setuid {
+    printf(&#34;PID %-6d EXE %-20s UID %d -&gt; %d\n&#34;,
+        pid, comm, uid, args-&gt;uid);
+}&#39;
+
+# Capture count of execve by binary (top 10)
+bpftrace -e &#39;
+tracepoint:syscalls:sys_enter_execve {
+    @execs[str(args-&gt;filename)] = count();
+}
+interval:s:10 {
+    print(@execs, 10);
+    clear(@execs);
+}&#39;
+
+# Trace DNS queries made by processes
+bpftrace -e &#39;
+tracepoint:syscalls:sys_enter_sendto {
+    $saddr = (struct sockaddr_in *)args-&gt;addr;
+    if ($saddr-&gt;sin_port == 13568) {  // port 53 in network byte order
+        printf(&#34;PID %-6d EXE %s sending to port 53\n&#34;, pid, comm);
+    }
+}&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="falco">Falco</h3>
+						<p>
+							Falco is a graduated project of the Cloud Native Computing Foundation. It uses a kernel module
+							or
+							<abbr title="Extended Berkeley Packet Filter">eBPF</abbr>
+							probe to capture syscalls, evaluates them against
+							a rule engine (similar to a
+							<abbr title="Web Application Firewall">WAF</abbr>
+							for syscalls), and emits alerts.
+							Rules are written in a
+							<abbr title="YAML Ain't Markup Language">YAML</abbr>
+							-like DSL.
+						</p>
+						<h4 id="installation-arch">Installation (Arch)</h4>
+						<pre class="bash">
+pacman -S falco falco-rules
+# Or via AUR: yay -S falco-bin
+						</pre>
+						<h4 id="key-configuration">Key Configuration</h4>
+						<pre class="yaml">
+# /etc/falco/falco.yaml
+json_output: true
+json_include_output_property: true
+log_stderr: true
+log_level: info
+priority: debug
+buffered_outputs: false
+outputs:
+  rate: 1
+  max_burst: 10
+						</pre>
+						<h4 id="default-rule-examples">Default Rule Examples</h4>
+						<pre class="yaml">
+# Detect shell spawned in a container
+- rule: Terminal shell in container
+  desc: A shell was used as the entrypoint/exec point into a container
+  condition: &gt;
+    spawned_process and container and
+    proc.name in (shell_binaries)
+  output: &#34;Shell spawned in container (user=%user.name container=%container.info shell=%proc.name cmdline=%proc.cmdline)&#34;
+  priority: NOTICE
+  tags: [container, shell]
+
+# Detect write below binary dir
+- rule: Write below binary dir
+  desc: File written below /bin, /sbin, /usr/bin, /usr/sbin
+  condition: &gt;
+    evt.dir = &lt; and evt.type in (open, openat, creat) and
+    fd.name startswith /bin or fd.name startswith /sbin or
+    fd.name startswith /usr/bin or fd.name startswith /usr/sbin
+  output: &#34;File below binary dir written (user=%user.name file=%fd.name)&#34;
+  priority: CRITICAL
+  tags: [filesystem, mitre_persistence]
+						</pre>
+						<h4 id="custom-rule-detect-reverse-shell">Custom Rule: Detect Reverse Shell</h4>
+						<pre class="yaml">
+# /etc/falco/rules.d/custom-reverse-shell.yaml
+- rule: Reverse shell connection
+  desc: Process with shell name establishes outbound connection
+  condition: &gt;
+    spawned_process and
+    proc.name in (nc, ncat, netcat, bash, sh, zsh, busybox) and
+    evt.type = connect and fd.sport != 0
+  output: &gt;
+    Reverse shell detected: pid=%proc.pid cmd=%proc.cmdline
+    connection=%fd.name
+  priority: CRITICAL
+  tags: [network, reverse_shell, mitre_execution]
+						</pre>
+						<h4 id="rule-writing-syntax">Rule Writing Syntax</h4>
+						<pre class="plaintext">
+Fields:
+  evt.type — syscall event type (open, openat, connect, execve, etc.)
+  evt.dir  — direction: &gt; (enter) or &lt; (exit)
+  proc.name — executable name (bash, python, curl)
+  proc.cmdline — full command line
+  proc.pid, proc.ppid — PID and parent PID
+  fd.name — file descriptor name (path, socket address)
+  user.name — user running the process
+  container.id — container ID if applicable
+
+Operators:
+  and, or, not
+  in, contains, startswith, endswith
+  =, !=, &lt;, &gt;, &lt;=, &gt;=
+  exists (field exists)
+
+Macros (reusable):
+- macro: shell_procs
+  condition: proc.name in (bash, sh, zsh, dash)
+						</pre>
+					</section>
+					<section>
+						<h3 id="osquery-introduction">osquery Introduction</h3>
+						<p>
+							osquery exposes the operating system as a relational database. You query running processes,
+							open sockets, kernel modules, and file metadata with
+							<abbr title="Structured Query Language">SQL</abbr>
+							. The
+							full osquery article covers this in depth (see
+							<a href="/blueteam/osquery.html">/wiki/articles/blueteam/osquery.html</a>
+							). Here we focus on its role in endpoint monitoring.
+						</p>
+						<pre class="bash">
+# Installation
+pacman -S osquery
+
+# Interactive mode
+osqueryi
+
+# Query: all processes with listening ports
+osquery&gt; SELECT pid, name, uid, cmdline FROM processes
+  WHERE pid IN (SELECT pid FROM listening_ports);
+
+# Query: processes with outbound connections to non-standard ports
+osquery&gt; SELECT p.pid, p.name, p.cmdline, s.remote_address, s.remote_port
+  FROM processes p
+  JOIN process_open_sockets s ON p.pid = s.pid
+  WHERE s.remote_port NOT IN (80, 443, 53);
+
+# Query: recently modified executables
+osquery&gt; SELECT path, mtime, size FROM file
+  WHERE (path LIKE &#39;/usr/bin/%&#39; OR path LIKE &#39;/usr/sbin/%&#39;)
+  AND mtime &gt; (strftime(&#39;%s&#39;, &#39;now&#39;) - 86400);
+						</pre>
+					</section>
+					<section>
+						<h3 id="comparing-approaches">Comparing Approaches</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Tool</th>
+									<th align="center">Event Source</th>
+									<th align="center">Latency</th>
+									<th align="center">Overhead</th>
+									<th align="center">Scope</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">auditd</td>
+									<td align="center">Kernel syscalls</td>
+									<td align="center">Low</td>
+									<td align="center">Medium (5-10% at heavy rulesets)</td>
+									<td align="center">All syscalls, rule-filtered</td>
+								</tr>
+								<tr>
+									<td align="center">bpftrace</td>
+									<td align="center">eBPF tracepoints</td>
+									<td align="center">Near-zero</td>
+									<td align="center">Low (< 1% per probe)</td>
+									<td align="center">Specific events, not persistent</td>
+								</tr>
+								<tr>
+									<td align="center">Falco</td>
+									<td align="center">Kernel module / eBPF</td>
+									<td align="center">Low</td>
+									<td align="center">Low-medium</td>
+									<td align="center">Syscall-level, rule engine</td>
+								</tr>
+								<tr>
+									<td align="center">osquery</td>
+									<td align="center">Userspace polling + events</td>
+									<td align="center">Medium</td>
+									<td align="center">Low</td>
+									<td align="center">State queries, scheduled packs</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>Decision matrix:</p>
+						<ul>
+							<li><b>auditd</b> - mandatory baseline, required for compliance, persistent rules</li>
+							<li><b>bpftrace</b> - ad-hoc investigations, live debugging, one-off tracing tasks</li>
+							<li><b>Falco</b> - runtime alerting, behavioral detection, container security</li>
+							<li><b>osquery</b> - scheduled state queries, compliance checks, forensics</li>
+						</ul>
+						<p>
+							None of these tools replace each other. A mature
+							<abbr title="Security Operations Center">SOC</abbr>
+							runs auditd
+							persistently, deploys Falco for behavioral alerting, uses osquery for scheduled state monitoring,
+							and keeps bpftrace in the toolbox for live investigations.
+						</p>
+					</section>
+					<section>
+						<h3 id="ebpf-based-monitoring">eBPF-based Monitoring</h3>
+						<p>
+							<abbr title="Extended Berkeley Packet Filter">eBPF</abbr>
+							is the substrate beneath bpftrace, Falco (modern driver),
+							Cilium, and many monitoring tools. It provides a sandboxed virtual machine in the kernel that
+							runs verified programs at hook points.
+						</p>
+						<p>Key hook types for security monitoring:</p>
+						<ul>
+							<li><code>tracepoint</code> - static kernel instrumentation (syscall entry/exit, scheduler events, network stack)</li>
+							<li><code>kprobe/kretprobe</code> - dynamic kernel function entry/return hooks</li>
+							<li><code>uprobe/uretprobe</code> - dynamic userspace function hooks</li>
+							<li><code>raw_tracepoint</code> - lower-overhead tracepoints</li>
+							<li><code>fentry/fexit</code> - lowest-overhead kernel function hooks (BPF trampoline)</li>
+						</ul>
+						<pre class="c">
+// eBPF program skeleton: trace execve
+#include &lt;linux/bpf.h&gt;
+
+SEC(&#34;tracepoint/syscalls/sys_enter_execve&#34;)
+int trace_execve(struct trace_event_raw_sys_enter *ctx) {
+    char comm[16];
+    u32 pid = bpf_get_current_pid_tgid() &gt;&gt; 32;
+    bpf_get_current_comm(&amp;comm, sizeof(comm));
+    // Send event to userspace via perf buffer
+    // ...
+    return 0;
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="detection-process-injection">Detection: Process Injection</h3>
+						<pre class="bash">
+# auditd rule: detect ptrace-based injection
+-a always,exit -F arch=b64 -S ptrace -k process_injection
+
+# bpftrace: detect ptrace attachment
+bpftrace -e &#39;
+tracepoint:syscalls:sys_enter_ptrace {
+    printf(&#34;PTRACE PID %d -&gt; TARGET %d REQUEST %d\n&#34;,
+        pid, args-&gt;pid, args-&gt;request);
+}&#39;
+
+# Falco rule: alert on PTRACE usage by anything other than a debugger
+- rule: PTRACE usage
+  desc: A process other than gdb invokes ptrace
+  condition: evt.type = ptrace and proc.name != &#34;gdb&#34;
+  output: &#34;PTRACE used (caller=%proc.name pid=%proc.pid)&#34;
+  priority: WARNING
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that scans
+							<code>/proc</code>
+							, resolves each process's
+							<code>exe</code>
+							symlink, and prints an alert
+							for every process executed from
+							<code>/tmp</code>
+							,
+							<code>/var/tmp</code>
+							, or
+							<code>/dev/shm</code>
+							. These are the same paths
+							the auditd rules above watch, but the tool needs no kernel audit subsystem. Build it, run a
+							harmless binary from
+							<code>/tmp</code>
+							, and confirm that the tool reports it while
+							<code>ss</code>
+							reports nothing
+							unusual.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;path/filepath&#34;
+	&#34;strconv&#34;
+	&#34;strings&#34;
+)
+
+var suspicious = []string{&#34;/tmp/&#34;, &#34;/var/tmp/&#34;, &#34;/dev/shm/&#34;}
+
+func main() {
+	entries, err := os.ReadDir(&#34;/proc&#34;)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		pid, err := strconv.Atoi(entry.Name())
+		if err != nil {
+			continue
+		}
+
+		exe, err := os.Readlink(filepath.Join(&#34;/proc&#34;, entry.Name(), &#34;exe&#34;))
+		if err != nil {
+			continue
+		}
+
+		for _, prefix := range suspicious {
+			if !strings.HasPrefix(exe, prefix) {
+				continue
+			}
+
+			raw, _ := os.ReadFile(filepath.Join(&#34;/proc&#34;, entry.Name(), &#34;cmdline&#34;))
+			args := strings.Split(strings.TrimRight(string(raw), &#34;\x00&#34;), &#34;\x00&#34;)
+
+			fmt.Printf(&#34;ALERT pid=%d exe=%s cmd=%s\n&#34;, pid, exe, strings.Join(args, &#34; &#34;))
+		}
+	}
+}
+						</pre>
+						<pre class="bash">
+go build -o tmp-exec tmp-exec.go
+./tmp-exec
+
+# Trigger the alert from a second terminal
+install -m 0755 /bin/sleep /tmp/harmless
+/tmp/harmless 300 &amp;
+./tmp-exec
+# ALERT pid=... exe=/tmp/harmless cmd=/tmp/harmless 300
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/auditd.8" target="_blank">man: auditd(8)</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/audit.rules.7" target="_blank">man: audit.rules(7)</a></li>
+							<li><a class="icon-github" href="https://github.com/bpftrace/bpftrace/blob/master/docs/reference_guide.md" target="_blank">bpftrace Reference Guide</a></li>
+							<li><a class="icon-website" href="https://falco.org/docs/" target="_blank">Falco Documentation</a></li>
+							<li><a class="icon-github" href="https://github.com/osquery/osquery" target="_blank">osquery GitHub</a></li>
+							<li><a class="icon-website" href="https://wiki.archlinux.org/title/Audit_framework" target="_blank">Arch Wiki: Audit framework</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

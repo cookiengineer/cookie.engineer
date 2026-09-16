@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Race Conditions | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Race Conditions">
+		<meta name="keywords" content="atomic, concurrency, fundamentals, memory-ordering, mutex, race-condition, thread-safety">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Race Conditions">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="A race condition is uncontrolled concurrent access to shared data, causing lost updates, TOCTOU bugs, and corrupted state.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/fundamentals/race-conditions.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Race Conditions">
+		<meta name="twitter:description" itemprop="description" content="A race condition is uncontrolled concurrent access to shared data, causing lost updates, TOCTOU bugs, and corrupted state.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#definition">Definition</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-read-modify-write-pattern">The Read-Modify-Write Pattern</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#critical-sections-and-mutual-exclusion">Critical Sections and Mutual Exclusion</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#mutex-internals">Mutex Internals</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#spinlocks">Spinlocks</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#semaphores">Semaphores</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#atomic-operations">Atomic Operations</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#memory-ordering">Memory Ordering</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#toctou-the-classic-check-then-act">TOCTOU: The Classic Check-Then-Act</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#signal-handler-races">Signal Handler Races</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#fork-multithreading-dangers">fork() + Multithreading Dangers</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#data-race-detection-tsan">Data Race Detection: TSan</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#helgrind-valgrind-tool">Helgrind (Valgrind Tool)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#gcc-warning-flags-for-races">GCC Warning Flags for Races</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/fundamentals/index.html">Fundamentals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/fundamentals/race-conditions.html">Race Conditions</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="race-conditions">Race Conditions</h2>
+					<p>
+						A race condition is uncontrolled concurrent access to shared data, causing lost updates, TOCTOU
+						bugs, and corrupted state.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Once two execution contexts share memory, the order in which their memory operations interleave
+							becomes part of the program's behaviour. A missing lock rarely fails on every run, which makes
+							these bugs expensive to debug and dangerous in production. This article starts from the lost-update
+							pattern and builds up through mutexes, spinlocks, semaphores, atomic operations, and memory
+							ordering, then applies the same reasoning to
+							<code>TOCTOU</code>
+							file operations and signal handlers.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - process creation, fork, exec, inter-process resource sharing</li>
+							<li><a href="/wiki/articles/fundamentals/threads.html">Threads</a> - pthreads, scheduling, shared address space, TCB layout</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="definition">Definition</h3>
+						<p>
+							A race condition occurs when two or more execution contexts (threads, processes, interrupt handlers,
+							signal handlers) access shared data concurrently and at least one access is a write, but the
+							relative order of these accesses is not controlled. The program's output depends on interleaving
+							<ul>
+								<li>the specific sequence in which the hardware interleaves the memory operations of each context.</li>
+							</ul>
+						</p>
+						<p>
+							The defining property: non-determinism. Run the program 1000 times - get 100 correct results
+							and 1 corruption. The corruption is not random noise; it follows a specific schedule that the
+							developer did not anticipate.
+						</p>
+					</section>
+					<section>
+						<h3 id="the-read-modify-write-pattern">The Read-Modify-Write Pattern</h3>
+						<p>The canonical race: two threads increment a shared counter.</p>
+						<pre class="c">
+/* race_counter.c - lost increments */
+#include &lt;stdio.h&gt;
+#include &lt;pthread.h&gt;
+
+#define ITERATIONS 100000
+
+int counter = 0;  /* shared, no lock */
+
+void *increment(void *arg) {
+    for (int i = 0; i &lt; ITERATIONS; i++) {
+        counter++;   /* three operations: load, add, store */
+    }
+    return NULL;
+}
+
+int main() {
+    pthread_t t1, t2;
+
+    pthread_create(&amp;t1, NULL, increment, NULL);
+    pthread_create(&amp;t2, NULL, increment, NULL);
+
+    pthread_join(t1, NULL);
+    pthread_join(t2, NULL);
+
+    printf(&#34;Expected: %d\n&#34;, 2 * ITERATIONS);
+    printf(&#34;Actual:   %d\n&#34;, counter);
+    printf(&#34;Lost:     %d\n&#34;, 2 * ITERATIONS - counter);
+
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+gcc -g -pthread -o race_counter race_counter.c
+for i in {1..10}; do ./race_counter; echo &#34;---&#34;; done
+
+# Expected: 200000
+# Actual:   154237
+# Lost:     45763
+# ---
+# Expected: 200000
+# Actual:   137892
+# Lost:     62108
+# ---
+# (different every run)
+						</pre>
+						<p>
+							At the assembly level,
+							<code>counter++</code>
+							decompiles to:
+						</p>
+						<pre class="x86asm">
+; counter++ on x86-64 (non-atomic)
+mov    eax, DWORD PTR [rip+0x2ea2]   ; load counter into eax
+add    eax, 1                          ; increment register
+mov    DWORD PTR [rip+0x2e9a], eax    ; store back to counter
+						</pre>
+						<p>
+							The race window exists between load and store. If both threads load the same value before either
+							stores, one increment is lost:
+						</p>
+						<pre class="plaintext">
+Time -&gt;
+Thread A: load counter (value = 42)
+Thread B:   load counter (value = 42)
+Thread A: add 1 -&gt; 43
+Thread B:   add 1 -&gt; 43
+Thread A: store 43
+Thread B:   store 43           &lt;- counter should be 44, but is 43
+						</pre>
+					</section>
+					<section>
+						<h3 id="critical-sections-and-mutual-exclusion">Critical Sections and Mutual Exclusion</h3>
+						<p>
+							A critical section is a code region that accesses shared data and must not be interleaved with
+							another thread's access to the same data. Mutual exclusion (mutex) serializes access: at most
+							one thread can be inside the critical section at any time.
+						</p>
+						<pre class="c">
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+int counter = 0;
+
+void *increment_safe(void *arg) {
+    for (int i = 0; i &lt; ITERATIONS; i++) {
+        pthread_mutex_lock(&amp;lock);
+        counter++;
+        pthread_mutex_unlock(&amp;lock);
+    }
+    return NULL;
+}
+						</pre>
+						<pre class="bash">
+gcc -g -pthread -o race_fixed race_counter_fixed.c
+./race_fixed
+
+# Expected: 200000
+# Actual:   200000
+# Lost:     0
+						</pre>
+						<p>
+							The cost: serialized counter increments. Each thread waits for the other at the mutex boundary.
+							The throughput drops - but correctness is preserved.
+						</p>
+					</section>
+					<section>
+						<h3 id="mutex-internals">Mutex Internals</h3>
+						<p>
+							<code>pthread_mutex_t</code>
+							on Linux is backed by
+							<code>futex(2)</code>
+							- the fast userspace mutex syscall. The uncontended
+							path is purely userspace: an atomic compare-and-swap tries to acquire the lock. If the lock
+							is free, the
+							<abbr title="Compare-and-Swap">CAS</abbr>
+							succeeds and the thread enters the critical section without
+							a syscall.
+						</p>
+						<p>
+							If the lock is held, the thread calls
+							<code>futex(FUTEX_WAIT)</code>
+							which puts it to sleep. When the lock
+							is released, the owner calls
+							<code>futex(FUTEX_WAKE)</code>
+							to wake one waiter. The kernel manages the
+							wait queue.
+						</p>
+						<pre class="c">
+// Simplified userspace futex-based mutex (not the real glibc implementation)
+typedef struct {
+    int lock;   // 0 = free, 1 = taken, no waiters
+} my_mutex_t;
+
+void my_mutex_lock(my_mutex_t *m) {
+    int c = 0;
+    // Try to atomically swap 0 -&gt; 1
+    if (__atomic_compare_exchange_n(&amp;m-&gt;lock, &amp;c, 1, 0,
+            __ATOMIC_ACQUIRE, __ATOMIC_RELAXED))
+        return;  // acquired without syscall
+
+    // Contended: try to set to 2 (taken + waiters), then sleep
+    if (c != 2)
+        c = __atomic_exchange_n(&amp;m-&gt;lock, 2, __ATOMIC_ACQUIRE);
+
+    while (c != 0) {
+        syscall(SYS_futex, &amp;m-&gt;lock, FUTEX_WAIT, 2, NULL, 0, 0);
+        c = __atomic_exchange_n(&amp;m-&gt;lock, 2, __ATOMIC_ACQUIRE);
+    }
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="spinlocks">Spinlocks</h3>
+						<p>
+							A spinlock busy-waits (spins in a loop) instead of sleeping. Useful when the critical section
+							is very short (a few instructions) and the overhead of a context switch outweighs the spin time.
+						</p>
+						<pre class="c">
+typedef volatile int spinlock_t;
+
+static inline void spin_lock(spinlock_t *lock) {
+    while (__atomic_test_and_set(lock, __ATOMIC_ACQUIRE))
+        /* spin */;
+}
+
+static inline void spin_unlock(spinlock_t *lock) {
+    __atomic_clear(lock, __ATOMIC_RELEASE);
+}
+						</pre>
+						<p>
+							On x86-64,
+							<code>__atomic_test_and_set</code>
+							compiles to a locked read-modify-write such as
+							<code>xchg</code>
+							or
+							<code>lock bts</code>
+							(Bit Test and Set with LOCK prefix). The
+							<code>PAUSE</code>
+							instruction is inserted in spin
+							loops to reduce power consumption and improve SMT (hyper-threading) throughput:
+						</p>
+						<pre class="c">
+while (__atomic_test_and_set(lock, __ATOMIC_ACQUIRE))
+    __builtin_ia32_pause();
+						</pre>
+						<p>
+							Spinlocks in the Linux kernel use ticket locks or queued spinlocks to guarantee fairness - preventing
+							starvation where one
+							<abbr title="Central Processing Unit">CPU</abbr>
+							repeatedly acquires the lock while others
+							spin indefinitely.
+						</p>
+					</section>
+					<section>
+						<h3 id="semaphores">Semaphores</h3>
+						<p>
+							A semaphore generalizes a mutex: instead of binary "locked/unlocked," it has a count.
+							<code>sem_wait()</code>
+							decrements the count (blocking if it reaches 0).
+							<code>sem_post()</code>
+							increments (waking a waiter).
+							A semaphore initialized to 1 is functionally equivalent to a mutex.
+						</p>
+						<pre class="c">
+#include &lt;semaphore.h&gt;
+
+sem_t sem;
+sem_init(&amp;sem, 0, 5);   // pshared=0 (threads only), initial count=5
+
+// Producer-consumer bounded buffer with two semaphores:
+sem_t empty_slots;   // count = buffer capacity
+sem_t filled_slots;  // count = 0
+pthread_mutex_t buf_lock;
+
+void produce(int item) {
+    sem_wait(&amp;empty_slots);        // wait for an empty slot
+    pthread_mutex_lock(&amp;buf_lock);
+    buffer[write_idx++] = item;
+    pthread_mutex_unlock(&amp;buf_lock);
+    sem_post(&amp;filled_slots);       // signal a new filled slot
+}
+
+int consume() {
+    sem_wait(&amp;filled_slots);       // wait for a filled slot
+    pthread_mutex_lock(&amp;buf_lock);
+    int item = buffer[read_idx++];
+    pthread_mutex_unlock(&amp;buf_lock);
+    sem_post(&amp;empty_slots);        // signal a freed empty slot
+    return item;
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="atomic-operations">Atomic Operations</h3>
+						<p>
+							C11 introduced
+							<code>_Atomic</code>
+							and
+							<code>&lt;stdatomic.h&gt;</code>
+							. These guarantee that operations on the atomically-qualified
+							variable are indivisible - no other thread can observe a partially-completed operation.
+						</p>
+						<pre class="c">
+#include &lt;stdatomic.h&gt;
+
+atomic_int counter = 0;
+
+void *increment_atomic(void *arg) {
+    for (int i = 0; i &lt; ITERATIONS; i++) {
+        atomic_fetch_add(&amp;counter, 1);
+    }
+    return NULL;
+}
+						</pre>
+						<p>
+							On x86-64,
+							<code>atomic_fetch_add</code>
+							compiles to
+							<code>lock xadd</code>
+							- a single atomic instruction. No load-add-store
+							window exists. No mutex, no syscall, no spin - just hardware atomicity.
+						</p>
+						<p>GCC builtins provide equivalent functionality without C11:</p>
+						<pre class="c">
+__atomic_add_fetch(&amp;counter, 1, __ATOMIC_SEQ_CST);
+__atomic_load_n(&amp;flag, __ATOMIC_ACQUIRE);
+__atomic_store_n(&amp;flag, 1, __ATOMIC_RELEASE);
+int expected = 0;
+__atomic_compare_exchange_n(&amp;flag, &amp;expected, 1, 0,
+    __ATOMIC_ACQUIRE, __ATOMIC_RELAXED);
+						</pre>
+					</section>
+					<section>
+						<h3 id="memory-ordering">Memory Ordering</h3>
+						<p>
+							Atomicity prevents torn reads/writes. Memory ordering prevents reordering - both by the compiler
+							(instruction scheduling) and by the
+							<abbr title="Central Processing Unit">CPU</abbr>
+							(out-of-order execution,
+							store buffers).
+						</p>
+						<p>The C11 memory order constants:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Order</th>
+									<th align="center">Guarantee</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>memory_order_relaxed</code></td>
+									<td align="center">Atomicity only. No ordering guarantees. Compiler/CPU may reorder freely.</td>
+								</tr>
+								<tr>
+									<td align="center"><code>memory_order_acquire</code></td>
+									<td align="center">Load: prevent subsequent loads/stores from being reordered before this load.</td>
+								</tr>
+								<tr>
+									<td align="center"><code>memory_order_release</code></td>
+									<td align="center">Store: prevent prior loads/stores from being reordered after this store.</td>
+								</tr>
+								<tr>
+									<td align="center"><code>memory_order_acq_rel</code></td>
+									<td align="center">Combined acquire + release (for read-modify-write).</td>
+								</tr>
+								<tr>
+									<td align="center"><code>memory_order_seq_cst</code></td>
+									<td align="center">Sequentially consistent. Total global order of all seq_cst operations. Strongest, slowest.</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							On x86-64, the hardware provides relatively strong ordering (TSO - Total Store Order): loads
+							are not reordered with other loads, stores are not reordered with other stores. The main reordering
+							risk is store-load: a load can complete before a prior store becomes visible to other cores.
+							<code>mfence</code>
+							,
+							<code>lock</code>
+							-prefixed instructions, and
+							<code>xchg</code>
+							prevent this.
+						</p>
+						<p>
+							ARM64 and POWER have weaker memory models - more reordering is allowed. Acquire/release semantics
+							are essential for portable code.
+						</p>
+						<pre class="c">
+/* Double-checked locking pattern - requires acquire/release */
+atomic_int initialized = 0;
+struct Config *global_config = NULL;
+
+struct Config *get_config() {
+    if (!atomic_load_explicit(&amp;initialized, memory_order_acquire)) {
+        pthread_mutex_lock(&amp;init_lock);
+        if (!atomic_load(&amp;initialized)) {
+            struct Config *cfg = parse_config_file();
+            atomic_store_explicit(&amp;global_config, cfg, memory_order_release);
+            atomic_store_explicit(&amp;initialized, 1, memory_order_release);
+        }
+        pthread_mutex_unlock(&amp;init_lock);
+    }
+    return atomic_load(&amp;global_config);
+}
+						</pre>
+						<p>
+							Without acquire/release, the compiler or
+							<abbr title="Central Processing Unit">CPU</abbr>
+							could reorder
+							<code>initialized = 1</code>
+							before
+							<code>global_config = cfg</code>
+							- a thread sees
+							<code>initialized == 1</code>
+							but reads a NULL
+							<code>global_config</code>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="toctou-the-classic-check-then-act">TOCTOU: The Classic Check-Then-Act</h3>
+						<p>Time-of-Check to Time-of-Use (TOCTOU) is the most common race pattern across processes:</p>
+						<pre class="c">
+/* toctou_vuln.c */
+if (access(path, W_OK) == 0) {   /* TIME OF CHECK: is file writable? */
+    int fd = open(path, O_WRONLY);  /* TIME OF USE: open it */
+    if (fd &gt;= 0) {
+        write(fd, data, len);
+        close(fd);
+    }
+}
+						</pre>
+						<p>
+							Between
+							<code>access()</code>
+							and
+							<code>open()</code>
+							, an attacker replaces the file at
+							<code>path</code>
+							with a symlink to
+							<code>/etc/passwd</code>
+							.
+							<code>access()</code>
+							checks the original file's permissions (which pass).
+							<code>open()</code>
+							follows
+							the symlink and opens
+							<code>/etc/passwd</code>
+							with the victim's privileges.
+						</p>
+						<p>
+							The root cause: file path resolution is not atomic. The path
+							<code>&#34;/tmp/userfile&#34;</code>
+							is a
+							<em>name</em>
+							-
+							it resolves to an inode at the moment of each syscall. Between two syscalls, the mapping from
+							name to inode can change.
+						</p>
+					</section>
+					<section>
+						<h3 id="signal-handler-races">Signal Handler Races</h3>
+						<p>
+							Signal handlers execute asynchronously and can interrupt a thread at any instruction boundary
+							(unless signals are masked). If a signal handler modifies a global variable that the main program
+							also reads/modifies, a race exists:
+						</p>
+						<pre class="c">
+#include &lt;signal.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;unistd.h&gt;
+
+volatile sig_atomic_t flag = 0;
+
+void handler(int sig) {
+    flag = 1;  /* async-signal-safe: atomic write on most platforms */
+}
+
+int main() {
+    struct sigaction sa = { .sa_handler = handler };
+    sigaction(SIGUSR1, &amp;sa, NULL);
+
+    while (1) {
+        if (flag) {       /* non-atomic read-modify on non-_Atomic volatile */
+            flag = 0;     /* the write here can race with handler&#39;s write */
+            printf(&#34;got signal\n&#34;);
+        }
+        usleep(100);
+    }
+}
+						</pre>
+						<p>
+							The rule: only
+							<code>volatile sig_atomic_t</code>
+							variables can be safely accessed from signal handlers.
+							Anything larger (64-bit on 32-bit platforms, structs) can be torn. Anything more complex (linked
+							list manipulation,
+							<code>printf</code>
+							,
+							<code>malloc</code>
+							) is not async-signal-safe and can deadlock or corrupt
+							heap state.
+						</p>
+						<pre class="c">
+// Safe pattern: sig_atomic_t flag + blocking main-loop check
+volatile sig_atomic_t signal_received = 0;
+
+void safe_handler(int sig) {
+    signal_received = 1;  // atomic write (single instruction usually)
+}
+
+int main() {
+    signal(SIGINT, safe_handler);
+    while (1) {
+        pause();  // or sigsuspend, or select with signal handling
+        if (signal_received) {
+            signal_received = 0;
+            /* do non-trivial work OUTSIDE the signal handler */
+        }
+    }
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="fork-multithreading-dangers">fork() + Multithreading Dangers</h3>
+						<p>
+							<code>fork()</code>
+							in a multi-threaded program creates a child process with a single thread (a copy of
+							the calling thread). All other threads of the parent simply vanish in the child - while holding
+							mutexes, in the middle of
+							<code>malloc</code>
+							, or in any inconsistent state.
+						</p>
+						<pre class="c">
+/* NEVER do this in a threaded program */
+void dangerous_fork() {
+    pthread_mutex_lock(&amp;lock);   // thread A holds lock
+    // ... thread B concurrently calls fork() ...
+    // child process: has the mutex in locked state, but thread A doesn&#39;t exist
+    // any attempt to lock the mutex in the child -&gt; deadlock forever
+}
+						</pre>
+						<p>
+							The only safe pattern:
+							<code>fork()</code>
+							before any threads are created, or
+							<code>fork()</code>
+							+ immediate
+							<code>exec()</code>
+							in the child (which replaces the process image, discarding stale mutex state).
+							<code>pthread_atfork()</code>
+							allows registering handlers that lock all mutexes before fork and unlock them after (in parent
+							and child), but this is fragile and error-prone.
+						</p>
+						<pre class="c">
+void prepare_fork() { pthread_mutex_lock(&amp;all_locks); }
+void parent_after_fork() { pthread_mutex_unlock(&amp;all_locks); }
+void child_after_fork() { pthread_mutex_unlock(&amp;all_locks); }
+
+// Register once, at startup:
+pthread_atfork(prepare_fork, parent_after_fork, child_after_fork);
+						</pre>
+					</section>
+					<section>
+						<h3 id="data-race-detection-tsan">Data Race Detection: TSan</h3>
+						<pre class="bash">
+gcc -g -fsanitize=thread -pthread -o race_tsan race_counter.c
+./race_tsan
+
+# WARNING: ThreadSanitizer: data race (pid 12345)
+#   Write of size 4 at 0x... by thread T1:
+#     #0 increment /path/race_counter.c:10
+#
+#   Previous write of size 4 at 0x... by thread T2:
+#     #0 increment /path/race_counter.c:10
+#
+#   Location is global &#39;counter&#39; of size 4 at ...
+						</pre>
+						<p>
+							TSan instruments every memory access with a shadow cell. When two accesses conflict (at least
+							one write, different threads, no happens-before relationship via synchronization), TSan reports
+							the race. The overhead is 5x-15x in
+							<abbr title="Central Processing Unit">CPU</abbr>
+							and 5x-10x in memory - suitable
+							for testing, not production.
+						</p>
+					</section>
+					<section>
+						<h3 id="helgrind-valgrind-tool">Helgrind (Valgrind Tool)</h3>
+						<pre class="bash">
+gcc -g -pthread -o race_counter race_counter.c
+valgrind --tool=helgrind ./race_counter
+
+# Possible data race during read of size 4 at 0x... by thread #1
+# Locks held: none
+#   at 0x...: increment (race_counter.c:10)
+#
+# This conflicts with a previous write of size 4 by thread #2
+# Locks held: none
+#   at 0x...: increment (race_counter.c:10)
+						</pre>
+						<p>
+							Helgrind also models the happens-before relationship by tracking every mutex lock/unlock and
+							every thread creation/join. It is slower than TSan (20x-100x overhead) but reports richer diagnostics
+							about lock ordering and deadlock potential.
+						</p>
+					</section>
+					<section>
+						<h3 id="gcc-warning-flags-for-races">GCC Warning Flags for Races</h3>
+						<p>These flags catch implicit integer conversion bugs that often manifest as race-prone counters:</p>
+						<pre class="bash">
+gcc -Wconversion -Wsign-compare -c race_counter.c
+# warning: conversion to &#39;int&#39; from &#39;long int&#39; may alter its value
+						</pre>
+						<p>
+							A 32-bit counter on a 64-bit platform, incremented by multiple threads, wraps earlier than expected.
+							Combined with races, the wrap point becomes unpredictable.
+						</p>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go program with two goroutines that each increment a shared
+							<code>int64</code>
+							one million times.
+							Run it with
+							<code>go run -race race.go</code>
+							and observe the
+							<code>WARNING: DATA RACE</code>
+							report. Then fix it
+							twice - once with
+							<code>sync/atomic</code>
+							and once with a
+							<code>sync.Mutex</code>
+							- and confirm that both versions
+							print
+							<code>2000000</code>
+							.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;fmt&#34;
+	&#34;sync&#34;
+)
+
+const iterations = 1000000
+
+func main() {
+	var counter int64
+	var wg sync.WaitGroup
+
+	for i := 0; i &lt; 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j &lt; iterations; j++ {
+				counter++
+			}
+		}()
+	}
+
+	wg.Wait()
+	fmt.Printf(&#34;counter = %d (expected %d)\n&#34;, counter, 2*iterations)
+}
+						</pre>
+						<pre class="bash">
+go run -race race.go;
+						</pre>
+						<p>
+							The atomic fix replaces
+							<code>counter++</code>
+							with
+							<code>atomic.AddInt64(&amp;counter, 1)</code>
+							and imports
+							<code>sync/atomic</code>
+							; the mutex fix guards the increment with
+							<code>lock.Lock()</code>
+							and
+							<code>lock.Unlock()</code>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/futex.2" target="_blank">futex(2) - fast user-space locking</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/pthread_mutex_lock.3" target="_blank">pthread_mutex_lock(3) - lock and unlock a mutex</a></li>
+							<li><a class="icon-website" href="https://www.iso.org/standard/57853.html" target="_blank">C11 - Programming Languages: C</a></li>
+							<li><a class="icon-website" href="https://clang.llvm.org/docs/ThreadSanitizer.html" target="_blank">ThreadSanitizer - Clang documentation</a></li>
+							<li><a class="icon-website" href="https://valgrind.org/docs/manual/hg-manual.html" target="_blank">Helgrind - Valgrind documentation</a></li>
+							<li><a class="icon-website" href="https://cwe.mitre.org/data/definitions/367.html" target="_blank">TOCTOU - Common Weakness Enumeration CWE-367</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

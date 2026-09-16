@@ -1,0 +1,1426 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>TLS | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="TLS">
+		<meta name="keywords" content="alpn, certificates, ecdhe, encryption, mutual-tls, openssl, sni, techniques, tls, tls-1.3, transport-layer-security, x509">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="TLS">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Transport Layer Security from first principles - TLS 1.3 handshake mechanics, cipher suites, ECDHE key exchange, X.509 certificate structure, SNI, ALPN, mutual TLS, certificate pinning, and inspecting TLS with openssl and Python.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/fundamentals/tls.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="TLS">
+		<meta name="twitter:description" itemprop="description" content="Transport Layer Security from first principles - TLS 1.3 handshake mechanics, cipher suites, ECDHE key exchange, X.509 certificate structure, SNI, ALPN, mutual TLS, certificate pinning, and inspecting TLS with openssl and Python.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-problem-tls-solves">The Problem TLS Solves</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tls-13-handshake-full-walkthrough">TLS 1.3 Handshake - Full Walkthrough</a></b>
+					<ul>
+						<li><a href="#step-by-step-breakdown">Step-by-step breakdown</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#key-exchange-ecdhe">Key Exchange - ECDHE</a></b>
+					<ul>
+						<li><a href="#ecdhe-key-exchange">ECDHE Key Exchange</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tls-13-cipher-suites">TLS 1.3 Cipher Suites</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tls-12-vs-tls-13-key-differences">TLS 1.2 vs TLS 1.3 - Key Differences</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#x509-certificate-structure">X.509 Certificate Structure</a></b>
+					<ul>
+						<li><a href="#critical-fields">Critical fields</a></li>
+						<li><a href="#certificate-chain">Certificate chain</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#sni-server-name-indication">SNI - Server Name Indication</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#alpn-protocol-negotiation">ALPN Protocol Negotiation</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#mutual-tls-mtls">Mutual TLS (mTLS)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#certificate-pinning">Certificate Pinning</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#certificate-transparency-ct">Certificate Transparency (CT)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tls-0-rtt-resumption">TLS 0-RTT Resumption</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tls-inspection-with-s-client">TLS Inspection with s_client</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#inspecting-x509-certificates">Inspecting X.509 Certificates</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#lets-encrypt-and-acme">Let's Encrypt and ACME</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tls-inspector-in-python">TLS Inspector in Python</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tls-record-protocol">TLS Record Protocol</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#security-considerations">Security Considerations</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tls-key-schedule">TLS Key Schedule</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#summary">Summary</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/fundamentals/index.html">Fundamentals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/fundamentals/tls.html">Tls</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="tls">TLS</h2>
+					<p>
+						Transport Layer Security from first principles -
+						<abbr title="Transport Layer Security">TLS</abbr>
+						1.3 handshake
+						mechanics, cipher suites, ECDHE key exchange, X.509 certificate structure, SNI, ALPN, mutual
+						<abbr title="Transport Layer Security">TLS</abbr>
+						, certificate pinning, and inspecting
+						<abbr title="Transport Layer Security">TLS</abbr>
+						with openssl and Python.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							<abbr title="Transport Layer Security">TLS</abbr>
+							adds confidentiality, integrity, and authentication on top of
+							a reliable byte stream. It is the protocol behind
+							<code>https://</code>
+							and most modern network services.
+							This article walks through the
+							<abbr title="Transport Layer Security">TLS</abbr>
+							1.3 handshake, ECDHE key exchange,
+							X.509 certificates, extensions such as SNI and ALPN, and hands-on inspection with
+							<code>openssl</code>
+							and Go. After reading you can capture and explain a full handshake and validate a certificate
+							chain.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/http.html">HTTP</a> - <abbr title="Hypertext Transfer Protocol">HTTP</abbr> /1.1 request/response structure, methods, headers</li>
+							<li><a href="/wiki/articles/fundamentals/tcp.html">TCP</a> - <abbr title="Transmission Control Protocol">TCP</abbr> three-way handshake, connection lifecycle, sequence numbers</li>
+							<li><a href="/wiki/articles/fundamentals/public-key-cryptography.html">Public Key Cryptography</a> - key exchange, digital signatures, and trust</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-problem-tls-solves">The Problem TLS Solves</h3>
+						<p>
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							provides reliable byte streams. It does not provide confidentiality
+							(anyone in the path can read the bytes), integrity (anyone can modify the bytes), or authentication
+							(anyone can impersonate the server).
+							<abbr title="Transport Layer Security">TLS</abbr>
+							adds all three on top of
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							:
+						</p>
+						<ul>
+							<li><b>Confidentiality:</b> Symmetric encryption ( <abbr title="Advanced Encryption Standard">AES</abbr> -GCM, ChaCha20-Poly1305) after key exchange</li>
+							<li><b>Integrity:</b> Authenticated Encryption with Associated Data (AEAD) - detects tampering</li>
+							<li><b>Authentication:</b> Certificate chain validation - verifies the server's identity</li>
+						</ul>
+						<p>
+							<abbr title="Transport Layer Security">TLS</abbr>
+							sits between the application layer (
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							,
+							<abbr title="Simple Mail Transfer Protocol">SMTP</abbr>
+							,
+							<abbr title="Internet Message Access Protocol">IMAP</abbr>
+							) and the
+							transport layer (
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							). Applications use
+							<abbr title="Transport Layer Security">TLS</abbr>
+							as a drop-in replacement for plain
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							sockets - same interface,
+							encrypted transport.
+						</p>
+						<pre class="plaintext">
+Application Layer:    HTTP, SMTP, IMAP, FTP
+                            ↓
+Presentation Layer:  TLS Handshake + TLS Record Protocol
+                            ↓
+Transport Layer:     TCP
+                            ↓
+Network Layer:       IP
+						</pre>
+					</section>
+					<section>
+						<h3 id="tls-13-handshake-full-walkthrough">TLS 1.3 Handshake - Full Walkthrough</h3>
+						<p>
+							<abbr title="Transport Layer Security">TLS</abbr>
+							1.3 (RFC 8446) redesigned the handshake for speed and security.
+							It reduces the classic
+							<abbr title="Transport Layer Security">TLS</abbr>
+							1.2 two-round-trip handshake to one round
+							trip, and removes all known-weak cryptographic primitives:
+						</p>
+						<pre class="plaintext">
+Client                                    Server
+
+ClientHello
+  + key_share (ECDHE public key)    →
+                                    ←    ServerHello
+                                         + key_share (ECDHE public key)
+                                         {EncryptedExtensions}
+                                         {Certificate}
+                                         {CertificateVerify}
+                                         {Finished}
+                                       
+{Finished}                          →
+[Application Data]                  ↔    [Application Data]
+						</pre>
+						<h4 id="step-by-step-breakdown">Step-by-step breakdown</h4>
+						<p>
+							<b>1. ClientHello:</b>
+							The client sends: -
+							<code>client_version</code>
+							:
+							<abbr title="Transport Layer Security">TLS</abbr>
+							1.3
+							(indicated as 0x0303 in legacy_version, with supported_versions extension containing 0x0304)
+							<ul>
+								<li><code>client_random</code> : 32 bytes of random data</li>
+								<li><code>cipher_suites</code> : List of supported AEAD ciphers ( <abbr title="Transport Layer Security">TLS</abbr> _ <abbr title="Advanced Encryption Standard">AES</abbr> _256_GCM_SHA384, <abbr title="Transport Layer Security">TLS</abbr> _CHACHA20_POLY1305_SHA256, <abbr title="Transport Layer Security">TLS</abbr> _ <abbr title="Advanced Encryption Standard">AES</abbr> _128_GCM_SHA256)</li>
+								<li><code>key_share</code> : Client's ECDHE public key for each supported curve (x25519, P-256)</li>
+								<li><code>signature_algorithms</code> : What algorithms the client accepts for certificate signatures (ecdsa_secp256r1_sha256, rsa_pss_rsae_sha256, ed25519)</li>
+								<li><code>supported_groups</code> : Elliptic curve groups for key exchange</li>
+								<li><code>server_name</code> (SNI): The hostname the client wants to reach</li>
+							</ul>
+						</p>
+						<p>
+							<b>2. ServerHello:</b>
+							The server responds with: -
+							<code>server_random</code>
+							: 32 bytes of random data -
+							<code>cipher_suite</code>
+							: The chosen cipher -
+							<code>key_share</code>
+							: Server's ECDHE public key for the chosen
+							group
+						</p>
+						<p>
+							At this point, both sides compute the shared secret from the ECDHE key exchange. All subsequent
+							messages are encrypted under keys derived from this shared secret.
+						</p>
+						<p>
+							<b>3. EncryptedExtensions:</b>
+							Server sends any additional parameters not needed for key negotiation
+							(ALPN, max fragment length, etc.). Encrypted under the handshake key.
+						</p>
+						<p>
+							<b>4. Certificate:</b>
+							Server sends its certificate chain (leaf + intermediates). Encrypted under
+							the handshake key. The client validates: signature chain, hostname match, expiration, revocation
+							status.
+						</p>
+						<p>
+							<b>5. CertificateVerify:</b>
+							Server signs the transcript hash of all handshake messages so far
+							with its certificate's private key. This proves the server possesses the private key for the
+							certificate.
+						</p>
+						<p>
+							<b>6. Finished:</b>
+							Both sides send an
+							<abbr title="Hash-based Message Authentication Code">HMAC</abbr>
+							over the
+							handshake transcript. This prevents downgrade attacks: if any message was modified, the
+							<abbr title="Hash-based Message Authentication Code">HMAC</abbr>
+							will not verify.
+						</p>
+						<p>
+							After the handshake completes, the
+							<abbr title="Transport Layer Security">TLS</abbr>
+							record layer encrypts all
+							application data using the derived traffic keys.
+						</p>
+					</section>
+					<section>
+						<h3 id="key-exchange-ecdhe">Key Exchange - ECDHE</h3>
+						<p>
+							<abbr title="Transport Layer Security">TLS</abbr>
+							1.3 mandates forward secrecy through Ephemeral Diffie-Hellman
+							key exchange.
+							<abbr title="Rivest-Shamir-Adleman">RSA</abbr>
+							key transport (where the client encrypts the pre-master
+							secret with the server's
+							<abbr title="Rivest-Shamir-Adleman">RSA</abbr>
+							public key) is removed entirely.
+						</p>
+						<h4 id="ecdhe-key-exchange">ECDHE Key Exchange</h4>
+						<pre class="plaintext">
+Setup: Both sides agree on an elliptic curve (e.g., curve25519)
+       and base point G.
+
+Client: Generates random private key a. Computes public key A = a * G.
+         Sends A in ClientHello.key_share.
+
+Server: Generates random private key b. Computes public key B = b * G.
+         Sends B in ServerHello.key_share.
+
+Shared secret: Client computes  S = a * B = a * b * G
+               Server computes S = b * A = b * a * G
+               Both arrive at the same S.
+
+The shared secret S is input to HKDF to derive encryption keys.
+The ephemeral keys a and b are discarded after the handshake.
+						</pre>
+						<p>
+							This provides forward secrecy: recording today's encrypted traffic reveals nothing if the server's
+							long-term private key is later compromised, because the ephemeral session keys were discarded.
+						</p>
+					</section>
+					<section>
+						<h3 id="tls-13-cipher-suites">TLS 1.3 Cipher Suites</h3>
+						<p>
+							<abbr title="Transport Layer Security">TLS</abbr>
+							1.3 eliminates all non-AEAD cipher suites. Only five are defined:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Cipher Suite</th>
+									<th align="center">Key Exchange</th>
+									<th align="center">Authentication</th>
+									<th align="center">Encryption</th>
+									<th align="center">Hash</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">TLS_AES_256_GCM_SHA384</td>
+									<td align="center">ECDHE</td>
+									<td align="center">Certificate</td>
+									<td align="center">AES-256-GCM</td>
+									<td align="center">SHA-384</td>
+								</tr>
+								<tr>
+									<td align="center">TLS_AES_128_GCM_SHA256</td>
+									<td align="center">ECDHE</td>
+									<td align="center">Certificate</td>
+									<td align="center">AES-128-GCM</td>
+									<td align="center">SHA-256</td>
+								</tr>
+								<tr>
+									<td align="center">TLS_CHACHA20_POLY1305_SHA256</td>
+									<td align="center">ECDHE</td>
+									<td align="center">Certificate</td>
+									<td align="center">ChaCha20</td>
+									<td align="center">SHA-256</td>
+								</tr>
+								<tr>
+									<td align="center">TLS_AES_128_CCM_SHA256</td>
+									<td align="center">ECDHE</td>
+									<td align="center">Certificate</td>
+									<td align="center">AES-128-CCM</td>
+									<td align="center">SHA-256</td>
+								</tr>
+								<tr>
+									<td align="center">TLS_AES_128_CCM_8_SHA256</td>
+									<td align="center">ECDHE</td>
+									<td align="center">Certificate</td>
+									<td align="center">AES-128-CCM-8</td>
+									<td align="center">SHA-256</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							The cipher suite no longer specifies the key exchange or authentication mechanism - those are
+							negotiated separately. In
+							<abbr title="Transport Layer Security">TLS</abbr>
+							1.2, a cipher suite like
+							<code>TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384</code>
+							embedded the ECDHE key exchange,
+							<abbr title="Rivest-Shamir-Adleman">RSA</abbr>
+							authentication,
+							<abbr title="Advanced Encryption Standard">AES</abbr>
+							-256-GCM encryption, and SHA-384 hashing all in one identifier.
+							<abbr title="Transport Layer Security">TLS</abbr>
+							1.3 decouples these.
+						</p>
+					</section>
+					<section>
+						<h3 id="tls-12-vs-tls-13-key-differences">TLS 1.2 vs TLS 1.3 - Key Differences</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Feature</th>
+									<th align="center">TLS 1.2</th>
+									<th align="center">TLS 1.3</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Handshake RTT</td>
+									<td align="center">2-RTT (4-RTT with session resumption)</td>
+									<td align="center">1-RTT (0-RTT with PSK)</td>
+								</tr>
+								<tr>
+									<td align="center">Key exchange algorithms</td>
+									<td align="center">RSA, DHE, ECDHE (all optional)</td>
+									<td align="center">ECDHE only (mandatory forward secrecy)</td>
+								</tr>
+								<tr>
+									<td align="center">Cipher suites count</td>
+									<td align="center">Hundreds (many weak)</td>
+									<td align="center">Five (all AEAD)</td>
+								</tr>
+								<tr>
+									<td align="center">RSA key transport</td>
+									<td align="center">Supported (no forward secrecy)</td>
+									<td align="center">Removed</td>
+								</tr>
+								<tr>
+									<td align="center">Static DH</td>
+									<td align="center">Supported (no forward secrecy)</td>
+									<td align="center">Removed</td>
+								</tr>
+								<tr>
+									<td align="center">CBC mode ciphers</td>
+									<td align="center">Supported (padding oracle risk)</td>
+									<td align="center">Removed</td>
+								</tr>
+								<tr>
+									<td align="center">RC4, 3DES, MD5, SHA-1</td>
+									<td align="center">Supported</td>
+									<td align="center">Removed</td>
+								</tr>
+								<tr>
+									<td align="center">Renegotiation</td>
+									<td align="center">Supported (vulnerable)</td>
+									<td align="center">Removed</td>
+								</tr>
+								<tr>
+									<td align="center">Compression</td>
+									<td align="center">Supported (CRIME attack)</td>
+									<td align="center">Removed</td>
+								</tr>
+								<tr>
+									<td align="center">Session tickets</td>
+									<td align="center">Optional</td>
+									<td align="center">Restructured as PSK</td>
+								</tr>
+								<tr>
+									<td align="center">Encrypted SNI</td>
+									<td align="center">Not supported</td>
+									<td align="center">Supported via ECH extension</td>
+								</tr>
+								<tr>
+									<td align="center">Downgrade protection</td>
+									<td align="center">Server random top bytes</td>
+									<td align="center">Server random 8 bytes (TLS 1.2 fallback detection)</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							<abbr title="Transport Layer Security">TLS</abbr>
+							1.3's design principle: if a feature caused security problems,
+							remove it rather than trying to fix it. The result is a simpler, faster, more secure protocol.
+						</p>
+					</section>
+					<section>
+						<h3 id="x509-certificate-structure">X.509 Certificate Structure</h3>
+						<p>
+							X.509 certificates bind a public key to an identity. The standard format (RFC 5280) uses
+							<code>ASN.1</code>
+							DER encoding:
+						</p>
+						<pre class="plaintext">
+Certificate ::= SEQUENCE {
+    tbsCertificate       TBSCertificate,        -- &#34;to be signed&#34;
+    signatureAlgorithm   AlgorithmIdentifier,
+    signatureValue       BIT STRING
+}
+
+TBSCertificate ::= SEQUENCE {
+    version              [0] INTEGER DEFAULT v1,
+    serialNumber         INTEGER,
+    signature            AlgorithmIdentifier,
+    issuer               Name,
+    validity             SEQUENCE {
+        notBefore        UTCTime,
+        notAfter         UTCTime
+    },
+    subject              Name,
+    subjectPublicKeyInfo SEQUENCE {
+        algorithm        AlgorithmIdentifier,
+        subjectPublicKey BIT STRING
+    },
+    extensions           [3] EXPLICIT Extensions OPTIONAL
+}
+						</pre>
+						<h4 id="critical-fields">Critical fields</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Field</th>
+									<th align="center">Purpose</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Serial Number</td>
+									<td align="center">Unique identifier for this certificate (used in CRLs)</td>
+								</tr>
+								<tr>
+									<td align="center">Issuer</td>
+									<td align="center">Who signed this certificate (DN: CN, O, C, etc.)</td>
+								</tr>
+								<tr>
+									<td align="center">Validity</td>
+									<td align="center">NotBefore + NotAfter - certificate lifetime</td>
+								</tr>
+								<tr>
+									<td align="center">Subject</td>
+									<td align="center">Who this certificate identifies</td>
+								</tr>
+								<tr>
+									<td align="center">SubjectPublicKeyInfo</td>
+									<td align="center">Algorithm OID + the actual public key bytes</td>
+								</tr>
+								<tr>
+									<td align="center">Extensions</td>
+									<td align="center">SAN (Subject Alternative Names), Key Usage, Extended Key Usage, CRL Distribution Points, Authority Information Access (OCSP URL), Certificate Policies, Basic Constraints (is this a CA?)</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							<b>Subject Alternative Name (SAN):</b>
+							The SAN extension lists the domains/
+							<abbr title="Internet Protocol">IP</abbr>
+							s the certificate is valid for. Modern browsers ignore the Subject CN and only use SAN entries:
+						</p>
+						<pre class="plaintext">
+X509v3 Subject Alternative Name:
+    DNS:example.com, DNS:www.example.com, DNS:*.example.com
+						</pre>
+						<h4 id="certificate-chain">Certificate chain</h4>
+						<pre class="plaintext">
+Root CA (self-signed, in trust store)
+  ↓ signs
+Intermediate CA (cross-signed by root)
+  ↓ signs
+Leaf certificate (for example.com)
+						</pre>
+						<p>
+							The relying party (browser) validates the chain: 1. Each certificate's signature matches its
+							parent's public key 1. The leaf certificate has not expired 1. The hostname matches a SAN entry
+							<ol>
+								<li>Key Usage allows the operation (digitalSignature for <abbr title="Transport Layer Security">TLS</abbr> server)</li>
+								<li>No certificate in the chain is revoked (CRL/ <abbr title="Online Certificate Status Protocol">OCSP</abbr> )</li>
+								<li>The root is trusted</li>
+							</ol>
+						</p>
+					</section>
+					<section>
+						<h3 id="sni-server-name-indication">SNI - Server Name Indication</h3>
+						<p>
+							SNI is a
+							<abbr title="Transport Layer Security">TLS</abbr>
+							extension that tells the server which hostname the
+							client is connecting to, before the server sends its certificate. Without SNI, a server hosting
+							multiple
+							<abbr title="Transport Layer Security">TLS</abbr>
+							sites on one
+							<abbr title="Internet Protocol">IP</abbr>
+							address could
+							not choose which certificate to present:
+						</p>
+						<pre class="plaintext">
+Without SNI: Client connects → Server sends default cert (possibly wrong domain)
+With SNI:    ClientHello includes &#34;example.com&#34; → Server chooses correct cert
+						</pre>
+						<pre class="bash">
+# Connect with SNI
+openssl s_client -connect 93.184.216.34:443 -servername www.example.com
+
+# Connect without SNI (server sends default certificate)
+openssl s_client -connect 93.184.216.34:443 -noservername
+						</pre>
+						<p>
+							SNI is sent in cleartext in
+							<abbr title="Transport Layer Security">TLS</abbr>
+							1.2 and 1.3 ClientHello. Anyone
+							monitoring the network can see which hostname is being accessed. Encrypted ClientHello (ECH),
+							also called Encrypted SNI (ESNI), encrypts the SNI extension under a public key published via
+							<abbr title="Domain Name System">DNS</abbr>
+							- but ECH deployment remains limited.
+						</p>
+					</section>
+					<section>
+						<h3 id="alpn-protocol-negotiation">ALPN Protocol Negotiation</h3>
+						<p>
+							ALPN lets the client and server agree on which application protocol to use over the
+							<abbr title="Transport Layer Security">TLS</abbr>
+							connection -
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							/1.1,
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							/2,
+							or
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							/3 - without an extra round trip:
+						</p>
+						<pre class="plaintext">
+ClientHello includes ALPN extension: [&#34;h2&#34;, &#34;http/1.1&#34;]
+ServerHello ALPN: &#34;h2&#34;  (server chose HTTP/2)
+						</pre>
+						<pre class="bash">
+# Check which protocols a server supports via ALPN
+openssl s_client -connect example.com:443 -alpn h2,http/1.1 &lt;/dev/null 2&gt;&amp;1 | grep &#34;ALPN&#34;
+
+# Force HTTP/1.1 via ALPN (curl)
+curl --http1.1 -v https://example.com/ 2&gt;&amp;1 | grep ALPN
+
+# Force HTTP/2 via ALPN
+curl --http2 -v https://example.com/ 2&gt;&amp;1 | grep ALPN
+						</pre>
+					</section>
+					<section>
+						<h3 id="mutual-tls-mtls">Mutual TLS (mTLS)</h3>
+						<p>
+							In standard
+							<abbr title="Transport Layer Security">TLS</abbr>
+							, only the server presents a certificate. In mutual
+							<abbr title="Transport Layer Security">TLS</abbr>
+							, the client also presents one. The server verifies the client's
+							certificate before allowing the connection:
+						</p>
+						<pre class="plaintext">
+Standard TLS:
+  1. ClientHello →
+  2. ← ServerHello, Certificate, CertificateVerify, Finished
+  3. Finished →
+  4. Application Data ↔
+
+Mutual TLS:
+  1. ClientHello →
+  2. ← ServerHello, EncryptedExtensions,
+     ← CertificateRequest (server asks for client cert)
+     ← Certificate, CertificateVerify, Finished
+  
+  3. Certificate (client cert) →
+     CertificateVerify (client signs transcript) →
+     Finished →
+  
+  4. Application Data ↔
+						</pre>
+						<pre class="bash">
+# Test mTLS with openssl s_client
+openssl s_client -connect mTLS-server:443 \
+    -cert client.crt \
+    -key client.key \
+    -CAfile ca.crt
+
+# Generate client cert for mTLS testing
+openssl req -new -newkey rsa:2048 -nodes -keyout client.key -out client.csr \
+    -subj &#34;/CN=client&#34;
+openssl x509 -req -in client.csr -CA ca.crt -CAkey ca.key \
+    -CAcreateserial -out client.crt -days 365
+						</pre>
+					</section>
+					<section>
+						<h3 id="certificate-pinning">Certificate Pinning</h3>
+						<p>
+							Certificate pinning restricts which certificates are valid for a domain. Instead of trusting
+							any certificate signed by any
+							<abbr title="Certificate Authority">CA</abbr>
+							in the trust store, the application
+							pins specific certificates or public keys:
+						</p>
+						<pre class="plaintext">
+Pinning strategies:
+  1. Pin the leaf certificate: Only accept this exact certificate
+  2. Pin the public key: Accept any certificate with this public key
+  3. Pin the intermediate CA: Accept any cert signed by this specific CA
+  4. Pin the SPKI hash: Accept any cert whose SubjectPublicKeyInfo hashes to this value
+						</pre>
+						<p>
+							Certificate pinning prevents attacks where a compromised
+							<abbr title="Certificate Authority">CA</abbr>
+							issues
+							a fraudulent certificate. However, it creates operational risks - if the pinned certificate
+							expires and a new one is deployed, pinned clients break.
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							Public Key Pinning (HPKP) was deprecated for this reason.
+						</p>
+						<pre class="bash">
+# Extract SPKI hash for pinning
+openssl x509 -in cert.pem -pubkey -noout | \
+    openssl pkey -pubin -outform der | \
+    openssl dgst -sha256 -binary | \
+    openssl enc -base64
+
+# Example pin hash:
+# kJshjJkHcGhRe45Fke4QqDlRxGFHHGmhHcRe45Fke4Q=
+						</pre>
+					</section>
+					<section>
+						<h3 id="certificate-transparency-ct">Certificate Transparency (CT)</h3>
+						<p>
+							Certificate Transparency (RFC 6962) requires certificate authorities to publicly log every certificate
+							they issue. Browsers require Signed Certificate Timestamps (SCTs) as proof that a certificate
+							was logged:
+						</p>
+						<pre class="plaintext">
+How CT works:
+  1. CA submits new certificate to one or more CT logs
+  2. CT log returns SCT (timestamped signature proving inclusion)
+  3. CA embeds SCT in certificate (X.509 extension) or delivers via TLS extension
+  4. Browser verifies: SCT is valid, certificate appears in CT logs
+
+Monitors continuously scan CT logs for:
+  - Certificates issued for their domains
+  - Suspicious certificates (possible misissuance)
+						</pre>
+						<pre class="bash">
+# View SCTs in a certificate
+openssl s_client -connect example.com:443 -servername example.com \
+    -showcerts &lt;/dev/null 2&gt;&amp;1 | \
+    openssl x509 -text -noout | grep -A3 &#34;SCT&#34;
+
+# Query CT logs with ct-submit (from certificate-transparency-tools)
+ct-submit --log=https://ct.cloudflare.com/logs/nimbus2024 \
+    &lt; cert.pem
+						</pre>
+					</section>
+					<section>
+						<h3 id="tls-0-rtt-resumption">TLS 0-RTT Resumption</h3>
+						<p>
+							<abbr title="Transport Layer Security">TLS</abbr>
+							1.3 supports 0-
+							<abbr title="Round-Trip Time">RTT</abbr>
+							resumption: a client
+							that previously connected can send application data immediately in the first flight, before
+							the server responds:
+						</p>
+						<pre class="plaintext">
+Initial handshake (1-RTT):
+  ClientHello + key_share →
+  ← ServerHello + key_share + {EncryptedExtensions, Certificate, CertVerify, Finished}
+  {Finished} →
+
+0-RTT Resumption:
+  ClientHello + key_share + [Application Data] + PSK extension →
+  ← ServerHello + key_share + {EncryptedExtensions, Finished} + [Application Data]
+  {Finished} + [Application Data] →
+						</pre>
+						<p>
+							The tradeoff: 0-
+							<abbr title="Round-Trip Time">RTT</abbr>
+							data has no forward secrecy (it is encrypted under a
+							PSK derived from a previous connection) and is replayable - an attacker can capture the 0-
+							<abbr title="Round-Trip Time">RTT</abbr>
+							flight and replay it to the server. Servers must implement replay protection or restrict 0-
+							<abbr title="Round-Trip Time">RTT</abbr>
+							to idempotent requests.
+						</p>
+					</section>
+					<section>
+						<h3 id="tls-inspection-with-s-client">TLS Inspection with s_client</h3>
+						<pre class="bash">
+# ── Basic connection ──
+openssl s_client -connect example.com:443 -servername example.com
+
+# ── Show the full certificate chain ──
+openssl s_client -connect example.com:443 -servername example.com -showcerts
+
+# ── Force TLS 1.3 ──
+openssl s_client -connect example.com:443 -tls1_3
+
+# ── Force TLS 1.2 (observe downgrade) ──
+openssl s_client -connect example.com:443 -tls1_2
+
+# ── Show all certificates in chain ──
+echo | openssl s_client -connect example.com:443 -showcerts 2&gt;&amp;1 | \
+    openssl x509 -text -noout
+
+# ── Extract specific certificate info ──
+echo | openssl s_client -connect example.com:443 -servername example.com 2&gt;/dev/null | \
+    openssl x509 -noout -subject -issuer -dates -fingerprint
+
+# ── View supported cipher suites ──
+openssl s_client -connect example.com:443 -servername example.com \
+    -cipher &#34;ALL&#34; &lt;/dev/null 2&gt;&amp;1 | grep &#34;Cipher&#34;
+
+# ── Test specific cipher ──
+openssl s_client -connect example.com:443 -tls1_3 \
+    -ciphersuites TLS_AES_256_GCM_SHA384
+
+# ── Test certificate expiry ──
+echo | openssl s_client -connect example.com:443 -servername example.com 2&gt;/dev/null | \
+    openssl x509 -noout -enddate
+
+# ── Test with client certificate (mTLS) ──
+openssl s_client -connect mTLS-server:443 \
+    -cert client.crt -key client.key -CAfile ca.crt
+
+# ── Save server certificate ──
+echo | openssl s_client -connect example.com:443 -servername example.com 2&gt;/dev/null | \
+    sed -n &#39;/BEGIN CERTIFICATE/,/END CERTIFICATE/p&#39; &gt; server.crt
+
+# ── Check if certificate is self-signed ──
+openssl verify -CAfile server.crt server.crt
+						</pre>
+					</section>
+					<section>
+						<h3 id="inspecting-x509-certificates">Inspecting X.509 Certificates</h3>
+						<pre class="bash">
+# ── Full certificate dump ──
+openssl x509 -in cert.pem -text -noout
+
+# ── Key fields only ──
+openssl x509 -in cert.pem -noout -subject -issuer -dates -serial
+
+# ── Extract public key ──
+openssl x509 -in cert.pem -pubkey -noout
+
+# ── Check modulus (RSA) for shared factors ──
+openssl x509 -in cert.pem -modulus -noout | openssl md5
+
+# ── Check SAN entries ──
+openssl x509 -in cert.pem -noout -ext subjectAltName
+
+# ── Check Key Usage ──
+openssl x509 -in cert.pem -noout -ext keyUsage
+openssl x509 -in cert.pem -noout -ext extendedKeyUsage
+
+# ── Check Basic Constraints (is it a CA?) ──
+openssl x509 -in cert.pem -noout -ext basicConstraints
+
+# ── Certificate fingerprint (SHA-256) ──
+openssl x509 -in cert.pem -noout -fingerprint -sha256
+						</pre>
+					</section>
+					<section>
+						<h3 id="lets-encrypt-and-acme">Let's Encrypt and ACME</h3>
+						<p>
+							Let's Encrypt uses the ACME (Automatic Certificate Management Environment, RFC 8555) protocol
+							to automate certificate issuance:
+						</p>
+						<pre class="plaintext">
+ACME flow:
+  1. Agent generates key pair and CSR
+  2. Agent registers account with ACME server
+  3. Agent places order for domain(s)
+  4. Server issues challenges (HTTP-01, DNS-01, TLS-ALPN-01)
+  5. Agent proves domain control by completing a challenge
+  6. Server validates challenge
+  7. Agent finalizes order → receives certificate
+						</pre>
+						<p>
+							<b>HTTP-01 challenge:</b>
+							The agent places a token at
+							<code>http://example.com/.well-known/acme-challenge/&lt;token&gt;</code>
+							. The ACME server verifies it can fetch this
+							<abbr title="Uniform Resource Locator">URL</abbr>
+							from the public
+							internet.
+						</p>
+						<p>
+							<b>DNS-01 challenge:</b>
+							The agent creates a TXT record at
+							<code>_acme-challenge.example.com</code>
+							containing
+							a validation token. The ACME server queries
+							<abbr title="Domain Name System">DNS</abbr>
+							to verify it.
+						</p>
+						<pre class="bash">
+# Manual ACME with acme.sh
+sudo pacman -S acme.sh
+
+# Issue cert via HTTP challenge
+acme.sh --issue -d example.com -w /var/www/html
+
+# Issue cert via DNS challenge (Cloudflare API)
+export CF_Token=&#34;your-api-token&#34;
+acme.sh --issue -d example.com --dns dns_cf
+						</pre>
+					</section>
+					<section>
+						<h3 id="tls-inspector-in-python">TLS Inspector in Python</h3>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;
+Connect to a TLS server and inspect its certificate.
+Uses Python&#39;s ssl module to perform the handshake and extract cert details.
+&#34;&#34;&#34;
+import ssl
+import socket
+import sys
+from datetime import datetime
+
+def inspect_tls_server(hostname: str, port: int = 443,
+                       timeout: float = 10.0) -&gt; dict:
+    &#34;&#34;&#34;Connect to a TLS server and extract certificate information.&#34;&#34;&#34;
+    result = {
+        &#34;hostname&#34;: hostname,
+        &#34;port&#34;: port,
+        &#34;cipher&#34;: None,
+        &#34;tls_version&#34;: None,
+        &#34;peer_cert&#34;: None,
+        &#34;cert_chain&#34;: [],
+        &#34;errors&#34;: [],
+    }
+
+    context = ssl.create_default_context()
+
+    # Don&#39;t verify to inspect even invalid certs
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+
+    try:
+        sock = socket.create_connection((hostname, port), timeout=timeout)
+        with context.wrap_socket(sock, server_hostname=hostname) as ssock:
+            # Get negotiated parameters
+            result[&#34;cipher&#34;] = ssock.cipher()
+            result[&#34;tls_version&#34;] = ssock.version()
+
+            # Get peer certificate as dict
+            cert = ssock.getpeercert(binary_form=False)
+
+            if cert:
+                result[&#34;peer_cert&#34;] = {
+                    &#34;subject&#34;: dict(x[0] for x in cert.get(&#34;subject&#34;, [])),
+                    &#34;issuer&#34;: dict(x[0] for x in cert.get(&#34;issuer&#34;, [])),
+                    &#34;serial&#34;: cert.get(&#34;serialNumber&#34;),
+                    &#34;notBefore&#34;: cert.get(&#34;notBefore&#34;),
+                    &#34;notAfter&#34;: cert.get(&#34;notAfter&#34;),
+                    &#34;version&#34;: cert.get(&#34;version&#34;),
+                    &#34;san&#34;: [],
+                }
+
+                # Parse SANs
+                for ext in cert.get(&#34;subjectAltName&#34;, []):
+                    ext_type, ext_value = ext
+                    result[&#34;peer_cert&#34;][&#34;san&#34;].append(f&#34;{ext_type}:{ext_value}&#34;)
+
+                # Check certificate expiry
+                not_after = datetime.strptime(
+                    cert[&#34;notAfter&#34;], &#34;%b %d %H:%M:%S %Y %Z&#34;
+                )
+                now = datetime.utcnow()
+                days_left = (not_after - now).days
+                result[&#34;peer_cert&#34;][&#34;days_until_expiry&#34;] = days_left
+                result[&#34;peer_cert&#34;][&#34;expired&#34;] = days_left &lt; 0
+
+            # Get certificate chain (PEM-encoded)
+            cert_chain_binary = ssock.get_peer_cert_chain()
+            if cert_chain_binary:
+                for cert_bytes in cert_chain_binary:
+                    result[&#34;cert_chain&#34;].append(
+                        ssl.DER_cert_to_PEM_cert(cert_bytes)
+                    )
+
+    except ssl.SSLCertVerificationError as e:
+        result[&#34;errors&#34;].append(f&#34;Certificate verification failed: {e}&#34;)
+    except ssl.SSLError as e:
+        result[&#34;errors&#34;].append(f&#34;TLS error: {e}&#34;)
+    except socket.timeout:
+        result[&#34;errors&#34;].append(&#34;Connection timed out&#34;)
+    except ConnectionRefusedError:
+        result[&#34;errors&#34;].append(&#34;Connection refused&#34;)
+    except socket.gaierror as e:
+        result[&#34;errors&#34;].append(f&#34;DNS resolution failed: {e}&#34;)
+    except Exception as e:
+        result[&#34;errors&#34;].append(f&#34;Unexpected error: {e}&#34;)
+
+    return result
+
+def print_tls_report(info: dict):
+    &#34;&#34;&#34;Pretty-print TLS inspection results.&#34;&#34;&#34;
+    print(f&#34;\n{&#39;=&#39;*60}&#34;)
+    print(f&#34;TLS Inspection Report&#34;)
+    print(f&#34;{&#39;=&#39;*60}&#34;)
+
+    if info[&#34;errors&#34;]:
+        for err in info[&#34;errors&#34;]:
+            print(f&#34;  [!] {err}&#34;)
+        return
+
+    print(f&#34;\n  Connection: {info[&#39;hostname&#39;]}:{info[&#39;port&#39;]}&#34;)
+    print(f&#34;  TLS Version: {info[&#39;tls_version&#39;]}&#34;)
+    if info[&#34;cipher&#34;]:
+        print(f&#34;  Cipher Suite: {info[&#39;cipher&#39;][0]}&#34;)
+        print(f&#34;  Cipher Bits:  {info[&#39;cipher&#39;][1]}&#34;)
+        print(f&#34;  TLS Protocol: {info[&#39;cipher&#39;][2] if len(info[&#39;cipher&#39;]) &gt; 2 else &#39;N/A&#39;}&#34;)
+
+    cert = info.get(&#34;peer_cert&#34;)
+    if cert:
+        print(f&#34;\n  ── Certificate ──&#34;)
+        print(f&#34;  Subject:   {cert[&#39;subject&#39;].get(&#39;commonName&#39;, &#39;N/A&#39;)}&#34;)
+        print(f&#34;  Issuer:    {cert[&#39;issuer&#39;].get(&#39;commonName&#39;, &#39;N/A&#39;)}&#34;)
+        print(f&#34;  Serial:    {cert[&#39;serial&#39;]}&#34;)
+        print(f&#34;  Valid from: {cert[&#39;notBefore&#39;]}&#34;)
+        print(f&#34;  Valid to:   {cert[&#39;notAfter&#39;]}&#34;)
+        print(f&#34;  Days left:  {cert.get(&#39;days_until_expiry&#39;, &#39;N/A&#39;)}&#34;)
+        if cert.get(&#34;expired&#34;):
+            print(f&#34;  ⚠ EXPIRED!&#34;)
+        print(f&#34;  Version:  v{cert[&#39;version&#39;]}&#34;)
+
+        if cert[&#34;san&#34;]:
+            print(f&#34;\n  ── Subject Alternative Names ──&#34;)
+            for san in cert[&#34;san&#34;]:
+                print(f&#34;    {san}&#34;)
+
+    if info[&#34;cert_chain&#34;]:
+        print(f&#34;\n  ── Certificate Chain ({len(info[&#39;cert_chain&#39;])} certs) ──&#34;)
+        for i, chain_cert in enumerate(info[&#34;cert_chain&#34;]):
+            # Extract CN from PEM
+            for line in chain_cert.split(&#34;\n&#34;):
+                if &#34;Subject:&#34; in line or &#34;CN =&#34; in line:
+                    print(f&#34;    [{i}] {line.strip()}&#34;)
+                    break
+
+def tls_cipher_scan(hostname: str, port: int = 443):
+    &#34;&#34;&#34;Test which cipher suites are accepted by a server.&#34;&#34;&#34;
+    ciphers = [
+        &#34;TLS_AES_256_GCM_SHA384&#34;,
+        &#34;TLS_AES_128_GCM_SHA256&#34;,
+        &#34;TLS_CHACHA20_POLY1305_SHA256&#34;,
+        &#34;ECDHE-RSA-AES256-GCM-SHA384&#34;,
+        &#34;ECDHE-RSA-AES128-GCM-SHA256&#34;,
+    ]
+
+    print(f&#34;\n{&#39;=&#39;*60}&#34;)
+    print(f&#34;TLS Cipher Suite Scan: {hostname}:{port}&#34;)
+    print(f&#34;{&#39;=&#39;*60}&#34;)
+
+    for cipher in ciphers:
+        try:
+            context = ssl.create_default_context()
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
+            context.set_ciphers(cipher)
+
+            sock = socket.create_connection((hostname, port), timeout=5)
+            with context.wrap_socket(sock, server_hostname=hostname) as ssock:
+                negotiated = ssock.cipher()
+                print(f&#34;  [✓] {cipher:&lt;35} → {negotiated[0]}&#34;)
+        except ssl.SSLError as e:
+            if &#34;NO_SHARED_CIPHER&#34; in str(e) or &#34;handshake failure&#34; in str(e):
+                print(f&#34;  [✗] {cipher:&lt;35} → rejected&#34;)
+            else:
+                print(f&#34;  [!] {cipher:&lt;35} → {e}&#34;)
+        except Exception as e:
+            print(f&#34;  [!] {cipher:&lt;35} → {e}&#34;)
+
+if __name__ == &#34;__main__&#34;:
+    target = sys.argv[1] if len(sys.argv) &gt; 1 else &#34;example.com&#34;
+    port = int(sys.argv[2]) if len(sys.argv) &gt; 2 else 443
+
+    info = inspect_tls_server(target, port)
+    print_tls_report(info)
+
+    # Optionally run cipher scan
+    if &#34;--ciphers&#34; in sys.argv:
+        tls_cipher_scan(target, port)
+						</pre>
+					</section>
+					<section>
+						<h3 id="tls-record-protocol">TLS Record Protocol</h3>
+						<p>
+							After the handshake, all data is transmitted in
+							<abbr title="Transport Layer Security">TLS</abbr>
+							records. Each
+							record has a 5-byte header:
+						</p>
+						<pre class="plaintext">
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+| Content Type  |    Version    |            Length             |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                  Encrypted Payload (variable)                 |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                  Authentication Tag (AEAD, variable)          |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+						</pre>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Field</th>
+									<th align="center">Bits</th>
+									<th align="center">TLS 1.3 Value</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Content Type</td>
+									<td align="center">8</td>
+									<td align="center">23 (Application Data), 22 (Handshake), 21 (Alert), 20 (CCS - not in 1.3)</td>
+								</tr>
+								<tr>
+									<td align="center">Version</td>
+									<td align="center">16</td>
+									<td align="center">0x0303 (legacy - TLS 1.3 disguises as 1.2 for middlebox compatibility)</td>
+								</tr>
+								<tr>
+									<td align="center">Length</td>
+									<td align="center">16</td>
+									<td align="center">Encrypted payload length (max 2^14 + 2048 bytes per record)</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							All records after the handshake are encrypted with AEAD (Authenticated Encryption with Associated
+							Data). The associated data includes the record header fields, so any modification to the header
+							will fail authentication.
+						</p>
+					</section>
+					<section>
+						<h3 id="security-considerations">Security Considerations</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Vulnerability</th>
+									<th align="center">Protocol</th>
+									<th align="center">Mechanism</th>
+									<th align="center">TLS 1.3 Mitigation</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">BEAST</td>
+									<td align="center">TLS 1.0</td>
+									<td align="center">CBC IV prediction</td>
+									<td align="center">Removed CBC</td>
+								</tr>
+								<tr>
+									<td align="center">CRIME/BREACH</td>
+									<td align="center">TLS 1.0-1.2</td>
+									<td align="center">Compression oracle</td>
+									<td align="center">Removed compression</td>
+								</tr>
+								<tr>
+									<td align="center">POODLE</td>
+									<td align="center">SSL 3.0</td>
+									<td align="center">Padding oracle in CBC</td>
+									<td align="center">Removed SSL 3.0, removed CBC</td>
+								</tr>
+								<tr>
+									<td align="center">Heartbleed</td>
+									<td align="center">OpenSSL</td>
+									<td align="center">Buffer over-read in heartbeat extension</td>
+									<td align="center">Not a protocol flaw - implementation bug</td>
+								</tr>
+								<tr>
+									<td align="center">Logjam</td>
+									<td align="center">TLS 1.0-1.2</td>
+									<td align="center">Export-grade DH downgrade</td>
+									<td align="center">Minimum DH group size, removed export ciphers</td>
+								</tr>
+								<tr>
+									<td align="center">FREAK</td>
+									<td align="center">TLS</td>
+									<td align="center">RSA export downgrade</td>
+									<td align="center">Removed export ciphers</td>
+								</tr>
+								<tr>
+									<td align="center">Lucky13</td>
+									<td align="center">TLS 1.0-1.2</td>
+									<td align="center">Timing oracle in CBC padding</td>
+									<td align="center">Removed CBC</td>
+								</tr>
+								<tr>
+									<td align="center">ROBOT</td>
+									<td align="center">TLS 1.0-1.2</td>
+									<td align="center">Bleichenbacher RSA PKCS#1 v1.5 oracle</td>
+									<td align="center">Removed RSA key transport</td>
+								</tr>
+								<tr>
+									<td align="center">3SHAKE</td>
+									<td align="center">TLS 1.0-1.2</td>
+									<td align="center">Renegotiation state confusion</td>
+									<td align="center">Removed renegotiation</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							<abbr title="Transport Layer Security">TLS</abbr>
+							1.3 effectively kills the entire class of downgrade, padding
+							oracle, and key-transport attacks by removing the vulnerable primitives entirely.
+						</p>
+					</section>
+					<section>
+						<h3 id="tls-key-schedule">TLS Key Schedule</h3>
+						<p>
+							<abbr title="Transport Layer Security">TLS</abbr>
+							1.3 derives all keys from the ECDHE shared secret using HKDF
+							(
+							<abbr title="Hash-based Message Authentication Code">HMAC</abbr>
+							-based Key Derivation Function, RFC 5869):
+						</p>
+						<pre class="plaintext">
+                     PSK (optional)
+                          |
+                          v
+Early Secret → [HKDF-Extract] → binder_key, early_traffic_secret
+                          |
+                          v
+                      (EC)DHE  → [HKDF-Extract] → Handshake Secret
+                          |                            |
+                          v                            v
+                                                  client_handshake_traffic_secret
+                                                  server_handshake_traffic_secret
+                          |
+                          v
+                      0  → [HKDF-Extract] → Master Secret
+                                                   |
+                                                   v
+                                              client_application_traffic_secret
+                                              server_application_traffic_secret
+                                              exporter_master_secret
+                                              resumption_master_secret
+						</pre>
+						<p>
+							Each derived secret is used as input to HKDF-Expand to produce the actual encryption keys, initialization
+							vectors (nonces), and record sequence numbers.
+						</p>
+					</section>
+					<section>
+						<h3 id="summary">Summary</h3>
+						<p>
+							<abbr title="Transport Layer Security">TLS</abbr>
+							provides confidentiality, integrity, and authentication on top
+							of
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							.
+							<abbr title="Transport Layer Security">TLS</abbr>
+							1.3 simplifies the
+							protocol dramatically - mandatory forward secrecy via ECDHE, AEAD-only cipher suites, one-round-trip
+							handshake, and removal of all known-weak primitives. Certificates follow X.509 and are validated
+							through a chain of trust rooted in pre-installed
+							<abbr title="Certificate Authority">CA</abbr>
+							certificates. The
+							protocol's security depends on correct implementation of the handshake state machine, certificate
+							validation, and the AEAD record layer - a mistake in any of these three components breaks the
+							security guarantees entirely.
+						</p>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a
+							<abbr title="Transport Layer Security">TLS</abbr>
+							inspector in Go. Connect to a server, complete the handshake,
+							and print the negotiated version, cipher suite, and leaf certificate fields. Set
+							<code>ServerName</code>
+							in the
+							<code>tls.Config</code>
+							so that SNI and certificate verification work correctly.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;crypto/tls&#34;
+	&#34;fmt&#34;
+	&#34;net&#34;
+	&#34;os&#34;
+	&#34;time&#34;
+)
+
+func main() {
+	addr := &#34;example.com:443&#34;
+	if len(os.Args) &gt; 1 {
+		addr = os.Args[1]
+	}
+
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, &#34;usage: tlsinspect host:port&#34;)
+		os.Exit(1)
+	}
+
+	dialer := &amp;net.Dialer{Timeout: 5 * time.Second}
+	config := &amp;tls.Config{ServerName: host}
+
+	conn, err := tls.DialWithDialer(dialer, &#34;tcp&#34;, addr, config)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, &#34;handshake failed:&#34;, err)
+		os.Exit(1)
+	}
+	defer conn.Close()
+
+	state := conn.ConnectionState()
+	fmt.Println(&#34;version:&#34;, tls.VersionName(state.Version))
+	fmt.Println(&#34;cipher: &#34;, tls.CipherSuiteName(state.CipherSuite))
+
+	for i, cert := range state.PeerCertificates {
+		fmt.Printf(&#34;cert[%d] subject: %s\n&#34;, i, cert.Subject.CommonName)
+		fmt.Printf(&#34;cert[%d] issuer:  %s\n&#34;, i, cert.Issuer.CommonName)
+		fmt.Printf(&#34;cert[%d] expires: %s\n&#34;, i, cert.NotAfter.Format(time.RFC3339))
+		fmt.Printf(&#34;cert[%d] SANs:    %v\n&#34;, i, cert.DNSNames)
+	}
+}
+						</pre>
+						<p>
+							Next, start the multi-endpoint lab container and inspect each endpoint with
+							<code>openssl</code>
+							:
+						</p>
+						<p><a href="/wiki/articles/fundamentals/tls.Containerfile">tls.Containerfile</a></p>
+						<pre class="bash">
+podman build -t tls -f tls.Containerfile .
+podman run -d --rm --name tls -p 8443:8443 -p 9443:9443 -p 10443:10443 -p 11443:11443 -p 12443:12443 -p 8888:8888 tls
+podman exec -it tls bash
+						</pre>
+						<p>
+							Inside the container, compare the
+							<abbr title="Transport Layer Security">TLS</abbr>
+							1.2 and 1.3 endpoints and
+							observe the self-signed certificate error:
+						</p>
+						<pre class="bash">
+openssl s_client -connect localhost:8443 -CAfile /etc/nginx/certs/ca.crt
+openssl s_client -connect localhost:9443 -CAfile /etc/nginx/certs/ca.crt
+openssl s_client -connect localhost:9443 -tls1_2 -CAfile /etc/nginx/certs/ca.crt
+openssl s_client -connect localhost:11443
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc8446" target="_blank">RFC 8446 - The Transport Layer Security (TLS) Protocol Version 1.3</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc5246" target="_blank">RFC 5246 - The Transport Layer Security (TLS) Protocol Version 1.2</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc5280" target="_blank">RFC 5280 - Internet X.509 Public Key Infrastructure Certificate</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc6066" target="_blank">RFC 6066 - TLS Extensions: Server Name Indication</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc7301" target="_blank">RFC 7301 - TLS Application-Layer Protocol Negotiation Extension</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc6962" target="_blank">RFC 6962 - Certificate Transparency</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc8555" target="_blank">RFC 8555 - Automatic Certificate Management Environment (ACME)</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc5869" target="_blank">RFC 5869 - HMAC-based Extract-and-Expand Key Derivation Function (HKDF)</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

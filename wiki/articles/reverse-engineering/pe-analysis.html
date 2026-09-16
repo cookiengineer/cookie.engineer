@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>PE Analysis from Linux | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="PE Analysis from Linux">
+		<meta name="keywords" content="forensics, malware-analysis, reverse-engineering, windows">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="PE Analysis from Linux">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Analyzing Windows PE malware from a Linux workstation: PE structure, import analysis, packer detection, and static triage.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/reverse-engineering/pe-analysis.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="PE Analysis from Linux">
+		<meta name="twitter:description" itemprop="description" content="Analyzing Windows PE malware from a Linux workstation: PE structure, import analysis, packer detection, and static triage.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#why-linux-for-windows-malware-analysis">Why Linux for Windows Malware Analysis</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#pe-structure-for-reversers">PE Structure for Reversers</a></b>
+					<ul>
+						<li><a href="#manual-pe-parsing">Manual PE Parsing</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#pe-analysis-toolkit-on-linux">PE Analysis Toolkit on Linux</a></b>
+					<ul>
+						<li><a href="#readpe-full-dump">readpe: Full Dump</a></li>
+						<li><a href="#pecheck-python">pecheck (Python)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#import-analysis">Import Analysis</a></b>
+					<ul>
+						<li><a href="#import-categorization-table">Import Categorization Table</a></li>
+						<li><a href="#what-imports-reveal-in-combination">What Imports Reveal in Combination</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#packer-detection-on-pe-files">Packer Detection on PE Files</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#pe-timestamps">PE Timestamps</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#rich-header-analysis">Rich Header Analysis</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#imphash-pe-import-hash">Imphash: PE Import Hash</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#yara-rules-for-pe-malware">YARA Rules for PE Malware</a></b>
+					<ul>
+						<li><a href="#more-pe-yara-rules">More PE YARA Rules</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#extracting-pe-resources">Extracting PE Resources</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#static-analysis-script-for-pe-files">Static Analysis Script for PE Files</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#next-steps">Next Steps</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/reverse-engineering/index.html">Reverse Engineering</a></li>
+						<li aria-current="page"><a href="/wiki/articles/reverse-engineering/pe-analysis.html">Pe Analysis</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="pe-analysis-from-linux">PE Analysis from Linux</h2>
+					<p>
+						Analyzing Windows PE malware from a Linux workstation: PE structure, import analysis, packer
+						detection, and static triage.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Windows malware cannot execute natively on Linux. This is not a limitation, it is a safety boundary:
+							the binary is inert, so you can dump every byte, parse every header, and extract every resource
+							without risk. This article covers the PE structures that matter for triage, the Linux toolchain
+							that replaces Dependency Walker and PE Explorer, import and packer analysis, timestamp and Rich
+							header forensics, and ends with a Go tool that scores a PE for suspicious traits.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/pe.html">PE Format</a> - PE format structure: DOS header, NT headers, sections, imports, exports, and resources</li>
+							<li><a href="/wiki/articles/reverse-engineering/binary-identification.html">Binary Identification</a> - initial file identification and triage before PE structural analysis</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="why-linux-for-windows-malware-analysis">Why Linux for Windows Malware Analysis</h3>
+						<p>
+							Windows malware cannot execute natively on Linux. This is not a limitation - it is a safety
+							boundary. The binary is inert. You can analyze it aggressively: dump every byte, run every static
+							tool, parse every header, extract every resource. Nothing executes. Nothing infects.
+						</p>
+						<p>
+							The Linux PE toolchain is mature.
+							<code>pev</code>
+							(PE Viewer) provides
+							<code>readpe</code>
+							,
+							<code>pescan</code>
+							,
+							<code>pepack</code>
+							,
+							<code>peres</code>
+							, and
+							<code>pedis</code>
+							- collectively replacing Dependency Walker, PE Explorer, and parts of
+							<code>IDA Pro</code>
+							for triage.
+							<code>pecheck</code>
+							from the
+							<code>pefile</code>
+							Python library exposes every structure programmatically.
+							<code>exiftool</code>
+							surfaces metadata. All of this runs from an ArchLinux terminal.
+						</p>
+					</section>
+					<section>
+						<h3 id="pe-structure-for-reversers">PE Structure for Reversers</h3>
+						<p>A PE file is a remapping of the COFF object format. The structure from front to back:</p>
+						<pre class="plaintext">
+Offset 0x00:  DOS Header (64 bytes)
+             - e_magic:    &#34;MZ&#34; (0x5A4D)
+             - e_lfanew:   offset to PE signature
+
+Offset e_lfanew: PE Signature &#34;PE\0\0&#34; (4 bytes)
+                 COFF File Header (20 bytes)
+                 - Machine:              0x014C (i386), 0x8664 (AMD64)
+                 - NumberOfSections:     section count
+                 - TimeDateStamp:        compile timestamp (UNIX epoch)
+                 - SizeOfOptionalHeader: varies
+
+Optional Header:
+                 - Magic:                0x10B (PE32), 0x20B (PE32+)
+                 - EntryPointAddress:    RVA of entry point
+                 - ImageBase:            default load address
+                 - SectionAlignment:     alignment in memory (0x1000)
+                 - FileAlignment:        alignment on disk (0x200)
+                 - SizeOfImage:          total virtual size
+                 - Subsystem:            GUI, CUI, native, driver
+                 - DataDirectory:        array of 16 IMAGE_DATA_DIRECTORY
+                   - [0]: Export Directory
+                   - [1]: Import Directory
+                   - [2]: Resource Directory
+                   - [9]: TLS Directory
+                   - [14]: .NET Metadata Directory
+
+Section Headers (NumberOfSections * 40 bytes):
+                 - Name:                 8-byte section name
+                 - VirtualSize:          size in memory
+                 - VirtualAddress:       RVA in memory
+                 - SizeOfRawData:        size on disk
+                 - PointerToRawData:     offset on disk
+                 - Characteristics:      flags
+						</pre>
+						<h4 id="manual-pe-parsing">Manual PE Parsing</h4>
+						<p>Before relying on tools, understand the raw bytes. Parse the DOS header manually:</p>
+						<pre class="plaintext">
+$ xxd -l 64 unknown.exe
+00000000: 4d5a 9000 0300 0000 0400 0000 ffff 0000  MZ..............
+00000010: b800 0000 0000 0000 4000 0000 0000 0000  ........@.......
+00000020: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+00000030: 0000 0000 0000 0000 0000 0000 e000 0000  ................
+						</pre>
+						<p>
+							Bytes
+							<code>0x00-0x01</code>
+							:
+							<code>4d 5a</code>
+							=
+							<code>MZ</code>
+							(little-endian word
+							<code>0x5A4D</code>
+							). Bytes
+							<code>0x3C-0x3F</code>
+							:
+							<code>e0 00 00 00</code>
+							=
+							<code>0x000000E0</code>
+							(e_lfanew). The PE signature is at offset
+							<code>0xE0</code>
+							.
+						</p>
+						<p>Check the PE signature:</p>
+						<pre class="plaintext">
+$ xxd -s 0xE0 -l 4 unknown.exe
+000000e0: 5045 0000                                PE..
+						</pre>
+						<p>
+							<code>50 45 00 00</code>
+							=
+							<code>PE\0\0</code>
+							. Confirmed PE.
+						</p>
+						<p>Read the COFF header:</p>
+						<pre class="plaintext">
+$ xxd -s 0xE4 -l 20 unknown.exe
+000000e4: 4c01 0400 6c8a da60 0000 0000 0000 0000  L...l..`........
+000000f4: e000 2300                                ..#.
+						</pre>
+						<p>
+							Machine at offset 0xE4:
+							<code>4c 01</code>
+							=
+							<code>0x014C</code>
+							(i386/x86). NumberOfSections at offset 0xE6:
+							<code>04 00</code>
+							= 4 sections. TimeDateStamp at offset 0xE8:
+							<code>6c 8a da 60</code>
+							= Unix timestamp.
+						</p>
+						<pre class="plaintext">
+$ python3 -c &#34;import datetime; print(datetime.datetime.fromtimestamp(0x60da8a6c, datetime.timezone.utc))&#34;
+2021-06-29 02:50:20+00:00
+						</pre>
+						<p>
+							This is the compile timestamp. Malware authors often forge this: NULL (0x00000000), past dates
+							to look legitimate, or dates matching known campaigns.
+						</p>
+					</section>
+					<section>
+						<h3 id="pe-analysis-toolkit-on-linux">PE Analysis Toolkit on Linux</h3>
+						<p>Install the essentials:</p>
+						<pre class="plaintext">
+$ pacman -S pev perl-image-exiftool
+$ pip install pefile peframe
+						</pre>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Tool</th>
+									<th align="center">Package</th>
+									<th align="center">Purpose</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>readpe</code></td>
+									<td align="center">pev</td>
+									<td align="center">Full PE dump: headers, sections, imports, exports</td>
+								</tr>
+								<tr>
+									<td align="center"><code>pescan</code></td>
+									<td align="center">pev</td>
+									<td align="center">Scan for anomalies, embedded PE headers, suspicious patterns</td>
+								</tr>
+								<tr>
+									<td align="center"><code>pepack</code></td>
+									<td align="center">pev</td>
+									<td align="center">Packer detection via 40+ packer signatures</td>
+								</tr>
+								<tr>
+									<td align="center"><code>peres</code></td>
+									<td align="center">pev</td>
+									<td align="center">Extract PE resources (icons, manifests, version info)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>pedis</code></td>
+									<td align="center">pev</td>
+									<td align="center">Basic disassembly of PE</td>
+								</tr>
+								<tr>
+									<td align="center"><code>pecheck</code></td>
+									<td align="center">pefile</td>
+									<td align="center">Pythonic PE parser with hierarchical output</td>
+								</tr>
+								<tr>
+									<td align="center"><code>peframe</code></td>
+									<td align="center">peframe</td>
+									<td align="center">Static malware analysis tool for PEs</td>
+								</tr>
+								<tr>
+									<td align="center"><code>exiftool</code></td>
+									<td align="center">perl-image-exiftool</td>
+									<td align="center">Metadata extraction</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="readpe-full-dump">readpe: Full Dump</h4>
+						<pre class="plaintext">
+$ readpe unknown.exe
+						</pre>
+						<p>Outputs every PE structure. For large binaries, focus on specific sections:</p>
+						<pre class="plaintext">
+$ readpe -H unknown.exe     # Headers only
+$ readpe -S unknown.exe     # Section table
+$ readpe -i unknown.exe     # Imports
+$ readpe -e unknown.exe     # Exports
+						</pre>
+						<p>
+							Sample section table from
+							<code>readpe -S</code>
+							:
+						</p>
+						<pre class="plaintext">
+Section Table
+=============
+Name      VirtAddr  VirtSize  RawSize   RawAddr   Flags
+.text     0x1000     0x2A3E    0x2C00    0x400     0x60000020
+.rdata    0x4000     0x1580    0x1600    0x3000    0x40000040
+.data     0x6000     0x08A0    0x0600    0x4600    0xC0000040
+.rsrc     0x7000     0x03C0    0x0400    0x4C00    0x40000040
+						</pre>
+						<p>
+							Section flags decode: -
+							<code>0x60000020</code>
+							: Code (CNT_CODE) + Execute + Read -
+							<code>0x40000040</code>
+							: Initialized
+							data + Read -
+							<code>0xC0000040</code>
+							: Initialized data + Read + Write
+						</p>
+						<p>
+							Suspicious flag:
+							<code>0xE0000020</code>
+							= Code + Execute + Read + Write. This is an RWX section - self-modifying
+							code or packed stub.
+						</p>
+						<h4 id="pecheck-python">pecheck (Python)</h4>
+						<pre class="plaintext">
+$ pecheck unknown.exe
+						</pre>
+						<p>Output:</p>
+						<pre class="plaintext">
+PE file
+  IMAGE_DOS_HEADER
+    e_magic:              0x5A4D (MZ)
+    e_lfanew:             0x00000100
+  IMAGE_NT_HEADERS
+    Signature:            0x00004550 (PE)
+    IMAGE_FILE_HEADER
+      Machine:            0x014C (i386)
+      NumberOfSections:   0x0004
+      TimeDateStamp:      0x60DA8A6C
+    IMAGE_OPTIONAL_HEADER
+      Magic:              0x010B (PE32)
+      EntryPointAddress:  0x00001240
+      ImageBase:          0x00400000
+      Subsystem:          0x0002 (WINDOWS_GUI)
+      DLLCharacteristics: 0x8140 (DYNAMIC_BASE, NX_COMPAT)
+      DataDirectory:
+        IMPORT:           0x00005000  (Size: 0xC8)
+        RESOURCE:         0x00007000  (Size: 0x3C0)
+  SECTIONS
+    .text:   VA:0x1000  Size:0x2A3E  Raw:0x400  RawSize:0x2C00
+    .rdata:  VA:0x4000  Size:0x1580  Raw:0x3000  RawSize:0x1600
+    .data:   VA:0x6000  Size:0x08A0  Raw:0x4600  RawSize:0x0600
+    .rsrc:   VA:0x7000  Size:0x03C0  Raw:0x4C00  RawSize:0x0400
+						</pre>
+					</section>
+					<section>
+						<h3 id="import-analysis">Import Analysis</h3>
+						<p>
+							The import table is the single most informative PE structure for triage. Every imported
+							<abbr title="Dynamic Link Library">DLL</abbr>
+							and function maps to a capability. Read imports:
+						</p>
+						<pre class="plaintext">
+$ readpe -i unknown.exe
+
+Imported functions
+==================
+    KERNEL32.dll
+        -------------
+        0x402018    CreateFileA
+        0x40201C    WriteFile
+        0x402020    ReadFile
+        0x402028    CreateProcessA
+        0x40202C    VirtualAlloc
+        0x402030    VirtualProtect
+        0x402034    GetProcAddress
+        0x402038    LoadLibraryA
+        0x402044    IsDebuggerPresent
+        0x402048    CreateRemoteThread
+        0x40204C    WriteProcessMemory
+
+    WS2_32.dll
+        -------------
+        0x402058    socket
+        0x40205C    connect
+        0x402060    send
+        0x402064    recv
+        0x402068    WSAStartup
+        0x40206C    gethostbyname
+
+    ADVAPI32.dll
+        -------------
+        0x402074    RegCreateKeyExA
+        0x402078    RegSetValueExA
+        0x40207C    RegDeleteKeyA
+        0x402080    OpenSCManagerA
+        0x402084    CreateServiceA
+
+    CRYPT32.dll
+        -------------
+        0x402090    CryptEncrypt
+        0x402094    CryptDecrypt
+        0x402098    CryptAcquireContextA
+						</pre>
+						<h4 id="import-categorization-table">Import Categorization Table</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Import</th>
+									<th align="center">Category</th>
+									<th align="center">Malware Behavior</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>socket</code>,<code>connect</code>,<code>send</code>,<code>recv</code></td>
+									<td align="center">Network</td>
+									<td align="center">C2 communication</td>
+								</tr>
+								<tr>
+									<td align="center"><code>WSAStartup</code></td>
+									<td align="center">Network</td>
+									<td align="center">Initializes WinSock</td>
+								</tr>
+								<tr>
+									<td align="center"><code>gethostbyname</code>,<code>InternetOpenUrl</code></td>
+									<td align="center">Network</td>
+									<td align="center">DNS resolution, HTTP</td>
+								</tr>
+								<tr>
+									<td align="center"><code>CreateFile</code>,<code>WriteFile</code>,<code>ReadFile</code>,<code>DeleteFile</code></td>
+									<td align="center">File</td>
+									<td align="center">File operations</td>
+								</tr>
+								<tr>
+									<td align="center"><code>CreateProcess</code>,<code>WinExec</code></td>
+									<td align="center">Execution</td>
+									<td align="center">Spawning processes</td>
+								</tr>
+								<tr>
+									<td align="center"><code>VirtualAlloc</code>,<code>VirtualProtect</code></td>
+									<td align="center">Memory</td>
+									<td align="center">Memory allocation for unpacking/shellcode</td>
+								</tr>
+								<tr>
+									<td align="center"><code>CreateRemoteThread</code>,<code>WriteProcessMemory</code></td>
+									<td align="center">Injection</td>
+									<td align="center">Process injection</td>
+								</tr>
+								<tr>
+									<td align="center"><code>OpenProcess</code>,<code>AdjustTokenPrivileges</code></td>
+									<td align="center">Privilege</td>
+									<td align="center">Privilege escalation</td>
+								</tr>
+								<tr>
+									<td align="center"><code>RegCreateKey</code>,<code>RegSetValue</code>,<code>RegDeleteKey</code></td>
+									<td align="center">Persistence</td>
+									<td align="center">Registry persistence</td>
+								</tr>
+								<tr>
+									<td align="center"><code>GetProcAddress</code>,<code>LoadLibrary</code></td>
+									<td align="center">Dynamic</td>
+									<td align="center">Dynamic API resolution (evades static import analysis)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>IsDebuggerPresent</code>,<code>CheckRemoteDebuggerPresent</code></td>
+									<td align="center">Anti-Analysis</td>
+									<td align="center">Debugger detection</td>
+								</tr>
+								<tr>
+									<td align="center"><code>NtQueryInformationProcess</code>,<code>NtSetInformationThread</code></td>
+									<td align="center">Anti-Analysis</td>
+									<td align="center">Anti-debug via NT API</td>
+								</tr>
+								<tr>
+									<td align="center"><code>OutputDebugString</code>,<code>DbgUiRemoteBreakin</code></td>
+									<td align="center">Anti-Analysis</td>
+									<td align="center">Debugger interaction</td>
+								</tr>
+								<tr>
+									<td align="center"><code>CryptEncrypt</code>,<code>CryptDecrypt</code>,<code>CryptAcquireContext</code></td>
+									<td align="center">Crypto</td>
+									<td align="center">Encryption (ransomware)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>FindFirstFile</code>,<code>FindNextFile</code>,<code>GetDriveType</code></td>
+									<td align="center">Enumeration</td>
+									<td align="center">File/drive enumeration</td>
+								</tr>
+								<tr>
+									<td align="center"><code>SetFileAttributes</code>,<code>MoveFile</code></td>
+									<td align="center">File</td>
+									<td align="center">Hide/rename files</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="what-imports-reveal-in-combination">What Imports Reveal in Combination</h4>
+						<p>Individual imports are informative. Combinations tell a story:</p>
+						<ul>
+							<li><code>VirtualAlloc</code> + <code>VirtualProtect</code> + <code>CreateRemoteThread</code> + <code>WriteProcessMemory</code> : Process hollowing or <abbr title="Dynamic Link Library">DLL</abbr> injection.</li>
+							<li><code>RegCreateKey</code> + <code>RegSetValue</code> + <code>CreateService</code> : Persistence via Windows service.</li>
+							<li><code>socket</code> + <code>connect</code> + <code>recv</code> + <code>CreateProcess</code> + <code>pipe</code> : Reverse shell (connect back, spawn cmd.exe, pipe I/O).</li>
+							<li><code>CryptEncrypt</code> + <code>FindFirstFile</code> + <code>WriteFile</code> + <code>DeleteFile</code> : Ransomware (find files, encrypt, replace, delete originals).</li>
+							<li><code>VirtualAlloc</code> + <code>GetProcAddress</code> + <code>LoadLibrary</code> : RunPE - custom PE loader that maps a payload from memory.</li>
+							<li><code>IsDebuggerPresent</code> + <code>GetTickCount</code> + <code>Sleep</code> : Anti-debug with timing evasion.</li>
+							<li><code>OpenProcess</code> + <code>VirtualAllocEx</code> + <code>WriteProcessMemory</code> + <code>CreateRemoteThread</code> : Classic <abbr title="Dynamic Link Library">DLL</abbr> injection.</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="packer-detection-on-pe-files">Packer Detection on PE Files</h3>
+						<p>Packers compress the original PE and wrap it in an unpacking stub. Detection from Linux:</p>
+						<pre class="plaintext">
+$ pepack unknown.exe
+						</pre>
+						<p>Pepack checks signatures for 40+ packers. Output:</p>
+						<pre class="plaintext">
+Packer: UPX -&gt; www.upx.sourceforge.net
+						</pre>
+						<p>Common packers and their PE indicators:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Packer</th>
+									<th align="center">Section Names</th>
+									<th align="center">Characteristics</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">UPX</td>
+									<td align="center">UPX0, UPX1, .rsrc</td>
+									<td align="center">Entropy > 7.8 in UPX1,<code>UPX!</code>string</td>
+								</tr>
+								<tr>
+									<td align="center">ASPack</td>
+									<td align="center">.aspack, .adata</td>
+									<td align="center">Entry point in .aspack</td>
+								</tr>
+								<tr>
+									<td align="center">Themida</td>
+									<td align="center">.themida, .data</td>
+									<td align="center">Obfuscated entry point, VM bytecode</td>
+								</tr>
+								<tr>
+									<td align="center">VMProtect</td>
+									<td align="center">.vmp0, .vmp1</td>
+									<td align="center">Virtualized code, mutated entry</td>
+								</tr>
+								<tr>
+									<td align="center">MPRESS</td>
+									<td align="center">.MPRESS1, .MPRESS2</td>
+									<td align="center">Small stub, high compression</td>
+								</tr>
+								<tr>
+									<td align="center">PECompact</td>
+									<td align="center">.pec, .pec1, .pec2</td>
+									<td align="center">Entry point in .pec section</td>
+								</tr>
+								<tr>
+									<td align="center">Enigma</td>
+									<td align="center">.enigma1, .enigma2</td>
+									<td align="center">Anti-debug VM, multiple layers</td>
+								</tr>
+								<tr>
+									<td align="center">Obsidium</td>
+									<td align="center">.obsidium</td>
+									<td align="center">Polymorphic decryptor</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>Manual packer detection without tools:</p>
+						<pre class="plaintext">
+$ strings -n 6 unknown.exe | grep -iE &#39;upx|aspack|themida|vmprotect&#39;
+UPX!
+$Info: This file is packed with the UPX executable packer
+						</pre>
+						<pre class="plaintext">
+$ readpe -S unknown.exe | grep -iE &#39;upx|aspack|themida|\.pec&#39;
+Name      VirtAddr  VirtSize  RawSize   RawAddr   Flags
+UPX0      0x00001000 0x0000A000 0x00000000 0x00000400 0xE0000080
+UPX1      0x0000B000 0x0000D000 0x0000CC00 0x00000400 0xE0000040
+						</pre>
+						<p>
+							UPX0 has
+							<code>RawSize=0</code>
+							and
+							<code>VirtSize &gt;&gt; RawSize</code>
+							- the decompression target in memory.
+						</p>
+					</section>
+					<section>
+						<h3 id="pe-timestamps">PE Timestamps</h3>
+						<p>
+							The
+							<code>TimeDateStamp</code>
+							in the COFF header is Unix epoch seconds of compilation. This identifies
+							the build era:
+						</p>
+						<pre class="plaintext">
+$ readpe -H unknown.exe | grep TimeDate
+TimeDateStamp:      0x60DA8A6C -&gt; Tue Jun 29 02:50:20 2021
+						</pre>
+						<p>Malware timestamp analysis:</p>
+						<ul>
+							<li>Unix epoch 0 (1970-01-01): explicitly zeroed, the author stripped the timestamp.</li>
+							<li>Future dates: timestamp manipulation tool or forged date.</li>
+							<li>Dates matching known campaigns: compare against threat intel timelines.</li>
+							<li>Weekend compile: less common for corporate software, common for hobbyist and malware development.</li>
+						</ul>
+						<pre class="plaintext">
+$ python3 -c &#34;
+import datetime
+ts = 0x60DA8A6C
+dt = datetime.datetime.fromtimestamp(ts, datetime.timezone.utc)
+print(f&#39;Compiled: {dt}&#39;)
+print(f&#39;Day:      {dt.strftime(\&#34;%A\&#34;)}&#39;)
+print(f&#39;Year:     {dt.year}&#39;)
+&#34;
+Compiled: 2021-06-29 02:50:20+00:00
+Day:      Tuesday
+Year:     2021
+						</pre>
+					</section>
+					<section>
+						<h3 id="rich-header-analysis">Rich Header Analysis</h3>
+						<p>
+							The Rich header is an undocumented section between the DOS stub and PE signature. It contains
+							encoded records of the build toolchain: compiler version, linker version, source language, build
+							count. Each record encodes a product ID and a count (number of object files from that product).
+						</p>
+						<p>Malware analysts use the Rich header to:</p>
+						<ul>
+							<li>Identify the Visual Studio version used (VS2008, VS2019, and so on).</li>
+							<li>Detect discrepancies: if the Rich header says VS2019 but the timestamp says 2010, the timestamp is forged.</li>
+							<li>Cluster malware families by build toolchain (the same Rich header means the same builder environment).</li>
+						</ul>
+						<pre class="plaintext">
+$ pecheck -r unknown.exe
+[...]
+Rich Header:
+  [ 0] Product=0x0104 (VS2019 16.0) Count=45
+  [ 1] Product=0x00E3 (VS2019 16.11) Count=12
+  [ 2] Product=0x009A (C++ AMP) Count=1
+						</pre>
+					</section>
+					<section>
+						<h3 id="imphash-pe-import-hash">Imphash: PE Import Hash</h3>
+						<p>Imphash hashes the import table for variant detection:</p>
+						<pre class="plaintext">
+$ python3 -c &#34;
+import pefile
+pe = pefile.PE(&#39;unknown.exe&#39;)
+print(pe.get_imphash())
+&#34;
+6f5d6f5d6f5d6f5d6f5d6f5d6f5d6f5d
+						</pre>
+						<p>
+							Identical imphashes mean identical import tables. Variants of the same malware family (same
+							<abbr title="Command and Control">C2</abbr>
+							logic, different payload) share the same imphash. Use it to cluster
+							unknown samples against a known malware database.
+						</p>
+						<p>
+							Imphash limitations: - Does not capture dynamically resolved imports (
+							<code>GetProcAddress</code>
+							/
+							<code>LoadLibrary</code>
+							) - the import table is minimal. - Packed binaries have tiny import tables (only the unpacking
+							stub's
+							<abbr title="Application Programming Interface">API</abbr>
+							s) - the real malware's imports are invisible
+							until unpacked. - Not useful for statically linked binaries (no imports).
+						</p>
+					</section>
+					<section>
+						<h3 id="yara-rules-for-pe-malware">YARA Rules for PE Malware</h3>
+						<p>
+							<abbr title="Yet Another Ridiculous Acronym">YARA</abbr>
+							is a pattern-matching engine for malware classification.
+							PE-specific
+							<abbr title="Yet Another Ridiculous Acronym">YARA</abbr>
+							rules check header fields, section names,
+							import tables, and byte patterns.
+						</p>
+						<p>
+							Install
+							<abbr title="Yet Another Ridiculous Acronym">YARA</abbr>
+							:
+						</p>
+						<pre class="plaintext">
+$ pacman -S yara
+						</pre>
+						<p>
+							Example
+							<abbr title="Yet Another Ridiculous Acronym">YARA</abbr>
+							rule detecting UPX-packed PEs:
+						</p>
+						<pre class="plaintext">
+rule UPX_Packed_PE {
+    meta:
+        description = &#34;Detects UPX-packed PE files&#34;
+        author      = &#34;Reverse Engineering Lab&#34;
+        date        = &#34;2026-06-26&#34;
+
+    strings:
+        $mz  = { 4D 5A }              // DOS magic
+        $pe  = { 50 45 00 00 }        // PE signature
+        $upx0 = &#34;UPX0&#34;                // UPX section name
+        $upx1 = &#34;UPX1&#34;                // UPX section name
+        $upxs = &#34;UPX!&#34;                // UPX string signature
+
+    condition:
+        $mz at 0 and
+        $pe at uint16(uint32(0x3C)) and
+        (any of ($upx0, $upx1)) and
+        $upxs
+}
+						</pre>
+						<p>Rule detecting process injection imports:</p>
+						<pre class="plaintext">
+rule ProcessInjector {
+    meta:
+        description = &#34;Detects PE with process injection imports&#34;
+        author      = &#34;Reverse Engineering Lab&#34;
+
+    strings:
+        $mz = { 4D 5A }
+        $pe = { 50 45 00 00 }
+        $va  = &#34;VirtualAlloc&#34; ascii wide
+        $vp  = &#34;VirtualProtect&#34; ascii wide
+        $wpm = &#34;WriteProcessMemory&#34; ascii wide
+        $crt = &#34;CreateRemoteThread&#34; ascii wide
+
+    condition:
+        $mz at 0 and
+        $pe at uint16(uint32(0x3C)) and
+        all of ($va, $vp, $wpm, $crt)
+}
+						</pre>
+						<p>
+							Save as
+							<code>pe_rules.yar</code>
+							and scan:
+						</p>
+						<pre class="plaintext">
+$ yara pe_rules.yar samples/
+UPX_Packed_PE samples/upx_sample.exe
+ProcessInjector samples/injector.exe
+						</pre>
+						<h4 id="more-pe-yara-rules">More PE YARA Rules</h4>
+						<p>Rule detecting suspicious section permissions:</p>
+						<pre class="plaintext">
+rule RWX_Section {
+    meta:
+        description = &#34;PE with RWX (executable+writeable) section&#34;
+
+    strings:
+        $mz = { 4D 5A }
+        $pe = { 50 45 00 00 }
+
+    condition:
+        $mz at 0 and
+        $pe at uint16(uint32(0x3C)) and
+        pe.sections[0].characteristics &amp; 0xE0000000 == 0xE0000000
+}
+						</pre>
+						<p>Rule for anti-debug imports:</p>
+						<pre class="plaintext">
+rule AntiDebug_Imports {
+    meta:
+        description = &#34;PE importing anti-debug functions&#34;
+
+    strings:
+        $idp = &#34;IsDebuggerPresent&#34; ascii wide
+        $crp = &#34;CheckRemoteDebuggerPresent&#34; ascii wide
+        $ntq = &#34;NtQueryInformationProcess&#34; ascii wide
+        $nts = &#34;NtSetInformationThread&#34; ascii wide
+
+    condition:
+        2 of them
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="extracting-pe-resources">Extracting PE Resources</h3>
+						<p>Embedded resources often contain additional payloads, configuration, or decoy data:</p>
+						<pre class="plaintext">
+$ peres unknown.exe
+						</pre>
+						<p>Extract all resources to disk:</p>
+						<pre class="plaintext">
+$ peres -x unknown.exe
+						</pre>
+						<p>
+							This dumps icons, dialogs, version info, manifests, and embedded binaries. Malware commonly
+							stores: - Encrypted payload in
+							<code>RT_RCDATA</code>
+							or custom resource types. - Decoy documents (
+							<abbr title="Portable Document Format">PDF</abbr>
+							, DOCX) in resources - opened as the malware runs. - Configuration blobs with
+							<abbr title="Command and Control">C2</abbr>
+							domains, keys, or campaign IDs.
+						</p>
+						<pre class="plaintext">
+$ peres -x unknown.exe
+$ file .rsrc/*
+.rsrc/0_1_1033.bin: data
+.rsrc/0_2_1033.bin: PE32 executable (GUI) Intel 80386
+						</pre>
+						<p>An embedded PE inside resources - the second-stage payload.</p>
+					</section>
+					<section>
+						<h3 id="static-analysis-script-for-pe-files">Static Analysis Script for PE Files</h3>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;
+pe_analyze.py -- static triage of PE files from Linux
+Usage: python3 pe_analyze.py &lt;file.exe&gt;
+&#34;&#34;&#34;
+
+import sys
+import hashlib
+import datetime
+import struct
+
+try:
+    import pefile
+except ImportError:
+    print(&#34;pip install pefile&#34;)
+    sys.exit(1)
+
+
+CATEGORIES = {
+    &#39;network&#39;: {
+        &#39;socket&#39;, &#39;connect&#39;, &#39;send&#39;, &#39;recv&#39;, &#39;sendto&#39;, &#39;recvfrom&#39;,
+        &#39;bind&#39;, &#39;listen&#39;, &#39;accept&#39;, &#39;WSAStartup&#39;, &#39;WSACleanup&#39;,
+        &#39;gethostbyname&#39;, &#39;getaddrinfo&#39;, &#39;inet_addr&#39;, &#39;inet_ntoa&#39;,
+        &#39;InternetOpenA&#39;, &#39;InternetOpenUrlA&#39;, &#39;InternetConnectA&#39;,
+        &#39;HttpOpenRequestA&#39;, &#39;HttpSendRequestA&#39;, &#39;WinHttpOpen&#39;,
+    },
+    &#39;file&#39;: {
+        &#39;CreateFileA&#39;, &#39;CreateFileW&#39;, &#39;WriteFile&#39;, &#39;ReadFile&#39;,
+        &#39;DeleteFileA&#39;, &#39;DeleteFileW&#39;, &#39;MoveFileA&#39;, &#39;CopyFileA&#39;,
+        &#39;FindFirstFileA&#39;, &#39;FindNextFileA&#39;, &#39;GetFileAttributesA&#39;,
+        &#39;SetFileAttributesA&#39;,
+    },
+    &#39;execution&#39;: {
+        &#39;CreateProcessA&#39;, &#39;CreateProcessW&#39;, &#39;WinExec&#39;, &#39;ShellExecuteA&#39;,
+        &#39;system&#39;, &#39;popen&#39;, &#39;_wsystem&#39;, &#39;_wpopen&#39;,
+    },
+    &#39;injection&#39;: {
+        &#39;VirtualAlloc&#39;, &#39;VirtualAllocEx&#39;, &#39;VirtualProtect&#39;, &#39;VirtualProtectEx&#39;,
+        &#39;WriteProcessMemory&#39;, &#39;ReadProcessMemory&#39;, &#39;CreateRemoteThread&#39;,
+        &#39;NtCreateThreadEx&#39;, &#39;RtlCreateUserThread&#39;, &#39;QueueUserAPC&#39;,
+        &#39;SetThreadContext&#39;, &#39;ResumeThread&#39;,
+    },
+    &#39;persistence&#39;: {
+        &#39;RegCreateKeyExA&#39;, &#39;RegCreateKeyExW&#39;, &#39;RegSetValueExA&#39;, &#39;RegSetValueExW&#39;,
+        &#39;RegDeleteKeyA&#39;, &#39;RegDeleteKeyW&#39;, &#39;RegOpenKeyExA&#39;, &#39;RegOpenKeyExW&#39;,
+        &#39;CreateServiceA&#39;, &#39;CreateServiceW&#39;, &#39;StartServiceA&#39;, &#39;OpenSCManagerA&#39;,
+        &#39;CopyFileA&#39;, &#39;SHGetSpecialFolderPathA&#39;,
+    },
+    &#39;crypto&#39;: {
+        &#39;CryptEncrypt&#39;, &#39;CryptDecrypt&#39;, &#39;CryptAcquireContextA&#39;, &#39;CryptAcquireContextW&#39;,
+        &#39;CryptGenKey&#39;, &#39;CryptExportKey&#39;, &#39;CryptImportKey&#39;, &#39;CryptHashData&#39;,
+    },
+    &#39;anti_analysis&#39;: {
+        &#39;IsDebuggerPresent&#39;, &#39;CheckRemoteDebuggerPresent&#39;,
+        &#39;NtQueryInformationProcess&#39;, &#39;NtSetInformationThread&#39;,
+        &#39;OutputDebugStringA&#39;, &#39;OutputDebugStringW&#39;, &#39;GetTickCount&#39;,
+        &#39;QueryPerformanceCounter&#39;, &#39;NtQuerySystemInformation&#39;,
+    },
+    &#39;info_gathering&#39;: {
+        &#39;GetComputerNameA&#39;, &#39;GetUserNameA&#39;, &#39;GetSystemInfo&#39;,
+        &#39;GlobalMemoryStatusEx&#39;, &#39;GetLogicalDriveStringsA&#39;,
+    },
+}
+
+PACKER_SECTIONS = {
+    &#39;UPX0&#39;, &#39;UPX1&#39;, &#39;.aspack&#39;, &#39;.adata&#39;, &#39;.themida&#39;,
+    &#39;.vmp0&#39;, &#39;.vmp1&#39;, &#39;.MPRESS1&#39;, &#39;.MPRESS2&#39;, &#39;.pec&#39;,
+    &#39;.pec1&#39;, &#39;.pec2&#39;, &#39;.enigma1&#39;, &#39;.enigma2&#39;,
+}
+
+
+def analyze_pe(filepath: str):
+    try:
+        pe = pefile.PE(filepath)
+    except pefile.PEFormatError as e:
+        print(f&#34;Error: not a valid PE file: {e}&#34;)
+        return
+
+    print(&#34;=&#34; * 64)
+    print(f&#34;  TARGET: {filepath}&#34;)
+    print(f&#34;  MACHINE: {hex(pe.FILE_HEADER.Machine)}&#34;)
+    print(f&#34;  SUBSYSTEM: {pe.OPTIONAL_HEADER.Subsystem}&#34;)
+
+    # Timestamp
+    ts = pe.FILE_HEADER.TimeDateStamp
+    dt = datetime.datetime.utcfromtimestamp(ts)
+    print(f&#34;  COMPILED: {dt} ({ts})&#34;)
+    if ts == 0:
+        print(f&#34;    [!] Timestamp is zero (forged)&#34;)
+    if dt &gt; datetime.datetime(2028, 1, 1):
+        print(f&#34;    [!] Future timestamp (forged)&#34;)
+
+    # Entry point
+    ep = pe.OPTIONAL_HEADER.AddressOfEntryPoint
+    print(f&#34;  ENTRY POINT: {hex(ep)}&#34;)
+    ep_sec = None
+    for sec in pe.sections:
+        if sec.VirtualAddress &lt;= ep &lt; sec.VirtualAddress + sec.Misc_VirtualSize:
+            ep_sec = sec.Name.decode().rstrip(&#39;\x00&#39;)
+    print(f&#34;  ENTRY SECTION: {ep_sec or &#39;UNKNOWN&#39;}&#34;)
+
+    # Hashes
+    with open(filepath, &#39;rb&#39;) as f:
+        data = f.read()
+    print(f&#34;  SHA-256: {hashlib.sha256(data).hexdigest()}&#34;)
+    print(f&#34;  IMPHASH: {pe.get_imphash()}&#34;)
+
+    # Sections
+    print(f&#34;\n  --- SECTIONS ---&#34;)
+    suspicious_sections = []
+    for sec in pe.sections:
+        name = sec.Name.decode().rstrip(&#39;\x00&#39;)
+        raw_size = sec.SizeOfRawData
+        virt_size = sec.Misc_VirtualSize
+        chars = sec.Characteristics
+        rwx = (chars &amp; 0xE0000000) == 0xE0000000
+        ratio = virt_size / max(raw_size, 1)
+        flags_str = []
+        if chars &amp; 0x20000000: flags_str.append(&#39;X&#39;)
+        if chars &amp; 0x40000000: flags_str.append(&#39;R&#39;)
+        if chars &amp; 0x80000000: flags_str.append(&#39;W&#39;)
+        flag = &#39;&#39;.join(flags_str) or &#39;NONE&#39;
+
+        print(f&#34;  {name:&lt;16} Raw={raw_size:#08x}  Virt={virt_size:#08x}  &#34;
+              f&#34;Ratio={ratio:.1f}  Flags={flag}&#34;)
+
+        if rwx:
+            suspicious_sections.append(f&#34;{name}: RWX section&#34;)
+        if name in PACKER_SECTIONS:
+            suspicious_sections.append(f&#34;{name}: packer section&#34;)
+        if name == &#39;.text&#39; and raw_size == 0:
+            suspicious_sections.append(&#34;.text: zero raw size&#34;)
+        if ratio &gt; 5:
+            suspicious_sections.append(f&#34;{name}: virt/raw ratio {ratio:.1f}&#34;)
+
+    # Imports
+    print(f&#34;\n  --- IMPORTS ---&#34;)
+    findings = {cat: set() for cat in CATEGORIES}
+    packer_imports = {&#39;LoadLibraryA&#39;, &#39;LoadLibraryW&#39;, &#39;GetProcAddress&#39;, &#39;VirtualAlloc&#39;, &#39;VirtualFree&#39;}
+
+    if hasattr(pe, &#39;DIRECTORY_ENTRY_IMPORT&#39;):
+        total_imports = 0
+        for entry in pe.DIRECTORY_ENTRY_IMPORT:
+            dll = entry.dll.decode()
+            for imp in entry.imports:
+                if imp.name:
+                    name = imp.name.decode() if imp.name else &#39;&#39;
+                    total_imports += 1
+                    for cat, keywords in CATEGORIES.items():
+                        if name in keywords:
+                            findings[cat].add(name)
+
+        print(f&#34;  Total imports: {total_imports}&#34;)
+        if total_imports &lt; 5:
+            suspicious_sections.append(f&#34;Few imports ({total_imports}) — likely packed&#34;)
+
+        # Deduplicate packer_imports from findings
+        for cat, syms in sorted(findings.items()):
+            if syms:
+                print(f&#34;  [{cat}]: {&#39;, &#39;.join(sorted(syms))}&#34;)
+    else:
+        print(f&#34;  No import table — static binary or corrupted&#34;)
+
+    # Packer indicators
+    print(f&#34;\n  --- PACKER ANALYSIS ---&#34;)
+    if suspicious_sections:
+        for f in suspicious_sections:
+            print(f&#34;  [!] {f}&#34;)
+    else:
+        print(f&#34;  No packer indicators detected&#34;)
+
+    # Rich header
+    if hasattr(pe, &#39;RICH_HEADER&#39;) and pe.RICH_HEADER:
+        print(f&#34;\n  --- RICH HEADER ---&#34;)
+        try:
+            for record in pe.RICH_HEADER.rich_entries[:10]:
+                print(f&#34;  Product=0x{record.ProductId:04X} Count={record.Count}&#34;)
+        except Exception:
+            pass
+
+    print(&#34;=&#34; * 64)
+
+
+if __name__ == &#39;__main__&#39;:
+    if len(sys.argv) &lt; 2:
+        print(f&#34;Usage: {sys.argv[0]} &lt;pe_file&gt;&#34;)
+        sys.exit(1)
+    analyze_pe(sys.argv[1])
+						</pre>
+						<p>Run it:</p>
+						<pre class="plaintext">
+$ python3 pe_analyze.py trojan.exe
+================================================================
+  TARGET: trojan.exe
+  MACHINE: 0x14C
+  SUBSYSTEM: 2
+  COMPILED: 2021-06-29 02:50:20 (1624935020)
+  ENTRY POINT: 0x1240
+  ENTRY SECTION: .text
+  SHA-256: a1b2c3...
+  IMPHASH: 6f5d6f5d6f5d6f5d6f5d6f5d6f5d6f5d
+
+  --- SECTIONS ---
+  .text            Raw=0x00002c00  Virt=0x00002a3e  Ratio=1.0  Flags=XR
+  .rdata           Raw=0x00001600  Virt=0x00001580  Ratio=1.0  Flags=R
+  .data            Raw=0x00000600  Virt=0x000008a0  Ratio=1.4  Flags=RW
+  .rsrc            Raw=0x00000400  Virt=0x000003c0  Ratio=1.0  Flags=R
+
+  --- IMPORTS ---
+  Total imports: 22
+  [network]: connect, gethostbyname, recv, send, socket, WSAStartup
+  [file]: CreateFileA, DeleteFileA, ReadFile, WriteFile
+  [execution]: CreateProcessA
+  [injection]: CreateRemoteThread, VirtualAlloc, WriteProcessMemory
+  [persistence]: RegCreateKeyExA, RegSetValueExA, StartServiceA
+  [crypto]: CryptDecrypt, CryptEncrypt
+  [anti_analysis]: IsDebuggerPresent
+
+  --- PACKER ANALYSIS ---
+  No packer indicators detected
+================================================================
+						</pre>
+						<p>
+							The output tells a clear story: network
+							<abbr title="Command and Control">C2</abbr>
+							(socket/connect/send/recv),
+							file operations, process injection (VirtualAlloc + WriteProcessMemory + CreateRemoteThread =
+							<abbr title="Dynamic Link Library">DLL</abbr>
+							injection), registry persistence, encryption (ransomware or config
+							obfuscation), and anti-debugging. This binary is malicious with high confidence.
+						</p>
+					</section>
+					<section>
+						<h3 id="next-steps">Next Steps</h3>
+						<p>After PE structural analysis:</p>
+						<ul>
+							<li>Packed? Unpack before further analysis. <code>upx -d</code> runs natively on Linux and handles PE files.</li>
+							<li>Network <abbr title="Indicator of Compromise">IOC</abbr> s found? Cross-reference with threat intel and passive <abbr title="Domain Name System">DNS</abbr> .</li>
+							<li>Process injection imports? Trace behavior with <a href="/wiki/articles/reverse-engineering/tracing.html">Tracing</a> .</li>
+							<li>Need runtime observation? Use <a href="/wiki/articles/reverse-engineering/process-monitoring.html">Process Monitoring</a> .</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that parses a PE file with
+							<code>debug/pe</code>
+							, prints the machine type, the compile
+							timestamp as UTC, every section with its permission flags, and a risk score. Award points for
+							an RWX section, a section name from a known packer, a virtual-size to raw-size ratio above
+							<code>5</code>
+							, and fewer than five imports. Print the score with the matching reasons.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;debug/pe&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;strings&#34;
+	&#34;time&#34;
+)
+
+var packerSections = []string{
+	&#34;UPX0&#34;, &#34;UPX1&#34;, &#34;.aspack&#34;, &#34;.adata&#34;, &#34;.themida&#34;,
+	&#34;.vmp0&#34;, &#34;.vmp1&#34;, &#34;.MPRESS1&#34;, &#34;.MPRESS2&#34;, &#34;.pec&#34;,
+	&#34;.enigma1&#34;, &#34;.enigma2&#34;,
+}
+
+func contains(list []string, name string) bool {
+	for _, item := range list {
+		if strings.EqualFold(item, name) {
+			return true
+		}
+	}
+	return false
+}
+
+func main() {
+	if len(os.Args) != 2 {
+		fmt.Fprintln(os.Stderr, &#34;usage: pescore &lt;file.exe&gt;&#34;)
+		os.Exit(1)
+	}
+
+	f, err := pe.Open(os.Args[1])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer f.Close()
+
+	fmt.Printf(&#34;Machine:   0x%04x\n&#34;, f.FileHeader.Machine)
+	ts := time.Unix(int64(f.FileHeader.TimeDateStamp), 0).UTC()
+	fmt.Printf(&#34;Compiled:  %s\n&#34;, ts)
+
+	score := 0
+	reasons := make([]string, 0)
+
+	imports := 0
+	if syms, err := f.ImportedSymbols(); err == nil {
+		imports = len(syms)
+	}
+	if imports &lt; 5 {
+		score += 2
+		reasons = append(reasons, &#34;few imports (likely packed)&#34;)
+	}
+
+	for _, s := range f.Sections {
+		name := s.Name
+		if contains(packerSections, name) {
+			score += 3
+			reasons = append(reasons, &#34;packer section: &#34;+name)
+		}
+		const (
+			IMAGE_SCN_MEM_EXECUTE = 0x20000000
+			IMAGE_SCN_MEM_READ    = 0x40000000
+			IMAGE_SCN_MEM_WRITE   = 0x80000000
+		)
+		rwx := s.Characteristics&amp;(IMAGE_SCN_MEM_EXECUTE|IMAGE_SCN_MEM_READ|IMAGE_SCN_MEM_WRITE) ==
+			(IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE)
+		if rwx {
+			score += 3
+			reasons = append(reasons, &#34;RWX section: &#34;+name)
+		}
+		if s.VirtualSize &gt; s.Size*5 &amp;&amp; s.Size &gt; 0 {
+			score += 1
+			reasons = append(reasons, &#34;large virtual/raw ratio: &#34;+name)
+		}
+		fmt.Printf(&#34;Section %-10s virt=0x%x raw=0x%x\n&#34;, name, s.VirtualSize, s.Size)
+	}
+
+	fmt.Printf(&#34;Score: %d\n&#34;, score)
+	for _, r := range reasons {
+		fmt.Printf(&#34;  - %s\n&#34;, r)
+	}
+}
+						</pre>
+						<p>Run it against a normal binary and a packed one, and explain which reasons changed:</p>
+						<pre class="bash">
+go run pescore.go normal.exe
+go run pescore.go packed.exe
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/windows/win32/debug/pe-format" target="_blank">PE Format - Microsoft</a> - official PE/COFF specification</li>
+							<li><a class="icon-github" href="https://github.com/merces/pev" target="_blank">pev project</a> - <code>readpe</code> , <code>pescan</code> , <code>pepack</code> , <code>peres</code></li>
+							<li><a class="icon-website" href="https://pefile.readthedocs.io/" target="_blank">pefile documentation</a> - Python PE parser and imphash</li>
+							<li><a class="icon-website" href="https://yara.readthedocs.io/" target="_blank">YARA documentation</a> - pattern matching for malware classification</li>
+							<li><a class="icon-website" href="https://nostarch.com/malware" target="_blank">Practical Malware Analysis</a> - Sikorski and Honig, PE triage</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

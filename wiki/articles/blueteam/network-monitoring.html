@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Network Monitoring | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Network Monitoring">
+		<meta name="keywords" content="blueteam, c2-detection, netflow, network-monitoring, ntopng, zeek">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Network Monitoring">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Detecting suspicious network behaviour with Zeek, ntopng, flow-based monitoring, and beaconing detection.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/blueteam/network-monitoring.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Network Monitoring">
+		<meta name="twitter:description" itemprop="description" content="Detecting suspicious network behaviour with Zeek, ntopng, flow-based monitoring, and beaconing detection.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#zeek-formerly-bro">Zeek (formerly Bro)</a></b>
+					<ul>
+						<li><a href="#architecture">Architecture</a></li>
+						<li><a href="#installation-arch">Installation (Arch)</a></li>
+						<li><a href="#key-log-files">Key Log Files</a></li>
+						<li><a href="#querying-zeek-logs">Querying Zeek Logs</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#zeek-script-writing">Zeek Script Writing</a></b>
+					<ul>
+						<li><a href="#basic-script-structure">Basic Script Structure</a></li>
+						<li><a href="#http-request-monitoring">HTTP Request Monitoring</a></li>
+						<li><a href="#loading-custom-scripts">Loading Custom Scripts</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ntopng">ntopng</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#flow-based-monitoring">Flow-Based Monitoring</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#dns-query-monitoring-for-c2">DNS Query Monitoring for C2</a></b>
+					<ul>
+						<li><a href="#sinkhole-passivedns">Sinkhole / PassiveDNS</a></li>
+						<li><a href="#zeek-dns-analysis">Zeek DNS Analysis</a></li>
+						<li><a href="#beaconing-detection">Beaconing Detection</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tls-certificate-transparency-monitoring">TLS Certificate Transparency Monitoring</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#data-exfiltration-detection-patterns">Data Exfiltration Detection Patterns</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/blueteam/index.html">Blueteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/blueteam/network-monitoring.html">Network Monitoring</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="network-monitoring">Network Monitoring</h2>
+					<p>
+						Detecting suspicious network behaviour with Zeek, ntopng, flow-based monitoring, and beaconing
+						detection.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Host-based monitoring tells you what a compromised machine is doing internally. Network monitoring
+							tells you what data it is sending to the outside world.
+							<abbr title="Command and Control">C2</abbr>
+							callbacks,
+							data exfiltration, lateral movement - they all traverse the wire. A well-placed network sensor
+							sees what endpoint tools miss.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/tcp-handshake.html">TCP Handshake</a> - <abbr title="Transmission Control Protocol">TCP</abbr> flags, state machine, connection lifecycle</li>
+							<li><a href="/wiki/articles/fundamentals/http.html">HTTP</a> - <abbr title="Hypertext Transfer Protocol">HTTP</abbr> methods, headers, status codes, sessions</li>
+							<li><a href="/wiki/articles/fundamentals/dns.html">DNS</a> - <abbr title="Domain Name System">DNS</abbr> resolution, record types, tunneling</li>
+							<li><a href="/wiki/articles/fundamentals/tls.html">TLS</a> - <abbr title="Transport Layer Security">TLS</abbr> handshake, certificates, cipher suites</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="zeek-formerly-bro">Zeek (formerly Bro)</h3>
+						<p>
+							Zeek is a passive network security monitor that reconstructs sessions at the application layer,
+							extracts metadata, and fires events that user-defined scripts consume. It is not an inline prevention
+							device and does not block traffic. It is a metadata extraction engine that generates structured
+							logs.
+						</p>
+						<h4 id="architecture">Architecture</h4>
+						<pre class="plaintext">
+Network Interface → Packet Capture (AF_PACKET / PF_RING)
+    → Event Engine (TCP reassembly, protocol parsers)
+        → Script Layer (policy scripts, notice framework)
+            → Logs (conn.log, http.log, dns.log, notice.log, ...)
+						</pre>
+						<p>
+							Zeek generates per-protocol log files continuously. Every connection gets a
+							<code>uid</code>
+							(unique identifier)
+							that links entries across logs.
+						</p>
+						<h4 id="installation-arch">Installation (Arch)</h4>
+						<pre class="bash">
+pacman -S zeek
+# Node configuration
+sed -i &#39;s/interface=eth0/interface=lo/&#39; /opt/zeek/etc/node.cfg
+zeekctl install
+zeekctl start
+						</pre>
+						<h4 id="key-log-files">Key Log Files</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Log File</th>
+									<th align="center">Contents</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>conn.log</code></td>
+									<td align="center">TCP/UDP/ICMP connections, bytes, duration, state</td>
+								</tr>
+								<tr>
+									<td align="center"><code>http.log</code></td>
+									<td align="center">HTTP requests, host header, URI, user-agent, response code</td>
+								</tr>
+								<tr>
+									<td align="center"><code>dns.log</code></td>
+									<td align="center">DNS queries and responses, query type, answer</td>
+								</tr>
+								<tr>
+									<td align="center"><code>ssl.log</code></td>
+									<td align="center">TLS handshake data, SNI, certificate issuer, JA3 hash</td>
+								</tr>
+								<tr>
+									<td align="center"><code>ssh.log</code></td>
+									<td align="center">SSH client/server versions, auth attempts</td>
+								</tr>
+								<tr>
+									<td align="center"><code>notice.log</code></td>
+									<td align="center">Alerts generated by notice framework</td>
+								</tr>
+								<tr>
+									<td align="center"><code>files.log</code></td>
+									<td align="center">Files transferred over protocols Zeek can extract</td>
+								</tr>
+								<tr>
+									<td align="center"><code>x509.log</code></td>
+									<td align="center">X.509 certificate details</td>
+								</tr>
+								<tr>
+									<td align="center"><code>weird.log</code></td>
+									<td align="center">Protocol anomalies (malformed packets, unexpected states)</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="querying-zeek-logs">Querying Zeek Logs</h4>
+						<pre class="bash">
+# All connections to port 445 (SMB)
+zeek-cut id.orig_h id.resp_h id.resp_p service &lt; conn.log | grep &#34;445&#34;
+
+# Top 10 client IPs by connection count
+zeek-cut id.orig_h &lt; conn.log | sort | uniq -c | sort -rn | head -10
+
+# DNS queries for suspicious TLDs
+zeek-cut query &lt; dns.log | grep -E &#39;\.(tk|ml|ga|cf|gq|xyz|top)$&#39;
+
+# HTTP POST requests (potential data exfiltration)
+zeek-cut method host uri &lt; http.log | grep &#34;^POST&#34;
+
+# TLS connections with suspicious SNI
+zeek-cut server_name &lt; ssl.log | sort | uniq -c | sort -rn | head -20
+
+# Long-duration connections (potential C2 beacons)
+zeek-cut id.orig_h id.resp_h id.resp_p duration &lt; conn.log | \
+    awk &#39;$4 &gt; 3600 {print}&#39;
+
+# Find connections with RST flag (scanning/recon)
+zeek-cut id.orig_h id.resp_h id.resp_p conn_state &lt; conn.log | \
+    grep -E &#34;RSTO|RSTR&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="zeek-script-writing">Zeek Script Writing</h3>
+						<p>Zeek scripts use an event-driven DSL. You register handlers for events the engine generates.</p>
+						<h4 id="basic-script-structure">Basic Script Structure</h4>
+						<pre class="zeek">
+# /opt/zeek/share/zeek/site/scripts/custom/detect-beacon.zeek
+
+module DetectBeacon;
+
+export {
+    redef enum Notice::Type += {
+        Periodic_Connection
+    };
+
+    # Threshold: 5 connections, max 30s variance
+    const beacon_threshold = 5 &amp;redef;
+    const beacon_variance = 30.0 &amp;redef;
+}
+
+# Track connection times per (source, destination) pair
+global conn_times: table[addr, addr, port] of vector of time &amp;read_expire=1hr;
+
+event connection_state_remove(c: connection) {
+    local key = (c$id$orig_h, c$id$resp_h, c$id$resp_p);
+
+    if (key !in conn_times)
+        conn_times[key] = vector();
+
+    conn_times[key] += c$start_time;
+
+    # Check for periodic pattern after threshold
+    if (|conn_times[key]| &gt;= beacon_threshold) {
+        local intervals: vector of interval;
+        for (i in conn_times[key]) {
+            if (i &gt; 0)
+                intervals += conn_times[key][i] - conn_times[key][i - 1];
+        }
+
+        local avg = 0.0;
+        for (i in intervals)
+            avg += interval_to_double(intervals[i]);
+        avg /= |intervals|;
+
+        local variance = 0.0;
+        for (i in intervals)
+            variance += (interval_to_double(intervals[i]) - avg) ** 2;
+        variance /= |intervals|;
+
+        if (variance &lt; beacon_variance) {
+            NOTICE([$note=Periodic_Connection,
+                    $conn=c,
+                    $msg=fmt(&#34;Periodic connection: %s -&gt; %s:%d every %.1fs&#34;,
+                        c$id$orig_h, c$id$resp_h, c$id$resp_p, avg)]);
+        }
+    }
+}
+						</pre>
+						<h4 id="http-request-monitoring">HTTP Request Monitoring</h4>
+						<pre class="zeek">
+# /opt/zeek/share/zeek/site/scripts/custom/detect-suspicious-http.zeek
+
+event http_request(c: connection, method: string, original_uri: string,
+                  unescaped_uri: string, version: string) {
+    # Detect unusually long URIs (potential injection)
+    if (|unescaped_uri| &gt; 2048) {
+        NOTICE([$note=Weird::Activity,
+                $conn=c,
+                $msg=fmt(&#34;Long URI (%d bytes): %s&#34;, |unescaped_uri|, unescaped_uri)]);
+    }
+
+    # Detect user-agent absence (common in malicious tools)
+    if (!c$http?$user_agent || c$http$user_agent == &#34;&#34;) {
+        NOTICE([$note=Weird::Activity,
+                $conn=c,
+                $msg=fmt(&#34;HTTP request with no User-Agent from %s&#34;, c$id$orig_h)]);
+    }
+
+    # Detect requests to raw IP addresses (C2 often uses IP, not domain)
+    if (c$http?$host &amp;&amp; /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ in c$http$host) {
+        NOTICE([$note=Weird::Activity,
+                $conn=c,
+                $msg=fmt(&#34;HTTP request to raw IP: %s&#34;, c$http$host)]);
+    }
+}
+						</pre>
+						<h4 id="loading-custom-scripts">Loading Custom Scripts</h4>
+						<pre class="bash">
+# Add to /opt/zeek/share/zeek/site/local.zeek
+@load site/scripts/custom/detect-beacon
+@load site/scripts/custom/detect-suspicious-http
+zeekctl deploy
+						</pre>
+					</section>
+					<section>
+						<h3 id="ntopng">ntopng</h3>
+						<p>
+							ntopng provides real-time traffic analysis with a web dashboard. It uses nDPI for deep packet
+							inspection (application protocol identification).
+						</p>
+						<pre class="bash">
+pacman -S ntopng nprobe
+
+# Start ntopng with Redis backend
+systemctl enable --now redis
+ntopng -i eth0 --http-port 3000
+
+# Access dashboard at https://cookie.engineer
+						</pre>
+						<p>
+							ntopng strengths: protocol breakdown per host, top talkers, flow aggregation, alerts on threshold
+							breaches. Weaknesses: resource-intensive,
+							<abbr title="Graphical User Interface">GUI</abbr>
+							-oriented (harder
+							to integrate with automated pipelines).
+						</p>
+					</section>
+					<section>
+						<h3 id="flow-based-monitoring">Flow-Based Monitoring</h3>
+						<p>
+							Flow records aggregate packets into unidirectional metadata summaries. A flow is defined by
+							the 5-tuple:
+							<code>(src_ip, dst_ip, src_port, dst_port, protocol)</code>
+							. Flows capture bytes, packets,
+							timestamps, and
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							flags.
+						</p>
+						<pre class="bash">
+# NetFlow export with softflowd
+pacman -S softflowd
+softflowd -i eth0 -n 192.168.1.100:2055
+
+# Collect and analyze with nfdump
+pacman -S nfdump
+nfcapd -l /var/netflow -p 2055
+nfdump -r /var/netflow/nfcapd.202606260000 | head -20
+
+# Top talkers
+nfdump -r /var/netflow/nfcapd.202606260000 -s srcip/bytes -n 10
+
+# Flow-based beaconing detection: flows with consistent intervals
+nfdump -r /var/netflow/nfcapd.202606260000 \
+    -o &#34;fmt:%ts %sa %da %sp %dp %pr %pkt %byt&#34; | \
+    awk &#39;{print $2, $3, $5}&#39; | sort | uniq -c | sort -rn | head -20
+						</pre>
+					</section>
+					<section>
+						<h3 id="dns-query-monitoring-for-c2">DNS Query Monitoring for C2</h3>
+						<p>
+							<abbr title="Domain Name System">DNS</abbr>
+							is the most abused protocol for
+							<abbr title="Command and Control">C2</abbr>
+							communication
+							because most environments allow outbound
+							<abbr title="Domain Name System">DNS</abbr>
+							unconditionally.
+						</p>
+						<h4 id="sinkhole-passivedns">Sinkhole / PassiveDNS</h4>
+						<pre class="bash">
+# dnsmasq-based sinkhole — redirect malicious domains to internal sinkhole
+# /etc/dnsmasq.d/sinkhole.conf
+address=/evil-domain.com/10.0.0.1
+address=/.malware-c2.xyz/10.0.0.1
+
+# PassiveDNS with dnsmonster
+dnsmonster --interface=eth0 --stdoutType=json | jq &#39;.&#39;
+						</pre>
+						<h4 id="zeek-dns-analysis">Zeek DNS Analysis</h4>
+						<pre class="zeek">
+# Detect DNS queries with excessive entropy (DGA domains)
+event dns_request(c: connection, msg: dns_msg, query: string, qtype: count,
+                  qclass: count) {
+    # Domain length check (DGA domains often long)
+    if (|query| &gt; 50) {
+        NOTICE([$note=Weird::Activity,
+                $conn=c,
+                $msg=fmt(&#34;Long DNS query: %s&#34;, query)]);
+    }
+
+    # Check entropy of subdomain labels
+    local entropy = 0;
+    for (i in query) {
+        if (query[i] == &#34;.&#34;)
+            next;
+        # Simplified: count unique characters
+    }
+}
+						</pre>
+						<h4 id="beaconing-detection">Beaconing Detection</h4>
+						<p>
+							<abbr title="Command and Control">C2</abbr>
+							beacons produce predictable connection patterns. Detection approach:
+						</p>
+						<pre class="python">
+# beacon-detect.py — detect periodic connections from Zeek conn.log
+import json
+import sys
+from collections import defaultdict
+from statistics import mean, stdev
+
+connections = defaultdict(list)
+
+for line in sys.stdin:
+    parts = line.strip().split(&#39;\t&#39;)
+    if len(parts) &lt; 7:
+        continue
+    ts, uid, orig_h, resp_h, resp_p, proto, duration = \
+        parts[0], parts[1], parts[2], parts[3], parts[4], parts[5], parts[6]
+    key = f&#34;{orig_h}-&gt;{resp_h}:{resp_p}&#34;
+    connections[key].append(float(ts))
+
+for key, times in connections.items():
+    if len(times) &lt; 10:
+        continue
+    # Calculate intervals between successive connections
+    intervals = [times[i] - times[i-1] for i in range(1, len(times))]
+    avg = mean(intervals)
+    sd = stdev(intervals) if len(intervals) &gt; 1 else 0
+    # Low standard deviation = regular pattern = potential beacon
+    if sd &lt; avg * 0.1 and 10 &lt; avg &lt; 86400:
+        print(f&#34;BEACON: {key} interval={avg:.1f}s stddev={sd:.1f}s count={len(times)}&#34;)
+						</pre>
+						<p>Usage:</p>
+						<pre class="bash">
+zeek-cut ts uid id.orig_h id.resp_h id.resp_p proto duration &lt; conn.log | \
+    python3 beacon-detect.py
+						</pre>
+					</section>
+					<section>
+						<h3 id="tls-certificate-transparency-monitoring">TLS Certificate Transparency Monitoring</h3>
+						<p>
+							Monitor Certificate Transparency logs for certificates issued to your domains - catches attackers
+							who obtain fraudulent certs.
+						</p>
+						<pre class="bash">
+# certspotter — monitor CT logs
+git clone https://github.com/SSLMate/certspotter.git
+./certspotter -domains example.com -start 2026-06-01
+
+# certstream — real-time CT log stream
+pip install certstream
+python3 -c &#34;
+from certstream.core import CertStreamClient
+def callback(message, context):
+    if message[&#39;message_type&#39;] == &#39;certificate_update&#39;:
+        domains = message[&#39;data&#39;][&#39;leaf_cert&#39;][&#39;all_domains&#39;]
+        if any(&#39;example.com&#39; in d for d in domains):
+            print(f&#39;[!] New cert for our domain: {domains}&#39;)
+CertStreamClient(on_message=callback).run_forever()
+&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="data-exfiltration-detection-patterns">Data Exfiltration Detection Patterns</h3>
+						<pre class="bash">
+# Large outbound transfers (&gt; 100MB to single destination)
+zeek-cut id.orig_h id.resp_h id.resp_p orig_bytes &lt; conn.log | \
+    awk &#39;$4 &gt; 104857600 {print $1&#34; -&gt; &#34;$2&#34;:&#34;$3, $4/1048576&#34;MB&#34;}&#39;
+
+# Unusual protocol usage (no common service on port 443 is not HTTPS)
+zeek-cut id.resp_p service &lt; conn.log | \
+    grep -vE &#34;^[0-9]+\t(http|ssl|dns|ssh|smtp)&#34; | \
+    sort | uniq -c | sort -rn
+
+# Many small uploads to same destination (data chunking)
+zeek-cut id.orig_h id.resp_h id.resp_p orig_bytes &lt; conn.log | \
+    awk &#39;{if ($4 &gt; 0) {k=$1&#34;-&gt;&#34;$2&#34;:&#34;$3; c[k]++; b[k]+=$4}} \
+    END {for (k in c) if (c[k]&gt;100) print k, c[k], b[k]/c[k]/1024&#34;KB avg&#34;}&#39;
+
+# Persistent TCP connections with no data (heartbeat beacons)
+zeek-cut id.orig_h id.resp_h id.resp_p duration orig_bytes resp_bytes &lt; conn.log | \
+    awk &#39;$4+$5&lt;100 &amp;&amp; $3&gt;60 {print $1&#34; -&gt; &#34;$2&#34;:&#34;$3, $4&#34;sec&#34;}&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Analyze the traffic in the container: identify the suspicious
+							<abbr title="Domain Name System">DNS</abbr>
+							queries,
+							the
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							POST exfiltration, and the periodic connections that
+							look like a beacon.
+						</p>
+						<p><a href="/wiki/articles/blueteam/network-monitoring.Containerfile">network-monitoring.Containerfile</a></p>
+						<pre class="bash">
+podman build -t network-monitoring-ctf -f network-monitoring.Containerfile .
+podman run -it --rm network-monitoring-ctf
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://docs.zeek.org/" target="_blank">Zeek Documentation</a></li>
+							<li><a class="icon-website" href="https://docs.zeek.org/en/master/script-reference/index.html" target="_blank">Zeek Script Reference</a></li>
+							<li><a class="icon-website" href="https://www.ntop.org/guides/ntopng/" target="_blank">ntopng Documentation</a></li>
+							<li><a class="icon-github" href="https://github.com/phaag/nfdump" target="_blank">nfdump Documentation</a></li>
+							<li><a class="icon-github" href="https://github.com/mosajjal/dnsmonster" target="_blank">DNSMonster GitHub</a></li>
+							<li><a class="icon-github" href="https://github.com/CaliDog/certstream-python" target="_blank">CertStream GitHub</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

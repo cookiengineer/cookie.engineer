@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Security Subsystem | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Security Subsystem">
+		<meta name="keywords" content="apparmor, audit, capabilities, evm, ima, keyring, landlock, lsm, seccomp, security, selinux, sysinternals">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Security Subsystem">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="The Linux kernel's multi-layered security architecture - LSMs, capabilities, SELinux, AppArmor, seccomp, keyrings, audit, Landlock, IMA/EVM, and the Windows security model compared.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/sysinternals/security-subsystem.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Security Subsystem">
+		<meta name="twitter:description" itemprop="description" content="The Linux kernel's multi-layered security architecture - LSMs, capabilities, SELinux, AppArmor, seccomp, keyrings, audit, Landlock, IMA/EVM, and the Windows security model compared.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-linux-security-model-stack">The Linux Security Model Stack</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#linux-security-module-lsm-framework">Linux Security Module (LSM) Framework</a></b>
+					<ul>
+						<li><a href="#hook-call-pattern">Hook call pattern</a></li>
+						<li><a href="#lsm-ordering">LSM Ordering</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#linux-capabilities-deep-dive">Linux Capabilities Deep Dive</a></b>
+					<ul>
+						<li><a href="#key-capabilities">Key Capabilities</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#selinux-type-enforcement-and-mls">SELinux: Type Enforcement and MLS</a></b>
+					<ul>
+						<li><a href="#selinux-decision-flow">SELinux decision flow</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#apparmor">AppArmor</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#seccomp-secure-computing-mode">seccomp - Secure Computing Mode</a></b>
+					<ul>
+						<li><a href="#seccomp-bpf-filter">seccomp-bpf Filter</a></li>
+						<li><a href="#libseccomp-the-practical-api">libseccomp - the practical API</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#linux-kernel-keyring">Linux Kernel Keyring</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#user-namespaces-and-cap-mapping">User Namespaces and Cap Mapping</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#linux-audit-subsystem">Linux Audit Subsystem</a></b>
+					<ul>
+						<li><a href="#audit-rule-file">Audit Rule File</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#landlock-sandboxing">Landlock Sandboxing</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ima-and-evm">IMA and EVM</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#windows-comparison">Windows Comparison</a></b>
+					<ul>
+						<li><a href="#windows-integrity-levels">Windows Integrity Levels</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/sysinternals/index.html">Sysinternals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/sysinternals/security-subsystem.html">Security Subsystem</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="security-subsystem">Security Subsystem</h2>
+					<p>
+						The Linux kernel's multi-layered security architecture - LSMs, capabilities, SELinux, AppArmor,
+						seccomp, keyrings, audit, Landlock, IMA/E
+						<abbr title="Virtual Machine">VM</abbr>
+						, and the Windows security model
+						compared.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Kernel security is a stack of independent checks rather than one gate. This article walks the
+							layers a syscall passes through: the LSM hook framework, capabilities, SELinux and AppArmor,
+							seccomp, Landlock, keyrings, the audit subsystem, and IMA/E
+							<abbr title="Virtual Machine">VM</abbr>
+							, then compares
+							the Windows model. After reading it you can inspect and reason about each layer on a live system.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/unix-permissions.html">Unix Permissions</a> - UID, GID, mode bits, P <abbr title="Open Systems Interconnection">OSI</abbr> X <abbr title="Access Control List">ACL</abbr> s</li>
+							<li><a href="/wiki/articles/fundamentals/capabilities.html">Capabilities</a> - the Linux capability model</li>
+							<li><a href="/wiki/articles/sysinternals/kernel-architecture.html">Kernel Architecture</a> - kernel layout, boot, subsystems</li>
+							<li><a href="/wiki/articles/sysinternals/process-manager.html">Process Manager</a> - task_struct, credentials, namespaces</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-linux-security-model-stack">The Linux Security Model Stack</h3>
+						<p>
+							Linux security is not a single system but a stack of independent mechanisms, each operating
+							at a different granularity. The kernel applies them in order, from coarse-grained to fine-grained:
+						</p>
+						<pre class="plaintext">
+┌────────────────────────────────────────────────────────────────────┐
+│  User Space                                                        │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────────────────────┐  │
+│  │ uid/gid  │ │ seccomp  │ │ Landlock │ │ LSM Policy (SELinux/    │  │
+│  │ (DAC)    │ │ rules    │ │ rules    │ │ AppArmor)               │  │
+│  └────+─────┘ └────+─────┘ └────+─────┘ └───────────+────────────┘  │
+│       │             │            │                    │              │
+├───────+─────────────+────────────+────────────────────+──────────────┤
+│       ▼             ▼            ▼                    ▼              │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │                    System Call Entry                          │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│       │             │            │                    │              │
+│       ▼             ▼            ▼                    ▼              │
+│  ┌────────┐  ┌──────────┐ ┌──────────┐ ┌─────────────────────────┐  │
+│  │ DAC    │  │ seccomp  │ │ Landlock │ │ LSM Hooks               │  │
+│  │ Check  │──┤ Filter   │─┤ Sandbox  │─┤ (SELinux, AppArmor, ...)│  │
+│  │ (VFS   │  │ (BPF)    │ │ (LSM)    │ │ → Check context/label   │  │
+│  │  layer)│  └──────────┘ └──────────┘ │ → Allow or deny         │  │
+│  └────+───┘                             └────────────+────────────┘  │
+│       │                                               │              │
+│       ▼                                               ▼              │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │              Kernel Operation (VFS, net, IPC, etc.)           │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │  Audit Subsystem: Logs security-relevant events (optional)    │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │  IMA/EVM: File integrity measurement &amp; verification           │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+└────────────────────────────────────────────────────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="linux-security-module-lsm-framework">Linux Security Module (LSM) Framework</h3>
+						<p>
+							The LSM framework provides hook points placed at every security-critical code path in the kernel.
+							Each registered LSM can implement hooks to make access control decisions. The hooks are called
+							in order, and if any hook denies access, the operation is blocked.
+						</p>
+						<pre class="plaintext">
+LSM Architecture:
+
+  struct security_hook_heads {
+      struct hlist_head binder_set_context_mgr;
+      struct hlist_head binder_transaction;
+      struct hlist_head ptrace_access_check;
+      struct hlist_head ptrace_traceme;
+      struct hlist_head capget;
+      struct hlist_head capset;
+      struct hlist_head cred_alloc_blank;
+      struct hlist_head cred_free;
+      struct hlist_head cred_prepare;
+      struct hlist_head cred_transfer;
+      struct hlist_head kernel_act_as;
+      struct hlist_head kernel_create_files_as;
+      struct hlist_head kernel_module_request;
+      struct hlist_head task_alloc;
+      struct hlist_head task_free;
+      struct hlist_head task_setrlimit;
+      struct hlist_head task_kill;
+      struct hlist_head inode_create;       // File creation check
+      struct hlist_head inode_link;         // Hard link check
+      struct hlist_head inode_unlink;       // File deletion check
+      struct hlist_head inode_rename;       // File rename check
+      struct hlist_head inode_permission;   // Read/write/execute check
+      struct hlist_head file_open;          // open() check
+      struct hlist_head file_ioctl;         // ioctl() check
+      struct hlist_head mmap_addr;          // mmap() address check
+      struct hlist_head mmap_file;          // mmap() file check
+      struct hlist_head socket_create;      // socket() check
+      struct hlist_head socket_bind;        // bind() check
+      struct hlist_head socket_connect;     // connect() check
+      struct hlist_head socket_sendmsg;     // sendmsg() check
+      struct hlist_head bpf;                // BPF program load check
+      struct hlist_head capable;            // capability() check
+      ... ~200+ hooks total ...
+  };
+						</pre>
+						<h4 id="hook-call-pattern">Hook call pattern</h4>
+						<pre class="c">
+// include/linux/lsm_hooks.h — hook invocation
+static inline int security_inode_permission(struct inode *inode, int mask)
+{
+    // Iterate all registered LSMs
+    return call_int_hook(inode_permission, 0, inode, mask);
+    //  ^^^^^^^^^^^^^^^^
+    //  Returns first non-zero (deny) or 0 (allow)
+}
+
+// LSM registration (each LSM does this at init):
+DEFINE_LSM(selinux) = {
+    .name = &#34;selinux&#34;,
+    .init = selinux_init,
+    .blobs = &amp;selinux_blob_sizes,
+};
+						</pre>
+						<h4 id="lsm-ordering">LSM Ordering</h4>
+						<pre class="bash">
+cat /proc/cmdline | tr &#39; &#39; &#39;\n&#39; | grep lsm
+# lsm=landlock,lockdown,yama,integrity,apparmor,bpf
+
+# Check loaded LSMs
+cat /sys/kernel/security/lsm
+# landlock,lockdown,yama,integrity,apparmor
+
+# Per-LSM status
+ls /sys/kernel/security/
+						</pre>
+					</section>
+					<section>
+						<h3 id="linux-capabilities-deep-dive">Linux Capabilities Deep Dive</h3>
+						<p>
+							Capabilities break the monolithic root privilege into 40+ distinct bits. Each thread has five
+							capability sets:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Capability Set</th>
+									<th align="center">Purpose</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">CapInh</td>
+									<td align="center">Inheritable - passed to children across exec</td>
+								</tr>
+								<tr>
+									<td align="center">CapPrm</td>
+									<td align="center">Permitted - caps the thread could use</td>
+								</tr>
+								<tr>
+									<td align="center">CapEff</td>
+									<td align="center">Effective - caps currently active</td>
+								</tr>
+								<tr>
+									<td align="center">CapBnd</td>
+									<td align="center">Bounding set - hard upper bound (all threads)</td>
+								</tr>
+								<tr>
+									<td align="center">CapAmb</td>
+									<td align="center">Ambient - preserved across non-setuid exec</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="plaintext">
+Capability Transition Rules (execve):
+
+  1. Non-setuid-root exec:
+     P&#39;(permitted)   = P(inheritable) ∩ P(bounding)
+     P&#39;(effective)   = P&#39;(ambient)   if P&#39;(permitted) permits it, else empty
+     P&#39;(inheritable) = P(inheritable)  (unchanged)
+     P&#39;(ambient)     = P(ambient)      (unchanged if permitted)
+
+  2. setuid-root / setcap exec (fI = file inheritable, fP = file permitted):
+     P&#39;(permitted)   = (P(inheritable) &amp; B(inheritable)) |
+                       (fP &amp; B(permitted))
+     P&#39;(effective)   = fE ? P&#39;(permitted) : 0
+     P&#39;(inheritable) = P(inheritable)
+     P&#39;(bounding)    = B(bounding)  (unchanged across exec — only init can narrow)
+						</pre>
+						<h4 id="key-capabilities">Key Capabilities</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Capability</th>
+									<th align="center">Grants Ability To...</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">CAP_SYS_ADMIN</td>
+									<td align="center">Almost unrestricted (mount, swapon, sethost, setdomainname, pivot_root, clone(CLONE_NEW*))</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_SYS_PTRACE</td>
+									<td align="center">ptrace any process, read /proc/PID/mem</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_SYS_RAWIO</td>
+									<td align="center">iopl(), ioperm(), /dev/mem, /dev/port</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_NET_RAW</td>
+									<td align="center">Raw sockets (packet capture, spoofing)</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_NET_ADMIN</td>
+									<td align="center">Interface config, routing, iptables</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_SYS_MODULE</td>
+									<td align="center">Load/unload kernel modules</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_SYS_BOOT</td>
+									<td align="center">reboot(), kexec_load()</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_SYSLOG</td>
+									<td align="center">read kernel log buffer (dmesg, /dev/kmsg)</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_SYS_CHROOT</td>
+									<td align="center">chroot()</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_SYS_NICE</td>
+									<td align="center">Set scheduling priority, CPU affinity</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_SYS_RESOURCE</td>
+									<td align="center">Override resource limits, reserved ext2 space</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_KILL</td>
+									<td align="center">Bypass permission checks when sending signals</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_BPF</td>
+									<td align="center">Load BPF programs (but LSM can restrict)</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_CHECKPOINT_RESTORE</td>
+									<td align="center">CRIU checkpoint/restore</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_SYS_TIME</td>
+									<td align="center">Set system clock</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_MKNOD</td>
+									<td align="center">Create device nodes</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_SETUID</td>
+									<td align="center">Arbitrary setuid/setgid/setgroups</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_SETPCAP</td>
+									<td align="center">Modify capability sets of other processes</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_NET_BIND_SERVICE</td>
+									<td align="center">Bind to ports < 1024</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_PERFMON</td>
+									<td align="center">Use perf_event_open()</td>
+								</tr>
+								<tr>
+									<td align="center">CAP_BLOCK_SUSPEND</td>
+									<td align="center">Prevent system suspend</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Inspect all capability sets of current shell
+capsh --print | grep -E &#39;Current|Bounding|Ambient|Securebits&#39;
+
+# Check capabilities of a specific binary
+getcap /usr/bin/ping
+# /usr/bin/ping cap_net_raw=ep
+
+# List all files with file capabilities
+getcap -r /usr/bin/ 2&gt;/dev/null
+getcap -r /usr/sbin/ 2&gt;/dev/null
+
+# Drop all capabilities and run a confined shell
+capsh --drop=&#39;cap_sys_admin,cap_net_raw,cap_sys_ptrace&#39; -- -c &#39;capsh --print&#39;
+
+# A truly minimal container capability set:
+# cap_chown, cap_dac_override, cap_fowner, cap_fsetid,
+# cap_kill, cap_setgid, cap_setuid, cap_setpcap,
+# cap_net_bind_service, cap_sys_chroot
+						</pre>
+					</section>
+					<section>
+						<h3 id="selinux-type-enforcement-and-mls">SELinux: Type Enforcement and MLS</h3>
+						<p>
+							SELinux implements Mandatory Access Control (
+							<abbr title="Media Access Control">MAC</abbr>
+							) using type enforcement.
+							Every subject (process) and object (file, socket, etc.) is assigned a security context label.
+							The policy defines which types can access which other types and in what ways.
+						</p>
+						<pre class="plaintext">
+SELinux Security Context:
+
+  system_u:object_r:httpd_sys_content_t:s0
+  │        │        │                    │
+  │        │        │                    └─ MLS level (s0 = SystemLow)
+  │        │        └─ Type (the core identifier for TE rules)
+  │        └─ Role (user_r, object_r, system_r)
+  └─ User (system_u, unconfined_u, staff_u, user_u)
+
+Type Enforcement Rule:
+  allow httpd_t httpd_sys_content_t : file { read getattr open };
+  │     │        │                    │    │
+  │     │        │                    │    └─ Permissions
+  │     │        │                    └─ Object class
+  │     │        └─ Target type
+  │     └─ Source type
+  └─ Rule kind (allow, auditallow, dontaudit)
+						</pre>
+						<h4 id="selinux-decision-flow">SELinux decision flow</h4>
+						<pre class="plaintext">
+  Userspace request: open(&#34;/var/www/index.html&#34;, O_RDONLY)
+       │
+       ▼
+  DAC check (mode bits, uid/gid) ──► Denied? ──► EACCES (never reaches MAC)
+       │ Approved
+       ▼
+  LSM hook: security_inode_permission()
+       │
+       ▼
+  SELinux hook: selinux_inode_permission()
+       │
+       ▼
+  AVC (Access Vector Cache) lookup:
+  ┌──────────────────────────────────────────────────┐
+  │ Query: { httpd_t, httpd_sys_content_t, file,     │
+  │          { read getattr open } }                 │
+  │                                                  │
+  │ AVC cache hit?                                   │
+  │   Yes → return cached decision                    │
+  │   No  → Compute: query security server (policy)  │
+  │         Decision → cache in AVC → return result   │
+  └──────────────────────────────────────────────────┘
+       │
+       ▼
+  Allowed → proceed    Denied → EACCES + AVC log:
+    type=AVC msg=audit(1234567890.123:456): avc: denied { read }
+    for pid=1234 comm=&#34;httpd&#34; name=&#34;index.html&#34;
+    dev=&#34;sda1&#34; ino=5678
+    scontext=system_u:system_r:httpd_t:s0
+    tcontext=system_u:object_r:httpd_sys_content_t:s0
+    tclass=file permissive=0
+						</pre>
+						<pre class="bash">
+# Check SELinux status
+getenforce                 # Enforcing / Permissive / Disabled
+sestatus                   # Full status with policy, mode, MLS
+
+# View process context
+ps -eZ | head -15          # -Z shows security context column
+
+# File contexts
+ls -Z /var/www/            # Show SELinux labels
+matchpathcon /var/www/html # What context should this file have?
+
+# AVC log inspection
+sudo ausearch -m avc -ts recent | head -20
+sudo sealert -a /var/log/audit/audit.log  # Human-readable analysis
+
+# Policy analysis
+sesearch --allow -s httpd_t | grep httpd_sys_content_t
+seinfo -t                  # List all types
+seinfo -r                  # List all roles
+seinfo -u                  # List all users
+
+# Booleans (runtime tunables)
+getsebool -a | head -20
+setsebool httpd_can_network_connect on
+						</pre>
+					</section>
+					<section>
+						<h3 id="apparmor">AppArmor</h3>
+						<p>
+							AppArmor takes a path-based approach: profiles are attached to executables by path, and each
+							profile lists the exact filesystem paths and operations permitted.
+						</p>
+						<pre class="plaintext">
+AppArmor Profile Structure:
+
+  /usr/bin/myapp {
+      #include &lt;abstractions/base&gt;        # Base system access
+      #include &lt;abstractions/nameservice&gt; # DNS resolution
+
+      capability net_raw,              # Specific caps allowed
+      capability setuid,
+
+      /etc/myapp/** r,                 # Read config files
+      /var/log/myapp/* w,              # Write logs
+      /var/run/myapp.pid rw,           # Read/write PID file
+      /tmp/myapp-* rwlk,               # r/w/link/lock in /tmp
+
+      network inet stream,             # TCP sockets
+      network inet dgram,              # UDP sockets
+
+      signal peer=@{profile_name},     # Signal handling
+
+      deny /etc/shadow r,              # Explicit deny overrides allow
+      deny @{HOME}/.ssh/** rw,         # Protect SSH keys
+  }
+
+  Modes:
+    complain: log violations but don&#39;t block (audit-only)
+    enforce:  block violations and log
+						</pre>
+						<pre class="bash">
+# AppArmor status
+sudo aa-status
+
+# List loaded profiles
+sudo aa-status --profiled
+
+# List processes with AppArmor profiles
+sudo aa-status --processes
+
+# Check if a specific binary is confined
+sudo aa-status | grep -A5 &#39;profiles are in enforce mode&#39;
+
+# Profile management
+sudo aa-complain /usr/bin/myapp   # Switch to complain mode
+sudo aa-enforce /usr/bin/myapp    # Switch to enforce mode
+sudo aa-disable /usr/bin/myapp    # Disable the profile
+
+# Generate a profile from observed behavior
+sudo aa-genprof /usr/bin/myapp
+
+# Update a profile from logs
+sudo aa-logprof
+
+# Parse AppArmor log entries
+sudo journalctl -k | grep -i apparmor | tail -20
+# kernel: audit: type=1400 audit(...): apparmor=&#34;DENIED&#34;
+#   operation=&#34;open&#34; profile=&#34;/usr/bin/myapp&#34; name=&#34;/etc/shadow&#34;
+#   pid=1234 comm=&#34;myapp&#34; requested_mask=&#34;r&#34; denied_mask=&#34;r&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="seccomp-secure-computing-mode">seccomp - Secure Computing Mode</h3>
+						<p>seccomp restricts the system calls a process can make. There are two modes:</p>
+						<pre class="plaintext">
+seccomp modes:
+
+  SECCOMP_SET_MODE_STRICT (legacy):
+    Only allowed syscalls: read, write, _exit, sigreturn
+    Any other syscall → SIGKILL
+    Simple but severely limited — only useful for compute-only tasks
+
+  SECCOMP_SET_MODE_FILTER (seccomp-bpf):
+    Syscall filtering via BPF programs
+    Each syscall number + arguments can be checked
+    Actions: ALLOW, KILL, TRAP, ERRNO, TRACE, LOG
+    Nested filters combined by priority
+						</pre>
+						<h4 id="seccomp-bpf-filter">seccomp-bpf Filter</h4>
+						<pre class="c">
+// seccomp filter in Berkeley Packet Filter bytecode:
+// Allow: write, read, exit, exit_group, rt_sigreturn
+// Default: kill
+
+// Generated by: scmp_bpf_sim -a x86_64
+// Pseudo-C representation:
+#include &lt;linux/seccomp.h&gt;
+#include &lt;linux/filter.h&gt;
+
+static struct sock_filter filter[] = {
+    // Load architecture (ensure we&#39;re x86-64)
+    BPF_STMT(BPF_LD | BPF_W | BPF_ABS, offsetof(struct seccomp_data, arch)),
+    BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, AUDIT_ARCH_X86_64, 1, 0),
+    BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_KILL),  // Wrong arch → kill
+
+    // Load syscall number
+    BPF_STMT(BPF_LD | BPF_W | BPF_ABS, offsetof(struct seccomp_data, nr)),
+
+    // write(1) → allow
+    BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_write, 4, 0),
+
+    // read(0) → allow
+    BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_read, 3, 0),
+
+    // exit / exit_group / rt_sigreturn → allow
+    BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_exit, 0, 1),
+    BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_exit_group, 1, 0),
+    BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_rt_sigreturn, 0, 1),
+
+    BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW),
+    BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_KILL),  // Default: kill
+};
+						</pre>
+						<h4 id="libseccomp-the-practical-api">libseccomp - the practical API</h4>
+						<pre class="c">
+#include &lt;seccomp.h&gt;
+#include &lt;stdio.h&gt;
+
+int main() {
+    scmp_filter_ctx ctx;
+
+    // Initialize with default action: kill process on disallowed syscall
+    ctx = seccomp_init(SCMP_ACT_KILL);
+    if (!ctx) { perror(&#34;seccomp_init&#34;); return 1; }
+
+    // Allow essential syscalls
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(write), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(read), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(exit), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(exit_group), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(rt_sigreturn), 0);
+
+    // Allow write() only to fd 1 (stdout) and fd 2 (stderr)
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(write), 1,
+        SCMP_A0(SCMP_CMP_EQ, 1));  // arg0 (fd) == 1
+
+    seccomp_load(ctx);
+    seccomp_release(ctx);
+
+    // Now only baseline syscalls work
+    printf(&#34;This uses write() → works\n&#34;);
+
+    // Any other syscall → SIGKILL
+    // open(&#34;/etc/passwd&#34;, O_RDONLY) → DEAD
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+# Compile and test
+gcc -o seccomp-test seccomp-test.c -lseccomp
+./seccomp-test
+
+# Check seccomp status of a process
+cat /proc/$$/status | grep Seccomp
+# Seccomp: 0 = disabled
+# Seccomp: 1 = strict mode
+# Seccomp: 2 = filter mode
+
+# Inspect seccomp filters of a running process (root)
+sudo cat /proc/$$/status | grep Seccomp
+
+# Podman/Docker use seccomp profiles:
+podman run --security-opt seccomp=unconfined alpine echo test
+podman run --security-opt seccomp=/path/to/profile.json alpine echo test
+						</pre>
+					</section>
+					<section>
+						<h3 id="linux-kernel-keyring">Linux Kernel Keyring</h3>
+						<p>
+							The kernel keyring service provides in-kernel key storage and retrieval, used by filesystem
+							encryption (fscrypt),
+							<abbr title="Domain Name System">DNS</abbr>
+							resolver, NFS, and user applications:
+						</p>
+						<pre class="plaintext">
+┌───────────────────────────────────────────────────────────────┐
+│  Keyring Hierarchy (per-task / per-user):                     │
+│                                                               │
+│  ┌─────────────────────────────────────┐                      │
+│  │ Session Keyring (per login session) │                      │
+│  │  ├── user key @u = user-KEYID      │                      │
+│  │  ├── trusted key                   │                      │
+│  │  └── encrypted key                 │                      │
+│  └──────────────+──────────────────────┘                      │
+│                 │ linked to                                    │
+│  ┌──────────────▼──────────────────────┐                      │
+│  │ User Keyring (per UID)              │                      │
+│  │  └── persistent key @p = user-KEYID│                      │
+│  └──────────────+──────────────────────┘                      │
+│                 │ linked to                                    │
+│  ┌──────────────▼──────────────────────┐                      │
+│  │ User-Session Keyring               │                      │
+│  └─────────────────────────────────────┘                      │
+│                                                               │
+│  ┌─────────────────────────────────────┐                      │
+│  │ Thread Keyring (per thread, CLONE_THREAD)                  │
+│  └─────────────────────────────────────┘                      │
+│                                                               │
+│  ┌─────────────────────────────────────┐                      │
+│  │ Process Keyring (per process, shared by threads)           │
+│  └─────────────────────────────────────┘                      │
+│                                                               │
+│  Key types: &#34;user&#34;, &#34;trusted&#34; (TPM-backed), &#34;encrypted&#34;,      │
+│             &#34;logon&#34;, &#34;big_key&#34;, &#34;asymmetric&#34;, &#34;dns_resolver&#34;  │
+└───────────────────────────────────────────────────────────────┘
+						</pre>
+						<pre class="bash">
+# List current keyrings
+keyctl show
+# Keyring
+#  123456789 --alswrv   1000 65534  keyring: _ses
+#  234567890 --alswrv   1000 65534   \_ keyring: _uid.1000
+#  345678901 --alswrv   1000     0   \_ user: my-secret-key
+
+# Add a key
+echo -n &#34;my-secret-data&#34; | keyctl padd user mykey @s
+
+# Read a key
+keyctl print $(keyctl search @s user mykey)
+
+# Revoke a key
+keyctl revoke $(keyctl search @s user mykey)
+
+# List key permissions
+keyctl describe $(keyctl search @s user mykey)
+# Format: type;uid;gid;permissions;description
+
+# Persistent keyring (survives logout)
+keyctl get_persistent @s 1000
+# Or: keyctl link @u @s  # Link to session keyring
+						</pre>
+					</section>
+					<section>
+						<h3 id="user-namespaces-and-cap-mapping">User Namespaces and Cap Mapping</h3>
+						<p>
+							User namespaces allow an unprivileged user to be root inside a namespace. Capabilities are mapped
+							between namespaces:
+						</p>
+						<pre class="plaintext">
+┌─────────────────────────────────────────────────────────────────┐
+│  Outer User Namespace (init_user_ns)                             │
+│                                                                  │
+│  UID 1000 (cookiengineer)                                       │
+│    └── unshare(CLONE_NEWUSER) ──►                              │
+│                                                                  │
+│        ┌─────────────────────────────────────────────────────┐  │
+│        │  Inner User Namespace                               │  │
+│        │                                                     │  │
+│        │  /proc/PID/uid_map:  0 1000 1                       │  │
+│        │  /proc/PID/gid_map:  0 1000 1                       │  │
+│        │                                                     │  │
+│        │  Inner UID 0 ⟷ Outer UID 1000                       │  │
+│        │  Process appears as root inside, cookiengineer outside│  │
+│        │                                                     │  │
+│        │  Full capabilities inside namespace, but:            │  │
+│        │  - Network: isolated by net namespace                │  │
+│        │  - Files: DAC still enforced across namespace boundary│ │
+│        │  - Devices: can create device nodes, not access real │  │
+│        └─────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+						</pre>
+						<pre class="bash">
+# Create a user namespace and check capabilities
+unshare --user --map-root-user bash -c &#39;
+    echo &#34;In namespace, my UID: $(id -u)&#34;
+    capsh --print | grep Current
+&#39;
+# Current: =ep  (all caps in the namespace!)
+
+# Inspect UID/GID mappings
+cat /proc/self/uid_map
+#          0       1000          1
+#  inner_uid  outer_uid  count
+						</pre>
+					</section>
+					<section>
+						<h3 id="linux-audit-subsystem">Linux Audit Subsystem</h3>
+						<p>
+							The audit subsystem logs security-relevant events to a persistent log. Events can be generated
+							by syscall auditing, file watches, LSM denials (AVC), and user-space messages:
+						</p>
+						<pre class="bash">
+# Check audit status
+sudo auditctl -s
+# enabled 1, pid 345 (auditd), rate_limit 0, backlog_limit 8192
+
+# List active audit rules
+sudo auditctl -l
+
+# Common audit rules:
+# Watch /etc/shadow for writes
+sudo auditctl -w /etc/shadow -p wa -k shadow_changes
+
+# Audit all execve calls by UID 1000
+sudo auditctl -a always,exit -F arch=b64 -S execve -F uid=1000 -k user_exec
+
+# Audit all privilege escalations
+sudo auditctl -a always,exit -F arch=b64 -S execve -F euid=0 -k root_exec
+
+# Audit chmod on sensitive paths
+sudo auditctl -a always,exit -F arch=b64 -S chmod,fchmod,fchmodat \
+    -F dir=/etc -k etc_perms
+
+# Search the audit log
+sudo ausearch -k shadow_changes -ts today
+sudo ausearch -m avc -ts recent   # SELinux denials
+sudo ausearch -m syscall -sc execve -ui 1000
+sudo ausearch -m user_avc        # AppArmor denials
+
+# Generate a report
+sudo aureport --summary
+sudo aureport -x --summary       # Executable summary
+sudo aureport -f --summary       # File access summary
+						</pre>
+						<h4 id="audit-rule-file">Audit Rule File</h4>
+						<pre class="plaintext">
+# Delete all existing rules
+-D
+
+# Increase buffer size
+-b 8192
+
+# Failure mode: 1=printk, 2=panic
+-f 1
+
+# Monitor changes to audit rules
+-w /etc/audit/ -p wa -k audit_config
+
+# Monitor critical system files
+-w /etc/shadow -p wa -k identity
+-w /etc/passwd -p wa -k identity
+-w /etc/sudoers -p wa -k sudoers
+
+# Monitor privilege escalation
+-a always,exit -F arch=b64 -S execve -F euid=0 -k root_cmd
+
+# Monitor kernel module loading
+-w /sbin/insmod -p x -k modules
+-w /sbin/modprobe -p x -k modules
+						</pre>
+					</section>
+					<section>
+						<h3 id="landlock-sandboxing">Landlock Sandboxing</h3>
+						<p>
+							Landlock enables unprivileged processes to sandbox themselves by restricting which filesystem
+							paths they can access. Unlike seccomp (syscall-level), Landlock operates at the filesystem level:
+						</p>
+						<pre class="c">
+// Landlock example: restrict process to read-only /tmp access
+#include &lt;linux/landlock.h&gt;
+#include &lt;sys/prctl.h&gt;
+#include &lt;sys/syscall.h&gt;
+
+int main() {
+    int ruleset_fd;
+    struct landlock_ruleset_attr ruleset_attr = {
+        .handled_access_fs = LANDLOCK_ACCESS_FS_READ_FILE |
+                             LANDLOCK_ACCESS_FS_WRITE_FILE |
+                             LANDLOCK_ACCESS_FS_EXECUTE,
+    };
+
+    ruleset_fd = syscall(__NR_landlock_create_ruleset, &amp;ruleset_attr,
+                         sizeof(ruleset_attr), 0);
+    if (ruleset_fd &lt; 0) { perror(&#34;landlock_create_ruleset&#34;); return 1; }
+
+    // Allow read and execute on /tmp
+    struct landlock_path_beneath_attr path_attr = {
+        .allowed_access = LANDLOCK_ACCESS_FS_READ_FILE |
+                          LANDLOCK_ACCESS_FS_EXECUTE |
+                          LANDLOCK_ACCESS_FS_READ_DIR,
+        .parent_fd = open(&#34;/tmp&#34;, O_PATH | O_CLOEXEC),
+    };
+
+    syscall(__NR_landlock_add_rule, ruleset_fd,
+            LANDLOCK_RULE_PATH_BENEATH, &amp;path_attr, 0);
+    close(path_attr.parent_fd);
+
+    // Enforce the ruleset (cannot be undone!)
+    prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0);
+    syscall(__NR_landlock_restrict_self, ruleset_fd, 0);
+    close(ruleset_fd);
+
+    // After this point:
+    //   open(&#34;/etc/passwd&#34;, O_RDONLY) → EACCES
+    //   open(&#34;/tmp/test.txt&#34;, O_RDONLY) → succeeds
+    printf(&#34;Landlock sandbox active\n&#34;);
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+# Check Landlock kernel support
+zcat /proc/config.gz 2&gt;/dev/null | grep LANDLOCK
+# CONFIG_SECURITY_LANDLOCK=y
+
+# Check if Landlock is enabled
+cat /sys/kernel/security/lsm
+
+# Test Landlock
+gcc -o landlock-test landlock-test.c &amp;&amp; ./landlock-test
+						</pre>
+					</section>
+					<section>
+						<h3 id="ima-and-evm">IMA and EVM</h3>
+						<p>
+							IMA measures files before they are executed or read, creating an integrity baseline. E
+							<abbr title="Virtual Machine">VM</abbr>
+							protects file metadata (extended attributes) from offline tampering:
+						</p>
+						<pre class="plaintext">
+IMA measurement flow:
+
+  file_open() or file_mmap()
+       │
+       ▼
+  ima_file_check()
+       │
+       ▼
+  Check: is this file in the IMA policy?
+       │ No → allow (no measurement)
+       │ Yes
+       ▼
+  Compute file hash (SHA256 typically)
+       │
+       ▼
+  Extend TPM PCR 10 with the hash
+  Add entry to /sys/kernel/security/ima/ascii_runtime_measurements:
+    PCR   template-hash   filename-hint   file-hash
+    10    sha256:abcd...  /usr/bin/bash  sha256:ef01...
+
+  IMA appraisal: verify the stored hash matches the expected hash
+    (requires file signatures or ima-evm-utils signed xattrs)
+						</pre>
+						<pre class="bash">
+# Check IMA status
+sudo cat /sys/kernel/security/ima/policy
+sudo cat /sys/kernel/security/ima/ascii_runtime_measurements | tail -20
+
+# IMA appraisal (if enabled)
+sudo cat /sys/kernel/security/ima/appraise
+
+# EVM status
+sudo cat /sys/kernel/security/evm
+
+# Show IMA xattrs on a file
+getfattr -m security.ima /usr/bin/bash 2&gt;/dev/null
+getfattr -m security.evm /usr/bin/bash 2&gt;/dev/null
+
+# Check TPM PCRs (requires tpm2-tools)
+sudo tpm2_pcrread sha256:10 2&gt;/dev/null
+						</pre>
+					</section>
+					<section>
+						<h3 id="windows-comparison">Windows Comparison</h3>
+						<p>
+							Windows security is fundamentally different - it is identity-based (SIDs) with
+							<abbr title="Access Control List">ACL</abbr>
+							-based access control, layered with integrity levels and mandatory integrity control:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Concept</th>
+									<th align="center">Linux</th>
+									<th align="center">Windows</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Identity</td>
+									<td align="center">UID/GID (16-bit/32-bit)</td>
+									<td align="center">SID (variable-length)</td>
+								</tr>
+								<tr>
+									<td align="center">Primary ID</td>
+									<td align="center">Numeric UID</td>
+									<td align="center">Security Identifier (SID) S-1-5-21-DOMAIN-RID</td>
+								</tr>
+								<tr>
+									<td align="center">Group model</td>
+									<td align="center">Primary + supplementary</td>
+									<td align="center">Token groups (SIDs)</td>
+								</tr>
+								<tr>
+									<td align="center">Process token</td>
+									<td align="center">struct cred</td>
+									<td align="center">Access Token (kernel object)</td>
+								</tr>
+								<tr>
+									<td align="center">Access check</td>
+									<td align="center">Mode bits (rwx for u/g/o) + POSIX ACLs (setfacl)</td>
+									<td align="center">DACL (Discretionary ACL); ACEs: Allow/Deny SID + Mask</td>
+								</tr>
+								<tr>
+									<td align="center">Mandatory Access Ctl</td>
+									<td align="center">SELinux/AppArmor (optional); LSMs + capability bounding</td>
+									<td align="center">Mandatory Integrity Control; IL: Low, Medium, High, System</td>
+								</tr>
+								<tr>
+									<td align="center">Capabilities</td>
+									<td align="center">CAP_* bits (40+); Per-process set</td>
+									<td align="center">Privileges (SE_* constants); Enabled/Disabled per token</td>
+								</tr>
+								<tr>
+									<td align="center">Sandboxing</td>
+									<td align="center">seccomp, Landlock, namespaces</td>
+									<td align="center">Restricted tokens, AppCont.</td>
+								</tr>
+								<tr>
+									<td align="center">Audit</td>
+									<td align="center">auditd + audit.rules</td>
+									<td align="center">Event Log + SACL entries</td>
+								</tr>
+								<tr>
+									<td align="center">Integrity Verification</td>
+									<td align="center">IMA/EVM (file measurement); TPM-backed verification</td>
+									<td align="center">Code Integrity (CI), ELAM; Secure Boot -> Measured Boot</td>
+								</tr>
+								<tr>
+									<td align="center">Keyring</td>
+									<td align="center">kernel keyring (keyctl)</td>
+									<td align="center">DPAPI, CNG key storage</td>
+								</tr>
+								<tr>
+									<td align="center">Namespace</td>
+									<td align="center">User/PID/net/mount/... ns</td>
+									<td align="center">Silo (Server), AppContainer</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="windows-integrity-levels">Windows Integrity Levels</h4>
+						<pre class="plaintext">
+Level         SID                            Use
+══════════    ═════════════════════════════  ═════════════════
+Untrusted     S-1-16-0                      Anonymous logins
+Low           S-1-16-4096                   IE Protected Mode, Edge
+Medium        S-1-16-8192                   Standard user processes
+High          S-1-16-12288                  Administrators (UAC)
+System        S-1-16-16384                  Services, SYSTEM account
+Installer     S-1-16-32768                  Trusted Installer
+
+Rule: A process can write only to objects with equal or lower IL (no-write-up).
+      Read-up is allowed by default; a mandatory label can deny read.
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Run the security subsystem lab container, which prints the loaded LSMs, decodes the capability
+							sets of the current process, compiles a seccomp filter, and probes the keyring, audit, Landlock,
+							and IMA/E
+							<abbr title="Virtual Machine">VM</abbr>
+							interfaces. Then compare the output with your host kernel.
+						</p>
+						<p><a href="/wiki/articles/sysinternals/security-subsystem.Containerfile">security-subsystem.Containerfile</a></p>
+						<pre class="bash">
+podman build -t sec-lab -f security-subsystem.Containerfile .
+podman run --rm --privileged sec-lab
+						</pre>
+						<pre class="bash">
+# 1. Check loaded LSMs and their order
+cat /sys/kernel/security/lsm
+
+# 2. Inspect capabilities of current process
+capsh --print | grep -E &#39;Current|Bounding|Ambient&#39;
+
+# 3. File capabilities on system binaries
+getcap -r /usr/bin/ 2&gt;/dev/null
+
+# 4. Check seccomp status of current shell
+cat /proc/self/status | grep Seccomp
+
+# 5. SELinux status (if present)
+getenforce 2&gt;/dev/null || echo &#34;SELinux not active&#34;
+ps -eZ 2&gt;/dev/null | head -5 || echo &#34;No SELinux contexts&#34;
+
+# 6. AppArmor status
+sudo aa-status 2&gt;/dev/null || echo &#34;AppArmor not available&#34;
+
+# 7. Audit rules and recent events
+sudo auditctl -l 2&gt;/dev/null
+sudo ausearch -m avc -ts recent 2&gt;/dev/null | head -10 || echo &#34;auditd not running&#34;
+
+# 8. Keyring inspection
+keyctl show 2&gt;/dev/null || echo &#34;keyutils not installed&#34;
+
+# 9. Landlock availability
+cat /sys/kernel/security/lsm | grep landlock &amp;&amp; echo &#34;Landlock available&#34;
+
+# 10. IMA/EVM status
+sudo cat /sys/kernel/security/ima/policy 2&gt;/dev/null || echo &#34;IMA not configured&#34;
+sudo cat /sys/kernel/security/evm 2&gt;/dev/null || echo &#34;EVM not configured&#34;
+
+# 11. User namespace capability test
+unshare --user --map-root-user capsh --print | grep Current
+
+# 12. Trace LSM hooks with bpftrace
+sudo bpftrace -e &#39;kprobe:security_inode_permission { printf(&#34;%s on inode %lx\n&#34;, comm, arg1); }&#39; 2&gt;/dev/null || \
+  echo &#34;bpftrace not available&#34;
+
+# 14. Check process credentials from /proc
+cat /proc/self/status | grep -E &#39;Uid|Gid|Cap|Seccomp&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/security" target="_blank">Linux kernel: security/ - LSM framework source</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/include/linux/lsm_hooks.h" target="_blank">Linux kernel: include/linux/lsm_hooks.h - ~200 LSM hooks</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/include/uapi/linux/capability.h" target="_blank">Linux kernel: include/uapi/linux/capability.h - capability definitions</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/security/selinux" target="_blank">Linux kernel: security/selinux/ - SELinux source</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/security/apparmor" target="_blank">Linux kernel: security/apparmor/ - AppArmor source</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/kernel/seccomp.c" target="_blank">Linux kernel: kernel/seccomp.c - seccomp implementation</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/security/keys" target="_blank">Linux kernel: security/keys/ - kernel keyring</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/security/landlock" target="_blank">Linux kernel: security/landlock/ - Landlock LSM</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/security/integrity/ima" target="_blank">Linux kernel: security/integrity/ima/ - IMA/EVM</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/capabilities.7" target="_blank">capabilities(7) - Linux capabilities overview</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/seccomp.2" target="_blank">seccomp(2) - secure computing</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/keyctl.1" target="_blank">keyctl(1) - key management</a></li>
+							<li><a class="icon-website" href="https://selinuxproject.org/" target="_blank">SELinux Project Wiki</a></li>
+							<li><a class="icon-gitlab" href="https://gitlab.com/apparmor/apparmor/-/wikis/Documentation" target="_blank">AppArmor Documentation</a></li>
+							<li><a class="icon-website" href="https://docs.kernel.org/userspace-api/landlock.html" target="_blank">Landlock Documentation</a></li>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/sysinternals/resources/windows-internals" target="_blank">Windows Internals Part 1, Chapter 7: Security</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

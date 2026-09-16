@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Service Enumeration | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Service Enumeration">
+		<meta name="keywords" content="nmap, nse, protocol-enumeration, redteam, service-enumeration, version-detection">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Service Enumeration">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Service version detection, NSE scripts, protocol-specific enumeration for SSH, FTP, SMTP, DNS, HTTP, MySQL, Redis, SMB, and SNMP.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/redteam/service-enumeration.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Service Enumeration">
+		<meta name="twitter:description" itemprop="description" content="Service version detection, NSE scripts, protocol-specific enumeration for SSH, FTP, SMTP, DNS, HTTP, MySQL, Redis, SMB, and SNMP.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-service-discovery-problem">The Service Discovery Problem</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#nmap-service-version-detection-sv">nmap Service Version Detection (-sV)</a></b>
+					<ul>
+						<li><a href="#how-nmap-service-probes-works">How nmap-service-probes Works</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#nse-scripts-for-service-enumeration">NSE Scripts for Service Enumeration</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#protocol-by-protocol-enumeration">Protocol-by-Protocol Enumeration</a></b>
+					<ul>
+						<li><a href="#ssh-tcp-22">SSH (TCP 22)</a></li>
+						<li><a href="#ftp-tcp-21">FTP (TCP 21)</a></li>
+						<li><a href="#smtp-tcp-25-465-587">SMTP (TCP 25, 465, 587)</a></li>
+						<li><a href="#dns-tcpudp-53">DNS (TCP/UDP 53)</a></li>
+						<li><a href="#httphttps-tcp-80-443-8080-8443">HTTP/HTTPS (TCP 80, 443, 8080, 8443)</a></li>
+						<li><a href="#mysql-tcp-3306">MySQL (TCP 3306)</a></li>
+						<li><a href="#postgresql-tcp-5432">PostgreSQL (TCP 5432)</a></li>
+						<li><a href="#redis-tcp-6379">Redis (TCP 6379)</a></li>
+						<li><a href="#smb-tcp-139-445">SMB (TCP 139, 445)</a></li>
+						<li><a href="#snmp-udp-161">SNMP (UDP 161)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#service-enumeration-workflow">Service Enumeration Workflow</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification">Verification</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#troubleshooting">Troubleshooting</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/redteam/index.html">Redteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/redteam/service-enumeration.html">Service Enumeration</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="service-enumeration">Service Enumeration</h2>
+					<p>
+						Service version detection, NSE scripts, protocol-specific enumeration for
+						<abbr title="Secure Shell">SSH</abbr>
+						,
+						<abbr title="File Transfer Protocol">FTP</abbr>
+						,
+						<abbr title="Simple Mail Transfer Protocol">SMTP</abbr>
+						,
+						<abbr title="Domain Name System">DNS</abbr>
+						,
+						<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+						, My
+						<abbr title="Structured Query Language">SQL</abbr>
+						, Redis,
+						<abbr title="Server Message Block">SMB</abbr>
+						, and
+						<abbr title="Simple Network Management Protocol">SNMP</abbr>
+						.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Service enumeration identifies what is listening behind each open port and how it is configured,
+							which decides whether a port is a dead end or an entry point. After reading this article you
+							can run version detection, choose the right NSE scripts, and probe
+							<abbr title="Secure Shell">SSH</abbr>
+							,
+							<abbr title="File Transfer Protocol">FTP</abbr>
+							,
+							<abbr title="Simple Mail Transfer Protocol">SMTP</abbr>
+							,
+							<abbr title="Domain Name System">DNS</abbr>
+							,
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							, My
+							<abbr title="Structured Query Language">SQL</abbr>
+							, Postgre
+							<abbr title="Structured Query Language">SQL</abbr>
+							, Redis,
+							<abbr title="Server Message Block">SMB</abbr>
+							, and
+							<abbr title="Simple Network Management Protocol">SNMP</abbr>
+							by hand.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/tcp-fingerprinting.html">/wiki/articles/fundamentals/tcp-fingerprinting.html</a> - OS detection, <abbr title="Transmission Control Protocol">TCP</abbr> / <abbr title="Internet Protocol">IP</abbr> stack differences</li>
+							<li><a href="/wiki/articles/fundamentals/http.html">/wiki/articles/fundamentals/http.html</a> - <abbr title="Hypertext Transfer Protocol">HTTP</abbr> protocol details</li>
+							<li><a href="/wiki/articles/fundamentals/tls.html">/wiki/articles/fundamentals/tls.html</a> - <abbr title="Transport Layer Security">TLS</abbr> versions, ALPN, SNI</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-service-discovery-problem">The Service Discovery Problem</h3>
+						<p>
+							Port scanning tells you which doors are open. Service enumeration tells you what is behind each
+							door and whether it is vulnerable. An open
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							port 80 could
+							be Apache httpd 2.4.6 from 2013, nginx 1.26.1 from last week, or a custom Python web server
+							written by an intern. The version determines your next move.
+						</p>
+						<p>Service enumeration has two approaches:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Approach</th>
+									<th align="center">Method</th>
+									<th align="center">Speed</th>
+									<th align="center">Accuracy</th>
+									<th align="center">Detection Risk</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><b>Banner-based</b></td>
+									<td align="center">Read the service's greeting string</td>
+									<td align="center">Fast</td>
+									<td align="center">Low (spoofable)</td>
+									<td align="center">Low (normal connection)</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Behavior-based</b></td>
+									<td align="center">Probe with specific payloads, measure responses</td>
+									<td align="center">Slow</td>
+									<td align="center">High</td>
+									<td align="center">Medium (malformed payloads)</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							Banners are aspirational: they say what the service claims to be. Behavior-based detection measures
+							what the service actually does. A misconfigured nginx can claim to be Apache. A patched Apache
+							with backported fixes looks vulnerable to a banner-based scanner but is not.
+						</p>
+					</section>
+					<section>
+						<h3 id="nmap-service-version-detection-sv">nmap Service Version Detection (-sV)</h3>
+						<p>
+							nmap's
+							<code>-sV</code>
+							uses a probe database (
+							<code>nmap-service-probes</code>
+							) containing~6800 probes. It sends
+							protocol-specific queries to open ports and pattern-matches the responses against known service
+							signatures.
+						</p>
+						<pre class="bash">
+# Basic version detection
+nmap -sV 10.10.0.5
+
+# Aggressive version detection — more probes, higher probability of correct match
+nmap -sV --version-intensity 9 10.10.0.5
+# Intensity scale: 0 (light, only most common probes) to 9 (all probes)
+# Default: 7
+
+# All probes (intensity 9 equivalent)
+nmap -sV --version-all 10.10.0.5
+
+# Combine with port scan for a complete picture
+nmap -sS -sV -p- --min-rate 1000 10.10.0.5 -oA full-scan
+
+# Limit version detection to specific ports (saves time)
+nmap -sS -p- 10.10.0.5 -oA sweep &amp;&amp; \
+  grep &#39;portid.*open&#39; sweep.xml | grep -oP &#39;portid=&#34;\K[^&#34;]+&#39; | sort -nu | \
+  tr &#39;\n&#39; &#39;,&#39; | xargs -I{} nmap -sV -p {} 10.10.0.5 -oA service-scan
+						</pre>
+						<h4 id="how-nmap-service-probes-works">How nmap-service-probes Works</h4>
+						<p>
+							The probe file (
+							<code>/usr/share/nmap/nmap-service-probes</code>
+							) defines structured queries. Each probe
+							has a protocol type (
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							/
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							),
+							a probe string (hex or ASCII), and a set of match patterns (regex against response).
+						</p>
+						<pre class="plaintext">
+# Example probe from nmap-service-probes (simplified)
+Probe TCP GetRequest q|GET / HTTP/1.0\r\n\r\n|
+match http m|^HTTP/1\.[01] \d\d\d .*\r\nServer: ([^\r\n]+)|s p/Apache httpd/ v/$1/
+match http m|^HTTP/1\.[01] \d\d\d .*\r\nServer: nginx/([\d.]+)|s p/nginx/ v/$1/
+match http m|^HTTP/1\.[01] \d\d\d .*\r\nX-Powered-By: PHP/([\d.]+)|s p/PHP/ v/$1/
+
+Probe TCP NULL q||
+# Empty probe — waits for server to send banner first (SMTP, SSH, FTP)
+						</pre>
+						<pre class="bash">
+# View the probe database
+wc -l /usr/share/nmap/nmap-service-probes
+# ~16,000 lines, ~6,800 probes, ~20,000 match patterns
+
+# grep for probes related to a service
+grep -A 10 &#39;Probe TCP.*mysql\|Probe TCP.*ssh\|Probe TCP.*smtp&#39; /usr/share/nmap/nmap-service-probes
+						</pre>
+					</section>
+					<section>
+						<h3 id="nse-scripts-for-service-enumeration">NSE Scripts for Service Enumeration</h3>
+						<p>
+							Nmap Scripting Engine (NSE) provides Lua scripts for protocol-specific enumeration beyond version
+							detection. Scripts are categories:
+							<code>default</code>
+							,
+							<code>safe</code>
+							,
+							<code>discovery</code>
+							,
+							<code>version</code>
+							,
+							<code>vuln</code>
+							,
+							<code>exploit</code>
+							.
+						</p>
+						<pre class="bash">
+# Default safe scripts — basic information gathering
+nmap -sV --script=default 10.10.0.5
+
+# Discovery scripts — deeper enumeration, higher noise
+nmap -sV --script=discovery 10.10.0.5
+
+# All scripts matching a category or name pattern
+nmap -sV --script=&#39;http-*&#39; 10.10.0.5        # all HTTP-related scripts
+nmap -sV --script=&#39;ssl-*&#39; 10.10.0.5         # all SSL/TLS scripts
+nmap -sV --script=&#39;smb-*&#39; 10.10.0.5         # all SMB scripts
+nmap -sV --script=&#39;ftp-*&#39; -p 21 10.10.0.5   # all FTP scripts
+
+# List available scripts in a category
+ls /usr/share/nmap/scripts/ | grep ^http- | head -20
+						</pre>
+					</section>
+					<section>
+						<h3 id="protocol-by-protocol-enumeration">Protocol-by-Protocol Enumeration</h3>
+						<p>
+							Automated tools are fast. Manual enumeration is precise. Below is protocol-by-protocol manual
+							enumeration: every command produces output you would see in a real engagement.
+						</p>
+						<h4 id="ssh-tcp-22">SSH (TCP 22)</h4>
+						<p>
+							The
+							<abbr title="Secure Shell">SSH</abbr>
+							protocol exchanges version strings before any crypto negotiation. This
+							is the server's only unencrypted output.
+						</p>
+						<pre class="bash">
+# Read the SSH banner directly
+nc 10.10.0.5 22 &lt;&lt;&lt; &#39;&#39;
+# SSH-2.0-OpenSSH_7.4
+# → OpenSSH version 7.4. This version shipped with RHEL/CentOS 7.
+
+# nmap SSH scripts
+nmap -sV -p 22 --script=&#39;ssh-auth-methods,ssh-hostkey,ssh2-enum-algos&#39; 10.10.0.5
+
+# OpenSSH version ↔ OS mapping (rough):
+# 6.6p1   — RHEL/CentOS 7.0
+# 7.4p1   — RHEL/CentOS 7.x, Debian 9 (Stretch)
+# 7.9p1   — Debian 10 (Buster)
+# 8.4p1   — Debian 11 (Bullseye)
+# 8.9p1   — Ubuntu 22.04 LTS
+# 9.3p1   — Ubuntu 23.10
+# 9.6p1   — Ubuntu 24.04 LTS
+
+# Enumerate supported authentication methods
+nmap -p 22 --script ssh-auth-methods 10.10.0.5
+# If &#34;publickey&#34; is shown, try the host key fingerprint:
+nmap -p 22 --script ssh-hostkey --script-args ssh_hostkey=full 10.10.0.5
+
+# Enumerate SSH algorithms — reveals server age and crypto posture
+nmap -p 22 --script ssh2-enum-algos 10.10.0.5
+# Old algorithms (ssh-dss, diffie-hellman-group1-sha1) = old server or misconfiguration
+						</pre>
+						<pre class="bash">
+# Manual SSH banner via Python (handles timeouts gracefully)
+python3 -c &#34;
+import socket
+s = socket.socket()
+s.settimeout(3)
+s.connect((&#39;10.10.0.5&#39;, 22))
+print(s.recv(256).decode().strip())
+s.close()
+&#34;
+
+# Manual SSH algorithm enumeration with nmap nse output parsing
+nmap -p 22 --script ssh2-enum-algos 10.10.0.5 -oX - | \
+  xmlstarlet sel -t -v &#39;//script[@id=&#34;ssh2-enum-algos&#34;]/@output&#39;
+						</pre>
+						<h4 id="ftp-tcp-21">FTP (TCP 21)</h4>
+						<p>
+							<abbr title="File Transfer Protocol">FTP</abbr>
+							is one of the most verbose protocols. The 220 banner, FEAT response,
+							and anonymous login attempt all reveal configuration details.
+						</p>
+						<pre class="bash">
+# Banner grab — FTP sends the 220 greeting immediately on connect
+nc 10.10.0.5 21 &lt;&lt;&lt; &#39;&#39;
+# 220 (vsFTPd 3.0.3) ← vsFTPd, version 3.0.3
+# 220 ProFTPD 1.3.5 Server ← ProFTPD
+# 220 Microsoft FTP Service ← IIS FTP
+
+# FEAT command — lists supported FTP extensions
+printf &#39;FEAT\r\n&#39; | nc -w 3 10.10.0.5 21
+# 211-Features:
+#  EPSV
+#  MDTM
+#  UTF8
+#  AUTH TLS
+# → AUTH TLS supported = FTPS capable
+
+# Anonymous login attempt
+printf &#39;USER anonymous\r\nPASS anonymous\r\n&#39; | nc -w 3 10.10.0.5 21
+# 230 Login successful ← anonymous FTP enabled, immediate finding
+# 530 Login incorrect ← anonymous disabled
+
+# nmap FTP scripts
+nmap -p 21 --script=&#39;ftp-anon,ftp-bounce,ftp-syst,ftp-vsftpd-backdoor&#39; 10.10.0.5
+
+# ftp-syst — system information
+printf &#39;SYST\r\n&#39; | nc -w 3 10.10.0.5 21
+# 215 UNIX Type: L8 ← Unix/Linux server
+						</pre>
+						<h4 id="smtp-tcp-25-465-587">SMTP (TCP 25, 465, 587)</h4>
+						<p>
+							<abbr title="Simple Mail Transfer Protocol">SMTP</abbr>
+							supports user enumeration via VRFY and EXPN. These commands
+							are disabled on modern servers but frequently found on internal mail relays.
+						</p>
+						<pre class="bash">
+# SMTP banner
+nc 10.10.0.5 25 &lt;&lt;&lt; &#39;&#39;
+# 220 mail.target.com ESMTP Postfix (Ubuntu)
+
+# EHLO — Extended Hello, smtp server capabilities
+printf &#39;EHLO test\r\n&#39; | nc -w 3 10.10.0.5 25
+# 250-STARTTLS
+# 250-AUTH LOGIN PLAIN
+# 250 PIPELINING
+# → STARTTLS supported, AUTH mechanisms exposed
+
+# VRFY — verify user exists
+printf &#39;VRFY root\r\n&#39; | nc -w 3 10.10.0.5 25
+# 252 2.0.0 root ← user exists
+# 550 5.1.1 User unknown ← does not exist
+# 252 2.0.0 Cannot VRFY ← VRFY disabled
+
+# EXPN — expand mailing list
+printf &#39;EXPN mail-list\r\n&#39; | nc -w 3 10.10.0.5 25
+
+# RCPT TO — recipient verification (connects, sends MAIL FROM, RCPT TO)
+printf &#39;MAIL FROM: &lt;test@test.com&gt;\r\nRCPT TO: &lt;user@target.com&gt;\r\nQUIT\r\n&#39; | nc -w 3 10.10.0.5 25
+# 250 2.1.5 OK ← recipient exists
+# 550 5.1.1 User unknown ← doesn&#39;t exist
+
+# nmap SMTP scripts
+nmap -p 25,465,587 --script=&#39;smtp-commands,smtp-enum-users,smtp-open-relay&#39; 10.10.0.5
+
+# smtp-user-enum — dedicated user enumeration tool
+smtp-user-enum -M VRFY -u root -t 10.10.0.5
+smtp-user-enum -M RCPT -u root -t 10.10.0.5
+smtp-user-enum -M EXPN -u root -t 10.10.0.5
+						</pre>
+						<h4 id="dns-tcpudp-53">DNS (TCP/UDP 53)</h4>
+						<p>
+							<abbr title="Domain Name System">DNS</abbr>
+							servers expose version information via the
+							<code>version.bind</code>
+							CHAOS query.
+							Recursion settings tell you if the server can be used for
+							<abbr title="Domain Name System">DNS</abbr>
+							amplification
+							attacks or if it can resolve internal hostnames.
+						</p>
+						<pre class="bash">
+# Version query — CHAOS class, TXT record for version.bind
+dig @10.10.0.5 version.bind CHAOS TXT +short
+# &#34;9.11.4-P2-RedHat-9.11.4-26.P2.el7_9.10&#34; ← BIND 9.11.4 on RHEL 7.9
+# &#34;dnsmasq-2.85&#34;
+# &#34;&#34; ← version.bind disabled, good security practice
+
+# Recursion test — can this DNS server resolve external domains?
+dig @10.10.0.5 google.com A +short
+# If you get an answer: recursion enabled
+# If you get a referral (NS records): recursion disabled, it&#39;s an authoritative server only
+
+# Recursion enabled is a finding: potential for DNS amplification attacks
+# or for resolving internal hostnames when pivoting.
+
+# Zone transfer attempt
+dig @10.10.0.5 target.com AXFR
+# If you get a zone dump: critical finding, misconfigured nameserver
+# &#34;Transfer failed&#34; or &#34;REFUSED&#34;: zone transfers restricted (correctly configured)
+
+# nmap DNS scripts
+nmap -p 53 --script=&#39;dns-nsid,dns-recursion,dns-service-discovery,dns-zone-transfer&#39; 10.10.0.5
+
+# dnsrecon — comprehensive DNS enumeration
+dnsrecon -d target.com -t axfr -n 10.10.0.5        # zone transfer
+dnsrecon -d target.com -t rvl -n 10.10.0.5         # reverse lookup
+dnsrecon -d target.com -t brt -n 10.10.0.5         # brute force subdomains
+						</pre>
+						<h4 id="httphttps-tcp-80-443-8080-8443">HTTP/HTTPS (TCP 80, 443, 8080, 8443)</h4>
+						<p>
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							is the richest information source. Every request, every
+							header, every error page leaks data.
+						</p>
+						<pre class="bash">
+# Full HTTP response headers — the Server, X-Powered-By, and Set-Cookie headers
+curl -sI https://10.10.0.5 | tee http-headers.txt
+# Server: Apache/2.4.6 (CentOS) ← specific version + OS
+# X-Powered-By: PHP/5.4.16 ← PHP version (EOL since 2015)
+# Set-Cookie: PHPSESSID=... ← PHP session
+
+# Analyze all headers systematically
+curl -sIL https://10.10.0.5 | grep -iE &#39;server|x-powered|set-cookie|x-frame|x-content|content-security|strict-transport&#39;
+
+# OPTIONS method — what HTTP methods does the server support?
+curl -sI -X OPTIONS https://10.10.0.5
+# Allow: GET, HEAD, POST, OPTIONS, PUT, DELETE, TRACE
+# TRACE + Allow header = potential Cross-Site Tracing (XST)
+# PUT + DELETE = potential WebDAV misconfiguration
+
+# TRACE method — echo back request (debugging)
+curl -sI -X TRACE https://10.10.0.5
+
+# Directory listing — is autoindex enabled?
+curl -sI https://10.10.0.5/icons/ 2&gt;/dev/null
+# 200 OK + Apache autoindex content = directory listing enabled
+
+# Common paths that leak server info
+curl -sI https://10.10.0.5/phpinfo.php       # PHP configuration dump
+curl -sI https://10.10.0.5/server-status     # Apache mod_status
+curl -sI https://10.10.0.5/server-info       # Apache mod_info
+curl -sI https://10.10.0.5/.env              # Laravel env file
+curl -sI https://10.10.0.5/actuator/health   # Spring Boot Actuator
+curl -sI https://10.10.0.5/.git/HEAD         # exposed .git directory
+
+# nmap HTTP scripts
+nmap -p 80,443 --script=&#39;http-enum,http-headers,http-methods,http-php-version,http-title,http-server-header&#39; 10.10.0.5
+
+# nikto — comprehensive web server scanner
+nikto -h https://10.10.0.5 -output nikto-scan.txt
+						</pre>
+						<pre class="bash">
+# TLS enumeration — what ciphers and protocols does the server support?
+nmap -p 443 --script=&#39;ssl-enum-ciphers,ssl-cert,ssl2-enum-ciphers&#39; 10.10.0.5
+
+# Manual TLS version testing
+for proto in ssl3 tls1 tls1_1 tls1_2 tls1_3; do
+  result=$(openssl s_client -connect 10.10.0.5:443 -&#34;$proto&#34; -servername 10.10.0.5 \
+    &lt;/dev/null 2&gt;/dev/null)
+  if echo &#34;$result&#34; | grep -q &#39;BEGIN CERTIFICATE&#39;; then
+    cipher=$(echo &#34;$result&#34; | grep -E &#39;^\s+Cipher\s+:&#39; | sed &#39;s/.*://&#39; | tr -d &#39; &#39;)
+    echo &#34;[+] $proto — SUPPORTED ($cipher)&#34;
+  else
+    echo &#34;[-] $proto — NOT SUPPORTED&#34;
+  fi
+done
+
+# Check for specific weak ciphers
+for cipher in &#39;RC4-MD5&#39; &#39;RC4-SHA&#39; &#39;DES-CBC3-SHA&#39; &#39;EXP-RC4-MD5&#39;; do
+  result=$(openssl s_client -connect 10.10.0.5:443 -cipher &#34;$cipher&#34; &lt;/dev/null 2&gt;/dev/null)
+  if echo &#34;$result&#34; | grep -q &#39;BEGIN CERTIFICATE&#39;; then
+    echo &#34;[!] WEAK CIPHER ACCEPTED: $cipher&#34;
+  fi
+done
+						</pre>
+						<h4 id="mysql-tcp-3306">MySQL (TCP 3306)</h4>
+						<p>
+							My
+							<abbr title="Structured Query Language">SQL</abbr>
+							sends a protocol handshake packet before authentication.
+							This contains the server version, capabilities flags, and authentication plugin information.
+						</p>
+						<pre class="bash">
+# MySQL version — the handshake packet contains the server version
+mysql -h 10.10.0.5 -u root --password=badpassword 2&gt;&amp;1 | head -1
+# ERROR 1045 (28000): Access denied for user &#39;root&#39;@&#39;10.0.0.100&#39; (using password: YES)
+# → Server is MySQL, root account exists, password auth required
+
+# nmap MySQL script
+nmap -p 3306 --script=&#39;mysql-info&#39; 10.10.0.5
+# Output includes: Version, Protocol, Capabilities, Status, Salt
+
+# MySQL version probe via Python (reads the handshake packet)
+python3 -c &#34;
+import socket, struct
+s = socket.socket()
+s.settimeout(3)
+s.connect((&#39;10.10.0.5&#39;, 3306))
+data = s.recv(1024)
+# MySQL handshake packet header: 4 bytes length + 1 byte sequence ID
+proto_version = data[4]
+# Server version is null-terminated, starting at offset 5
+end = data.index(b&#39;\x00&#39;, 5)
+version = data[5:end].decode()
+print(f&#39;Protocol: {proto_version}&#39;)
+print(f&#39;Version: {version}&#39;)
+s.close()
+&#34;
+
+# nmap MySQL scripts for auth testing
+nmap -p 3306 --script=&#39;mysql-empty-password,mysql-databases,mysql-users&#39; \
+  --script-args=&#39;mysqluser=root,mysqlpass=&#39; 10.10.0.5
+						</pre>
+						<h4 id="postgresql-tcp-5432">PostgreSQL (TCP 5432)</h4>
+						<p>
+							Postgre
+							<abbr title="Structured Query Language">SQL</abbr>
+							uses a binary protocol. The startup packet triggers
+							either an authentication request or an error.
+						</p>
+						<pre class="bash">
+# nmap PostgreSQL scripts
+nmap -p 5432 --script=&#39;pgsql-brute&#39; 10.10.0.5
+
+# Manual PostgreSQL version check via psql
+psql -h 10.10.0.5 -U postgres -c &#39;SELECT version();&#39; 2&gt;&amp;1
+# If password prompt appears: server is reachable, user exists
+# If &#34;FATAL: no pg_hba.conf entry&#34;: server reachable, but you&#39;re not in allowed IP range
+
+# PostgreSQL version via Python
+python3 -c &#34;
+import socket, struct
+s = socket.socket()
+s.settimeout(3)
+s.connect((&#39;10.10.0.5&#39;, 5432))
+# PostgreSQL StartupMessage: int32 length + int32 protocol + params
+# The length field counts itself (4) plus the protocol (4) plus the params.
+params = b&#39;user\x00postgres\x00database\x00postgres\x00\x00&#39;
+startup = struct.pack(&#39;&gt;II&#39;, 8 + len(params), 3 &lt;&lt; 16) + params
+s.send(startup)
+data = s.recv(1024)
+msg_type = data[0:1]
+if msg_type == b&#39;R&#39;:
+    print(&#39;Authentication required — server is PostgreSQL (live)&#39;)
+elif msg_type == b&#39;E&#39;:
+    print(f&#39;Error: {data[1:].decode(errors=\&#34;replace\&#34;)}&#39;)
+else:
+    print(f&#39;Response type: {msg_type}&#39;)
+s.close()
+&#34;
+						</pre>
+						<h4 id="redis-tcp-6379">Redis (TCP 6379)</h4>
+						<p>
+							Redis is plain-text and extremely informative. The PING, INFO, and CONFIG commands reveal the
+							server state.
+						</p>
+						<pre class="bash">
+# Redis PING — basic liveness check
+printf &#39;PING\r\n&#39; | nc -w 3 10.10.0.5 6379
+# +PONG ← server is Redis, accepting commands, no authentication required
+
+# Redis INFO — everything about this Redis instance
+printf &#39;INFO\r\n&#39; | nc -w 3 10.10.0.5 6379 | head -40
+# redis_version:6.0.16
+# os:Linux 5.4.0-150-generic x86_64
+# redis_mode:standalone
+# connected_clients:3
+# used_memory_human:2.15M
+
+# Redis CONFIG — read server configuration
+printf &#39;CONFIG GET *\r\n&#39; | nc -w 3 10.10.0.5 6379 | head -40
+# If this works without a password: critical finding
+# Includes: bind address, port, dir, dbfilename (can be abused for RCE)
+
+# Redis KEYS — enumerate all keys
+printf &#39;KEYS *\r\n&#39; | nc -w 3 10.10.0.5 6379
+
+# Redis AUTH — test common passwords
+printf &#39;AUTH password\r\n&#39; | nc -w 3 10.10.0.5 6379
+# +OK ← authenticated
+
+# nmap Redis scripts
+nmap -p 6379 --script=&#39;redis-info&#39; 10.10.0.5
+						</pre>
+						<h4 id="smb-tcp-139-445">SMB (TCP 139, 445)</h4>
+						<p>
+							<abbr title="Server Message Block">SMB</abbr>
+							is a binary protocol with multiple dialects. Enumeration reveals
+							the OS version, domain name, and available shares.
+						</p>
+						<pre class="bash">
+# nmap SMB scripts
+nmap -p 139,445 --script=&#39;smb-os-discovery,smb-protocols,smb-security-mode,smb-enum-shares,smb-enum-users&#39; 10.10.0.5
+
+# smb-os-discovery — operating system detection via SMB
+# smb-protocols — negotiated SMB dialect (SMBv1 through v3)
+# smb-security-mode — signing required? message signing yes/no
+# smb-enum-shares — list available shares including hidden ones ($)
+# smb-enum-users — domain users (requires credentials)
+
+# enum4linux — comprehensive SMB enumeration (Perl, older but thorough)
+pacman -S enum4linux
+enum4linux 10.10.0.5
+enum4linux -U 10.10.0.5    # user list
+enum4linux -S 10.10.0.5    # share list
+enum4linux -O 10.10.0.5    # OS detection
+enum4linux -P 10.10.0.5    # password policy
+
+# smbclient — list shares without credentials
+smbclient -L //10.10.0.5 -N
+# Anonymous login successful ← null session allowed, significant finding
+# Sharename       Type      Comment
+# ---------       ----      -------
+# ADMIN$          Disk      Remote Admin
+# C$              Disk      Default share
+# IPC$            IPC       Remote IPC
+# Users           Disk      ← accessible share without authentication
+
+# Connect to a share
+smbclient //10.10.0.5/Users -N
+# smb: \&gt; ls
+# smb: \&gt; get confidential.xlsx
+						</pre>
+						<pre class="bash">
+# SMB protocol version — important for exploit selection
+nmap -p 445 --script smb-protocols 10.10.0.5
+# SMBv1 enabled → EternalBlue (MS17-010) candidate
+# SMBv1 disabled → modern server, look for SMB signing issues
+
+# Check SMB signing
+nmap -p 445 --script smb-security-mode 10.10.0.5
+# message_signing: disabled ← relay attack possible
+# message_signing: enabled and required ← relay not possible
+						</pre>
+						<h4 id="snmp-udp-161">SNMP (UDP 161)</h4>
+						<p>
+							<abbr title="Simple Network Management Protocol">SNMP</abbr>
+							is the "keys to the kingdom" protocol. A readable
+							community string exposes system configuration, network interfaces, running processes, and installed
+							software.
+						</p>
+						<pre class="bash">
+# SNMP walk with community string &#34;public&#34;
+snmpwalk -v1 -c public 10.10.0.5 1.3.6.1.2.1.1.5.0
+# iso.3.6.1.2.1.1.5.0 = STRING: &#34;server01.internal&#34;
+# → hostname exposed
+
+# System information
+snmpwalk -v1 -c public 10.10.0.5 system
+# sysDescr: Linux server01 5.4.0-150-generic #167-Ubuntu SMP
+# → OS, kernel version, distribution
+
+# Network interfaces — all IPs, MACs, traffic counters
+snmpwalk -v1 -c public 10.10.0.5 1.3.6.1.2.1.2.2.1.2
+# iso.3.6.1.2.1.2.2.1.2.1 = STRING: &#34;lo&#34;
+# iso.3.6.1.2.1.2.2.1.2.2 = STRING: &#34;eth0&#34;
+
+# Running processes
+snmpwalk -v1 -c public 10.10.0.5 1.3.6.1.2.1.25.4.2.1.2
+# Lists every running process name by PID
+
+# Installed software
+snmpwalk -v1 -c public 10.10.0.5 1.3.6.1.2.1.25.6.3.1.2
+# Lists every installed package
+
+# Community string brute force
+onesixtyone -c /usr/share/seclists/Discovery/SNMP/common-snmp-community-strings.txt 10.10.0.5
+# onesixtyone — fast SNMP community scanner (~1 million strings/sec)
+
+# nmap SNMP scripts
+nmap -sU -p 161 --script=&#39;snmp-interfaces,snmp-processes,snmp-sysdescr,snmp-info&#39; 10.10.0.5
+						</pre>
+					</section>
+					<section>
+						<h3 id="service-enumeration-workflow">Service Enumeration Workflow</h3>
+						<p>A complete service enumeration follows a repeatable, parallelizable process:</p>
+						<pre class="bash">
+#!/bin/bash
+# service-enum.sh — standard service enumeration workflow
+TARGET=&#34;$1&#34;
+OUTDIR=&#34;enum-$(date +%Y%m%d-%H%M%S)&#34;
+mkdir -p &#34;$OUTDIR&#34;
+
+echo &#34;[*] Phase 1: Port scan (SYN, top 10000 ports)&#34;
+nmap -sS -T4 --top-ports 10000 &#34;$TARGET&#34; -oA &#34;$OUTDIR/1-port-scan&#34; -n
+
+echo &#34;[*] Phase 2: Service version detection on open ports&#34;
+OPEN_PORTS=$(grep &#39;portid=.*state=.open&#39; &#34;$OUTDIR/1-port-scan.xml&#34; | \
+  grep -oP &#39;portid=&#34;\K[^&#34;]+&#39; | sort -nu | tr &#39;\n&#39; &#39;,&#39; | sed &#39;s/,$//&#39;)
+if [ -n &#34;$OPEN_PORTS&#34; ]; then
+  nmap -sV -p &#34;$OPEN_PORTS&#34; &#34;$TARGET&#34; -oA &#34;$OUTDIR/2-service-versions&#34;
+fi
+
+echo &#34;[*] Phase 3: NSE default scripts on discovered services&#34;
+if [ -n &#34;$OPEN_PORTS&#34; ]; then
+  nmap -sV -p &#34;$OPEN_PORTS&#34; --script=default &#34;$TARGET&#34; -oA &#34;$OUTDIR/3-nse-default&#34;
+fi
+
+echo &#34;[*] Phase 4: Protocol-specific enumeration&#34;
+# SSH
+grep -q &#39;22/open&#39; &#34;$OUTDIR/2-service-versions.nmap&#34; &amp;&amp; {
+  nmap -sV -p 22 --script=&#39;ssh-auth-methods,ssh2-enum-algos,ssh-hostkey&#39; \
+    &#34;$TARGET&#34; -oA &#34;$OUTDIR/4-ssh-enum&#34;
+  nc &#34;$TARGET&#34; 22 &lt;&lt;&lt; &#39;&#39; &gt; &#34;$OUTDIR/4-ssh-banner.txt&#34; 2&gt;&amp;1
+}
+
+# HTTP/HTTPS
+for port in $(grep -oP &#39;(80|443|8080|8443)/open&#39; &#34;$OUTDIR/2-service-versions.nmap&#34; | \
+  cut -d&#39;/&#39; -f1); do
+  scheme=&#34;http&#34;
+  [ &#34;$port&#34; = &#34;443&#34; ] || [ &#34;$port&#34; = &#34;8443&#34; ] &amp;&amp; scheme=&#34;https&#34;
+  curl -sI &#34;$scheme://$TARGET:$port&#34; &gt; &#34;$OUTDIR/4-http-$port-headers.txt&#34; 2&gt;&amp;1
+  curl -sI -X OPTIONS &#34;$scheme://$TARGET:$port&#34; &gt;&gt; &#34;$OUTDIR/4-http-$port-options.txt&#34; 2&gt;&amp;1
+done
+
+# FTP
+grep -q &#39;21/open&#39; &#34;$OUTDIR/2-service-versions.nmap&#34; &amp;&amp; {
+  printf &#39;FEAT\r\n&#39; | nc -w 3 &#34;$TARGET&#34; 21 &gt; &#34;$OUTDIR/4-ftp-feat.txt&#34; 2&gt;&amp;1
+  printf &#39;USER anonymous\r\nPASS anonymous\r\n&#39; | nc -w 3 &#34;$TARGET&#34; 21 &gt; &#34;$OUTDIR/4-ftp-anon.txt&#34; 2&gt;&amp;1
+}
+
+# SMB
+grep -q &#39;445/open&#39; &#34;$OUTDIR/2-service-versions.nmap&#34; &amp;&amp; {
+  enum4linux &#34;$TARGET&#34; &gt; &#34;$OUTDIR/4-smb-enum4linux.txt&#34; 2&gt;&amp;1
+  smbclient -L &#34;//$TARGET&#34; -N &gt; &#34;$OUTDIR/4-smb-shares.txt&#34; 2&gt;&amp;1
+}
+
+# Redis
+grep -q &#39;6379/open&#39; &#34;$OUTDIR/2-service-versions.nmap&#34; &amp;&amp; {
+  printf &#39;PING\r\nINFO\r\n&#39; | nc -w 3 &#34;$TARGET&#34; 6379 &gt; &#34;$OUTDIR/4-redis-info.txt&#34; 2&gt;&amp;1
+}
+
+# SNMP
+grep -q &#39;161/open&#39; &#34;$OUTDIR/2-service-versions.nmap&#34; &amp;&amp; {
+  snmpwalk -v1 -c public &#34;$TARGET&#34; system &gt; &#34;$OUTDIR/4-snmp-system.txt&#34; 2&gt;&amp;1
+}
+
+echo &#34;[*] Enumeration complete. Results in $OUTDIR/&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="verification">Verification</h3>
+						<pre class="bash">
+# Verify: nmap correctly identifies the HTTP server version
+grep -E &#39;http-server-header|http-generator&#39; service-scan.xml
+
+# Verify: SSH version matches the OS expectation
+# If OpenSSH says 7.4 → probably CentOS/RHEL 7.4
+# Cross-reference with OS detection: nmap -O 10.10.0.5
+
+# Verify: banner vs behavior — is the service lying?
+# Compare nmap -sV output against manual banner grab
+# If nginx reports itself nginx but manual grab says Apache → modified banner
+
+# Verify: multiple services on same host indicate VM/container
+# Windows: 135, 139, 445, 3389 all open = likely Windows host
+# Linux: 22 (SSH) + 25 (SMTP) + 80/443 (HTTP) = likely web/mail server
+# Database-only: 3306, 5432 open but no web ports = database server (high value target)
+						</pre>
+					</section>
+					<section>
+						<h3 id="troubleshooting">Troubleshooting</h3>
+						<ol>
+							<li><b>nmap shows port as open|filtered:</b> Firewall is dropping packets silently. Try <code>-sT</code> (connect scan) instead of <code>-sS</code> ( <abbr title="Synchronize">SYN</abbr> scan). Connect scan uses the OS <abbr title="Transmission Control Protocol">TCP</abbr> stack, which may retransmit differently.</li>
+							<li><b>Service detection returns no match:</b> Service is on a non-standard port or uses a custom protocol. Try <code>--version-all</code> to send all probes.</li>
+							<li><b>nmap cannot determine SSH version:</b>  <abbr title="Secure Shell">SSH</abbr> version string sent before crypto negotiation. If nothing received, port is open but protocol is not <abbr title="Secure Shell">SSH</abbr> . Try netcat to read raw response.</li>
+							<li><b>SMB scripts require credentials:</b> Many <abbr title="Server Message Block">SMB</abbr> enumeration scripts need authentication. Try null session ( <code>smbclient -N</code> ) first. If blocked, note "null session disabled" in report.</li>
+							<li><b>Redis INFO works without AUTH:</b> This is a finding. Redis without authentication allows reading and writing all data. Immediate reportable vulnerability.</li>
+						</ol>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							A multi-service container with
+							<abbr title="File Transfer Protocol">FTP</abbr>
+							,
+							<abbr title="Secure Shell">SSH</abbr>
+							,
+							<abbr title="Simple Mail Transfer Protocol">SMTP</abbr>
+							,
+							<abbr title="Domain Name System">DNS</abbr>
+							,
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							, My
+							<abbr title="Structured Query Language">SQL</abbr>
+							, Redis, and
+							<abbr title="Server Message Block">SMB</abbr>
+							running with realistic banner configurations. Enumerate
+							every service, determine the true version of each, and identify which banners are spoofed.
+						</p>
+						<p><a href="/wiki/articles/redteam/service-enumeration.Containerfile">service-enumeration.Containerfile</a></p>
+						<pre class="bash">
+podman build -t service-enum-lab -f service-enumeration.Containerfile .
+podman run -it --rm --cap-add=NET_ADMIN --cap-add=NET_RAW \
+  -p 21:21 -p 22:22 -p 25:25 -p 53:53 -p 80:80 -p 443:443 \
+  -p 3306:3306 -p 6379:6379 -p 445:445 -p 139:139 -p 161:161/udp \
+  service-enum-lab
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://nmap.org/book/vscan.html" target="_blank">nmap Service and Version Detection</a></li>
+							<li><a class="icon-website" href="https://nmap.org/book/nse.html" target="_blank">Nmap Scripting Engine (NSE) Documentation</a></li>
+							<li><a class="icon-website" href="https://nmap.org/book/nse-tutorial.html" target="_blank">NSE Script Writing Tutorial</a></li>
+							<li><a class="icon-website" href="https://redis.io/docs/latest/develop/reference/protocol-spec/" target="_blank">Redis Protocol Specification</a></li>
+							<li><a class="icon-website" href="https://dev.mysql.com/doc/dev/mysql-server/latest/PAGE_PROTOCOL.html" target="_blank">MySQL Client/Server Protocol</a></li>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/windows-server/storage/file-server/troubleshoot/detect-enable-and-disable-smbv1-v2-v3" target="_blank">SMB Protocol Versions - Microsoft</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

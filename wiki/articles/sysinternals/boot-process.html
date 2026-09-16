@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Boot Process | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Boot Process">
+		<meta name="keywords" content="bios, boot, grub, initramfs, secure-boot, start_kernel, sysinternals, systemd-boot, uefi">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Boot Process">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="UEFI firmware to kernel init - the complete boot chain from power-on to PID 1, including Secure Boot, initramfs, and systemd activation.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/sysinternals/boot-process.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Boot Process">
+		<meta name="twitter:description" itemprop="description" content="UEFI firmware to kernel init - the complete boot chain from power-on to PID 1, including Secure Boot, initramfs, and systemd activation.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#uefi-vs-legacy-bios">UEFI vs Legacy BIOS</a></b>
+					<ul>
+						<li><a href="#legacy-bios-security">Legacy BIOS Security</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#efi-system-partition">EFI System Partition</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#systemd-boot-configuration">systemd-boot Configuration</a></b>
+					<ul>
+						<li><a href="#loaderconf">loader.conf</a></li>
+						<li><a href="#boot-entry-config">Boot Entry Config</a></li>
+						<li><a href="#security-boot-parameters">Security Boot Parameters</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#grub-bootloader">GRUB Bootloader</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#linux-kernel-boot">Linux Kernel Boot</a></b>
+					<ul>
+						<li><a href="#stage-1-protected-mode">Stage 1 - Protected Mode</a></li>
+						<li><a href="#stage-2-decompression">Stage 2 - Decompression</a></li>
+						<li><a href="#stage-3-start-kernel-initmainc">Stage 3: 'start_kernel()' (init/main.c)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#memory-discovery-e820-and-acpi">Memory Discovery: E820 and ACPI</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#cpu-detection-and-microcode-loading">CPU Detection and Microcode Loading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#initramfs-initrd">initramfs / initrd</a></b>
+					<ul>
+						<li><a href="#why-use-an-initramfs">Why Use an initramfs</a></li>
+						<li><a href="#the-pivot-root-switch-root-transition">The pivot_root / switch_root transition</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#systemd-as-pid-1">systemd as PID 1</a></b>
+					<ul>
+						<li><a href="#systemd-boot-sequence">systemd boot sequence</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#secure-boot">Secure Boot</a></b>
+					<ul>
+						<li><a href="#mok-and-the-shim-bootloader">MOK and the Shim Bootloader</a></li>
+						<li><a href="#secure-boot-bypass-techniques">Secure Boot Bypass Techniques</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-boot-chain-as-an-attack-surface">The Boot Chain as an Attack Surface</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#uefi-runtime-variables-and-efibootmgr">UEFI Runtime Variables and efibootmgr</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#boot-process-timeline-analysis">Boot Process Timeline Analysis</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#inspection-of-the-running-boot-state">Inspection of the Running Boot State</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/sysinternals/index.html">Sysinternals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/sysinternals/boot-process.html">Boot Process</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="boot-process">Boot Process</h2>
+					<p>
+						UEFI firmware to kernel init - the complete boot chain from power-on to PID 1, including Secure
+						Boot, initramfs, and systemd activation.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							From power-on to a running login prompt, the boot chain involves at least seven distinct stages.
+							Each stage hands control to the next through a well-defined interface. For a security researcher,
+							understanding this sequence is essential - rootkits, bootkits, and Secure Boot bypasses each
+							target a different link.
+						</p>
+						<pre class="plaintext">
+Power-on
+  │
+  ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ 1. Firmware (UEFI / BIOS)                                       │
+│    - CPU reset vector execution (0xFFFFFFF0 on x86)             │
+│    - Platform initialization: memory, PCIe, USB                 │
+│    - Device enumeration, DXE phase (UEFI)                       │
+│    - Locates EFI System Partition (ESP)                         │
+│    - Loads and executes boot manager                            │
+└──────────────────────────+──────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ 2. Boot Manager (systemd-boot / GRUB / Windows Boot Manager)    │
+│    - Reads config from ESP/loader/entries/ or /boot/grub/       │
+│    - Presents boot menu (if multiple entries)                    │
+│    - Loads kernel image (vmlinuz-linux) and initramfs into RAM  │
+│    - Sets up kernel command line                                 │
+│    - Calls ExitBootServices() to hand off to kernel             │
+└──────────────────────────+──────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ 3. Linux Kernel Boot (arch/x86/boot/)                           │
+│    - Real-mode entry, decompression, protected mode switch       │
+│    - start_kernel(): architecture init, subsystem init          │
+│    - Memory discovery (E820, ACPI), CPU enumeration              │
+│    - Initial ramdisk (initramfs) unpacking                       │
+└──────────────────────────+──────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ 4. Early Userspace (initramfs)                                  │
+│    - /init script or binary executes                             │
+│    - Loads essential kernel modules (storage, filesystem)       │
+│    - Mounts root filesystem (pivot_root / switch_root)          │
+└──────────────────────────+──────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ 5. PID 1 (systemd / OpenRC / runit)                             │
+│    - Exec&#39;d from initramfs /usr/bin/init -&gt; /usr/lib/systemd     │
+│    - Mounts API filesystems (/proc, /sys, /dev)                 │
+│    - Reaches default.target (multi-user.target / graphical)     │
+│    - Spawns getty on ttys, display manager, services            │
+└─────────────────────────────────────────────────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - process lifecycle, /proc, fork/exec, PID 1</li>
+							<li><a href="/wiki/articles/sysinternals/kernel-architecture.html">Kernel Architecture</a> - kernel subsystems, init sequence, address spaces</li>
+							<li><a href="/wiki/articles/sysinternals/device-drivers.html">Device Drivers</a> - kernel modules, the device model</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="uefi-vs-legacy-bios">UEFI vs Legacy BIOS</h3>
+						<p>
+							The industry has largely transitioned from legacy BIOS (16-bit real mode, Master Boot Record)
+							to UEFI (32/64-bit,
+							<code>GUID</code>
+							Partition Table, EFI executables). The differences are fundamental
+							and security-relevant.
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Legacy BIOS</th>
+									<th align="center">UEFI</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">16-bit real mode (8086)</td>
+									<td align="center">32-bit or 64-bit protected mode</td>
+								</tr>
+								<tr>
+									<td align="center">1 MiB addressable boot code</td>
+									<td align="center">Full address space for drivers</td>
+								</tr>
+								<tr>
+									<td align="center">MBR: 512 bytes boot code</td>
+									<td align="center">GPT: no 2 TiB disk limit</td>
+								</tr>
+								<tr>
+									<td align="center">No standard driver model</td>
+									<td align="center">DXE drivers for hardware</td>
+								</tr>
+								<tr>
+									<td align="center">Boots first sector of disk</td>
+									<td align="center">Loads EFI executable from ESP</td>
+								</tr>
+								<tr>
+									<td align="center">No Secure Boot</td>
+									<td align="center">Secure Boot (PK, KEK, db, dbx)</td>
+								</tr>
+								<tr>
+									<td align="center">CSM (Compatibility Support)</td>
+									<td align="center">Native UEFI only (modern)</td>
+								</tr>
+								<tr>
+									<td align="center">No network boot standard</td>
+									<td align="center">PXE over UEFI, HTTP Boot</td>
+								</tr>
+								<tr>
+									<td align="center">No persistent variables</td>
+									<td align="center">NVRAM variables (BootOrder, etc.)</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="legacy-bios-security">Legacy BIOS Security</h4>
+						<p>
+							Many cloud virtual machines still use "BIOS" mode (SeaBIOS). In BIOS mode, the bootloader runs
+							in 16-bit real mode, the MBR is trivially overwritten, and there is no Secure Boot. This makes
+							it easier to: - Deploy a hypervisor-level implant that survives guest reboots - Modify the boot
+							chain without triggering
+							<abbr title="Trusted Platform Module">TPM</abbr>
+							PCR measurements - Use bootkits that
+							install to the MBR gap (sectors 1-62 between the MBR and first partition)
+						</p>
+						<pre class="bash">
+# Check if your system is booted in UEFI or legacy mode
+[ -d /sys/firmware/efi ] &amp;&amp; echo &#34;UEFI mode&#34; || echo &#34;Legacy BIOS mode (or /sys not mounted)&#34;
+
+# If UEFI, inspect EFI variables
+ls /sys/firmware/efi/efivars/ 2&gt;/dev/null | head -20
+ls /sys/firmware/efi/ 2&gt;/dev/null
+
+# Check firmware type from dmesg
+sudo dmesg | grep -i &#34;efi\|bios\|uefi&#34; | head -10
+						</pre>
+					</section>
+					<section>
+						<h3 id="efi-system-partition">EFI System Partition</h3>
+						<p>
+							The EFI System Partition is a FAT partition (
+							<code>GUID</code>
+							
+							<code>C12A7328-F81F-11D2-BA4B-00A0C93EC93B</code>
+							) that stores EFI executables. On Arch Linux, it is typically mounted at
+							<code>/boot</code>
+							or
+							<code>/efi</code>
+							.
+						</p>
+						<pre class="plaintext">
+ESP layout (typical Arch Linux with systemd-boot):
+/boot/
+├── EFI/
+│   ├── BOOT/
+│   │   └── BOOTX64.EFI           # Fallback bootloader (UEFI default)
+│   ├── Linux/
+│   │   └── linux.efi             # Unified kernel image (optional)
+│   └── systemd/
+│       └── systemd-bootx64.efi   # systemd-boot EFI stub
+├── loader/
+│   ├── loader.conf               # Boot manager config
+│   └── entries/
+│       ├── arch.conf             # Default boot entry
+│       └── arch-fallback.conf    # Fallback initramfs entry
+├── vmlinuz-linux                 # Kernel image
+├── initramfs-linux.img           # Default initramfs
+├── initramfs-linux-fallback.img  # Fallback initramfs (more drivers)
+└── amd-ucode.img                 # CPU microcode (if AMD)
+						</pre>
+						<pre class="bash">
+# Find and inspect the ESP
+lsblk -o NAME,SIZE,TYPE,MOUNTPOINT,LABEL | grep -i efi
+# Or find by partition type GUID
+sudo blkid | grep -i &#34;C12A7328-F81F-11D2-BA4B-00A0C93EC93B&#34;
+
+# List contents of ESP
+ls -laR /boot/ 2&gt;/dev/null | head -50
+
+# Check partition layout
+sudo fdisk -l $(findmnt -n -o SOURCE /boot | sed &#39;s/[0-9]*$//&#39;) 2&gt;/dev/null
+						</pre>
+					</section>
+					<section>
+						<h3 id="systemd-boot-configuration">systemd-boot Configuration</h3>
+						<p>
+							systemd-boot (
+							<code>bootctl</code>
+							) is the recommended boot manager for Arch Linux UEFI systems. It is
+							simpler and faster than GRUB.
+						</p>
+						<pre class="bash">
+# Check systemd-boot status
+bootctl status
+
+# Typical output:
+# Firmware: UEFI 2.70
+# Secure Boot: disabled
+# Setup Mode: user
+# Boot into FW: supported
+# Current Boot Loader: systemd-boot
+# ...
+
+# Boot entries
+bootctl list
+						</pre>
+						<h4 id="loaderconf">loader.conf</h4>
+						<pre class="plaintext">
+# /boot/loader/loader.conf
+timeout 3
+console-mode max
+editor no         # Disable kernel cmdline editing (security: prevents init=/bin/bash)
+auto-entries yes  # Auto-generate entries from kernel images
+						</pre>
+						<h4 id="boot-entry-config">Boot Entry Config</h4>
+						<pre class="plaintext">
+# /boot/loader/entries/arch.conf
+title   Arch Linux
+linux   /vmlinuz-linux
+initrd  /amd-ucode.img
+initrd  /initramfs-linux.img
+options root=UUID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx rw quiet loglevel=3
+						</pre>
+						<h4 id="security-boot-parameters">Security Boot Parameters</h4>
+						<pre class="bash">
+# Common kernel cmdline options and their security implications:
+# 
+# init=/bin/bash                Bypasses init system → root shell (physical access)
+# systemd.unit=emergency.target Drops to emergency shell
+# single / 1 / S                Single-user mode, often no password
+# rd.break                      Break before switch_root in dracut initramfs
+# mitigations=off               Disable all CPU vulnerability mitigations
+# nosmep / nosmap               Disable SMEP/SMAP (dangerous, for exploit dev)
+# nopti                         Disable Kernel Page Table Isolation
+# page_poison=0                 Disable page poisoning (memory forensics evasion)
+# quiet                         Suppress kernel messages
+# loglevel=0                    Silence everything (anti-forensics)
+# audit=0                       Disable audit subsystem
+# selinux=0 / apparmor=0        Disable LSM
+
+# Read current boot parameters
+cat /proc/cmdline
+
+# Typical output:
+# root=UUID=abc123 rw quiet loglevel=3 initrd=\amd-ucode.img initrd=\initramfs-linux.img
+						</pre>
+					</section>
+					<section>
+						<h3 id="grub-bootloader">GRUB Bootloader</h3>
+						<p>
+							GRUB 2 is more complex than systemd-boot but supports legacy BIOS, encrypted
+							<code>/boot</code>
+							, and
+							<code>LVM</code>
+							. Its modular design loads filesystem drivers before accessing the kernel.
+						</p>
+						<pre class="plaintext">
+GRUB boot sequence:
+┌──────────────────┐
+│ boot.img         │ ← 446 bytes, written to MBR (BIOS) or as EFI app
+│ (LBA of core)    │
+└────────+─────────┘
+         ▼
+┌──────────────────┐
+│ core.img         │ ← Sector 1+, contains GRUB kernel + filesystem modules
+│ (diskboot +      │   Loaded from post-MBR gap (BIOS) or ESP (UEFI)
+│  kernel + mods)  │
+└────────+─────────┘
+         ▼
+┌──────────────────┐
+│ /boot/grub/      │ ← Filesystem accessible: reads grub.cfg
+│ grub.cfg         │   Loads kernel + initramfs from actual filesystem
+│ modules (*.mod)  │
+└────────+─────────┘
+         ▼
+┌──────────────────┐
+│ Linux kernel     │ ← vmlinuz-linux, loaded via the `linux` command
+│ + initramfs      │
+└──────────────────┘
+						</pre>
+						<pre class="bash">
+# GRUB configuration locations
+cat /boot/grub/grub.cfg 2&gt;/dev/null | head -60
+cat /etc/default/grub 2&gt;/dev/null
+
+# Regenerate GRUB config
+sudo grub-mkconfig -o /boot/grub/grub.cfg
+
+# List GRUB modules
+ls /boot/grub/x86_64-efi/ 2&gt;/dev/null | head -20
+
+# GRUB rescue shell access (Ctrl+Alt+Del or at GRUB prompt):
+# grub&gt; ls                          # List devices and partitions
+# grub&gt; ls (hd0,gpt2)/              # List files on partition
+# grub&gt; linux /vmlinuz-linux root=/dev/sda2
+# grub&gt; initrd /initramfs-linux.img
+# grub&gt; boot
+						</pre>
+					</section>
+					<section>
+						<h3 id="linux-kernel-boot">Linux Kernel Boot</h3>
+						<p>
+							The kernel boot is divided into architecture-specific early boot and architecture-independent
+							initialization. This is where rootkits that patch the kernel image on disk take effect.
+						</p>
+						<h4 id="stage-1-protected-mode">Stage 1 - Protected Mode</h4>
+						<pre class="plaintext">
+arch/x86/boot/
+├── header.S        # Boot sector header, setup header, kernel version
+├── main.c          # main() — decompress kernel, detect memory, set video
+├── cpucheck.c      # CPU feature detection (64-bit, SSE, etc.)
+├── memory.c        # E820 and E801 memory detection
+├── pm.c            # Protected mode switch (16-bit → 32-bit)
+└── video.c         # Video mode selection
+						</pre>
+						<h4 id="stage-2-decompression">Stage 2 - Decompression</h4>
+						<pre class="plaintext">
+arch/x86/boot/compressed/
+├── head_64.S       # startup_64 — 64-bit entry, set up early page tables
+├── misc.c          # decompress_kernel() — extract vmlinux.bin
+└── pgtable_64.c    # Early identity mapping and kernel mapping
+						</pre>
+						<p>
+							The compressed kernel image (bzImage) contains a self-extractor. The real kernel is uncompressed
+							at boot:
+						</p>
+						<pre class="bash">
+# Kernel image sizes
+ls -lh /boot/vmlinuz-linux
+# vmlinuz-linux: ~13 MiB (compressed bzImage)
+# After decompression, vmlinux is ~40+ MiB
+
+# Extract and inspect the kernel image
+sudo pacman -S binutils
+# vmlinuz is a bzImage; the actual ELF (vmlinux) is embedded inside
+file /boot/vmlinuz-linux
+# Output: Linux kernel x86 boot executable bzImage, version X.XX
+						</pre>
+						<h4 id="stage-3-start-kernel-initmainc">Stage 3: 'start_kernel()' (init/main.c)</h4>
+						<p>
+							<code>start_kernel()</code>
+							in
+							<code>init/main.c</code>
+							is the first architecture-independent C function. It initializes
+							every kernel subsystem in a strict order:
+						</p>
+						<pre class="c">
+// init/main.c — start_kernel() (simplified call chain)
+asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
+{
+    // ─── Architecture setup ───
+    setup_arch(&amp;command_line);       // arch/x86/kernel/setup.c
+    //   → Parse kernel command line
+    //   → Initialize memory map (E820)
+    //   → Setup paging, early_ioremap
+    //   → Initialize APIC, timers
+
+    // ─── Scheduler ───
+    sched_init();                    // kernel/sched/core.c
+    //   → Initialize runqueues
+    //   → Set up idle threads per CPU
+
+    // ─── Memory ───
+    mm_init();                       // init/main.c → mm_init()
+    //   → Bootmem allocator
+    //   → Page allocator (buddy system)
+    //   → Slab allocator (SLUB)
+    //   → vmalloc
+
+    // ─── Core subsystems ───
+    rcu_init();                      // RCU subsystem
+    init_IRQ();                      // Interrupt handling
+    init_timers();                   // Timer subsystem
+    timekeeping_init();              // Timekeeping
+    console_init();                  // Console (VGA, fbcon, serial)
+    vfs_caches_init();               // VFS dentry/inode caches
+    signals_init();                  // Signal subsystem
+    pagecache_init();                // Page cache
+    acpi_early_init();               // ACPI tables
+
+    // ─── The final step ───
+    arch_call_rest_init();           // → rest_init()
+    //   → Creates kernel_init thread (PID 1)
+    //   → Creates kthreadd (PID 2)
+    //   → CPU 0 enters idle loop
+}
+						</pre>
+						<pre class="bash">
+# See the boot call trace from the kernel log
+sudo dmesg | grep -E &#34;^\[&#34; | head -60
+
+# Filter for key milestones
+sudo dmesg | grep -iE &#34;Linux version|Command line|BIOS-e820|Memory:|DMI:|smpboot|write through the L1|sched_clock|Calibrating&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="memory-discovery-e820-and-acpi">Memory Discovery: E820 and ACPI</h3>
+						<p>
+							The BIOS/UEFI provides the kernel with a map of physical memory through the E820 interface.
+							This map tells the kernel which physical address ranges are RAM (usable), reserved (firmware,
+							ACPI,
+							<code>PCIe</code>
+							MMIO), or defective.
+						</p>
+						<pre class="plaintext">
+Typical E820 memory map (from dmesg):
+BIOS-e820: [mem 0x0000000000000000-0x000000000009ffff] usable       ← RAM
+BIOS-e820: [mem 0x00000000000a0000-0x00000000000fffff] reserved     ← Legacy VGA
+BIOS-e820: [mem 0x0000000000100000-0x000000007fffffff] usable       ← RAM
+BIOS-e820: [mem 0x0000000080000000-0x000000008fffffff] reserved     ← PCIe MMIO?
+BIOS-e820: [mem 0x00000000f0000000-0x00000000f7ffffff] reserved     ← GPU?
+BIOS-e820: [mem 0x00000000fed1c000-0x00000000fed1ffff] reserved     ← HPET
+BIOS-e820: [mem 0x0000000100000000-0x000000083fffffff] usable       ← RAM above 4GiB
+						</pre>
+						<pre class="bash">
+# Inspect firmware-provided memory map
+sudo dmesg | grep &#34;BIOS-e820&#34;
+sudo dmesg | grep &#34;e820&#34;
+
+# View the kernel&#39;s internal memory map
+sudo cat /proc/iomem | head -40
+# Typical: System RAM, Kernel code, Kernel data, ACPI Tables, PCI Bus, etc.
+
+# Check ACPI tables
+sudo ls /sys/firmware/acpi/tables/
+# ACPI tables: DSDT, FADT, MADT, MCFG, etc.
+
+# Dump a specific ACPI table
+sudo cat /sys/firmware/acpi/tables/DSDT &gt; /tmp/dsdt.dat
+						</pre>
+					</section>
+					<section>
+						<h3 id="cpu-detection-and-microcode-loading">CPU Detection and Microcode Loading</h3>
+						<p>
+							During boot, the kernel identifies the
+							<abbr title="Central Processing Unit">CPU</abbr>
+							model, family, stepping,
+							and features. Microcode updates (
+							<abbr title="Central Processing Unit">CPU</abbr>
+							firmware patches) are applied
+							early in the boot process because they can fix security vulnerabilities (Spectre, Meltdown variants,
+							MMIO stale data).
+						</p>
+						<p>Microcode loading timeline:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">UEFI/BIOS</th>
+									<th align="center">Applies early microcode</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Bootloader</td>
+									<td align="center">Loads ucode.cpio/initrd</td>
+								</tr>
+								<tr>
+									<td align="center">Linux kernel (early boot)</td>
+									<td align="center">Applies microcode from initramfs (if present)</td>
+								</tr>
+								<tr>
+									<td align="center">Linux kernel (runtime)</td>
+									<td align="center">/lib/firmware/amd-ucode/ or intel-ucode/; can reload via /sys</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Check current CPU microcode version
+cat /proc/cpuinfo | grep -E &#34;microcode|model name&#34; | head -4
+
+# Microcode revision comparison
+grep microcode /proc/cpuinfo | head -1
+
+# Check if microcode was loaded at boot
+sudo dmesg | grep -i microcode
+
+# Reload microcode at runtime (if newer version available)
+ls /lib/firmware/amd-ucode/ 2&gt;/dev/null || ls /lib/firmware/intel-ucode/ 2&gt;/dev/null
+# On Arch: install amd-ucode or intel-ucode packages
+sudo pacman -S amd-ucode 2&gt;/dev/null || sudo pacman -S intel-ucode 2&gt;/dev/null
+
+# Manual microcode reload (root):
+# echo 1 &gt; /sys/devices/system/cpu/microcode/reload
+						</pre>
+					</section>
+					<section>
+						<h3 id="initramfs-initrd">initramfs / initrd</h3>
+						<p>
+							The initramfs is a CPIO archive (optionally compressed) that contains a minimal root filesystem.
+							Its purpose is to provide drivers and tools needed to mount the real root filesystem -
+							<code>LVM</code>
+							, LUKS, RAID, network storage, or exotic filesystems.
+						</p>
+						<h4 id="why-use-an-initramfs">Why Use an initramfs</h4>
+						<ul>
+							<li>Smaller kernel = faster to load</li>
+							<li>Flexibility: change storage layout without recompiling</li>
+							<li>Early crypto: LUKS passphrase prompt before root is mounted</li>
+							<li>License separation: proprietary drivers need not be in the kernel image</li>
+						</ul>
+						<pre class="plaintext">
+initramfs contents (typical Arch mkinitcpio):
+/
+├── init                      # Init script or systemd binary
+├── usr/
+│   ├── bin/                  # Busybox utils or full binary set
+│   │   └── systemd-tmpfiles
+│   └── lib/systemd/          # systemd in initramfs
+├── lib/
+│   └── modules/              # Kernel modules for root fs
+│       └── $(uname -r)/
+│           └── kernel/
+│               ├── drivers/scsi/
+│               ├── drivers/nvme/
+│               └── fs/ext4/
+├── etc/
+│   └── crypttab              # LUKS configuration
+├── proc/ sys/ dev/ run/      # Mount points
+└── root/                     # New root mount point for switch_root
+						</pre>
+						<pre class="bash">
+# Inspect initramfs contents
+lsinitcpio /boot/initramfs-linux.img | head -40
+
+# List kernel modules included in initramfs
+lsinitcpio /boot/initramfs-linux.img | grep &#39;\.ko&#39;
+
+# Check initramfs size
+ls -lh /boot/initramfs-linux.img /boot/initramfs-linux-fallback.img
+
+# Extract initramfs for forensic analysis
+mkdir /tmp/initramfs-inspect
+cd /tmp/initramfs-inspect
+sudo zstd -d -c /boot/initramfs-linux.img | sudo cpio -idmv 2&gt;/dev/null || \
+    sudo cat /boot/initramfs-linux.img | sudo cpio -idmv 2&gt;/dev/null
+ls -la
+cd ~
+
+# Check mkinitcpio configuration
+cat /etc/mkinitcpio.conf
+
+# Rebuild initramfs after changes
+sudo mkinitcpio -P
+						</pre>
+						<h4 id="the-pivot-root-switch-root-transition">The pivot_root / switch_root transition</h4>
+						<p>
+							At the end of early userspace, the initramfs must hand control to the real root filesystem.
+							The sequence:
+						</p>
+						<pre class="plaintext">
+initramfs /init script:
+  1. Load kernel modules (modprobe ext4, modprobe nvme)
+  2. Assemble storage (LVM, mdraid)
+  3. Unlock encryption (cryptsetup luksOpen)
+  4. Mount real root on /new_root
+  5. switch_root /new_root /sbin/init
+     → Moves /proc, /sys, /dev to /new_root
+     → chroots to /new_root
+     → execs /sbin/init (systemd)
+     → Old initramfs memory is freed
+						</pre>
+						<pre class="bash">
+# Trace the pivot/switch_root in kernel log
+sudo dmesg | grep -iE &#34;root|mount|switch|pivot|initramfs&#34; | head -20
+
+# Check root filesystem mount info
+findmnt /
+
+# See the device backing your root filesystem
+lsblk -o NAME,SIZE,TYPE,MOUNTPOINT,UUID
+						</pre>
+					</section>
+					<section>
+						<h3 id="systemd-as-pid-1">systemd as PID 1</h3>
+						<p>
+							systemd is the de facto init system on Linux. It is PID 1 - the first user-space process - and
+							inherits all orphaned processes. Its design is fundamentally different from SysV init: it activates
+							units in parallel based on dependency graphs, uses socket activation for on-demand service start,
+							and manages cgroups for process tracking.
+						</p>
+						<h4 id="systemd-boot-sequence">systemd boot sequence</h4>
+						<pre class="plaintext">
+systemd (PID 1)
+  │
+  ├─► default.target (symlink to graphical.target or multi-user.target)
+  │     │
+  │     ├─► sysinit.target (system initialization)
+  │     │     ├─► local-fs.target      ← mount local filesystems
+  │     │     ├─► swap.target          ← activate swap
+  │     │     ├─► systemd-sysctl       ← apply sysctl settings
+  │     │     ├─► systemd-modules-load ← load kernel modules
+  │     │     └─► systemd-tmpfiles     ← create volatile files
+  │     │
+  │     ├─► basic.target (basic system)
+  │     │     ├─► sockets.target       ← socket-activated services
+  │     │     ├─► timers.target        ← timer-activated services
+  │     │     └─► paths.target         ← path-activated services
+  │     │
+  │     └─► multi-user.target
+  │           ├─► network.target       ← network up
+  │           ├─► sshd.service         ← SSH daemon
+  │           ├─► cronie.service       ← Cron daemon
+  │           └─► getty@tty1.service   ← Login prompts
+						</pre>
+						<pre class="bash">
+# Boot time analysis
+systemd-analyze
+systemd-analyze blame | head -20           # What took the most time
+systemd-analyze critical-chain             # Dependency chain on critical path
+systemd-analyze plot &gt; /tmp/boot.svg       # Generate SVG graph of boot
+
+# List all active units
+systemctl list-units --state=running | head -20
+systemctl list-units --type=target
+
+# See the dependency tree of a unit
+systemctl list-dependencies multi-user.target
+
+# Which units failed?
+systemctl --failed
+
+# Show default target
+systemctl get-default
+
+# Switch to a different target at runtime
+sudo systemctl isolate multi-user.target    # Drop from graphical to console
+sudo systemctl isolate rescue.target        # Single-user rescue mode
+sudo systemctl isolate emergency.target     # Emergency shell (minimal)
+						</pre>
+					</section>
+					<section>
+						<h3 id="secure-boot">Secure Boot</h3>
+						<p>
+							Secure Boot is a UEFI feature that ensures only cryptographically signed code executes during
+							boot. The trust chain starts at the Platform Key (PK) and cascades through the Key Exchange
+							Key (KEK) to the Signature Database (db) and Forbidden Signature Database (dbx).
+						</p>
+						<pre class="plaintext">
+Secure Boot trust chain:
+
+Platform Key (PK)
+  │  Owned by platform owner (or OEM)
+  │  Private key used to sign KEK updates
+  │
+  ▼
+Key Exchange Key (KEK)
+  │  Owned by Microsoft + platform owner
+  │  Private key used to sign db/dbx updates
+  │
+  ├──────────────+──────────────────┐
+  ▼              ▼                  ▼
+Signature       Forbidden          Timestamp
+Database (db)   Signatures (dbx)   Database (dbt)
+  │              │
+  │ Allowed      │ Revoked
+  │ signatures   │ signatures
+  │              │
+  ▼              ▼
+EFI binary → checked against db → if found → OK
+             checked against dbx → if found → REJECTED
+             not in db → NOT ALLOWED (unless Setup Mode)
+						</pre>
+						<h4 id="mok-and-the-shim-bootloader">MOK and the Shim Bootloader</h4>
+						<p>
+							For Linux distributions, the shim bootloader serves as a bridge. Shim is signed by Microsoft's
+							UEFI
+							<abbr title="Certificate Authority">CA</abbr>
+							(present in the default db). Shim then trusts binaries signed
+							by the distribution's MOK (Machine Owner Key), which is enrolled at install time or via
+							<code>mokutil</code>
+							.
+						</p>
+						<pre class="plaintext">
+UEFI Firmware → db (Microsoft CA)
+  → shimx64.efi (signed by Microsoft)
+    → GRUB/systemd-boot (signed by distro MOK)
+      → Linux kernel (signed by distro MOK)
+        → Kernel modules (signature checked by kernel, not UEFI)
+						</pre>
+						<pre class="bash">
+# Check Secure Boot status
+bootctl status | grep &#34;Secure Boot&#34;
+# Or:
+mokutil --sb-state
+# Or directly from efivars:
+sudo cat /sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c 2&gt;/dev/null | xxd
+
+# List enrolled MOK keys
+mokutil --list-enrolled | head -20
+
+# Check if kernel enforces module signature verification
+cat /sys/module/kernel/parameters/module_sig_enforce
+# 1 = only signed modules can be loaded
+
+# See kernel lockdown status (Secure Boot enforces lockdown)
+cat /sys/kernel/security/lockdown
+# none = no lockdown
+# integrity = kernel features restricted (no raw MSR access, no /dev/mem)
+# confidentiality = even stricter (no kprobes on certain functions)
+						</pre>
+						<h4 id="secure-boot-bypass-techniques">Secure Boot Bypass Techniques</h4>
+						<ul>
+							<li><b>shim vulnerability</b> : <code>CVE-2020-14372</code> - GRUB2 <code>acpi</code> command allowed loading unsigned ACPI tables, bypassing Secure Boot</li>
+							<li><b>Boothole (CVE-2020-10713)</b> : GRUB2 buffer overflow in config parser allowed arbitrary code execution before ExitBootServices</li>
+							<li><b>Incomplete dbx revocation</b> : a signed bootloader that is vulnerable but not yet listed in dbx can still chain-load unsigned code</li>
+							<li><b>Setup Mode</b> : If the PK is deleted (via firmware menu or physical access), Secure Boot enters Setup Mode where db/dbx can be freely modified</li>
+							<li><b>LogoFAIL</b> : UEFI image parsers (BMP, PNG, etc.) in firmware can be exploited during the boot logo display</li>
+						</ul>
+						<pre class="bash">
+# Check for known Secure Boot bypass CVEs
+# Boothole mitigation: check if GRUB is updated
+pacman -Qi grub 2&gt;/dev/null | grep Version
+
+# Check if shim is installed
+pacman -Qi shim 2&gt;/dev/null || echo &#34;shim not installed — custom Secure Boot keys likely in use&#34;
+
+# Verify kernel module signature enforcement (if Secure Boot is active)
+grep -r &#34;CONFIG_MODULE_SIG_FORCE&#34; /boot/config-$(uname -r)
+						</pre>
+					</section>
+					<section>
+						<h3 id="the-boot-chain-as-an-attack-surface">The Boot Chain as an Attack Surface</h3>
+						<p>Every stage in the boot chain is a potential persistence or privilege escalation target:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Stage</th>
+									<th align="center">Attack Vector</th>
+									<th align="center">Artifact</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">UEFI firmware</td>
+									<td align="center">DXE driver implant (LoJax, MosaicRegressor)</td>
+									<td align="center">SPI flash write</td>
+								</tr>
+								<tr>
+									<td align="center">Boot manager (systemd-boot/GRUB)</td>
+									<td align="center">Modified EFI binary on ESP; GRUB config modification; BootHole GRUB exploit</td>
+									<td align="center">Replaced .efi file; grub.cfg with init=/bin/bash</td>
+								</tr>
+								<tr>
+									<td align="center">Kernel + initramfs</td>
+									<td align="center">Kernel module rootkit; Modified initramfs; Patched kernel image on /boot</td>
+									<td align="center">Modified .ko in initramfs (persists across mkinitcpio)</td>
+								</tr>
+								<tr>
+									<td align="center">Early userspace</td>
+									<td align="center">initramfs /init hook; Kernel cmdline injection (rd.break, init=/bin/bash)</td>
+									<td align="center">Hook in /etc/mkinitcpio.conf HOOKS array</td>
+								</tr>
+								<tr>
+									<td align="center">PID 1 / systemd</td>
+									<td align="center">Malicious systemd service; systemd generator script; User unit persistence</td>
+									<td align="center">.service unit file; /etc/systemd/system/;~/.config/systemd/user/</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Forensics: Detect boot chain tampering
+
+# 1. Check ESP for unexpected EFI binaries
+sudo find /boot -name &#34;*.efi&#34; -exec sha256sum {} \;
+
+# 2. Verify initramfs integrity (compare against freshly built)
+mkinitcpio -P 2&gt;/dev/null
+sha256sum /boot/initramfs-linux.img
+
+# 3. Check kernel cmdline for suspicious parameters
+cat /proc/cmdline
+
+# 4. Look for unexpected kernel modules loaded at boot
+sudo dmesg | grep -i &#34;module.*loaded&#34;
+lsmod | awk &#39;{print $1}&#39; | while read mod; do
+    [ &#34;$mod&#34; != &#34;Module&#34; ] &amp;&amp; modinfo -F signature &#34;$mod&#34; 2&gt;/dev/null
+done | grep -v &#34;^$&#34; | head -10
+
+# 5. Check TPM PCR values (if TPM is present)
+sudo tpm2_pcrread 2&gt;/dev/null || echo &#34;No TPM 2.0 device accessible&#34;
+
+# 6. systemd services that start at boot
+systemctl list-unit-files --state=enabled | grep -v &#34;^$&#34; | head -30
+
+# 7. Check for modified systemd generators
+ls /etc/systemd/system-generators/ 2&gt;/dev/null
+ls /usr/local/lib/systemd/system-generators/ 2&gt;/dev/null
+						</pre>
+					</section>
+					<section>
+						<h3 id="uefi-runtime-variables-and-efibootmgr">UEFI Runtime Variables and efibootmgr</h3>
+						<p>
+							UEFI stores persistent configuration in NVRAM variables accessible via
+							<code>efivars</code>
+							. The boot
+							order, boot entries, and Secure Boot databases are all stored there.
+						</p>
+						<pre class="bash">
+# List UEFI boot entries
+efibootmgr
+# Typical output:
+# BootCurrent: 0002
+# BootOrder: 0002,0001,0000
+# Boot0000* Windows Boot Manager
+# Boot0001* UEFI: USB Drive
+# Boot0002* Linux Boot Manager
+
+# Create a new boot entry
+sudo efibootmgr --create --disk /dev/nvme0n1 --part 1 --label &#34;TestKernel&#34; --loader /vmlinuz-linux
+
+# Delete a boot entry
+sudo efibootmgr --delete-bootnum --bootnum 0004
+
+# Set next boot to a specific entry (one-time boot override)
+sudo efibootmgr --bootnext 0001
+
+# List all UEFI variables (huge output — pipe to head)
+ls /sys/firmware/efi/efivars/ | head -30
+
+# Read a specific EFI variable
+# Note: efivars filenames are NAME-VENDOR_GUID
+sudo xxd /sys/firmware/efi/efivars/BootOrder-8be4df61-93ca-11d2-aa0d-00e098032b8c 2&gt;/dev/null
+
+# Dump the full Boot Order as hex
+sudo cat /sys/firmware/efi/efivars/BootOrder-8be4df61-93ca-11d2-aa0d-00e098032b8c 2&gt;/dev/null | xxd
+						</pre>
+					</section>
+					<section>
+						<h3 id="boot-process-timeline-analysis">Boot Process Timeline Analysis</h3>
+						<pre class="bash">
+# Detailed boot time breakdown
+systemd-analyze time
+# Startup finished in Xms (firmware) + Yms (loader) + Zms (kernel) + Wms (userspace)
+
+# Kernel boot time from the kernel&#39;s perspective
+sudo dmesg | grep -E &#34;^\[.*\]&#34; | awk &#39;{print $1}&#39; | tail -1
+
+# Show the boot log from the current boot
+journalctl -b | head -50
+
+# Show boot logs from previous boot
+journalctl -b -1 | tail -50
+
+# Filter only errors and warnings
+journalctl -b -p err..warning | head -30
+
+# Show systemd journal for kernel messages
+journalctl -k | head -40
+
+# Analyse time spent in firmware, bootloader, kernel, userspace
+systemd-analyze plot &gt; /tmp/boot-chart.svg
+echo &#34;Open /tmp/boot-chart.svg in a browser&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="inspection-of-the-running-boot-state">Inspection of the Running Boot State</h3>
+						<p>Once booted, the boot chain artifacts remain visible in the running system:</p>
+						<pre class="bash">
+# Frame the complete boot picture:
+echo &#34;=== Firmware ===&#34;
+[ -d /sys/firmware/efi ] &amp;&amp; echo &#34;UEFI&#34; || echo &#34;BIOS&#34;
+cat /sys/class/dmi/id/bios_vendor 2&gt;/dev/null
+cat /sys/class/dmi/id/bios_version 2&gt;/dev/null
+
+echo &#34;&#34;
+echo &#34;=== Bootloader ===&#34;
+bootctl 2&gt;/dev/null || echo &#34;Not systemd-boot (check /boot/grub/grub.cfg)&#34;
+
+echo &#34;&#34;
+echo &#34;=== Kernel cmdline ===&#34;
+cat /proc/cmdline
+
+echo &#34;&#34;
+echo &#34;=== Root device ===&#34;
+findmnt -n -o SOURCE /
+
+echo &#34;&#34;
+echo &#34;=== Initramfs modules ===&#34;
+lsinitcpio /boot/initramfs-linux.img 2&gt;/dev/null | grep &#39;\.ko&#39; | head -10
+
+echo &#34;&#34;
+echo &#34;=== PID 1 ===&#34;
+ls -la /proc/1/exe
+cat /proc/1/comm
+
+echo &#34;&#34;
+echo &#34;=== Boot time analysis ===&#34;
+systemd-analyze time 2&gt;/dev/null
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that reconstructs the boot chain of the running system: detect the firmware
+							mode, read the kernel command line, report the lockdown state, and list the UEFI boot variables.
+							Run it and verify each value against the shell commands below.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;strings&#34;
+)
+
+func main() {
+	if _, err := os.Stat(&#34;/sys/firmware/efi&#34;); err == nil {
+		fmt.Println(&#34;Firmware: UEFI&#34;)
+	} else {
+		fmt.Println(&#34;Firmware: Legacy BIOS&#34;)
+	}
+
+	cmdline, _ := os.ReadFile(&#34;/proc/cmdline&#34;)
+	fmt.Println(&#34;Command line:&#34;, strings.TrimSpace(string(cmdline)))
+
+	if lockdown, err := os.ReadFile(&#34;/sys/kernel/security/lockdown&#34;); err == nil {
+		fmt.Println(&#34;Lockdown:&#34;, strings.TrimSpace(string(lockdown)))
+	}
+
+	entries, err := os.ReadDir(&#34;/sys/firmware/efi/efivars&#34;)
+	if err != nil {
+		fmt.Println(&#34;EFI variables: not available&#34;)
+		return
+	}
+	fmt.Printf(&#34;EFI variables: %d\n&#34;, len(entries))
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), &#34;Boot&#34;) {
+			fmt.Println(&#34;  &#34;, entry.Name())
+		}
+	}
+}
+						</pre>
+						<p>Build the tool and compare its output with the manual checks:</p>
+						<pre class="bash">
+# 1. Determine firmware type
+[ -d /sys/firmware/efi ] &amp;&amp; echo &#34;UEFI&#34; || echo &#34;BIOS/Legacy&#34;
+ls /sys/firmware/efi/efivars/ 2&gt;/dev/null | head -5
+
+# 2. Inspect boot manager and entries
+bootctl status 2&gt;/dev/null || echo &#34;Not using systemd-boot&#34;
+efibootmgr 2&gt;/dev/null | head -10
+
+# 3. Analyze kernel command line
+cat /proc/cmdline
+
+# 4. Examine boot messages
+sudo dmesg | head -40
+sudo dmesg | grep -iE &#34;efi|bios|e820|microcode|kernel command line|Decompressing&#34;
+
+# 5. Inspect initramfs
+lsinitcpio /boot/initramfs-linux.img 2&gt;/dev/null | head -30
+ls -lh /boot/initramfs-linux*.img
+
+# 6. Check Secure Boot state
+mokutil --sb-state 2&gt;/dev/null || echo &#34;mokutil not available&#34;
+cat /sys/kernel/security/lockdown 2&gt;/dev/null
+
+# 7. Boot performance analysis
+systemd-analyze time
+systemd-analyze blame 2&gt;/dev/null | head -15
+systemd-analyze critical-chain 2&gt;/dev/null | head -20
+
+# 8. Verify root filesystem
+findmnt /
+lsblk -o NAME,SIZE,TYPE,MOUNTPOINT,FSTYPE
+
+# 9. Check kernel config for boot-relevant options
+grep -E &#39;CONFIG_(CMDLINE|SECURE|MODULE_SIG|EFI|CMDLINE|INITRAMFS)&#39; \
+    /boot/config-$(uname -r) 2&gt;/dev/null | head -20
+
+# 10. Show boot-time systemd journal
+journalctl -b -o short-monotonic | head -30
+
+# 11. Verify initramfs integrity (compare with known good)
+sha256sum /boot/initramfs-linux.img
+
+# 12. Check for unexpected early-boot hooks
+cat /etc/mkinitcpio.conf 2&gt;/dev/null | grep HOOKS
+ls /etc/initcpio/hooks/ 2&gt;/dev/null
+ls /etc/initcpio/install/ 2&gt;/dev/null
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://www.kernel.org/doc/html/latest/arch/x86/boot.html" target="_blank">Linux kernel boot protocol (x86)</a> - Documentation/x86/boot.rst</li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/systemd-boot.7" target="_blank">systemd-boot documentation</a></li>
+							<li><a class="icon-website" href="https://wiki.archlinux.org/title/Mkinitcpio" target="_blank">mkinitcpio - Arch Linux</a></li>
+							<li><a class="icon-website" href="https://uefi.org/specifications" target="_blank">UEFI Specification</a> - Section 8: Security (Secure Boot)</li>
+							<li><a class="icon-github" href="https://github.com/rhboot/shim" target="_blank">shim bootloader - GitHub</a></li>
+							<li><a class="icon-website" href="https://eclypsium.com/2020/07/29/theres-a-hole-in-the-boot/" target="_blank">BootHole vulnerability (CVE-2020-10713)</a></li>
+							<li><a class="icon-website" href="https://en.wikipedia.org/wiki/EFI_system_partition" target="_blank">ESP partition GUID spec</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/proc.5" target="_blank">man 5 proc</a> - /proc/cmdline, /proc/iomem</li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/bootup.7" target="_blank">man 7 bootup</a> - systemd boot process</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

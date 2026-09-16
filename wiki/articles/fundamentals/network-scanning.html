@@ -46,6 +46,16 @@
 		<aside class="visible">
 			<ul class="toc">
 				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
 					<b><a href="#osi-layers">OSI Layers</a></b>
 					<ul>
 					</ul>
@@ -110,6 +120,11 @@
 					</ul>
 				</li>
 				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
 					<b><a href="#references">References</a></b>
 					<ul>
 					</ul>
@@ -129,10 +144,42 @@
 				<article>
 					<h2 id="network-scanning">Network Scanning</h2>
 					<p>
-						Network scanning is about finding out which hosts are alive on a network, and which ports are
-						open on those hosts. Every attack or defense operation starts here. You cannot interact with
-						what you cannot find.
+						Host discovery and port scanning with
+						<abbr title="Address Resolution Protocol">ARP</abbr>
+						,
+						<abbr title="Internet Control Message Protocol">ICMP</abbr>
+						,
+						<abbr title="Transmission Control Protocol">TCP</abbr>
+						, and
+						<abbr title="User Datagram Protocol">UDP</abbr>
+						probes.
 					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Network scanning answers two questions: which hosts are alive, and which ports are open. Every
+							reconnaissance and defense workflow starts here, because you cannot interact with a host you
+							have not found. This article covers host discovery with
+							<abbr title="Address Resolution Protocol">ARP</abbr>
+							and
+							<abbr title="Internet Control Message Protocol">ICMP</abbr>
+							,
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							and
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							port scanning, service detection, and internet-scale scanners. After reading you can choose
+							the scan type that matches a target's defenses.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/arp.html">ARP</a> - address resolution on the local segment</li>
+							<li><a href="/wiki/articles/fundamentals/icmp.html">ICMP</a> - echo, timestamp, and error messages</li>
+							<li><a href="/wiki/articles/fundamentals/tcp.html">TCP</a> - flags, handshake, and the connection state machine</li>
+							<li><a href="/wiki/articles/fundamentals/udp.html">UDP</a> - connectionless transport and scanning</li>
+						</ul>
+					</section>
 					<section>
 						<h3 id="osi-layers">OSI Layers</h3>
 						<p>
@@ -611,7 +658,7 @@ sudo nmap -sS --top-ports 100 192.168.1.42;
 nmap -sT 192.168.1.42;
 
 # Compare SYN vs Connect: SYN scan terminates with RST, Connect with FIN
-# sudo tcpdump -i eth0 -nn &#39;host 192.168.1.42;
+# sudo tcpdump -i eth0 -nn &#39;host 192.168.1.42&#39;;
 						</pre>
 						<h4 id="tcp-null-scan">TCP NULL Scan</h4>
 						<p>
@@ -1150,6 +1197,71 @@ sudo nmap -O --osscan-guess -iL live-ips.txt -oN phase4-os.txt;
 # Phase 5: Full sweep of a specific host
 sudo nmap -sS -sU -sV -O -p- --script default,safe 10.0.0.42 -oA target-full;
 						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a concurrent
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							connect scanner in Go. It should accept
+							a host and a port range, try each port with a short timeout, and print the open ports in order.
+							Unlike a
+							<abbr title="Synchronize">SYN</abbr>
+							scan it needs no raw socket privilege, so it runs as a normal user.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;fmt&#34;
+	&#34;net&#34;
+	&#34;sort&#34;
+	&#34;strconv&#34;
+	&#34;sync&#34;
+	&#34;time&#34;
+)
+
+func scanPort(host string, port int, open *[]int, mu *sync.Mutex, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	address := net.JoinHostPort(host, strconv.Itoa(port))
+	conn, err := net.DialTimeout(&#34;tcp&#34;, address, 500*time.Millisecond)
+	if err != nil {
+		return
+	}
+	conn.Close()
+
+	mu.Lock()
+	*open = append(*open, port)
+	mu.Unlock()
+}
+
+func main() {
+	host := &#34;127.0.0.1&#34;
+	open := make([]int, 0)
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	for port := 1; port &lt;= 1024; port++ {
+		wg.Add(1)
+		go scanPort(host, port, &amp;open, &amp;mu, &amp;wg)
+	}
+	wg.Wait()
+
+	sort.Ints(open)
+	fmt.Println(&#34;open ports:&#34;, open)
+}
+						</pre>
+						<p>
+							Run it with
+							<code>go run scanner.go</code>
+							. Then add a banner grabber: after a successful connect, read
+							up to 256 bytes with a read deadline and print what the service sends back. Compare your result
+							with
+							<code>nmap -sT -p1-1024 localhost</code>
+							and explain any differences.
+						</p>
 					</section>
 					<section>
 						<h3 id="references">References</h3>

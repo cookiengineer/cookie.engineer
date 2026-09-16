@@ -1,0 +1,1519 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>DNS | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="DNS">
+		<meta name="keywords" content="axfr, dig, dns, dns-records, dnssec, doh, domain-name-system, dot, edns0, techniques, zone-transfer">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="DNS">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Domain Name System from first principles - resolution chain, packet structure in wire format, all record types, dig deep dive, zone transfers, DNSSEC chain of trust, EDNS0, DoH/DoT, and writing a DNS query builder in Python.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/fundamentals/dns.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="DNS">
+		<meta name="twitter:description" itemprop="description" content="Domain Name System from first principles - resolution chain, packet structure in wire format, all record types, dig deep dive, zone transfers, DNSSEC chain of trust, EDNS0, DoH/DoT, and writing a DNS query builder in Python.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#what-dns-is">What DNS Is</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#dns-resolution-chain">DNS Resolution Chain</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#dns-packet-structure-wire-format">DNS Packet Structure - Wire Format</a></b>
+					<ul>
+						<li><a href="#header-field-breakdown">Header field breakdown</a></li>
+						<li><a href="#rcode-values">RCODE values</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#dns-name-encoding-label-compression">DNS Name Encoding - Label Compression</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#dns-record-types-complete-reference">DNS Record Types - Complete Reference</a></b>
+					<ul>
+						<li><a href="#record-type-deep-dive">Record type deep dive</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#mx-priority-and-email-routing">MX Priority and Email Routing</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#dig-deep-dive">dig - Deep Dive</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#zone-transfers-axfr">Zone Transfers (AXFR)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#dns-caching-and-ttl">DNS Caching and TTL</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#cache-poisoning">Cache Poisoning</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#dnssec-chain-of-trust">DNSSEC - Chain of Trust</a></b>
+					<ul>
+						<li><a href="#key-dnssec-record-types">Key DNSSEC record types</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#dns-over-https-and-dns-over-tls">DNS over HTTPS and DNS over TLS</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#edns0-extension-mechanisms-for-dns">EDNS0 - Extension Mechanisms for DNS</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#reverse-dns-ptr-records">Reverse DNS - PTR Records</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#writing-a-dns-query-builder-in-python">Writing a DNS Query Builder in Python</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#common-dns-tools-reference">Common DNS Tools Reference</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#summary">Summary</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/fundamentals/index.html">Fundamentals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/fundamentals/dns.html">Dns</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="dns">DNS</h2>
+					<p>
+						Domain Name System from first principles - resolution chain, packet structure in wire format,
+						all record types, dig deep dive, zone transfers,
+						<abbr title="Domain Name System Security Extensions">DNSSEC</abbr>
+						chain of trust,
+						<code>EDNS0</code>
+						, DoH/DoT, and writing a
+						<abbr title="Domain Name System">DNS</abbr>
+						query builder in
+						Python.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							The
+							<abbr title="Domain Name System">DNS</abbr>
+							is the Internet's global name-to-address directory. It turns a
+							name such as
+							<code>www.example.com</code>
+							into the
+							<abbr title="Internet Protocol">IP</abbr>
+							address that packets are routed
+							to. Almost every network connection starts with a
+							<abbr title="Domain Name System">DNS</abbr>
+							lookup, which makes
+							the protocol a high-value target for cache poisoning, traffic interception, and reconnaissance.
+							After reading this article you can decode the binary wire format by hand, run and interpret
+							a zone transfer, follow the
+							<abbr title="Domain Name System Security Extensions">DNSSEC</abbr>
+							chain of trust,
+							and build a query from scratch in Python.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/network-scanning.html">Network Scanning</a> - host discovery, port scanning, <abbr title="User Datagram Protocol">UDP</abbr> scanning mechanics</li>
+							<li><a href="/wiki/articles/fundamentals/tcp.html">TCP</a> - ports, the handshake, and why large <abbr title="Domain Name System">DNS</abbr> answers fall back to <abbr title="Transmission Control Protocol">TCP</abbr></li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="what-dns-is">What DNS Is</h3>
+						<p>
+							<abbr title="Domain Name System">DNS</abbr>
+							(Domain Name System) translates human-readable domain names into machine-routable
+							<abbr title="Internet Protocol">IP</abbr>
+							addresses. It is a hierarchical, distributed, eventually-consistent
+							database. Defined in RFC 1034 and RFC 1035,
+							<abbr title="Domain Name System">DNS</abbr>
+							is one of the oldest Internet
+							protocols still in active use - and one of the few that uses both
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							(port 53, standard queries) and
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							(port 53, zone transfers,
+							large responses,
+							<abbr title="Domain Name System Security Extensions">DNSSEC</abbr>
+							).
+						</p>
+						<p>
+							<abbr title="Domain Name System">DNS</abbr>
+							is not a single server. It is a tree of authoritative nameservers,
+							each responsible for its zone, with recursive resolvers acting as intermediaries for clients.
+						</p>
+					</section>
+					<section>
+						<h3 id="dns-resolution-chain">DNS Resolution Chain</h3>
+						<p>
+							When you type
+							<code>www.example.com</code>
+							into a browser, this happens:
+						</p>
+						<pre class="plaintext">
+Client -&gt; Stub Resolver -&gt; Recursive Resolver
+  -&gt; Root Server (.)
+    -&gt; TLD Server (.com)
+      -&gt; Authoritative Nameserver (ns1.example.com)
+        -&gt; Answer: www.example.com. A 93.184.216.34
+
+Step by step:
+1. Recursive resolver queries a root server: &#34;Who handles .com?&#34;
+   Root: NS a.gtld-servers.net (192.5.6.30), etc.
+   Root: also returns glue records (IPs of the TLD servers)
+
+2. Resolver queries a .com TLD server: &#34;Who handles example.com?&#34;
+   TLD: NS ns1.example.com (192.0.2.1), ns2.example.com (192.0.2.2)
+
+3. Resolver queries ns1.example.com: &#34;What&#39;s the A record for www.example.com?&#34;
+   Authoritative: A 93.184.216.34
+
+4. Resolver caches the answer and returns it to the client.
+   TTL determines how long the cache is valid.
+						</pre>
+						<p>
+							The 13 root servers (a.root-servers.net through m.root-servers.net) are the starting point.
+							Every recursive resolver ships with a root hints file listing these servers. The root zone is
+							signed with
+							<abbr title="Domain Name System Security Extensions">DNSSEC</abbr>
+							and served by anycast across hundreds
+							of instances worldwide.
+						</p>
+						<pre class="bash">
+# View root hints
+cat /etc/unbound/root.hints
+# Or:
+dig . NS
+
+# Trace resolution from root down
+dig +trace www.example.com A
+						</pre>
+					</section>
+					<section>
+						<h3 id="dns-packet-structure-wire-format">DNS Packet Structure - Wire Format</h3>
+						<p>
+							<abbr title="Domain Name System">DNS</abbr>
+							uses a binary wire format designed for compact encoding. Every
+							<abbr title="Domain Name System">DNS</abbr>
+							message has the same structure:
+						</p>
+						<pre class="plaintext">
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                        Transaction ID (16)                    |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|QR|   Opcode  |AA|TC|RD|RA| Z|AD|CD|          RCODE           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                        QDCOUNT (16)                           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                        ANCOUNT (16)                           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                        NSCOUNT (16)                           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                        ARCOUNT (16)                           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                     Question Section (variable)               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                     Answer Section (variable)                 |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                     Authority Section (variable)              |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                     Additional Section (variable)             |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+						</pre>
+						<h4 id="header-field-breakdown">Header field breakdown</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Field</th>
+									<th align="center">Bits</th>
+									<th align="center">Purpose</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Transaction ID</td>
+									<td align="center">16</td>
+									<td align="center">Matches queries to responses</td>
+								</tr>
+								<tr>
+									<td align="center">QR</td>
+									<td align="center">1</td>
+									<td align="center">0=Query, 1=Response</td>
+								</tr>
+								<tr>
+									<td align="center">Opcode</td>
+									<td align="center">4</td>
+									<td align="center">0=Standard query, 1=IQUERY (obsolete), 2=Status, 4=Notify, 5=Update</td>
+								</tr>
+								<tr>
+									<td align="center">AA</td>
+									<td align="center">1</td>
+									<td align="center">Authoritative Answer (response is from authoritative server)</td>
+								</tr>
+								<tr>
+									<td align="center">TC</td>
+									<td align="center">1</td>
+									<td align="center">Truncation (response too large for UDP; retry via TCP)</td>
+								</tr>
+								<tr>
+									<td align="center">RD</td>
+									<td align="center">1</td>
+									<td align="center">Recursion Desired (ask the resolver to follow the chain)</td>
+								</tr>
+								<tr>
+									<td align="center">RA</td>
+									<td align="center">1</td>
+									<td align="center">Recursion Available (the resolver supports recursion)</td>
+								</tr>
+								<tr>
+									<td align="center">Z</td>
+									<td align="center">1</td>
+									<td align="center">Reserved (zero)</td>
+								</tr>
+								<tr>
+									<td align="center">AD</td>
+									<td align="center">1</td>
+									<td align="center">Authentic Data (DNSSEC-validated response)</td>
+								</tr>
+								<tr>
+									<td align="center">CD</td>
+									<td align="center">1</td>
+									<td align="center">Checking Disabled (don't validate DNSSEC)</td>
+								</tr>
+								<tr>
+									<td align="center">RCODE</td>
+									<td align="center">4</td>
+									<td align="center">Response code: 0=NoError, 1=FormErr, 2=ServFail, 3=NXDomain, 4=NotImp, 5=Refused</td>
+								</tr>
+								<tr>
+									<td align="center">QDCOUNT</td>
+									<td align="center">16</td>
+									<td align="center">Number of entries in Question section</td>
+								</tr>
+								<tr>
+									<td align="center">ANCOUNT</td>
+									<td align="center">16</td>
+									<td align="center">Number of entries in Answer section</td>
+								</tr>
+								<tr>
+									<td align="center">NSCOUNT</td>
+									<td align="center">16</td>
+									<td align="center">Number of entries in Authority section</td>
+								</tr>
+								<tr>
+									<td align="center">ARCOUNT</td>
+									<td align="center">16</td>
+									<td align="center">Number of entries in Additional section</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="rcode-values">RCODE values</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Code</th>
+									<th align="center">Name</th>
+									<th align="center">Meaning</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">0</td>
+									<td align="center">NOERROR</td>
+									<td align="center">Query succeeded</td>
+								</tr>
+								<tr>
+									<td align="center">1</td>
+									<td align="center">FORMERR</td>
+									<td align="center">Format error - query malformed</td>
+								</tr>
+								<tr>
+									<td align="center">2</td>
+									<td align="center">SERVFAIL</td>
+									<td align="center">Server failed to process query</td>
+								</tr>
+								<tr>
+									<td align="center">3</td>
+									<td align="center">NXDOMAIN</td>
+									<td align="center">Name does not exist</td>
+								</tr>
+								<tr>
+									<td align="center">4</td>
+									<td align="center">NOTIMP</td>
+									<td align="center">Not implemented</td>
+								</tr>
+								<tr>
+									<td align="center">5</td>
+									<td align="center">REFUSED</td>
+									<td align="center">Server refused to answer (policy)</td>
+								</tr>
+								<tr>
+									<td align="center">6</td>
+									<td align="center">YXDOMAIN</td>
+									<td align="center">Name exists when it should not</td>
+								</tr>
+								<tr>
+									<td align="center">7</td>
+									<td align="center">YXRRSET</td>
+									<td align="center">RR set exists when it should not</td>
+								</tr>
+								<tr>
+									<td align="center">8</td>
+									<td align="center">NXRRSET</td>
+									<td align="center">RR set does not exist</td>
+								</tr>
+								<tr>
+									<td align="center">9</td>
+									<td align="center">NOTAUTH</td>
+									<td align="center">Server is not authoritative for zone</td>
+								</tr>
+								<tr>
+									<td align="center">10</td>
+									<td align="center">NOTZONE</td>
+									<td align="center">Name not in zone</td>
+								</tr>
+								<tr>
+									<td align="center">16</td>
+									<td align="center">BADVERS</td>
+									<td align="center">Bad EDNS version</td>
+								</tr>
+								<tr>
+									<td align="center">17</td>
+									<td align="center">BADKEY</td>
+									<td align="center">Key not recognized (TSIG)</td>
+								</tr>
+								<tr>
+									<td align="center">18</td>
+									<td align="center">BADTIME</td>
+									<td align="center">Time out of sync (TSIG)</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="dns-name-encoding-label-compression">DNS Name Encoding - Label Compression</h3>
+						<p>
+							Domain names in
+							<abbr title="Domain Name System">DNS</abbr>
+							wire format use length-prefixed labels, not dots:
+						</p>
+						<pre class="plaintext">
+&#34;www.example.com&#34; on the wire:
+  3 &#39;w&#39; &#39;w&#39; &#39;w&#39;  7 &#39;e&#39; &#39;x&#39; &#39;a&#39; &#39;m&#39; &#39;p&#39; &#39;l&#39; &#39;e&#39;  3 &#39;c&#39; &#39;o&#39; &#39;m&#39;  0
+
+Encoded as: 0x03 77 77 77 0x07 65 78 61 6D 70 6C 65 0x03 63 6F 6D 0x00
+             ^^^ w  w  w  ^^^ e  x  a  m  p  l  e  ^^^ c  o  m  ^^^
+             len=3         len=7                     len=3        terminator
+						</pre>
+						<p>
+							<abbr title="Domain Name System">DNS</abbr>
+							uses pointer compression to avoid repeating domain names. When a name
+							or suffix appears elsewhere in the message, it is replaced by a 2-byte pointer:
+						</p>
+						<pre class="plaintext">
+Pointer format:
+  1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+  ^ ^ ^                       ^ ^
+  | | |_______________________| |
+  | |     offset (14 bits)      |
+  | |____________________________|
+  |    Marker bits (11)
+
+Example: 0xC0 0x0C = pointer to offset 12 in the DNS message
+						</pre>
+						<p>
+							This is critical for zone transfers and large responses - without compression, responses would
+							be significantly larger.
+						</p>
+					</section>
+					<section>
+						<h3 id="dns-record-types-complete-reference">DNS Record Types - Complete Reference</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Type</th>
+									<th align="center">Value</th>
+									<th align="center">Purpose</th>
+									<th align="center">Example Data</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">A</td>
+									<td align="center">1</td>
+									<td align="center">IPv4 address</td>
+									<td align="center">93.184.216.34</td>
+								</tr>
+								<tr>
+									<td align="center">AAAA</td>
+									<td align="center">28</td>
+									<td align="center">IPv6 address</td>
+									<td align="center">2606:2800:220:1:248:1893:25c8:1946</td>
+								</tr>
+								<tr>
+									<td align="center">NS</td>
+									<td align="center">2</td>
+									<td align="center">Nameserver for zone</td>
+									<td align="center">ns1.example.com</td>
+								</tr>
+								<tr>
+									<td align="center">CNAME</td>
+									<td align="center">5</td>
+									<td align="center">Canonical name (alias)</td>
+									<td align="center">www.example.com -> example.com</td>
+								</tr>
+								<tr>
+									<td align="center">SOA</td>
+									<td align="center">6</td>
+									<td align="center">Start of Authority</td>
+									<td align="center">ns1.example.com admin.example.com 2024010101 ...</td>
+								</tr>
+								<tr>
+									<td align="center">PTR</td>
+									<td align="center">12</td>
+									<td align="center">Reverse DNS (IP->name)</td>
+									<td align="center">34.216.184.93.in-addr.arpa -> example.com</td>
+								</tr>
+								<tr>
+									<td align="center">MX</td>
+									<td align="center">15</td>
+									<td align="center">Mail exchange</td>
+									<td align="center">10 mail.example.com</td>
+								</tr>
+								<tr>
+									<td align="center">TXT</td>
+									<td align="center">16</td>
+									<td align="center">Text data</td>
+									<td align="center">"v=spf1 include:_spf.example.com~all"</td>
+								</tr>
+								<tr>
+									<td align="center">SRV</td>
+									<td align="center">33</td>
+									<td align="center">Service locator</td>
+									<td align="center">0 5 5060 sip.example.com</td>
+								</tr>
+								<tr>
+									<td align="center">CAA</td>
+									<td align="center">257</td>
+									<td align="center">Certificate Authority Authorization</td>
+									<td align="center">0 issue "letsencrypt.org"</td>
+								</tr>
+								<tr>
+									<td align="center">RRSIG</td>
+									<td align="center">46</td>
+									<td align="center">DNSSEC signature</td>
+									<td align="center">(cryptographic signature over RRset)</td>
+								</tr>
+								<tr>
+									<td align="center">DNSKEY</td>
+									<td align="center">48</td>
+									<td align="center">DNSSEC public key</td>
+									<td align="center">(zone signing key or key signing key)</td>
+								</tr>
+								<tr>
+									<td align="center">DS</td>
+									<td align="center">43</td>
+									<td align="center">Delegation Signer</td>
+									<td align="center">(hash of child's DNSKEY for chain of trust)</td>
+								</tr>
+								<tr>
+									<td align="center">NSEC</td>
+									<td align="center">47</td>
+									<td align="center">Next Secure (authenticated denial)</td>
+									<td align="center">(next existing name in zone)</td>
+								</tr>
+								<tr>
+									<td align="center">NSEC3</td>
+									<td align="center">50</td>
+									<td align="center">NSEC3 (hashed authenticated denial)</td>
+									<td align="center">(next hashed name, prevents zone walking)</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="record-type-deep-dive">Record type deep dive</h4>
+						<pre class="plaintext">
+A (Address):     example.com.         3600  IN  A      93.184.216.34
+AAAA (IPv6):     example.com.         3600  IN  AAAA   2606:2800:220:1:248:1893:25c8:1946
+CNAME (Alias):   www.example.com.     3600  IN  CNAME  example.com.
+MX (Mail):       example.com.         3600  IN  MX     10 mail.example.com.
+                                                 MX     20 mail2.example.com.
+NS (Nameserver): example.com.         86400 IN  NS     ns1.example.com.
+SOA (Authority): example.com.         86400 IN  SOA    ns1.example.com. admin.example.com. (
+                                                        2024010101  ; serial
+                                                        7200        ; refresh (2h)
+                                                        3600        ; retry (1h)
+                                                        1209600     ; expire (14d)
+                                                        86400 )     ; minimum TTL (1d)
+PTR (Reverse):   34.216.184.93.in-addr.arpa. 3600 IN PTR example.com.
+SRV (Service):   _sip._tcp.example.com. 3600 IN SRV  0 5 5060 sip.example.com.
+                                           priority weight port target
+TXT (Text):      example.com.         3600  IN  TXT   &#34;v=spf1 ip4:192.0.2.0/24 -all&#34;
+CAA (CA Policy): example.com.         3600  IN  CAA   0 issue &#34;letsencrypt.org&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="mx-priority-and-email-routing">MX Priority and Email Routing</h3>
+						<p>
+							MX records include a 16-bit priority. Lower numbers are tried first. Multiple records with the
+							same priority are load-balanced:
+						</p>
+						<pre class="plaintext">
+example.com.  MX  10  mail1.example.com   &lt;- tried first
+example.com.  MX  20  mail2.example.com   &lt;- tried only if mail1 is unreachable
+example.com.  MX  20  mail3.example.com   &lt;- load-balanced with mail2
+						</pre>
+						<pre class="bash">
+# Check MX with dig
+dig +short example.com MX
+
+# Check MX with human-readable output
+dig example.com MX +noall +answer
+
+# Output:
+# example.com.    3600    IN    MX    10  mail1.example.com.
+# example.com.    3600    IN    MX    20  mail2.example.com.
+						</pre>
+					</section>
+					<section>
+						<h3 id="dig-deep-dive">dig - Deep Dive</h3>
+						<p>
+							dig (Domain Information Groper) is the standard
+							<abbr title="Domain Name System">DNS</abbr>
+							diagnostic tool. It
+							sends
+							<abbr title="Domain Name System">DNS</abbr>
+							queries and displays the full response in a human-readable format.
+						</p>
+						<pre class="bash">
+# ── Basic queries ──
+
+# Simple A record query
+dig example.com
+
+# Show only the answer (no comments, no stats)
+dig example.com +short
+
+# Query a specific record type
+dig example.com MX
+dig example.com NS
+dig example.com SOA
+dig example.com TXT
+dig example.com ANY         # All records (rarely supported now)
+
+# Query a specific nameserver (bypass recursion)
+dig @8.8.8.8 example.com
+dig @ns1.example.com example.com
+
+# ── Output control ──
+
+# Suppress everything except answer
+dig example.com +noall +answer
+
+# Show only question and answer
+dig example.com +noall +question +answer
+
+# View full trace
+dig example.com +trace
+
+# ── DNSSEC ──
+
+# Query with DNSSEC validation
+dig example.com +dnssec
+
+# Check RRSIG, DNSKEY, DS records
+dig example.com DNSKEY +dnssec
+dig example.com DS +dnssec
+						</pre>
+					</section>
+					<section>
+						<h3 id="zone-transfers-axfr">Zone Transfers (AXFR)</h3>
+						<p>
+							Zone transfers replicate an entire
+							<abbr title="Domain Name System">DNS</abbr>
+							zone from an authoritative nameserver
+							to a secondary. They use
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							port 53 because zone data often
+							exceeds the 512-byte
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							limit. AXFR (Authoritative Transfer) sends
+							the complete zone; IXFR (Incremental Transfer) sends only changes since a given serial number.
+						</p>
+						<pre class="bash">
+# Attempt zone transfer
+dig axfr @ns1.example.com example.com
+
+# If successful, output shows every record in the zone:
+# example.com.        86400 IN SOA ns1.example.com. admin.example.com. ...
+# example.com.        3600  IN A   93.184.216.34
+# www.example.com.    3600  IN A   93.184.216.34
+# mail.example.com.   3600  IN A   93.184.216.35
+# ...
+
+# Attempt IXFR (incremental)
+dig ixfr=2024010101 @ns1.example.com example.com
+
+# Multiple nameservers often have different transfer policies
+# Try each NS from the NS record
+for ns in $(dig +short example.com NS); do
+    echo &#34;=== Trying $ns ===&#34;
+    dig axfr @$ns example.com
+done
+						</pre>
+						<p>
+							Zone transfers should be restricted to authorized secondary nameservers only. An open zone transfer
+							exposes the entire internal network topology - every hostname,
+							<abbr title="Internet Protocol">IP</abbr>
+							, and
+							subdomain.
+						</p>
+						<pre class="plaintext">
+; Zone transfer reveals internal infrastructure:
+;   vpn.example.com.     A 10.0.0.1
+;   admin.example.com.   A 10.0.0.5
+;   db.internal.example.com.  A 10.0.0.10
+						</pre>
+						<pre class="bash">
+# dnsrecon - automated zone transfer checking
+sudo pacman -S dnsrecon
+dnsrecon -d example.com -t axfr
+
+# fierce - DNS enumeration with zone transfer
+sudo pacman -S fierce
+fierce --domain example.com
+						</pre>
+					</section>
+					<section>
+						<h3 id="dns-caching-and-ttl">DNS Caching and TTL</h3>
+						<p>
+							Every
+							<abbr title="Domain Name System">DNS</abbr>
+							record has a
+							<abbr title="Time To Live">TTL</abbr>
+							(Time To Live) in seconds.
+							Resolvers and clients cache records for this duration.
+							<abbr title="Time To Live">TTL</abbr>
+							controls the tradeoff
+							between freshness and query load:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">TTL</th>
+									<th align="center">Use Case</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">30-300s</td>
+									<td align="center">Frequently changing records (load balancers, CDN failover)</td>
+								</tr>
+								<tr>
+									<td align="center">3600 (1h)</td>
+									<td align="center">Common default for A/AAAA records</td>
+								</tr>
+								<tr>
+									<td align="center">86400 (24h)</td>
+									<td align="center">NS, MX records (infrastructure that rarely changes)</td>
+								</tr>
+								<tr>
+									<td align="center">604800 (7d)</td>
+									<td align="center">SOA minimum TTL (negative caching for NXDOMAIN)</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Check TTL
+dig example.com +noall +answer
+# example.com.    3600    IN    A    93.184.216.34
+#                 ^^^^ TTL (seconds remaining at the resolver you queried)
+
+# View record with original TTL from authoritative server
+dig @ns1.example.com example.com +noall +answer
+
+# Query caching resolver for its cached TTL
+dig @resolver.local example.com +noall +answer
+
+# Force fresh lookup (bypass local cache)
+dig @ns1.example.com example.com +noall +answer
+						</pre>
+					</section>
+					<section>
+						<h3 id="cache-poisoning">Cache Poisoning</h3>
+						<p>
+							<abbr title="Domain Name System">DNS</abbr>
+							cache poisoning tricks a recursive resolver into storing a forged
+							record. The classic Kaminsky attack (2008) exploited the 16-bit transaction ID - only 65,536
+							possible values. By flooding the resolver with forged responses while the real response was
+							in transit, an attacker could guess the transaction ID and inject a malicious NS record:
+						</p>
+						<pre class="plaintext">
+Classic Kaminsky attack:
+  Attacker: sends query for random.example.com to victim resolver
+  Attacker: floods resolver with forged responses claiming:
+    &#34;random.example.com doesn&#39;t exist (NXDOMAIN)
+     BUT the nameserver for example.com is attacker.evil.com&#34;
+  Attack succeeds if forged response arrives with correct TXID before real one
+
+Mitigation:
+  - Source port randomization (adds 16 bits of entropy)
+  - DNSSEC (cryptographic signatures)
+  - 0x20 encoding (randomize case in query names - adds entropy)
+						</pre>
+						<p>
+							Modern resolvers randomize both transaction ID and source port, making the attack space 32 bits
+							(4 billion possibilities).
+							<abbr title="Domain Name System Security Extensions">DNSSEC</abbr>
+							provides cryptographic
+							protection regardless.
+						</p>
+					</section>
+					<section>
+						<h3 id="dnssec-chain-of-trust">DNSSEC - Chain of Trust</h3>
+						<p>
+							<abbr title="Domain Name System Security Extensions">DNSSEC</abbr>
+							adds digital signatures to
+							<abbr title="Domain Name System">DNS</abbr>
+							responses. It does NOT encrypt
+							<abbr title="Domain Name System">DNS</abbr>
+							traffic - it only signs records so
+							resolvers can verify they haven't been tampered with.
+							<abbr title="Domain Name System Security Extensions">DNSSEC</abbr>
+							uses public-key cryptography:
+						</p>
+						<pre class="plaintext">
+Chain of trust:
+
+Root Zone (.)
+  DNSKEY: root&#39;s public key (trust anchor - configured in resolver)
+  DS: hash of .com&#39;s DNSKEY
+
+                 v validated by root&#39;s DNSKEY
+
+.com TLD
+  DNSKEY: .com&#39;s public key
+  DS: hash of example.com&#39;s DNSKEY
+
+                 v validated by .com&#39;s DNSKEY
+
+example.com
+  DNSKEY: example.com&#39;s public key
+  RRSIG: signature over A record for example.com
+
+                 v validated by example.com&#39;s DNSKEY
+
+example.com A 93.184.216.34  &lt;- signature verified!
+						</pre>
+						<h4 id="key-dnssec-record-types">Key DNSSEC record types</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Record</th>
+									<th align="center">Purpose</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">DNSKEY</td>
+									<td align="center">Zone's public key (ZSK = Zone Signing Key, KSK = Key Signing Key)</td>
+								</tr>
+								<tr>
+									<td align="center">RRSIG</td>
+									<td align="center">Cryptographic signature over an RRset</td>
+								</tr>
+								<tr>
+									<td align="center">DS</td>
+									<td align="center">Delegation Signer - hash of child zone's KSK, stored in parent</td>
+								</tr>
+								<tr>
+									<td align="center">NSEC</td>
+									<td align="center">Next Secure - proves a name does not exist (links existing names)</td>
+								</tr>
+								<tr>
+									<td align="center">NSEC3</td>
+									<td align="center">Same as NSEC, but uses hashed names (prevents zone enumeration)</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Check if a domain uses DNSSEC
+dig example.com +dnssec +short
+
+# View the RRSIG (contains algorithm, key tag, signer, expiration)
+dig example.com A +dnssec +noall +answer
+
+# Output:
+# example.com.    3600 IN A        93.184.216.34
+# example.com.    3600 IN RRSIG    A 13 2 3600 20240130000000 20240101000000
+#                                   34505 example.com. (base64-signature)
+#                                   ^^^^^ algorithm (13=ECDSAP256SHA256)
+#                                   ^^^^^ key tag (34505)
+
+# Verify the chain of trust manually
+dig . DNSKEY +noall +answer        # Root&#39;s KSK
+dig com. DS +noall +answer         # .com DS in root
+dig example.com DNSKEY +noall +answer  # example.com&#39;s keys
+						</pre>
+					</section>
+					<section>
+						<h3 id="dns-over-https-and-dns-over-tls">DNS over HTTPS and DNS over TLS</h3>
+						<p>
+							Both protocols encrypt
+							<abbr title="Domain Name System">DNS</abbr>
+							queries to prevent eavesdropping and manipulation:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Feature</th>
+									<th align="center">DoH (RFC 8484)</th>
+									<th align="center">DoT (RFC 7858)</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Protocol</td>
+									<td align="center">HTTP/2 + TLS</td>
+									<td align="center">TLS directly</td>
+								</tr>
+								<tr>
+									<td align="center">Port</td>
+									<td align="center">443</td>
+									<td align="center">853</td>
+								</tr>
+								<tr>
+									<td align="center">URL</td>
+									<td align="center">https://resolver/dns-query</td>
+									<td align="center">tls://resolver:853</td>
+								</tr>
+								<tr>
+									<td align="center">Visibility</td>
+									<td align="center">Indistinguishable from other HTTPS</td>
+									<td align="center">Distinct port (firewall-able)</td>
+								</tr>
+								<tr>
+									<td align="center">Framing</td>
+									<td align="center">HTTP request/response (Content-Type: application/dns-message)</td>
+									<td align="center">2-byte length prefix + DNS message</td>
+								</tr>
+								<tr>
+									<td align="center">Use case</td>
+									<td align="center">Browser-based (hides in web traffic)</td>
+									<td align="center">System-level (dedicated port)</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# DoH query using curl
+curl -H &#34;Accept: application/dns-message&#34; \
+    &#34;https://cloudflare-dns.com/dns-query?name=example.com&amp;type=A&#34;
+
+# DoH query using kdig (from knot-dnsutils)
+sudo pacman -S knot
+kdig +https @cloudflare-dns.com example.com A
+
+# DoT query using kdig
+kdig +tls @cloudflare-dns.com example.com A
+
+# DoH query with Python
+python3 &lt;&lt; &#39;EOF&#39;
+import requests
+import dns.message
+import base64
+
+query = dns.message.make_query(&#34;example.com&#34;, &#34;A&#34;)
+wire = query.to_wire()
+
+response = requests.get(
+    &#34;https://cloudflare-dns.com/dns-query&#34;,
+    headers={&#34;Accept&#34;: &#34;application/dns-message&#34;},
+    params={&#34;dns&#34;: base64.urlsafe_b64encode(wire).rstrip(b&#34;=&#34;)}
+
+)
+print(f&#34;Status: {response.status_code}&#34;)
+print(f&#34;Response size: {len(response.content)} bytes&#34;)
+EOF
+						</pre>
+					</section>
+					<section>
+						<h3 id="edns0-extension-mechanisms-for-dns">EDNS0 - Extension Mechanisms for DNS</h3>
+						<p>
+							<code>EDNS0</code>
+							(RFC 6891) extends
+							<abbr title="Domain Name System">DNS</abbr>
+							with larger
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							payload sizes, additional flags, and the ability to carry
+							<abbr title="Domain Name System Security Extensions">DNSSEC</abbr>
+							information. It is signaled by the
+							<code>OPT</code>
+							pseudo-record type (41) in the Additional section:
+						</p>
+						<pre class="bash">
+# Check if resolver supports EDNS0
+dig example.com +noall +additional
+
+# Output shows OPT pseudo-record:
+# ;; OPT PSEUDOSECTION:
+# ; EDNS: version: 0, flags:; udp: 1232
+#                             ^^^^ Max UDP payload size advertised
+
+# Query with specific EDNS buffer size
+dig example.com +bufsize=4096
+
+# Query with EDNS client subnet (ECS - sends subnet info)
+dig example.com +subnet=192.168.0.0/24
+						</pre>
+						<p>
+							<code>EDNS0</code>
+							is critical for
+							<abbr title="Domain Name System Security Extensions">DNSSEC</abbr>
+							because:
+						</p>
+						<ul>
+							<li><abbr title="Domain Name System Security Extensions">DNSSEC</abbr> responses regularly exceed 512 bytes, the original <abbr title="Domain Name System">DNS</abbr>  <abbr title="User Datagram Protocol">UDP</abbr> limit.</li>
+							<li>The DO ( <abbr title="Domain Name System Security Extensions">DNSSEC</abbr> OK) flag in <code>EDNS0</code> signals that the resolver can handle <abbr title="Domain Name System Security Extensions">DNSSEC</abbr> data.</li>
+							<li>The <code>EDNS0</code> buffer size negotiation allows <abbr title="User Datagram Protocol">UDP</abbr> payloads of 4096 bytes and larger.</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="reverse-dns-ptr-records">Reverse DNS - PTR Records</h3>
+						<p>
+							Reverse
+							<abbr title="Domain Name System">DNS</abbr>
+							maps
+							<abbr title="Internet Protocol">IP</abbr>
+							addresses back to domain names.
+							It uses the special domain
+							<code>in-addr.arpa</code>
+							(
+							<abbr title="Internet Protocol Version 4">IPv4</abbr>
+							) or
+							<code>ip6.arpa</code>
+							(
+							<abbr title="Internet Protocol Version 6">IPv6</abbr>
+							):
+						</p>
+						<pre class="plaintext">
+IPv4 reverse: 192.0.2.34  -&gt;  34.2.0.192.in-addr.arpa  PTR  example.com.
+IPv6 reverse: 2001:db8::1 -&gt;  1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                              Each hex digit becomes a dot-separated label, reversed, appended to ip6.arpa
+						</pre>
+						<pre class="bash">
+# Manual reverse lookup
+dig -x 8.8.8.8 +short
+# dns.google.
+
+# Equivalent to:
+dig PTR 8.8.8.8.in-addr.arpa +short
+
+# Reverse DNS is often delegated differently than forward DNS
+# The ISP usually controls the in-addr.arpa zone for IP blocks
+						</pre>
+					</section>
+					<section>
+						<h3 id="writing-a-dns-query-builder-in-python">Writing a DNS Query Builder in Python</h3>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;
+Build DNS queries from scratch using struct - no libraries.
+Demonstrates the wire format, label encoding, and compression.
+&#34;&#34;&#34;
+import socket
+import struct
+import random
+
+def encode_dns_name(name: str) -&gt; bytes:
+    &#34;&#34;&#34;Encode a domain name into DNS wire format (length-prefixed labels).&#34;&#34;&#34;
+    encoded = b&#39;&#39;
+    for label in name.rstrip(&#39;.&#39;).split(&#39;.&#39;):
+        label_bytes = label.encode(&#39;ascii&#39;, errors=&#39;replace&#39;)
+        if len(label_bytes) &gt; 63:
+            raise ValueError(f&#34;Label too long: {label}&#34;)
+        encoded += struct.pack(&#39;B&#39;, len(label_bytes)) + label_bytes
+    encoded += b&#39;\x00&#39;  # Terminator
+    return encoded
+
+def build_dns_query(domain: str, qtype: int = 1, qclass: int = 1,
+                    recursion: bool = True) -&gt; bytes:
+    &#34;&#34;&#34;
+    Build a DNS query packet.
+    
+    qtype:  1=A, 2=NS, 5=CNAME, 6=SOA, 15=MX, 16=TXT, 28=AAAA, 255=ANY
+    qclass: 1=IN (Internet), 3=CH (Chaos), 4=HS (Hesiod)
+    &#34;&#34;&#34;
+    transaction_id = random.randint(0, 0xFFFF)
+
+    flags = 0x0000
+    if recursion:
+        flags |= 0x0100  # RD = Recursion Desired
+
+    # Header: ID, flags, QD/AN/NS/AR counts
+    header = struct.pack(
+        &#39;!HHHHHH&#39;,
+        transaction_id,
+        flags,
+        1,   # QDCOUNT = 1 question
+        0,   # ANCOUNT = 0
+        0,   # NSCOUNT = 0
+        0,   # ARCOUNT = 0 (no EDNS, no additional records)
+    )
+
+    # Question: QNAME + QTYPE + QCLASS
+    question = encode_dns_name(domain) + struct.pack(&#39;!HH&#39;, qtype, qclass)
+
+    return header + question
+
+def parse_dns_reply(packet: bytes) -&gt; dict:
+    &#34;&#34;&#34;Parse a DNS response packet and extract answers.&#34;&#34;&#34;
+    result = {
+        &#39;id&#39;: struct.unpack(&#39;!H&#39;, packet[0:2])[0],
+        &#39;flags&#39;: struct.unpack(&#39;!H&#39;, packet[2:4])[0],
+        &#39;qdcount&#39;: struct.unpack(&#39;!H&#39;, packet[4:6])[0],
+        &#39;ancount&#39;: struct.unpack(&#39;!H&#39;, packet[6:8])[0],
+        &#39;answers&#39;: []
+    }
+
+    # Skip header + question section
+    offset = 12
+
+    # Skip question section
+    for _ in range(result[&#39;qdcount&#39;]):
+        while packet[offset] != 0:
+            if packet[offset] &amp; 0xC0 == 0xC0:  # Pointer
+                offset += 2
+                break
+            offset += packet[offset] + 1
+        if packet[offset] == 0:
+            offset += 1  # Skip zero-length label
+        offset += 4  # Skip QTYPE + QCLASS
+
+    # Parse answer section
+    for _ in range(result[&#39;ancount&#39;]):
+        # Decode the name (may include compression pointers)
+        name_data, new_offset = decode_dns_name_from_packet(packet, offset)
+        offset = new_offset
+
+        rtype, rclass, ttl, rdlength = struct.unpack(
+            &#39;!HHIH&#39;, packet[offset:offset+10]
+        )
+        offset += 10
+
+        rdata = packet[offset:offset+rdlength]
+
+        # Parse RDATA based on type
+        if rtype == 1 and rdlength == 4:  # A record
+            ip = socket.inet_ntoa(rdata)
+            result[&#39;answers&#39;].append({
+                &#39;name&#39;: name_data,
+                &#39;type&#39;: &#39;A&#39;,
+                &#39;ttl&#39;: ttl,
+                &#39;data&#39;: ip
+            })
+        elif rtype == 28 and rdlength == 16:  # AAAA record
+            ip = socket.inet_ntop(socket.AF_INET6, rdata)
+            result[&#39;answers&#39;].append({
+                &#39;name&#39;: name_data,
+                &#39;type&#39;: &#39;AAAA&#39;,
+                &#39;ttl&#39;: ttl,
+                &#39;data&#39;: ip
+            })
+        elif rtype == 5:  # CNAME
+            cname, _ = decode_dns_name_from_packet(packet, offset - 10)
+            result[&#39;answers&#39;].append({
+                &#39;name&#39;: name_data,
+                &#39;type&#39;: &#39;CNAME&#39;,
+                &#39;ttl&#39;: ttl,
+                &#39;data&#39;: cname
+            })
+        elif rtype == 15:  # MX
+            preference = struct.unpack(&#39;!H&#39;, rdata[:2])[0]
+            mx, _ = decode_dns_name_from_packet(packet, offset - rdlength + 2)
+            result[&#39;answers&#39;].append({
+                &#39;name&#39;: name_data,
+                &#39;type&#39;: &#39;MX&#39;,
+                &#39;ttl&#39;: ttl,
+                &#39;data&#39;: f&#39;{preference} {mx}&#39;
+            })
+        elif rtype == 2:  # NS
+            ns, _ = decode_dns_name_from_packet(packet, offset - rdlength)
+            result[&#39;answers&#39;].append({
+                &#39;name&#39;: name_data,
+                &#39;type&#39;: &#39;NS&#39;,
+                &#39;ttl&#39;: ttl,
+                &#39;data&#39;: ns
+            })
+
+        offset += rdlength
+
+    return result
+
+def decode_dns_name_from_packet(packet: bytes, offset: int) -&gt; tuple[str, int]:
+    &#34;&#34;&#34;Decode a DNS name from a packet, handling compression pointers.&#34;&#34;&#34;
+    labels = []
+    jumped = False
+    original_offset = offset
+
+    while True:
+        if offset &gt;= len(packet):
+            break
+
+        length = packet[offset]
+
+        if length == 0:
+            if not jumped:
+                offset += 1
+            break
+
+        # Compression pointer (top 2 bits set)
+        if (length &amp; 0xC0) == 0xC0:
+            pointer = struct.unpack(&#39;!H&#39;, packet[offset:offset+2])[0] &amp; 0x3FFF
+            if not jumped:
+                original_offset = offset + 2
+                jumped = True
+            offset = pointer
+            continue
+
+        offset += 1
+        label = packet[offset:offset+length].decode(&#39;ascii&#39;, errors=&#39;replace&#39;)
+        labels.append(label)
+        offset += length
+
+    return (&#39;.&#39;.join(labels), original_offset)
+
+def dns_lookup(domain: str, qtype: str = &#39;A&#39;,
+               server: str = &#39;8.8.8.8&#39;) -&gt; dict:
+    &#34;&#34;&#34;Perform a DNS lookup and return parsed results.&#34;&#34;&#34;
+    type_map = {
+        &#39;A&#39;: 1, &#39;NS&#39;: 2, &#39;CNAME&#39;: 5, &#39;SOA&#39;: 6, &#39;PTR&#39;: 12,
+        &#39;MX&#39;: 15, &#39;TXT&#39;: 16, &#39;AAAA&#39;: 28, &#39;ANY&#39;: 255
+    }
+
+    query = build_dns_query(domain, type_map.get(qtype, 1))
+
+    # Send via UDP
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.settimeout(5)
+
+    try:
+        sock.sendto(query, (server, 53))
+        response, _ = sock.recvfrom(4096)
+        sock.close()
+        return parse_dns_reply(response)
+    except socket.timeout:
+        sock.close()
+        return {&#39;answers&#39;: [], &#39;error&#39;: &#39;timeout&#39;}
+    except Exception as e:
+        sock.close()
+        return {&#39;answers&#39;: [], &#39;error&#39;: str(e)}
+
+# ── Usage ──
+if __name__ == &#39;__main__&#39;:
+    import sys
+    domain = sys.argv[1] if len(sys.argv) &gt; 1 else &#39;example.com&#39;
+    qtype = sys.argv[2] if len(sys.argv) &gt; 2 else &#39;A&#39;
+
+    result = dns_lookup(domain, qtype)
+    print(f&#34;DNS Query: {domain} {qtype}&#34;)
+    print(f&#34;Answers ({len(result[&#39;answers&#39;])}):&#34;)
+    for ans in result[&#39;answers&#39;]:
+        print(f&#34;  {ans[&#39;name&#39;]}  {ans[&#39;ttl&#39;]}s  {ans[&#39;type&#39;]}  {ans[&#39;data&#39;]}&#34;)
+						</pre>
+					</section>
+					<section>
+						<h3 id="common-dns-tools-reference">Common DNS Tools Reference</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Tool</th>
+									<th align="center">Package</th>
+									<th align="center">Primary Use</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">dig</td>
+									<td align="center">bind (Arch: bind)</td>
+									<td align="center">Manual DNS queries, zone transfer</td>
+								</tr>
+								<tr>
+									<td align="center">host</td>
+									<td align="center">bind</td>
+									<td align="center">Simple DNS lookups</td>
+								</tr>
+								<tr>
+									<td align="center">nslookup</td>
+									<td align="center">bind</td>
+									<td align="center">Legacy query tool (interactive)</td>
+								</tr>
+								<tr>
+									<td align="center">dnsrecon</td>
+									<td align="center">dnsrecon</td>
+									<td align="center">DNS enumeration, zone transfer, brute force</td>
+								</tr>
+								<tr>
+									<td align="center">fierce</td>
+									<td align="center">fierce</td>
+									<td align="center">DNS enumeration with subdomain bruteforce</td>
+								</tr>
+								<tr>
+									<td align="center">dnsenum</td>
+									<td align="center">dnsenum</td>
+									<td align="center">Automated DNS enumeration</td>
+								</tr>
+								<tr>
+									<td align="center">subfinder</td>
+									<td align="center">subfinder</td>
+									<td align="center">Passive subdomain discovery</td>
+								</tr>
+								<tr>
+									<td align="center">massdns</td>
+									<td align="center">massdns</td>
+									<td align="center">High-performance bulk DNS resolver</td>
+								</tr>
+								<tr>
+									<td align="center">kdig</td>
+									<td align="center">knot</td>
+									<td align="center">Modern dig alternative with DoT/DoH</td>
+								</tr>
+								<tr>
+									<td align="center">dnswalk</td>
+									<td align="center">dnswalk</td>
+									<td align="center">Zone file debugger</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# host - quick lookups
+host example.com
+host -t MX example.com
+host -t NS example.com
+host 8.8.8.8    # Reverse lookup
+
+# nslookup (interactive mode)
+nslookup
+&gt; server 8.8.8.8
+&gt; set type=MX
+&gt; example.com
+&gt; exit
+
+# dnsrecon - enumerate subdomains
+dnsrecon -d example.com -t std     # Standard enumeration
+dnsrecon -d example.com -t brt -D subdomains.txt  # Brute force
+
+# massdns - resolve thousands of subdomains quickly
+massdns -r resolvers.txt -t A -o S subdomains.txt
+						</pre>
+					</section>
+					<section>
+						<h3 id="summary">Summary</h3>
+						<p>
+							<abbr title="Domain Name System">DNS</abbr>
+							is a hierarchical, distributed database that maps names to
+							<abbr title="Internet Protocol">IP</abbr>
+							addresses. It operates on a binary wire protocol over
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							(standard
+							queries) and
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							(zone transfers, large responses).
+							<abbr title="Domain Name System Security Extensions">DNSSEC</abbr>
+							adds cryptographic integrity through a chain of trust from the root zone down. Modern privacy
+							extensions (DoH, DoT) encrypt
+							<abbr title="Domain Name System">DNS</abbr>
+							traffic. The protocol's simple query/response
+							model, label compression scheme, and caching architecture have proven remarkably resilient -
+							it is the backbone of every Internet service.
+						</p>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a minimal
+							<abbr title="Domain Name System">DNS</abbr>
+							client in Go without a
+							<abbr title="Domain Name System">DNS</abbr>
+							library.
+							Build the 12-byte header and the question section with
+							<code>encoding/binary</code>
+							, send the packet over
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							to
+							<code>1.1.1.1:53</code>
+							, and print every answer. Then extend it: handle
+							compression pointers in the response and print the
+							<abbr title="Time To Live">TTL</abbr>
+							of each record.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;encoding/binary&#34;
+	&#34;fmt&#34;
+	&#34;net&#34;
+	&#34;os&#34;
+)
+
+func encodeName(name string) []byte {
+	var out []byte
+	label := make([]byte, 0, 63)
+	flush := func() {
+		out = append(out, byte(len(label)))
+		out = append(out, label...)
+		label = label[:0]
+	}
+	for i := 0; i &lt; len(name); i++ {
+		if name[i] == &#39;.&#39; {
+			flush()
+		} else {
+			label = append(label, name[i])
+		}
+	}
+	if len(label) &gt; 0 {
+		flush()
+	}
+	return append(out, 0)
+}
+
+func main() {
+	query := make([]byte, 12)
+	binary.BigEndian.PutUint16(query[0:2], 0x1234) // transaction ID
+	binary.BigEndian.PutUint16(query[2:4], 0x0100) // RD = recursion desired
+	binary.BigEndian.PutUint16(query[4:6], 1)      // QDCOUNT
+	query = append(query, encodeName(os.Args[1])...)
+	query = binary.BigEndian.AppendUint16(query, 1) // QTYPE = A
+	query = binary.BigEndian.AppendUint16(query, 1) // QCLASS = IN
+
+	conn, err := net.Dial(&#34;udp&#34;, &#34;1.1.1.1:53&#34;)
+	if err != nil {
+		panic(err)
+	}
+	defer conn.Close()
+	conn.Write(query)
+
+	reply := make([]byte, 4096)
+	n, _ := conn.Read(reply)
+	fmt.Printf(&#34;got %d bytes, ANCOUNT=%d\n&#34;, n, binary.BigEndian.Uint16(reply[6:8]))
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc1034" target="_blank">RFC 1034 - Domain Names: Concepts and Facilities</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc1035" target="_blank">RFC 1035 - Domain Names: Implementation and Specification</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc6891" target="_blank">RFC 6891 - Extension Mechanisms for DNS (EDNS0)</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc4033" target="_blank">RFC 4033 - DNS Security Introduction and Requirements</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc8484" target="_blank">RFC 8484 - DNS Queries over HTTPS (DoH)</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc7858" target="_blank">RFC 7858 - Specification for DNS over Transport Layer Security (TLS)</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc2782" target="_blank">RFC 2782 - A DNS RR for specifying the location of services (SRV)</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc6844" target="_blank">RFC 6844 - DNS Certification Authority Authorization (CAA)</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/dig.1" target="_blank">dig(1) - DNS lookup utility</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

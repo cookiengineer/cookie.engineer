@@ -46,12 +46,17 @@
 		<aside class="visible">
 			<ul class="toc">
 				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
 					<b><a href="#required-reading">Required Reading</a></b>
 					<ul>
 					</ul>
 				</li>
 				<li>
-					<b><a href="#overview">Overview</a></b>
+					<b><a href="#udp-vs-tcp">UDP vs TCP</a></b>
 					<ul>
 					</ul>
 				</li>
@@ -92,6 +97,16 @@
 					<ul>
 					</ul>
 				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
 			</ul>
 		</aside>
 
@@ -113,14 +128,35 @@
 						rate limiting, and service-specific probes.
 					</p>
 					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							is connectionless: there is no handshake, no acknowledgment, and
+							no delivery guarantee. An open
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							port may stay completely silent,
+							and the only reliable signal that a port is closed is an
+							<abbr title="Internet Control Message Protocol">ICMP</abbr>
+							Port Unreachable error. After reading you can interpret
+							<code>nmap -sU</code>
+							port states and write protocol-specific
+							probes for services like
+							<abbr title="Domain Name System">DNS</abbr>
+							and
+							<abbr title="Simple Network Management Protocol">SNMP</abbr>
+							.
+						</p>
+					</section>
+					<section>
 						<h3 id="required-reading">Required Reading</h3>
 						<ul>
 							<li><a href="/wiki/articles/fundamentals/network-scanning.html">Network Scanning</a> - host discovery, port scanning fundamentals, nmap basics</li>
 							<li><a href="/wiki/articles/fundamentals/tcp.html">TCP</a> - <abbr title="Transmission Control Protocol">TCP</abbr> flags, handshake, state machine, connection lifecycle</li>
+							<li><a href="/wiki/articles/fundamentals/icmp.html">ICMP</a> - echo requests and error messages, including Port Unreachable</li>
 						</ul>
 					</section>
 					<section>
-						<h3 id="overview">Overview</h3>
+						<h3 id="udp-vs-tcp">UDP vs TCP</h3>
 						<p>
 							<abbr title="Transmission Control Protocol">TCP</abbr>
 							is connection-oriented. A
@@ -594,11 +630,9 @@ sudo nmap -sU -sV --version-intensity 9 192.168.1.1
 							responses between rounds. Each probe that doesn't
 							receive a response is retried. The default
 							<code>--max-retries</code>
-							parameter is essentially unbounded,
-							which makes
+							parameter is 10, which makes
 							<abbr title="User Datagram Protocol">UDP</abbr>
-							scans extremely slow and often taking hours for a
-							simple
+							scans extremely slow and often taking hours for a simple
 							<code>/24</code>
 							
 							<abbr title="Internet Protocol Version 4">IPv4</abbr>
@@ -770,16 +804,15 @@ def dns_probe(target: str, port: int = 53) -&gt; bool:
 							listens on the port
 							<code>161</code>
 							and uses
-							<abbr title="Autonomous System Number">ASN1</abbr>
-							BER encoding. A get-request for
+							<code>ASN.1</code>
+							BER encoding.
+							A get-request for
 							<code>sysDescr.0</code>
 							(OID
 							<code>1.3.6.1.2.1.1.1.0</code>
-							) will elicit a response
-							from any
+							) will elicit a response from any
 							<abbr title="Simple Network Management Protocol">SNMP</abbr>
-							enabled device even with the default "public"
-							community string:
+							enabled device even with the default "public" community string:
 						</p>
 						<pre class="python">
 import socket
@@ -1024,6 +1057,107 @@ sudo nft add rule inet filter input udp dport 161 reject with icmp type port-unr
 							<code>DROP</code>
 							rule sends no information back.
 						</p>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a
+							<abbr title="User Datagram Protocol">UDP</abbr>
+							prober in Go. Send a
+							<abbr title="Domain Name System">DNS</abbr>
+							A query
+							for
+							<code>example.com</code>
+							to a resolver, then print whether a response arrived and how long it took.
+							A response proves the port is
+							<code>open</code>
+							; a timeout leaves it
+							<code>open|filtered</code>
+							.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;encoding/binary&#34;
+	&#34;fmt&#34;
+	&#34;net&#34;
+	&#34;os&#34;
+	&#34;time&#34;
+)
+
+func encodeName(name string) []byte {
+	var out []byte
+	label := make([]byte, 0, 63)
+
+	for i := 0; i &lt; len(name); i++ {
+		if name[i] == &#39;.&#39; {
+			out = append(out, byte(len(label)))
+			out = append(out, label...)
+			label = label[:0]
+		} else {
+			label = append(label, name[i])
+		}
+	}
+
+	out = append(out, byte(len(label)))
+	out = append(out, label...)
+
+	return append(out, 0)
+}
+
+func main() {
+	target := &#34;1.1.1.1:53&#34;
+	if len(os.Args) &gt; 1 {
+		target = os.Args[1]
+	}
+
+	query := make([]byte, 12)
+	binary.BigEndian.PutUint16(query[0:2], 0x1234) // transaction ID
+	binary.BigEndian.PutUint16(query[2:4], 0x0100) // recursion desired
+	binary.BigEndian.PutUint16(query[4:6], 1)      // QDCOUNT
+	query = append(query, encodeName(&#34;example.com&#34;)...)
+	query = binary.BigEndian.AppendUint16(query, 1) // QTYPE A
+	query = binary.BigEndian.AppendUint16(query, 1) // QCLASS IN
+
+	conn, err := net.Dial(&#34;udp&#34;, target)
+	if err != nil {
+		panic(err)
+	}
+	defer conn.Close()
+
+	start := time.Now()
+	conn.Write(query)
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+
+	buf := make([]byte, 512)
+	n, err := conn.Read(buf)
+	if err != nil {
+		fmt.Printf(&#34;%s open|filtered (no response)\n&#34;, target)
+		os.Exit(0)
+	}
+
+	fmt.Printf(&#34;%s open (reply %d bytes in %s)\n&#34;, target, n, time.Since(start))
+}
+						</pre>
+						<p>
+							Compare the result with
+							<code>sudo nmap -sU -sV -p 53 &lt;target&gt;</code>
+							and explain why the socket
+							<abbr title="Application Programming Interface">API</abbr>
+							can never distinguish an open port that stays silent from a firewall that drops the probe.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc768" target="_blank">RFC 768 - User Datagram Protocol</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc792" target="_blank">RFC 792 - Internet Control Message Protocol</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc1122" target="_blank">RFC 1122 - Requirements for Internet Hosts (ICMP)</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc1812" target="_blank">RFC 1812 - Requirements for IP Version 4 Routers (ICMP rate limiting)</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc4443" target="_blank">RFC 4443 - Internet Control Message Protocol (ICMPv6)</a></li>
+							<li><a class="icon-website" href="https://nmap.org/book/man-port-scanning-techniques.html" target="_blank">Nmap - UDP Scan</a></li>
+						</ul>
 					</section>
 				</article>
 			</main>

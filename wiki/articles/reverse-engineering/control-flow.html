@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Control Flow Reconstruction | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Control Flow Reconstruction">
+		<meta name="keywords" content="basic-blocks, cfg, control-flow, dominator-tree, loop-detection, reverse-engineering, switch-recovery">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Control Flow Reconstruction">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Reconstructing high-level program logic from disassembly with control flow graphs, dominance, loop detection, and switch recovery.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/reverse-engineering/control-flow.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Control Flow Reconstruction">
+		<meta name="twitter:description" itemprop="description" content="Reconstructing high-level program logic from disassembly with control flow graphs, dominance, loop detection, and switch recovery.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#what-reconstruction-solves">What Reconstruction Solves</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#basic-blocks-and-discovery">Basic Blocks and Discovery</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#building-a-cfg-algorithm">Building a CFG Algorithm</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#high-level-structures-from-cfg">High-Level Structures from CFG</a></b>
+					<ul>
+						<li><a href="#if-then-no-else">if-then (no else)</a></li>
+						<li><a href="#if-then-else-diamond">if-then-else (diamond)</a></li>
+						<li><a href="#while-loop-pre-test">while loop (pre-test)</a></li>
+						<li><a href="#do-while-loop-post-test">do-while loop (post-test)</a></li>
+						<li><a href="#for-loop">for loop</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#loop-detection-with-dominance">Loop Detection with Dominance</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#switch-statement-recovery">Switch Statement Recovery</a></b>
+					<ul>
+						<li><a href="#jump-table-dense-cases">Jump table (dense cases)</a></li>
+						<li><a href="#decision-tree-sparse-cases">Decision tree (sparse cases)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tail-call-identification">Tail Call Identification</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#function-boundary-discovery">Function Boundary Discovery</a></b>
+					<ul>
+						<li><a href="#prologue-signature-scanning">Prologue signature scanning</a></li>
+						<li><a href="#call-target-collection">Call target collection</a></li>
+						<li><a href="#return-instruction-clustering">Return instruction clustering</a></li>
+						<li><a href="#gap-scanning">Gap scanning</a></li>
+						<li><a href="#cross-reference-analysis">Cross-reference analysis</a></li>
+						<li><a href="#ghidraida-approach">Ghidra/IDA approach</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#call-graphs">Call Graphs</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#data-flow-as-context-for-control-flow">Data Flow as Context for Control Flow</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#handling-obfuscated-control-flow">Handling Obfuscated Control Flow</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#go-cfg-builder">Go CFG Builder</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#loop-detection-walkthrough">Loop Detection Walkthrough</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#crypto-functions-by-cfg-shape">Crypto Functions by CFG Shape</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/reverse-engineering/index.html">Reverse Engineering</a></li>
+						<li aria-current="page"><a href="/wiki/articles/reverse-engineering/control-flow.html">Control Flow</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="control-flow-reconstruction">Control Flow Reconstruction</h2>
+					<p>
+						Reconstructing high-level program logic from disassembly with control flow graphs, dominance,
+						loop detection, and switch recovery.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Control flow reconstruction converts flat disassembly into a control flow graph of basic blocks
+							and edges. The graph shape reveals loops, conditionals, switches, and tail calls long before
+							you read every instruction, which is the foundation of decompilation. After reading, you can
+							identify leaders, partition blocks, compute dominance, detect natural loops, recover switch
+							tables, and build a CFG analyzer.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/reverse-engineering/reading-assembly.html">/wiki/articles/reverse-engineering/reading-assembly.html</a> - x86-64 instruction semantics, prologue/epilogue patterns, condition codes</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="what-reconstruction-solves">What Reconstruction Solves</h3>
+						<p>
+							Raw disassembly is a linear sequence of instructions. Programs are not linear. They branch,
+							loop, call, and return. Control flow reconstruction converts the flat instruction list into
+							a structured representation - a control flow graph (CFG) - where nodes are basic blocks (straight-line
+							code sequences) and edges are possible execution paths.
+						</p>
+						<p>
+							Without a CFG, reversing a 10,000-instruction function is impossible. With one, you reduce it
+							to a graph of maybe 50 blocks connected by if-else diamonds and loop back-edges. The structure
+							tells you what the code does before you've read a single instruction.
+						</p>
+					</section>
+					<section>
+						<h3 id="basic-blocks-and-discovery">Basic Blocks and Discovery</h3>
+						<p>
+							A
+							<b>basic block</b>
+							is a maximal sequence of instructions with a single entry point and a single
+							exit point. Inside a basic block, execution is strictly sequential - no branches in, no branches
+							out (except the final instruction). Every instruction in the block executes exactly once per
+							block invocation.
+						</p>
+						<p>
+							To partition disassembly into basic blocks, identify
+							<b>leaders</b>
+							- instructions that start a
+							new block:
+						</p>
+						<ol>
+							<li>The first instruction of a function (entry point)</li>
+							<li>Any instruction that is the target of a branch ( <code>jmp</code> , <code>jcc</code> , <code>call</code> )</li>
+							<li>Any instruction immediately following a branch or <code>ret</code></li>
+						</ol>
+						<p>
+							A block runs from a leader up to (but not including) the next leader, or until a control transfer
+							instruction (
+							<code>jmp</code>
+							,
+							<code>jcc</code>
+							,
+							<code>call</code>
+							,
+							<code>ret</code>
+							).
+						</p>
+						<p>Example - disassembly of a simple function:</p>
+						<pre class="asm">
+0x401140:  push   rbp                    ; Block A (leader: entry)
+0x401141:  mov    rbp, rsp
+0x401144:  mov    DWORD PTR [rbp-0x4], edi
+0x401147:  cmp    DWORD PTR [rbp-0x4], 0xa
+0x40114b:  jle    0x401155               ; -&gt; leader at 0x401155
+
+0x40114d:  mov    eax, DWORD PTR [rbp-0x4]  ; Block B (leader: after jle)
+0x401150:  add    eax, 0x1
+0x401153:  jmp    0x40115b               ; -&gt; leader at 0x40115b
+
+0x401155:  mov    eax, DWORD PTR [rbp-0x4]  ; Block C (leader: target of jle)
+0x401158:  sub    eax, 0x1
+
+0x40115b:  pop    rbp                    ; Block D (leader: target of jmp + after C)
+0x40115c:  ret
+						</pre>
+						<p>Block partition:</p>
+						<pre class="plaintext">
+Block A: 0x401140 - 0x40114b (ends with conditional jump jle)
+Block B: 0x40114d - 0x401153 (ends with unconditional jump jmp)
+Block C: 0x401155 - 0x401158 (falls through to D)
+Block D: 0x40115b - 0x40115c (ends with ret)
+						</pre>
+						<p>
+							Edges: - A -> B (fall-through, when
+							<code>jle</code>
+							not taken) - A -> C (branch taken, when
+							<code>jle</code>
+							is true)
+							<ul>
+								<li>B -> D (unconditional jump)</li>
+								<li>C -> D (fall-through)</li>
+							</ul>
+						</p>
+						<p>Decompilation:</p>
+						<pre class="c">
+if (x &gt; 10)
+    return x + 1;
+else
+    return x - 1;
+						</pre>
+					</section>
+					<section>
+						<h3 id="building-a-cfg-algorithm">Building a CFG Algorithm</h3>
+						<p>
+							The algorithm takes a function's disassembly and produces a dictionary of
+							<code>{address -&gt; Block}</code>
+							where each Block contains its instruction list and outgoing edges.
+						</p>
+						<pre class="plaintext">
+ALGORITHM: build_cfg(function_start, function_end, disassembly)
+
+1. Identify all instructions in the function range.
+   Parse each line: address, bytes?, mnemonic, operands.
+
+2. Find leaders:
+   - The function entry address is a leader.
+   - Every jump target is a leader (resolve relative offsets to absolute addresses).
+   - Every instruction after a jmp/jcc/ret is a leader.
+
+3. Sort leaders by address. For each consecutive pair (L[i], L[i+1]),
+   create Block L[i] containing all instructions from L[i] to L[i+1]-1.
+   The last block runs from its leader to the function end.
+
+4. For each block, examine its final instruction:
+   - jmp ADDR   -&gt; add edge block -&gt; ADDR
+   - jCC ADDR   -&gt; add edges: block -&gt; ADDR (taken), block -&gt; next_block (fall-through)
+   - ret        -&gt; no outgoing edges (or edge to virtual exit node)
+   - call ADDR  -&gt; edge to next block (call returns, but also consider the callee)
+   - Other      -&gt; fall-through to next block
+
+5. Optionally add edges for indirect jumps if resolvable (jump tables, tail calls).
+						</pre>
+						<p>
+							The result is a directed graph. Blocks with multiple predecessors are
+							<b>merge points</b>
+							(end
+							of if-else, loop header). Blocks with multiple successors are
+							<b>branch points</b>
+							. Back-edges
+							(an edge from a block to a block that appears earlier in the address space) identify loops.
+						</p>
+					</section>
+					<section>
+						<h3 id="high-level-structures-from-cfg">High-Level Structures from CFG</h3>
+						<p>
+							The shape of the CFG directly encodes the control structure. This is the core insight behind
+							decompilation.
+						</p>
+						<h4 id="if-then-no-else">if-then (no else)</h4>
+						<pre class="plaintext">
+    Block A  (condition check)
+     /   \
+    v     v
+Block B   Block A.fallthrough
+(if body) |
+     \   /
+      v v
+    Block D  (merge)
+						</pre>
+						<p>
+							The conditional jump creates two paths: one into B (the then-block) and one skipping B. B jumps
+							or falls through to the merge point D.
+						</p>
+						<pre class="x86asm">
+; if (x &gt; 10)
+;     x = 0;
+; ...
+    cmp    [rbp-4], 0xa
+    jle    .L_skip
+    mov    [rbp-4], 0
+.L_skip:
+    ; after if
+						</pre>
+						<h4 id="if-then-else-diamond">if-then-else (diamond)</h4>
+						<pre class="plaintext">
+      Block A
+      /     \
+     v       v
+ Block B   Block C
+      \     /
+       v   v
+      Block D
+						</pre>
+						<p>
+							Block A is the condition. Two outgoing edges lead to B (then) and C (else). Both converge at
+							D. D has in-degree 2 from within the diamond structure.
+						</p>
+						<pre class="asm">
+    cmp    [rbp-4], 0xa
+    jle    .L_else
+    mov    eax, 1
+    jmp    .L_end
+.L_else:
+    mov    eax, 0
+.L_end:
+    ret
+						</pre>
+						<h4 id="while-loop-pre-test">while loop (pre-test)</h4>
+						<pre class="plaintext">
+      Block A (loop header)
+      /   \
+     v     v
+Block B    Block C (exit)
+     \     /
+      v   v
+						</pre>
+						<p>
+							The critical feature is the
+							<b>back-edge</b>
+							: Block B points back to Block A (the loop header).
+							Block A dominates all blocks inside the loop - meaning all paths into any loop block must pass
+							through A. The conditional branch at A either enters the loop body (B) or exits (C).
+						</p>
+						<pre class="asm">
+.L_loop:
+    cmp    [rbp-4], 0xa
+    jge    .L_exit
+    ; loop body
+    add    [rbp-4], 1
+    jmp    .L_loop
+.L_exit:
+						</pre>
+						<h4 id="do-while-loop-post-test">do-while loop (post-test)</h4>
+						<pre class="plaintext">
+    Block A (loop body start)
+     |  \
+     v   v
+Block B  Block A (back-edge)
+						</pre>
+						<p>
+							The condition test is at the bottom. The back-edge originates from a block containing the condition,
+							pointing to the loop body start. There is no initial branch to skip the body - it always executes
+							at least once.
+						</p>
+						<pre class="asm">
+.L_do_top:
+    add    [rbp-4], 1
+    cmp    [rbp-4], 0xa
+    jl     .L_do_top
+						</pre>
+						<h4 id="for-loop">for loop</h4>
+						<p>Structurally identical to a while loop in the CFG:</p>
+						<pre class="plaintext">
+    Block A (init: i=0)
+      |
+      v
+    Block B (condition: i&lt;N?)
+     /   \
+    v     v
+Block C  Block E (exit)
+    |
+    v
+Block D (increment: i++)
+    |
+    v
+  Block B (back-edge)
+						</pre>
+						<p>
+							Block A initializes the loop counter. Block B tests the condition. Block C is the body. Block
+							D increments. The back-edge goes from D to B.
+						</p>
+						<pre class="plaintext">
+if (condition) { /* setup */ }
+while (condition) {
+    /* body */
+    /* increment */
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="loop-detection-with-dominance">Loop Detection with Dominance</h3>
+						<p>
+							Not every back-edge forms a meaningful loop (compiler-generated jumps can go anywhere). The
+							standard approach uses
+							<b>dominator trees</b>
+							.
+						</p>
+						<p>
+							Block A
+							<b>dominates</b>
+							block B if every path from the function entry to B must pass through A.
+							The immediate dominator of B is the unique node that dominates B and does not dominate any other
+							dominator of B (the "closest" dominator).
+						</p>
+						<p>
+							A
+							<b>back-edge</b>
+							is an edge A -> B where B dominates A. That is, the target of the edge is a
+							block that must have been executed before the source can be reached - this is a cycle.
+						</p>
+						<p>
+							A
+							<b>natural loop</b>
+							is defined by a back-edge A -> B: - B is the
+							<b>loop header</b>
+							(it dominates
+							A) - The loop body consists of all nodes that can reach A without passing through B - The header
+							dominates all nodes in the loop body
+						</p>
+						<pre class="plaintext">
+┌─────────────────────────────────────────────────────────────┐
+│                   Loop Detection Algorithm                  │
+├─────────────────────────────────────────────────────────────┤
+│ For each edge A -&gt; B in the CFG:                             │
+│   If B dominates A (B is an ancestor of A in the dominator  │
+│   tree), then A -&gt; B is a back-edge.                         │
+│                                                             │
+│   The natural loop of back-edge A -&gt; B:                      │
+│     Loop = { B }                                            │
+│     Worklist = { A }                                       │
+│     While Worklist not empty:                               │
+│       Pop node X from Worklist                              │
+│       If X not in Loop:                                         │
+│         Loop = Loop union { X }                                │
+│         For each predecessor P of X:                        │
+│           Add P to Worklist                                 │
+│     Result: Loop contains header B + all nodes that reach A │
+│             without going through B                         │
+└─────────────────────────────────────────────────────────────┘
+						</pre>
+						<p>
+							Nested loops are detected by finding back-edges where the header is already inside an outer
+							loop body.
+						</p>
+					</section>
+					<section>
+						<h3 id="switch-statement-recovery">Switch Statement Recovery</h3>
+						<p>Switch statements compile to one of two patterns:</p>
+						<h4 id="jump-table-dense-cases">Jump table (dense cases)</h4>
+						<pre class="x86asm">
+    cmp    eax, MAX_CASE        ; range check
+    ja     .L_default           ; if out of range -&gt; default
+    cdqe                        ; sign-extend eax -&gt; rax
+    lea    rcx, [rip+TABLE]     ; rcx = &amp;jump_table
+    movsxd rax, [rcx + rax*4]   ; rax = table[eax] (32-bit signed offset)
+    add    rax, rcx              ; rax = &amp;table + offset = target
+    jmp    rax                   ; indirect jump
+						</pre>
+						<p>
+							The jump table is an array of 32-bit signed offsets from the table base (or absolute addresses
+							in non-PIE binaries). The pattern to recognize:
+						</p>
+						<ol>
+							<li>A <code>cmp</code> against a constant (the maximum case value)</li>
+							<li>A <code>ja</code> conditional branch to the default case</li>
+							<li>A memory load with index scaling ( <code>[base + rax*4]</code> or <code>[base + rax*8]</code> )</li>
+							<li>An indirect <code>jmp</code> through the loaded value</li>
+						</ol>
+						<p>
+							To recover the case count: the maximum value in the
+							<code>cmp</code>
+							minus the minimum (usually 0, but
+							check for subtraction of a base value). To recover individual case targets: read the jump table
+							from the binary data section.
+						</p>
+						<h4 id="decision-tree-sparse-cases">Decision tree (sparse cases)</h4>
+						<p>
+							For sparse switch values, the compiler emits a binary decision tree: a sequence of
+							<code>cmp / jcc</code>
+							pairs that narrows the range.
+						</p>
+						<pre class="asm">
+    cmp    eax, 0x100
+    je     .L_case_256
+    cmp    eax, 0x200
+    je     .L_case_512
+    cmp    eax, 0x7fff
+    je     .L_case_32767
+    jmp    .L_default
+						</pre>
+						<p>
+							This pattern linearizes to a chain of if-else comparisons. Less efficient but preserves code
+							size.
+						</p>
+					</section>
+					<section>
+						<h3 id="tail-call-identification">Tail Call Identification</h3>
+						<p>
+							A tail call is a function call positioned as the last action in a function, where the callee's
+							return value becomes the caller's return value. In disassembly:
+						</p>
+						<pre class="asm">
+; Normal call (not a tail call)
+    call   target
+    ; more instructions...
+    ret
+
+; Tail call
+    jmp    target              ; OR: pop reg; jmp target
+						</pre>
+						<p>
+							When the compiler sees
+							<code>return func(args)</code>
+							, it can replace
+							<code>call func; ret</code>
+							with
+							<code>jmp func</code>
+							. The
+							<code>jmp</code>
+							transfers control to
+							<code>func</code>
+							without pushing a new return address. When
+							<code>func</code>
+							executes
+							<code>ret</code>
+							, it returns directly to the original caller, skipping the intermediate frame.
+						</p>
+						<p>
+							Tail calls break function boundary detection because there's no
+							<code>ret</code>
+							at the apparent end of
+							the function. In the CFG, a tail call is an edge from the calling block to the entry block of
+							the target function (an interprocedural edge).
+						</p>
+						<p>Tail calls through pointers:</p>
+						<pre class="asm">
+; tail call via function pointer
+    mov    rax, [rbp-0x8]     ; function pointer
+    pop    rbp
+    jmp    rax                 ; first restore frame, then jump
+						</pre>
+						<p>Or with argument preparation:</p>
+						<pre class="asm">
+; function returns target(args) - compiled as tail call
+    mov    rdi, rbx            ; set up first arg
+    mov    rsi, r12            ; set up second arg
+    pop    rbp
+    pop    rbx
+    pop    r12
+    jmp    target              ; tail call
+						</pre>
+					</section>
+					<section>
+						<h3 id="function-boundary-discovery">Function Boundary Discovery</h3>
+						<p>
+							When symbols are stripped, you have a sea of bytes without function labels. Several heuristics
+							recover function boundaries:
+						</p>
+						<h4 id="prologue-signature-scanning">Prologue signature scanning</h4>
+						<p>
+							Scan the binary for the byte sequence
+							<code>55 48 89 E5</code>
+							(
+							<code>push rbp; mov rbp, rsp</code>
+							). Each occurrence
+							is a candidate function start. But: -
+							<code>-fomit-frame-pointer</code>
+							eliminates this signature. - False
+							positives exist (the bytes could be data or part of another instruction). - Functions compiled
+							with
+							<code>-O2</code>
+							rarely use
+							<code>rbp</code>
+							as a frame pointer.
+						</p>
+						<h4 id="call-target-collection">Call target collection</h4>
+						<p>
+							Find all
+							<code>call ADDR</code>
+							instructions. Each
+							<code>ADDR</code>
+							is a function entry. Also find all
+							<code>lea rdi, [rip+OFFSET]</code>
+							near
+							<code>call</code>
+							instructions - those register loads often set up a function pointer argument to
+							<code>__libc_start_main</code>
+							(which reveals
+							<code>main</code>
+							).
+						</p>
+						<h4 id="return-instruction-clustering">Return instruction clustering</h4>
+						<p>
+							Every
+							<code>ret</code>
+							ends a function. The instruction after a
+							<code>ret</code>
+							(up to alignment padding) is a function
+							start - or unreachable dead code.
+						</p>
+						<h4 id="gap-scanning">Gap scanning</h4>
+						<p>
+							Between functions, compilers insert alignment padding (typically
+							<code>nop</code>
+							sequences or
+							<code>0xcc</code>
+							).
+							Scan for the pattern:
+							<code>ret</code>
+							-> padding bytes -> prologue-like instruction -> start of next function.
+						</p>
+						<h4 id="cross-reference-analysis">Cross-reference analysis</h4>
+						<p>
+							Build a complete cross-reference table: for every instruction, record which other instructions
+							reference it (as a jump/call target, or as data). Addresses with many incoming
+							<code>call</code>
+							references
+							are functions. Addresses with only
+							<code>jmp</code>
+							references might be jump table targets or case labels.
+						</p>
+						<h4 id="ghidraida-approach">Ghidra/IDA approach</h4>
+						<p>
+							Modern tools combine all heuristics: they scan for prologues, collect call targets, run recursive
+							disassembly (following all control flow from known entry points), and apply machine learning
+							classifiers trained on known function signatures. The
+							<code>-M intel</code>
+							objdump output alone won't
+							do this - you need the raw binary bytes.
+						</p>
+					</section>
+					<section>
+						<h3 id="call-graphs">Call Graphs</h3>
+						<p>Beyond intraprocedural CFGs, build a call graph - nodes are functions, edges are call relationships.</p>
+						<pre class="plaintext">
+main
+├── authenticate (0x401196)
+│   ├── strcmp@plt (0x401036)
+│   └── check_password (0x401162)
+│       └── strcmp@plt (0x401036)
+└── printf@plt (0x401040)
+						</pre>
+						<p>
+							Call graphs reveal: -
+							<b>Leaf functions</b>
+							: functions with no outgoing calls (terminate at syscalls
+							or computation-only). -
+							<b>Wrapper functions</b>
+							: short functions that do nothing but call another
+							function with rearranged arguments. -
+							<b>Recursion</b>
+							: a cycle in the call graph. -
+							<b>Library dependency profile</b>
+							: all external symbols resolve to specific behaviors (networking, crypto, file I/O).
+						</p>
+						<p>
+							To build one from disassembly: for each function, collect all
+							<code>call</code>
+							instruction targets. Group
+							by resolved symbol name if available, by address if not. Create an edge from the calling function
+							to the target.
+						</p>
+					</section>
+					<section>
+						<h3 id="data-flow-as-context-for-control-flow">Data Flow as Context for Control Flow</h3>
+						<p>
+							Control flow alone doesn't tell you what a function computes. But data flow provides hints about
+							control flow:
+						</p>
+						<ul>
+							<li>If a function's return value is compared to 0 immediately after a call, the return value is a boolean success/failure indicator.</li>
+							<li>If a register is loaded with a constant before a call, the constant is an argument - and knowing common constant values reveals intent (e.g., <code>0x1f4</code> = 500, likely a timeout in milliseconds; <code>AF_INET = 2</code> , <code>SOCK_STREAM = 1</code> , <code>IPPROTO_TCP = 6</code> are socket triplet).</li>
+							<li>If a function reads from a buffer in a loop and calls no other functions, it's likely a checksum, hash, or encoding function.</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="handling-obfuscated-control-flow">Handling Obfuscated Control Flow</h3>
+						<p>
+							Control flow flattening is the most common obfuscation. The compiler (or obfuscator) replaces
+							structured control flow with a state machine:
+						</p>
+						<pre class="c">
+// Original
+while (i &lt; 10) {
+    if (cond) i++;
+    else i += 2;
+}
+
+// Flattened
+int state = 0;
+while (1) {
+    switch (state) {
+        case 0: if (i &gt;= 10) state = 3; else state = 1; break;
+        case 1: if (cond) state = 2; else state = 4; break;
+        case 2: i++; state = 0; break;
+        case 3: return; break;
+        case 4: i += 2; state = 0; break;
+    }
+}
+						</pre>
+						<p>
+							In the CFG, this produces a single dispatcher block (containing the indirect jump through the
+							jump table) and multiple "case handler" blocks that all jump back to the dispatcher. The dominator
+							tree is flat - every handler block is immediately dominated by the dispatcher. There are no
+							back-edges from inside the loop because the loop no longer exists structurally.
+						</p>
+						<p>
+							To recover the original logic from flattened control flow: 1. Identify the dispatcher block
+							(indirect jump through table with loop variable in a register). 1. Track the state variable
+							through case handlers. 1. Determine which state transitions are the original loop back-edges.
+							<ol>
+								<li>Reconstruct by grouping state transitions into their original control structures.</li>
+							</ol>
+						</p>
+						<p>
+							This is an active research area. Tools like
+							<code>debins</code>
+							and
+							<code>GSoC-deobfuscation</code>
+							Ghidra plugin
+							attempt automated recovery, but manual analysis is the fallback for heavily obfuscated code.
+						</p>
+					</section>
+					<section>
+						<h3 id="go-cfg-builder">Go CFG Builder</h3>
+						<p>
+							This script reads objdump disassembly output, partitions it into basic blocks, identifies function
+							boundaries, and builds a CFG with basic loop detection via back-edge analysis.
+						</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;cfg.py - Build CFG from objdump disassembly output.&#34;&#34;&#34;
+
+import re
+import sys
+from collections import defaultdict, namedtuple
+from typing import Dict, List, Set, Tuple, Optional
+
+Instruction = namedtuple(&#39;Instruction&#39;, [&#39;address&#39;, &#39;mnemonic&#39;, &#39;operands&#39;, &#39;line&#39;])
+Block = namedtuple(&#39;Block&#39;, [&#39;start&#39;, &#39;end&#39;, &#39;instructions&#39;, &#39;successors&#39;])
+
+def parse_objdump(objdump_output: str) -&gt; Dict[int, Instruction]:
+    &#34;&#34;&#34;Parse objdump -d -M intel output into address-&gt;instruction map.&#34;&#34;&#34;
+    insns = {}
+    pattern = re.compile(
+        r&#39;^\s*([0-9a-f]+):\s+((?:[0-9a-f]{2}\s+)+)?\s*(\w+)\s*(.*?)\s*$&#39;,
+        re.IGNORECASE
+    )
+    for line in objdump_output.split(&#39;\n&#39;):
+        match = pattern.match(line.strip())
+        if not match:
+            continue
+        addr = int(match.group(1), 16)
+        mnemonic = match.group(3).lower()
+        operands = match.group(4).strip() if match.group(4) else &#39;&#39;
+        insns[addr] = Instruction(addr, mnemonic, operands, line.strip())
+    return insns
+
+def is_branch(mnemonic: str) -&gt; bool:
+    &#34;&#34;&#34;Check if mnemonic is a conditional jump.&#34;&#34;&#34;
+    return mnemonic in {&#39;je&#39;, &#39;jz&#39;, &#39;jne&#39;, &#39;jnz&#39;, &#39;jg&#39;, &#39;jnle&#39;,
+                        &#39;jge&#39;, &#39;jnl&#39;, &#39;jl&#39;, &#39;jnge&#39;, &#39;jle&#39;, &#39;jng&#39;,
+                        &#39;ja&#39;, &#39;jnbe&#39;, &#39;jae&#39;, &#39;jnb&#39;, &#39;jb&#39;, &#39;jnae&#39;,
+                        &#39;jbe&#39;, &#39;jna&#39;, &#39;js&#39;, &#39;jns&#39;, &#39;jo&#39;, &#39;jno&#39;,
+                        &#39;jp&#39;, &#39;jpe&#39;, &#39;jnp&#39;, &#39;jpo&#39;, &#39;jcxz&#39;, &#39;jecxz&#39;}
+
+def is_unconditional_jump(mnemonic: str) -&gt; bool:
+    return mnemonic == &#39;jmp&#39; or mnemonic == &#39;jmpq&#39;
+
+def is_return(mnemonic: str) -&gt; bool:
+    return mnemonic in {&#39;ret&#39;, &#39;retn&#39;, &#39;retf&#39;, &#39;iret&#39;, &#39;iretq&#39;, &#39;sysret&#39;}
+
+def resolve_operand_target(operands: str, current_addr: int) -&gt; Optional[int]:
+    &#34;&#34;&#34;Resolve a hex operand (relative or absolute) to an absolute address.&#34;&#34;&#34;
+    match = re.search(r&#39;(0x[0-9a-f]+)&#39;, operands, re.IGNORECASE)
+    if not match:
+        return None
+    return int(match.group(1), 16)
+
+def find_leaders(insns: Dict[int, Instruction]) -&gt; Set[int]:
+    &#34;&#34;&#34;Identify basic block leaders.&#34;&#34;&#34;
+    sorted_addrs = sorted(insns.keys())
+    leaders = set()
+    leaders.add(sorted_addrs[0])
+
+    for addr in sorted_addrs:
+        insn = insns[addr]
+        # Target of any jump is a leader
+        target = resolve_operand_target(insn.operands, addr)
+        if target and target in insns:
+            leaders.add(target)
+
+        # Instruction after a branch/jump/ret is a leader (fall-through)
+        if is_branch(insn.mnemonic) or is_unconditional_jump(insn.mnemonic) \
+                or is_return(insn.mnemonic) or insn.mnemonic == &#39;call&#39;:
+            next_idx = sorted_addrs.index(addr) + 1
+            if next_idx &lt; len(sorted_addrs):
+                leaders.add(sorted_addrs[next_idx])
+
+    return leaders
+
+def partition_blocks(insns: Dict[int, Instruction],
+                     leaders: Set[int]) -&gt; List[Block]:
+    &#34;&#34;&#34;Group instructions into basic blocks.&#34;&#34;&#34;
+    sorted_addrs = sorted(insns.keys())
+    sorted_leaders = sorted(leaders)
+    blocks = []
+
+    for i, start in enumerate(sorted_leaders):
+        if start not in insns:
+            continue
+        end_idx = sorted_leaders[i + 1] if i + 1 &lt; len(sorted_leaders) else None
+        block_addrs = []
+        cursor = sorted_addrs.index(start)
+        while cursor &lt; len(sorted_addrs):
+            addr = sorted_addrs[cursor]
+            if end_idx and addr &gt;= end_idx:
+                break
+            block_addrs.append(addr)
+            insn = insns[addr]
+            if is_branch(insn.mnemonic) or is_unconditional_jump(insn.mnemonic) \
+                    or is_return(insn.mnemonic):
+                break
+            cursor += 1
+
+        block_insns = [insns[a] for a in block_addrs if a in insns]
+        if not block_insns:
+            continue
+
+        # Determine successors
+        last = block_insns[-1]
+        successors = set()
+
+        target = resolve_operand_target(last.operands, last.address)
+        if target and target in insns:
+            successors.add(target)
+
+        if is_branch(last.mnemonic):
+            # Fall-through to next block
+            block_end = block_addrs[-1]
+            fallthrough = next((a for a in sorted_addrs if a &gt; block_end), None)
+            if fallthrough and fallthrough in insns:
+                successors.add(fallthrough)
+        elif not is_unconditional_jump(last.mnemonic) \
+                and not is_return(last.mnemonic):
+            # Natural fall-through to next instruction
+            block_end = block_addrs[-1]
+            fallthrough = next((a for a in sorted_addrs if a &gt; block_end), None)
+            if fallthrough and fallthrough in insns:
+                successors.add(fallthrough)
+
+        blocks.append(Block(start, block_addrs[-1], block_insns, successors))
+
+    return blocks
+
+def compute_dominators(blocks: List[Block], entry_idx: int) -&gt; Dict[int, Set[int]]:
+    &#34;&#34;&#34;Compute dominator sets for each block.&#34;&#34;&#34;
+    n = len(blocks)
+    all_indices = set(range(n))
+    dom = {i: all_indices.copy() if i == entry_idx else set() for i in range(n)}
+    dom[entry_idx] = {entry_idx}
+
+    changed = True
+    while changed:
+        changed = False
+        for i, block in enumerate(blocks):
+            if i == entry_idx:
+                continue
+            # Predecessors: blocks that have this block as a successor
+            preds = [j for j, b in enumerate(blocks)
+                     if block.start in b.successors]
+            # Also handle fall-through from previous block
+            if i &gt; 0 and blocks[i - 1].end + 1 &gt;= block.start:
+                preds.append(i - 1)
+
+            if not preds:
+                continue
+
+            new_dom = dom[preds[0]].copy()
+            for p in preds[1:]:
+                new_dom &amp;= dom[p]
+            new_dom.add(i)
+
+            if new_dom != dom[i]:
+                dom[i] = new_dom
+                changed = True
+    return dom
+
+def find_loops(blocks: List[Block],
+               dom: Dict[int, Set[int]]) -&gt; List[Tuple[int, List[int]]]:
+    &#34;&#34;&#34;Find natural loops via back-edge detection.&#34;&#34;&#34;
+    loops = []
+    for i, block in enumerate(blocks):
+        header = block.start
+        for succ in block.successors:
+            # Find index of successor block
+            j = next((idx for idx, b in enumerate(blocks)
+                      if b.start == succ), None)
+            if j is None:
+                continue
+            # Back-edge: j dominates i (source)
+            if i in dom.get(j, set()):
+                # Natural loop body: all nodes that can reach i
+                # without going through j
+                loop_body = {j}
+                stack = [i]
+                while stack:
+                    x = stack.pop()
+                    if x not in loop_body:
+                        loop_body.add(x)
+                        preds = [idx for idx, b in enumerate(blocks)
+                                 if blocks[x].start in b.successors]
+                        for p in preds:
+                            stack.append(p)
+                loops.append((j, sorted(loop_body)))
+    return loops
+
+def print_cfg(blocks: List[Block], loops: List[Tuple[int, List[int]]]):
+    &#34;&#34;&#34;Pretty-print the CFG with annotated blocks.&#34;&#34;&#34;
+    loop_headers = {h for h, _ in loops}
+    loop_body = set()
+    for _, body in loops:
+        loop_body |= set(body)
+
+    for i, block in enumerate(blocks):
+        flags = []
+        if i in loop_headers:
+            flags.append(&#34;LOOP_HEADER&#34;)
+        if i in loop_body:
+            flags.append(&#34;LOOP&#34;)
+
+        flag_str = f&#34; [{&#39;, &#39;.join(flags)}]&#34; if flags else &#34;&#34;
+        print(f&#34;\nBlock {i} @ 0x{block.start:x} - 0x{block.end:x} &#34;
+              f&#34;({len(block.instructions)} insns){flag_str}&#34;)
+
+        for insn in block.instructions:
+            print(f&#34;  0x{insn.address:x}: {insn.mnemonic:8s} {insn.operands}&#34;)
+
+        succ_str = &#34;, &#34;.join(f&#34;Block {next((idx for idx, b in enumerate(blocks) if b.start == s), &#39;?&#39;)}&#34; for s in block.successors)
+        print(f&#34;  -&gt; {succ_str or &#39;(exit)&#39;}&#34;)
+
+def main():
+    if len(sys.argv) &lt; 2:
+        print(f&#34;Usage: {sys.argv[0]} &lt;function_name&gt; [objdump_file]&#34;)
+        print(&#34;  Reads objdump -d -M intel output from stdin or file&#34;)
+        sys.exit(1)
+
+    func_name = sys.argv[1]
+    if len(sys.argv) &gt; 2:
+        with open(sys.argv[2]) as f:
+            text = f.read()
+    else:
+        text = sys.stdin.read()
+
+    # Extract function&#39;s disassembly from objdump output
+    # Pattern: &#34;0000000000401140 &lt;func_name&gt;:&#34;
+    func_pattern = re.compile(
+        rf&#39;^([0-9a-f]+)\s+&lt;{re.escape(func_name)}&gt;:&#39;,
+        re.MULTILINE
+    )
+    match = func_pattern.search(text)
+    if not match:
+        print(f&#34;Function &#39;{func_name}&#39; not found in objdump output&#34;)
+        sys.exit(1)
+
+    func_start = int(match.group(1), 16)
+
+    # Find end of function (next symbol or empty line gap)
+    lines = text[match.start():].split(&#39;\n&#39;)
+    func_lines = []
+    for line in lines:
+        if line.strip() == &#39;&#39;:
+            break
+        if re.search(r&#39;^[0-9a-f]+\s+&lt;&#39;, line) and func_lines:
+            break
+        func_lines.append(line)
+
+    insns = parse_objdump(&#39;\n&#39;.join(func_lines))
+    if not insns:
+        print(&#34;No instructions parsed&#34;)
+        sys.exit(1)
+
+    leaders = find_leaders(insns)
+    blocks = partition_blocks(insns, leaders)
+
+    entry_idx = next(i for i, b in enumerate(blocks) if b.start == func_start)
+    dom = compute_dominators(blocks, entry_idx)
+    loops = find_loops(blocks, dom)
+
+    print(f&#34;\n=== CFG for {func_name} ===\n&#34;)
+    print(f&#34;Basic blocks: {len(blocks)}&#34;)
+    print(f&#34;Loops detected: {len(loops)}&#34;)
+
+    for header_idx, body in loops:
+        print(f&#34;  Loop header: Block {header_idx} (0x{blocks[header_idx].start:x})&#34;)
+        print(f&#34;  Body blocks:  {body}&#34;)
+
+    print_cfg(blocks, loops)
+
+if __name__ == &#39;__main__&#39;:
+    main()
+						</pre>
+						<p>Usage:</p>
+						<pre class="plaintext">
+objdump -d -M intel binary | python3 cfg.py check_password
+						</pre>
+						<p>Expected output:</p>
+						<pre class="plaintext">
+=== CFG for check_password ===
+
+Basic blocks: 2
+Loops detected: 0
+
+Block 0 @ 0x401162 - 0x401187 (6 insns)
+  0x401162: push    rbp
+  0x401163: mov     rbp, rsp
+  0x401166: sub     rsp, 0x20
+  0x40116a: mov     QWORD PTR [rbp-0x18], rdi
+  0x40116e: lea     rax, [rip+0xe93]
+  0x401175: mov     QWORD PTR [rbp-0x8], rax
+  -&gt; Block 1
+
+Block 1 @ 0x401179 - 0x401195 (7 insns)
+  0x401179: mov     rdx, QWORD PTR [rbp-0x8]
+  0x40117d: mov     rax, QWORD PTR [rbp-0x18]
+  0x401181: mov     rsi, rdx
+  0x401184: mov     rdi, rax
+  0x401187: call    401036 &lt;strcmp@plt&gt;
+  0x40118c: test    eax, eax
+  0x40118e: sete    al
+  -&gt; (exit)
+						</pre>
+					</section>
+					<section>
+						<h3 id="loop-detection-walkthrough">Loop Detection Walkthrough</h3>
+						<p>
+							The
+							<code>authenticate</code>
+							function has two conditional branches. The CFG:
+						</p>
+						<pre class="plaintext">
+Block 0: prologue + strcmp(user, &#34;root&#34;) + je -&gt; Block 1 or Block 2
+Block 1: return 0 (jmp -&gt; Block 4)
+Block 2: strcmp(pass, &#34;1337haxor&#34;) + je -&gt; Block 3 or Block 5
+Block 3: return 1 (jmp -&gt; Block 4)
+Block 4: epilogue + ret (merge)
+Block 5: return 0 (jmp -&gt; Block 4)
+						</pre>
+						<p>
+							No loops - the dominator tree shows Block 0 as root, all blocks dominated by it. No back-edges
+							exist. The structure is strictly diamond-shaped (if-then-else).
+						</p>
+					</section>
+					<section>
+						<h3 id="crypto-functions-by-cfg-shape">Crypto Functions by CFG Shape</h3>
+						<p>Crypto functions have distinctive CFG signatures:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Algorithm</th>
+									<th align="center">CFG Signature</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">AES-128</td>
+									<td align="center">10 nearly identical blocks (rounds), each containing 16 sbox lookups (<code>movzx; mov [base+idx]; xor</code>)</td>
+								</tr>
+								<tr>
+									<td align="center">CRC32</td>
+									<td align="center">Single small block with lookup table access (<code>movzx; xor; shr; mov [table+reg*4]</code>) in a tight loop</td>
+								</tr>
+								<tr>
+									<td align="center">MD5/SHA1</td>
+									<td align="center">4 groups of 16 rounds, each group with different round constant; 4 state variables shifted</td>
+								</tr>
+								<tr>
+									<td align="center">RC4</td>
+									<td align="center">Tight loop:<code>i = (i+1)&amp;0xFF; j = (j+sbox[i])&amp;0xFF; swap(sbox[i],sbox[j]); keystream = sbox[(sbox[i]+sbox[j])&amp;0xFF]</code></td>
+								</tr>
+								<tr>
+									<td align="center">Base64</td>
+									<td align="center">3-byte-to-4-char conversion loop with repeated division by 64 (<code>shr edx, 6</code>pattern) and lookup table</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							Crypto constants are easier to search for (see Ghidra Scripting article), but control flow confirms
+							the algorithm after detection.
+						</p>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that reads
+							<code>objdump -d -M intel</code>
+							output and partitions each function into basic
+							blocks. Identify leaders (function entry, jump targets, instructions after a jump or return),
+							count the blocks per function, and report back-edges, which mark natural loop headers. Run it
+							against a binary with a known loop and confirm the header you found.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;bufio&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;regexp&#34;
+	&#34;sort&#34;
+	&#34;strings&#34;
+)
+
+var insnRe = regexp.MustCompile(`^\s*([0-9a-f]+):\s+(?:[0-9a-f]{2}\s+)+\s*([a-z][a-z0-9]*)\s*(.*)$`)
+var targetRe = regexp.MustCompile(`([0-9a-f]+)\s`)
+
+func isCondJump(m string) bool {
+	return len(m) &gt; 1 &amp;&amp; m[0] == &#39;j&#39; &amp;&amp; m != &#34;jmp&#34; &amp;&amp; m != &#34;jmpq&#34;
+}
+
+func main() {
+	scanner := bufio.NewScanner(os.Stdin)
+	addresses := []uint64{}
+	mnemonics := map[uint64]string{}
+	targets := map[uint64]uint64{}
+	for scanner.Scan() {
+		m := insnRe.FindStringSubmatch(scanner.Text())
+		if m == nil {
+			continue
+		}
+		var addr uint64
+		fmt.Sscanf(m[1], &#34;%x&#34;, &amp;addr)
+		addresses = append(addresses, addr)
+		mnemonics[addr] = m[2]
+		if t := targetRe.FindStringSubmatch(m[3]); t != nil {
+			var target uint64
+			fmt.Sscanf(t[1], &#34;%x&#34;, &amp;target)
+			targets[addr] = target
+		}
+	}
+	if len(addresses) == 0 {
+		fmt.Println(&#34;no instructions parsed&#34;)
+		return
+	}
+	sort.Slice(addresses, func(i, j int) bool { return addresses[i] &lt; addresses[j] })
+	leaders := map[uint64]bool{addresses[0]: true}
+	for i, addr := range addresses {
+		m := mnemonics[addr]
+		if target, ok := targets[addr]; ok {
+			leaders[target] = true
+		}
+		if m == &#34;jmp&#34; || m == &#34;ret&#34; || isCondJump(m) {
+			if i+1 &lt; len(addresses) {
+				leaders[addresses[i+1]] = true
+			}
+		}
+	}
+	leadersList := make([]uint64, 0, len(leaders))
+	for addr := range leaders {
+		leadersList = append(leadersList, addr)
+	}
+	sort.Slice(leadersList, func(i, j int) bool { return leadersList[i] &lt; leadersList[j] })
+
+	fmt.Printf(&#34;instructions: %d\n&#34;, len(addresses))
+	fmt.Printf(&#34;basic blocks: %d\n&#34;, len(leadersList))
+	var sb strings.Builder
+	for i, header := range leadersList {
+		sb.Reset()
+		sb.WriteString(fmt.Sprintf(&#34;Block %d @ 0x%x:&#34;, i, header))
+		next := uint64(0)
+		if i+1 &lt; len(leadersList) {
+			next = leadersList[i+1]
+		}
+		count := 0
+		for _, addr := range addresses {
+			if addr &gt;= header &amp;&amp; (next == 0 || addr &lt; next) {
+				count++
+			}
+		}
+		sb.WriteString(fmt.Sprintf(&#34; %d insns&#34;, count))
+		if target, ok := targets[header]; ok &amp;&amp; target &lt; header {
+			sb.WriteString(&#34; &lt;- loop header (back-edge)&#34;)
+		}
+		fmt.Println(sb.String())
+	}
+}
+						</pre>
+						<p>Pipe a function through it and compare the loop header against Ghidra's graph view:</p>
+						<pre class="bash">
+objdump -d -M intel ./target | go run cfg.go
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://en.wikipedia.org/wiki/Dominator_(graph_theory" target="_blank">Dominator (graph theory) - Wikipedia</a> ) - dominance and the dominator tree</li>
+							<li><a class="icon-website" href="https://en.wikipedia.org/wiki/Control-flow_graph" target="_blank">Control-flow graph - Wikipedia</a> - basic blocks, edges, and reducibility</li>
+							<li><a class="icon-website" href="https://suif.stanford.edu/dragonbook/" target="_blank">Aho, Lam, Sethi, Ullman - Compilers: Principles, Techniques, and Tools</a> - leader identification and loop detection algorithms</li>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man1/objdump.1.html" target="_blank">objdump(1) - display object file information</a> - the disassembly input format</li>
+							<li><a class="icon-website" href="https://ghidra-sre.org/" target="_blank">Ghidra Documentation</a> - production decompiler and CFG viewer</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

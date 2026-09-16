@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Heap | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Heap">
+		<meta name="keywords" content="glibc, heap, malloc, memory-allocation, ptmalloc, sbrk, tcache, techniques">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Heap">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Dynamic memory allocation - malloc() internals, ptmalloc2 arenas and bins, tcache, chunk structure, sbrk vs mmap, and heap profiling tools.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/fundamentals/heap.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Heap">
+		<meta name="twitter:description" itemprop="description" content="Dynamic memory allocation - malloc() internals, ptmalloc2 arenas and bins, tcache, chunk structure, sbrk vs mmap, and heap profiling tools.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#what-the-heap-is">What the Heap Is</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#how-malloc-gets-kernel-memory">How malloc() Gets Kernel Memory</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#glibc-ptmalloc2-architecture">glibc ptmalloc2 Architecture</a></b>
+					<ul>
+						<li><a href="#number-of-arenas-formula">Number of arenas formula</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#glibc-bins-reference-table">glibc Bins Reference Table</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#chunk-structure">Chunk Structure</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#malloc-usable-size-vs-requested-size">malloc_usable_size() vs Requested Size</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#what-happens-during-free">What Happens During free()</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tcache-thread-cache-glibc-226">tcache (Thread Cache) - glibc 2.26+</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#sbrk-for-small-mmap-for-large">sbrk() for Small, mmap() for Large</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#heap-vs-other-memory-regions">Heap vs Other Memory Regions</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#heap-profiling-tools">Heap Profiling Tools</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#dumping-and-inspecting-heap-contents">Dumping and Inspecting Heap Contents</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification-checklist">Verification Checklist</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/fundamentals/index.html">Fundamentals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/fundamentals/heap.html">Heap</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="heap">Heap</h2>
+					<p>
+						Dynamic memory allocation - malloc() internals, ptmalloc2 arenas and bins, tcache, chunk structure,
+						sbrk vs mmap, and heap profiling tools.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							The heap is the region of a process that holds dynamically allocated memory, memory that lives
+							until the program frees it. Unlike the stack, allocation and deallocation are driven by the
+							program, so the allocator keeps its own bookkeeping structures to track free and used space.
+							This article walks through the glibc allocator: how it asks the kernel for memory, how it organizes
+							chunks and bins, what happens on every allocation and free, and which tools expose the resulting
+							layout.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/virtual-memory.html">Virtual Memory</a> - page tables, mmap, /proc/PID/maps</li>
+							<li><a href="/wiki/articles/fundamentals/system-calls.html">System Calls</a> - brk and mmap syscalls</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="what-the-heap-is">What the Heap Is</h3>
+						<p>
+							The heap is the region of a process's address space where dynamically allocated memory lives
+							<ul>
+								<li>memory whose lifetime is not tied to function scope. Unlike the stack, which auto-frees</li>
+							</ul>
+							on
+							return, heap memory persists until explicitly freed by
+							<code>free()</code>
+							. The heap sits between the
+							BSS segment and the mmap region, growing upward (toward higher addresses) as
+							<code>brk()</code>
+							is called.
+						</p>
+						<pre class="plaintext">
+Virtual Address Space:
+┌──────────────────────┐ 0x0000000000000000
+│  Text (.text)        │
+├──────────────────────┤
+│  Data (.data, .bss)  │ ← Static/global variables
+├──────────────────────┤ ← program break (brk)
+│  HEAP                │ ← malloc() region, grows upward
+│    ...               │
+│    ...               │
+│    ┌──────────────┐  │
+│    │ Allocated chk│  │
+│    ├──────────────┤  │
+│    │ Free chunk   │  │
+│    ├──────────────┤  │
+│    │ Allocated chk│  │
+│    ├──────────────┤  │
+│    ▼               │  │
+├──────────────────────┤
+│  mmap gap            │ ← Space between heap and libs
+├──────────────────────┤
+│  Shared libraries    │ ← libc, ld-linux, .so files
+├──────────────────────┤
+│  Stack               │ ← Function calls, grows downward
+└──────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="how-malloc-gets-kernel-memory">How malloc() Gets Kernel Memory</h3>
+						<p>
+							<code>malloc()</code>
+							is a user-space library, not a syscall. It requests memory from the kernel through
+							two mechanisms:
+						</p>
+						<pre class="c">
+// Small allocations: move the program break upward
+// brk(NULL) returns the current program break
+// brk(addr) sets the break to addr
+void* ptr = sbrk(0);    // Current break
+sbrk(4096);             // Extend heap by 4096 bytes
+// Equivalent: brk(ptr + 4096);
+
+// Large allocations: create a separate mapping
+void* big = mmap(NULL, 1024*1024, PROT_READ|PROT_WRITE,
+                 MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+						</pre>
+						<pre class="bash">
+# Observe which mechanism a program uses
+strace -e brk,mmap ls 2&gt;&amp;1 | head -20
+# Small allocations: brk(NULL) → brk(some_addr) — heap extends
+# Large / many: mmap(NULL, ..., MAP_PRIVATE|MAP_ANONYMOUS, -1, 0)
+						</pre>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Allocation Size</th>
+									<th align="center">glibc Behavior</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><= 128 KiB (default)</td>
+									<td align="center">Use arena (sbrk/brk)  -  from the main heap</td>
+								</tr>
+								<tr>
+									<td align="center">> 128 KiB</td>
+									<td align="center">Use mmap()  -  separate anonymous mapping</td>
+								</tr>
+								<tr>
+									<td align="center">Freed mmap chunks</td>
+									<td align="center">munmap() returns memory to OS immediately</td>
+								</tr>
+								<tr>
+									<td align="center">Freed brk chunks</td>
+									<td align="center">Kept in arena; top chunk may shrink with MADV_DONTNEED</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="glibc-ptmalloc2-architecture">glibc ptmalloc2 Architecture</h3>
+						<p>
+							glibc uses ptmalloc2 (derived from Doug Lea's dlmalloc, rewritten by Wolfram Gloger). It organizes
+							memory into
+							<b>arenas</b>
+							to reduce lock contention in multi-threaded programs:
+						</p>
+						<pre class="plaintext">
+Process:
+┌──────────────────────────────────────────────┐
+│                                              │
+│  Main Arena (uses sbrk/brk)                  │
+│  ┌──────────────────────────────────────┐    │
+│  │ Fastbins: [16] [24] [32] [48] [64]  │    │
+│  │           [80] [96] [112] [128]      │    │
+│  │ Each: singly-linked LIFO list        │    │
+│  ├──────────────────────────────────────┤    │
+│  │ Smallbins: [32] [48] ... [1008]      │    │
+│  │ 62 bins, each: doubly-linked, FIFO  │    │
+│  ├──────────────────────────────────────┤    │
+│  │ Largebins: [1024+] → [∞]            │    │
+│  │ 63 bins, sorted by size, best-fit   │    │
+│  ├──────────────────────────────────────┤    │
+│  │ Unsorted bin: recently freed chunks  │    │
+│  │ cache-like, 1 bin, doubly-linked    │    │
+│  ├──────────────────────────────────────┤    │
+│  │ Top chunk: unallocated space at end  │    │
+│  │ Allocations come from here first     │    │
+│  ├──────────────────────────────────────┤    │
+│  │ Tcache (per-thread) ← glibc 2.26+   │    │
+│  │ [64 bins, each 64 entries max]       │    │
+│  └──────────────────────────────────────┘    │
+│                                              │
+│  Thread Arena 1 (uses mmap)                  │
+│  ┌──────────────────────────────────────┐    │
+│  │ (same bin structure as main arena)   │    │
+│  │  ± tcache per thread                 │    │
+│  └──────────────────────────────────────┘    │
+│                                              │
+│  Thread Arena N                              │
+│  ┌──────────────────────────────────────┐    │
+│  │ ...                                   │    │
+│  └──────────────────────────────────────┘    │
+└──────────────────────────────────────────────┘
+						</pre>
+						<h4 id="number-of-arenas-formula">Number of arenas formula</h4>
+						<pre class="plaintext">
+num_arenas = 8 * num_cpus   # 64-bit
+num_arenas = 2 * num_cpus   # 32-bit
+						</pre>
+						<p>
+							For an 8-core 64-bit system: up to 64 arenas.
+							<code>M_ARENA_MAX</code>
+							can cap the total. Each arena has
+							its own mutex. Threads are assigned to arenas round-robin.
+						</p>
+					</section>
+					<section>
+						<h3 id="glibc-bins-reference-table">glibc Bins Reference Table</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Bin Type</th>
+									<th align="center">Count</th>
+									<th align="center">Range</th>
+									<th align="center">Structure</th>
+									<th align="center">Strategy</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Fastbins</td>
+									<td align="center">10</td>
+									<td align="center">32, 48, 64, 80, 96, 112, 128</td>
+									<td align="center">Singly-linked LIFO</td>
+									<td align="center">O(1), never coalesced</td>
+								</tr>
+								<tr>
+									<td align="center">Tcache</td>
+									<td align="center">64</td>
+									<td align="center">32-1040</td>
+									<td align="center">Singly-linked LIFO</td>
+									<td align="center">Per-thread, no locking, counts 0-7 per size</td>
+								</tr>
+								<tr>
+									<td align="center">Smallbins</td>
+									<td align="center">62</td>
+									<td align="center">32-1008 (16B steps)</td>
+									<td align="center">Doubly-linked FIFO</td>
+									<td align="center">Exact fit only; coalesced with neighbors</td>
+								</tr>
+								<tr>
+									<td align="center">Largebins</td>
+									<td align="center">63</td>
+									<td align="center">1008+</td>
+									<td align="center">Doubly-linked, sorted by size</td>
+									<td align="center">Best-fit; coalesced</td>
+								</tr>
+								<tr>
+									<td align="center">Unsorted bin</td>
+									<td align="center">1</td>
+									<td align="center">Any</td>
+									<td align="center">Doubly-linked circular</td>
+									<td align="center">Temporary staging; iterated on next malloc</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="chunk-structure">Chunk Structure</h3>
+						<p>
+							Every allocated or free block of heap memory is preceded by metadata called a chunk header.
+							The user receives a pointer past this header.
+						</p>
+						<pre class="plaintext">
+Allocated chunk:
+┌────────────────────────┐
+│ prev_size     │ size   │ ← 8 + 8 = 16 bytes overhead (x86-64)
+│ (8 bytes)     │ (8 B)  │
+├────────────────────────┤
+│                        │
+│  User data             │ ← Pointer returned by malloc()
+│  (requested size)      │
+│                        │
+├────────────────────────┤
+│  (next chunk begins)   │
+
+Free chunk (doubly-linked in a bin):
+┌────────────────────────┐
+│ prev_size     │ size   │ ← 8 + 8 = 16 bytes overhead
+├────────────────────────┤
+│ fd            │ bk     │ ← Forward/backward pointers in free list
+│ (8 bytes)     │ (8 B)  │
+├────────────────────────┤
+│                        │
+│  Unused space          │
+│                        │
+├────────────────────────┤
+						</pre>
+						<p>
+							<b>size field bits:</b>
+							The chunk size is stored as a multiple of 16 (on x86-64), with the low
+							3 bits used as flags:
+						</p>
+						<pre class="plaintext">
+size field (64-bit):
+┌────────────────────────────────────────────────────────────┐
+│  Chunk size (multiple of 16)                   │ N │ M │ P │
+└────────────────────────────────────────────────────────────┘
+                                                          │
+                                        PREV_INUSE ──────┘ (bit 0)
+                                        IS_MMAPPED ─────── (bit 1)
+                                        NON_MAIN_ARENA ─── (bit 2)
+						</pre>
+						<ul>
+							<li><b>PREV_INUSE (P)</b> : The previous chunk is in use. Used for coalescing decisions.</li>
+							<li><b>IS_MMAPPED (M)</b> : This chunk was allocated via mmap.</li>
+							<li><b>NON_MAIN_ARENA (N)</b> : This chunk belongs to a non-main arena.</li>
+						</ul>
+						<pre class="c">
+// Inspect chunk metadata
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;malloc.h&gt;
+
+int main() {
+    void *p1 = malloc(24);
+    void *p2 = malloc(24);
+    void *p3 = malloc(1024);
+
+    printf(&#34;malloc(24) → usable size: %zu\n&#34;, malloc_usable_size(p1));
+    printf(&#34;  Header at %p, data at %p\n&#34;,
+           (char*)p1 - 16, p1);  // Header is 16 bytes before data on x86-64
+    printf(&#34;  Chunk size: %zu\n&#34;, *(size_t*)((char*)p1 - 8) &amp; ~0x7);
+
+    printf(&#34;  Next chunk size: %zu\n&#34;,
+           *(size_t*)((char*)p1 - 8 + malloc_usable_size(p1) + 16) &amp; ~0x7);
+
+    free(p1);
+    free(p2);
+    free(p3);
+    return 0;
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="malloc-usable-size-vs-requested-size">malloc_usable_size() vs Requested Size</h3>
+						<p>
+							<code>malloc(n)</code>
+							may allocate more than
+							<code>n</code>
+							bytes.
+							<code>malloc_usable_size(ptr)</code>
+							returns the actual usable
+							space. The overhead is: -
+							<b>Minimum chunk size</b>
+							: 32 bytes on x86-64 (16 header + 16 min data)
+							<ul>
+								<li><b>Alignment</b> : 16-byte aligned on x86-64</li>
+								<li><b>Padding</b> : Rounded up to next 16-byte boundary</li>
+							</ul>
+						</p>
+						<pre class="bash">
+gcc -o chunk-demo chunk-demo.c &amp;&amp; ./chunk-demo
+						</pre>
+					</section>
+					<section>
+						<h3 id="what-happens-during-free">What Happens During free()</h3>
+						<p>
+							Calling
+							<code>free(ptr)</code>
+							does NOT necessarily return memory to the OS. The sequence depends on the
+							chunk:
+						</p>
+						<pre class="plaintext">
+free(ptr):
+    │
+    ▼
+┌──────────────────────────────────────────────────────┐
+│  Is ptr NULL?                                        │
+│  Yes → return immediately (free(NULL) is safe)       │
+│  No  → continue                                      │
+├──────────────────────────────────────────────────────┤
+│  Is chunk mmap&#39;d? (IS_MMAPPED flag)                  │
+│  Yes → munmap() immediately, return to OS            │
+│  No  → continue                                      │
+├──────────────────────────────────────────────────────┤
+│  Is chunk in tcache bin size range?                   │
+│  Is tcache bin not full? (&lt; 7 entries by default)    │
+│  Yes → push to tcache bin; return                    │
+│  No  → continue                                      │
+├──────────────────────────────────────────────────────┤
+│  Is chunk in fastbin size range?                      │
+│  Yes → push to fastbin (LIFO, no coalescing)         │
+│  No  → continue                                      │
+├──────────────────────────────────────────────────────┤
+│  Not fastbin-eligible:                               │
+│  - Check if adjacent chunks are free                 │
+│  - Coalesce (merge) backward if prev is free         │
+│  - Coalesce (merge) forward if next is free          │
+│  - Place merged chunk in unsorted bin                │
+│  - If merged chunk touches top chunk → absorb        │
+└──────────────────────────────────────────────────────┘
+						</pre>
+						<p>
+							<b>Coalescing</b>
+							merges adjacent free chunks into a larger one, reducing fragmentation. The PREV_INUSE
+							bit on the
+							<b>next</b>
+							chunk tells whether the current chunk can be merged backward. The forward
+							merge checks if the chunk
+							<b>after</b>
+							the next chunk has its PREV_INUSE bit clear.
+						</p>
+					</section>
+					<section>
+						<h3 id="tcache-thread-cache-glibc-226">tcache (Thread Cache) - glibc 2.26+</h3>
+						<p>
+							The tcache is a per-thread cache that sits in front of all other bins. It's lock-free (thread-local)
+							and provides fast reuse for small allocations:
+						</p>
+						<pre class="c">
+// Simplified tcache representation
+typedef struct tcache_entry {
+    struct tcache_entry *next;  // Singly-linked
+    // Optional: key field for double-free detection
+} tcache_entry;
+
+typedef struct tcache_perthread_struct {
+    uint16_t counts[TCACHE_MAX_BINS];  // 64 entries
+    tcache_entry *entries[TCACHE_MAX_BINS];  // 64 bin heads
+} tcache_perthread_struct;
+						</pre>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Property</th>
+									<th align="center">Value</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Number of bins</td>
+									<td align="center">64</td>
+								</tr>
+								<tr>
+									<td align="center">Size range</td>
+									<td align="center">32 to 1040 bytes (16B increments)</td>
+								</tr>
+								<tr>
+									<td align="center">Max entries per bin</td>
+									<td align="center">7 (tcache_count)</td>
+								</tr>
+								<tr>
+									<td align="center">Locking</td>
+									<td align="center">None (per-thread, no contention)</td>
+								</tr>
+								<tr>
+									<td align="center">Coalescing</td>
+									<td align="center">Never  -  tcache chunks are not merged</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							The tcache dramatically improves performance for workloads with many small, short-lived allocations.
+							However, it bypasses many consistency checks that other bins perform, making it a common target
+							for heap exploitation.
+						</p>
+					</section>
+					<section>
+						<h3 id="sbrk-for-small-mmap-for-large">sbrk() for Small, mmap() for Large</h3>
+						<p>
+							The threshold for using
+							<code>mmap()</code>
+							instead of
+							<code>sbrk()</code>
+							is determined by
+							<code>M_MMAP_THRESHOLD</code>
+							:
+						</p>
+						<pre class="c">
+#include &lt;malloc.h&gt;
+#include &lt;stdio.h&gt;
+
+int main() {
+    /* Default threshold is 128 * 1024 = 131072 bytes. Lower it to 4 KiB so
+       that medium allocations use mmap instead of brk. mallopt() returns 1
+       on success and 0 on error. */
+    if (mallopt(M_MMAP_THRESHOLD, 4096) == 0) {
+        fprintf(stderr, &#34;mallopt failed\n&#34;);
+        return 1;
+    }
+
+    printf(&#34;mmap threshold set to 4096 bytes\n&#34;);
+
+    /* Also adjustable via environment: MALLOC_MMAP_THRESHOLD_=4096 ./program */
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+# Trace to see when sbrk vs mmap is used
+MALLOC_MMAP_THRESHOLD_=4096 strace -e brk,mmap,mprotect ./chunk-demo 2&gt;&amp;1 | grep -E &#39;brk|mmap&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="heap-vs-other-memory-regions">Heap vs Other Memory Regions</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Region</th>
+									<th align="center">Lifespan</th>
+									<th align="center">Size</th>
+									<th align="center">Allocation</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Text</td>
+									<td align="center">Program life</td>
+									<td align="center">Fixed</td>
+									<td align="center">Compile-time</td>
+								</tr>
+								<tr>
+									<td align="center">Data (init)</td>
+									<td align="center">Program life</td>
+									<td align="center">Fixed</td>
+									<td align="center">Compile-time</td>
+								</tr>
+								<tr>
+									<td align="center">BSS (0-init)</td>
+									<td align="center">Program life</td>
+									<td align="center">Fixed</td>
+									<td align="center">Compile-time</td>
+								</tr>
+								<tr>
+									<td align="center">Heap</td>
+									<td align="center">Manual</td>
+									<td align="center">Dynamic</td>
+									<td align="center">malloc/free</td>
+								</tr>
+								<tr>
+									<td align="center">Stack</td>
+									<td align="center">Automatic</td>
+									<td align="center">Dynamic</td>
+									<td align="center">Function scope</td>
+								</tr>
+								<tr>
+									<td align="center">mmap (anon)</td>
+									<td align="center">Manual</td>
+									<td align="center">Dynamic</td>
+									<td align="center">mmap/munmap</td>
+								</tr>
+								<tr>
+									<td align="center">mmap (file)</td>
+									<td align="center">Manual</td>
+									<td align="center">File size</td>
+									<td align="center">mmap/munmap</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="c">
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+int data_init = 42;        // .data (initialized)
+int bss_zero;              // .bss (zeroed)
+const int rodata = 100;    // .rodata (read-only)
+
+int main() {
+    static int data_static = 7;   // .data
+    int stack_var = 1;            // Stack
+    char* heap_var = malloc(64);  // Heap
+
+    printf(&#34;Text (main):     %p\n&#34;, main);
+    printf(&#34;.data:           %p\n&#34;, &amp;data_init);
+    printf(&#34;.bss:            %p\n&#34;, &amp;bss_zero);
+    printf(&#34;.rodata:         %p\n&#34;, &amp;rodata);
+    printf(&#34;Stack:           %p\n&#34;, &amp;stack_var);
+    printf(&#34;Heap:            %p\n&#34;, heap_var);
+
+    free(heap_var);
+    return 0;
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="heap-profiling-tools">Heap Profiling Tools</h3>
+						<pre class="bash">
+# massif — Valgrind&#39;s heap profiler
+valgrind --tool=massif --massif-out-file=/tmp/massif.out ./your-program
+ms_print /tmp/massif.out | less
+# Shows heap usage over time: peak, allocation rate, where allocations happen
+
+# mtrace — glibc&#39;s built-in allocation tracer
+cat &gt; /tmp/mtrace-test.c &lt;&lt; &#39;EOF&#39;
+#include &lt;mcheck.h&gt;
+#include &lt;stdlib.h&gt;
+int main() {
+    mtrace();  // Start tracing
+    void* p = malloc(100);
+    // free(p);  // Uncomment to fix the leak
+    muntrace();  // Stop tracing
+    return 0;
+}
+EOF
+gcc -o /tmp/mtrace-test /tmp/mtrace-test.c
+
+MALLOC_TRACE=/tmp/mtrace.log /tmp/mtrace-test
+mtrace /tmp/mtrace-test /tmp/mtrace.log
+# Shows unfreed allocations with backtrace
+
+# ltrace — library call tracer
+ltrace -e malloc+free+realloc+calloc ls 2&gt;&amp;1 | head -20
+
+# strace — system call level
+strace -e brk,mmap,munmap,mprotect ls 2&gt;&amp;1
+
+# /proc/self/maps — current heap boundaries
+cat /proc/self/maps | grep heap
+						</pre>
+					</section>
+					<section>
+						<h3 id="dumping-and-inspecting-heap-contents">Dumping and Inspecting Heap Contents</h3>
+						<pre class="bash">
+# Read heap memory of a running process (requires root or ptrace scope)
+sudo cat /proc/$(pidof program)/maps | grep heap
+# 55555555a000-55555557b000 rw-p 00000000 00:00 0  [heap]
+
+# Dump heap:
+sudo dd if=/proc/$(pidof program)/mem bs=1 skip=$((0x55555555a000)) \
+        count=$((0x55555557b000 - 0x55555555a000)) | hexdump -C | head -50
+
+# Or with gdb:
+gdb -p $(pidof program)
+(gdb) info proc mappings
+(gdb) find /w 0x55555555a000, 0x55555557b000, 0x41414141  # Search for &#39;AAAA&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="verification-checklist">Verification Checklist</h3>
+						<pre class="bash">
+# 1. Check heap boundaries
+cat /proc/self/maps | grep heap
+
+# 2. Count how many malloc/free happen during a command
+ltrace -e malloc+free ls 2&gt;&amp;1 | grep -c malloc
+
+# 3. Test malloc overhead
+python3 -c &#34;
+import os
+# Using the posix malloc wrapper
+data = [b&#39;x&#39; * 64 for _ in range(10000)]
+# Read /proc/self/status for VmData
+pid = os.getpid()
+with open(f&#39;/proc/{pid}/status&#39;) as f:
+    for line in f:
+        if &#39;VmData&#39; in line:
+            print(line.strip())
+&#34;
+
+# 4. Inspect malloc trim behavior
+man mallopt  # Read M_TRIM_THRESHOLD
+
+# 5. Profile heap with massif on a simple program
+echo &#39;int main(){for(int i=0;i&lt;1000;i++) malloc(1024); return 0;}&#39; &gt; /tmp/heap-test.c
+gcc -o /tmp/heap-test /tmp/heap-test.c
+valgrind --tool=massif /tmp/heap-test 2&gt;&amp;1 | grep -A5 &#39;total heap&#39;
+
+# 6. System-wide memory usage
+free -h
+cat /proc/meminfo | grep -E &#39;MemTotal|MemFree|MemAvailable|Cached&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go program that decodes a glibc heap chunk chain from a hex dump. The input is one 64-bit
+							little-endian value per line, starting at the first chunk header. For each chunk, print the
+							<code>prev_size</code>
+							, the
+							<code>size</code>
+							with the low three flag bits masked off, and the active flags (
+							<code>PREV_INUSE</code>
+							,
+							<code>IS_MMAPPED</code>
+							,
+							<code>NON_MAIN_ARENA</code>
+							). Advance to the next chunk by the raw size value in bytes,
+							so the walk follows the real chunk chain and stops at the top chunk.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;bufio&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;strconv&#34;
+	&#34;strings&#34;
+)
+
+func flags(size uint64) string {
+	var names []string
+	if size&amp;0x1 != 0 {
+		names = append(names, &#34;PREV_INUSE&#34;)
+	}
+	if size&amp;0x2 != 0 {
+		names = append(names, &#34;IS_MMAPPED&#34;)
+	}
+	if size&amp;0x4 != 0 {
+		names = append(names, &#34;NON_MAIN_ARENA&#34;)
+	}
+	return strings.Join(names, &#34;|&#34;)
+}
+
+func main() {
+	scanner := bufio.NewScanner(os.Stdin)
+	var words []uint64
+	for scanner.Scan() {
+		w := strings.TrimSpace(scanner.Text())
+		if w == &#34;&#34; || strings.HasPrefix(w, &#34;#&#34;) {
+			continue
+		}
+		v, err := strconv.ParseUint(w, 16, 64)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		words = append(words, v)
+	}
+
+	// TODO: walk the dump two words at a time. For each chunk print
+	// prev_size, size&amp;^0x7, and flags(size). Advance the index by
+	// (size&amp;^0x7)/8 words. Stop when the size is zero.
+	_ = words
+	_ = flags
+}
+						</pre>
+						<p>
+							Feed it the
+							<code>x/20gx</code>
+							dump from the GDB listing above with the
+							<code>0x...:</code>
+							addresses stripped, and
+							check that the first chunk reports size
+							<code>0x50</code>
+							with
+							<code>PREV_INUSE</code>
+							set.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/virtual-memory.html">Virtual Memory</a> - mmap, page tables, overcommit</li>
+							<li><a class="icon-website" href="https://sourceware.org/git/?p=glibc.git;a=blob;f=malloc/malloc.c" target="_blank">glibc malloc source - malloc/malloc.c</a></li>
+							<li><a class="icon-download" href="https://wiki-prog.infoprepa.epita.fr/images/0/04/Malloc_tutorial.pdf" target="_blank">A Malloc Tutorial - by Marwan Burelle</a></li>
+							<li><a class="icon-website" href="https://sploitfun.wordpress.com/2015/02/10/understanding-glibc-malloc/" target="_blank">Understanding glibc malloc - SploitFun</a></li>
+							<li><a class="icon-website" href="https://valgrind.org/docs/manual/ms-manual.html" target="_blank">Massif - Valgrind heap profiler</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/mtrace.1" target="_blank">mtrace(1) - malloc tracing</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/mallopt.3" target="_blank">mallopt(3) - set memory allocation parameters</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Virtual File System | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Virtual File System">
+		<meta name="keywords" content="dentry, filesystem, inode, linux, mount-namespaces, superblock, sysinternals, vfs">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Virtual File System">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Linux VFS architecture - superblock, inode, dentry, file objects, pathname resolution, mount namespaces, filesystem registration, and procfs/sysfs as filesystem drivers">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/sysinternals/vfs.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Virtual File System">
+		<meta name="twitter:description" itemprop="description" content="Linux VFS architecture - superblock, inode, dentry, file objects, pathname resolution, mount namespaces, filesystem registration, and procfs/sysfs as filesystem drivers">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-vfs-as-universal-interface">The VFS as Universal Interface</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-four-core-vfs-objects">The Four Core VFS Objects</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-superblock">The Superblock</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-inode">The Inode</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-dentry-cache">The Dentry Cache</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-file-object">The File Object</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#pathname-resolution-walkthrough">Pathname Resolution Walkthrough</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#filesystem-registration">Filesystem Registration</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#mount-namespaces-and-the-mount-tree">Mount Namespaces and the Mount Tree</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#fscrypt-encryption">fscrypt Encryption</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#procfs-sysfs-debugfs">procfs, sysfs, debugfs</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#vfs-hooking-and-security-modules">VFS Hooking and Security Modules</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/sysinternals/index.html">Sysinternals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/sysinternals/vfs.html">Vfs</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="virtual-file-system">Virtual File System</h2>
+					<p>
+						Linux VFS architecture - superblock, inode, dentry, file objects, pathname resolution, mount
+						namespaces, filesystem registration, and procfs/sysfs as filesystem drivers
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							The Virtual File System is the single interface that lets dozens of filesystem types share one
+							set of system calls. This article walks the four core objects (superblock, inode, dentry, and
+							file), follows a pathname through resolution, and shows how filesystems register, how mount
+							namespaces isolate views, and how procfs, sysfs, and fscrypt plug into the same layer.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/filesystems.html">/wiki/articles/fundamentals/filesystems.html</a> - Linux VFS layer, inodes, ext4 internals, journaling, stat()</li>
+							<li><a href="/wiki/articles/sysinternals/kernel-architecture.html">/wiki/articles/sysinternals/kernel-architecture.html</a> - kernel architecture, subsystems, modular design</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-vfs-as-universal-interface">The VFS as Universal Interface</h3>
+						<p>
+							The Linux Virtual File System is the abstraction layer that allows dozens of filesystem types
+							<ul>
+								<li>ext4, btrfs, XFS, NFS, procfs, sysfs, tmpfs, FUSE - to coexist behind a single set of</li>
+							</ul>
+							system
+							calls. Every
+							<code>open()</code>
+							,
+							<code>read()</code>
+							,
+							<code>write()</code>
+							,
+							<code>stat()</code>
+							, and
+							<code>mkdir()</code>
+							call passes through
+							the VFS, which dispatches to the correct filesystem driver through function pointer tables embedded
+							in kernel objects.
+						</p>
+						<p>
+							The VFS is not a filesystem itself. It is a set of data structures and function dispatch tables
+							that filesystem drivers implement. From the kernel's perspective,
+							<code>/proc/self/status</code>
+							(procfs),
+							<code>/sys/class/net/lo/mtu</code>
+							(sysfs), and
+							<code>/home/user/file.txt</code>
+							(ext4) are all processed by the same
+							code in
+							<code>fs/open.c</code>
+							and
+							<code>fs/read_write.c</code>
+							. The differences are hidden behind per-filesystem
+							operation tables.
+						</p>
+						<pre class="plaintext">
+                        User Space
+                            │
+               open(), read(), write(), stat(), ...
+                            │
+                            ▼
+┌────────────────────────────────────────────────┐
+│              VFS Layer (fs/*.c)                 │
+│                                                │
+│  fs/open.c        — do_sys_open()              │
+│  fs/read_write.c  — vfs_read(), vfs_write()    │
+│  fs/namei.c       — pathname resolution        │
+│  fs/stat.c        — vfs_statx()                │
+│  fs/namespace.c   — mount, umount, pivot_root  │
+│  fs/dcache.c      — dentry cache management    │
+│  fs/inode.c       — inode cache management     │
+│  fs/file_table.c  — file object management     │
+└───────────────+────────────────────────────────┘
+                │  Function pointer tables (f_op, i_op, d_op, s_op)
+                ▼
+┌───────────────────────────────────────────────┐
+│           Filesystem Drivers                   │
+│                                               │
+│  fs/ext4/    fs/btrfs/   fs/xfs/   fs/nfs/    │
+│  fs/proc/    fs/sysfs/   fs/tmpfs/ fs/fuse/   │
+│  fs/debugfs/ fs/configfs/  ...                │
+└───────────────────────────────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="the-four-core-vfs-objects">The Four Core VFS Objects</h3>
+						<p>
+							Every filesystem interaction in Linux is mediated through four fundamental object types. Each
+							has an operation table with function pointers that the filesystem driver fills in at mount time:
+						</p>
+						<pre class="plaintext">
+Object Hierarchy:
+══════════════════════════════════════════════════════════════
+
+                 struct super_block
+                 ┌────────────────────────────────┐
+                 │  s_op → super_operations       │
+                 │    .alloc_inode()               │
+                 │    .destroy_inode()             │
+                 │    .write_inode()               │
+                 │    .put_super()                 │
+                 │    .sync_fs()                   │
+                 │    .statfs()                    │
+                 │  s_root → dentry of &#39;/&#39;        │
+                 └────────────+───────────────────┘
+                              │
+                              ▼
+                 struct inode (file metadata)
+                 ┌────────────────────────────────┐
+                 │  i_ino      (inode number)     │
+                 │  i_mode     (type + perms)     │
+                 │  i_uid, i_gid (ownership)      │
+                 │  i_size     (file size)        │
+                 │  i_blocks   (blocks allocated) │
+                 │  i_atime, i_mtime, i_ctime     │
+                 │  i_op → inode_operations       │
+                 │    .create(), .lookup()        │
+                 │    .link(), .unlink()          │
+                 │    .mkdir(), .rmdir()          │
+                 │    .rename(), .setattr()       │
+                 │  i_fop → file_operations       │
+                 │    (default for this inode)    │
+                 └────────────+───────────────────┘
+                              │
+                              ▼
+                 struct dentry (name → inode, cached)
+                 ┌────────────────────────────────┐
+                 │  d_name      (qstr: name+hash) │
+                 │  d_inode     (→ inode)         │
+                 │  d_parent    (→ parent dentry) │
+                 │  d_sb        (→ super_block)   │
+                 │  d_op → dentry_operations      │
+                 │    .d_hash(), .d_compare()     │
+                 │    .d_delete(), .d_release()   │
+                 │  d_subdirs   (list of children)│
+                 └────────────+───────────────────┘
+                              │
+                              ▼
+                 struct file (open file instance)
+                 ┌────────────────────────────────┐
+                 │  f_path      (dentry + mount)  │
+                 │  f_inode     (→ inode)         │
+                 │  f_pos       (current offset)  │
+                 │  f_flags     (O_RDONLY, ...)   │
+                 │  f_mode      (FMODE_READ, ...)  │
+                 │  f_cred      (credentials)     │
+                 │  f_op → file_operations        │
+                 │    .open(), .release()         │
+                 │    .read(), .write()           │
+                 │    .llseek(), .mmap()          │
+                 │    .fsync(), .iterate()        │
+                 │    .unlocked_ioctl()           │
+                 └────────────────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="the-superblock">The Superblock</h3>
+						<p>
+							The
+							<code>super_block</code>
+							represents a single mounted instance of a filesystem. When you run
+							<code>mount -t ext4 /dev/sda1 /mnt</code>
+							, the kernel creates a new
+							<code>super_block</code>
+							and binds it to the mount point. Multiple mounts of
+							the same block device each get their own
+							<code>super_block</code>
+							.
+						</p>
+						<pre class="c">
+// include/linux/fs.h — struct super_block (abbreviated)
+struct super_block {
+    struct list_head    s_list;         // global list of all superblocks
+    dev_t               s_dev;          // device identifier
+    unsigned long       s_blocksize;    // block size in bytes
+    unsigned char       s_blocksize_bits;
+    loff_t              s_maxbytes;     // max file size
+    struct file_system_type *s_type;    // filesystem type (ext4, btrfs, ...)
+    const struct super_operations *s_op; // operations table
+    struct dentry       *s_root;         // dentry of filesystem root
+    struct list_head    s_inodes;        // all inodes in this fs
+    struct list_head    s_dirty_lists;   // dirty inodes
+    struct list_head    s_inodes_wb;     // writeback inodes
+    unsigned long       s_magic;         // filesystem magic number
+    struct hlist_bl_head s_roots;       // alternate root dentries
+    void                *s_fs_info;      // filesystem-private data (e.g., ext4_sb_info)
+    unsigned long       s_flags;         // mount flags (MS_RDONLY, MS_NOATIME, ...)
+    struct user_namespace *s_user_ns;    // user namespace
+    // ...
+};
+
+struct super_operations {
+    struct inode *(*alloc_inode)(struct super_block *sb);
+    void (*destroy_inode)(struct inode *);
+    void (*free_inode)(struct inode *);
+    void (*dirty_inode)(struct inode *, int flags);
+    int  (*write_inode)(struct inode *, struct writeback_control *wbc);
+    int  (*drop_inode)(struct inode *);
+    void (*evict_inode)(struct inode *);
+    void (*put_super)(struct super_block *);
+    int  (*sync_fs)(struct super_block *sb, int wait);
+    int  (*statfs)(struct dentry *, struct kstatfs *);
+    int  (*remount_fs)(struct super_block *, int *, char *);
+    void (*umount_begin)(struct super_block *);
+    // ...
+};
+						</pre>
+						<pre class="bash">
+# Explore superblocks on a running system
+
+# List all mounted filesystems
+findmnt -t ext4,btrfs,xfs,tmpfs,proc,sysfs -o TARGET,SOURCE,FSTYPE,OPTIONS
+
+# Inspect superblock parameters
+sudo dumpe2fs -h /dev/sda1 2&gt;/dev/null | head -40
+# Filesystem magic number:  0xEF53
+# Filesystem features:      has_journal ext_attr resize_inode dir_index filetype ...
+# Block count:              58593750
+# Block size:               4096
+# Inode count:              14655488
+
+# View superblock magic numbers (VFS-independent type identification)
+# Each filesystem has a unique magic stored in the superblock
+python3 -c &#34;
+fstypes = {
+    0xEF53: &#39;ext4&#39;, 0x9123683E: &#39;btrfs&#39;, 0x58465342: &#39;XFS&#39;,
+    0x01021994: &#39;tmpfs&#39;, 0x65735546: &#39;fuse&#39;, 0x6969: &#39;NFS&#39;,
+    0x9fa0: &#39;proc&#39;, 0x62656572: &#39;sysfs&#39;,
+}
+# Read magic from a raw block device
+import os; fd = os.open(&#39;/dev/sda1&#39;, os.O_RDONLY)
+os.lseek(fd, 0x438, os.SEEK_SET)  # offset 0x438 for ext4
+magic = int.from_bytes(os.read(fd, 2), &#39;little&#39;)
+print(f&#39;Magic: 0x{magic:04X} → {fstypes.get(magic, \&#34;unknown\&#34;)}&#39;)
+os.close(fd)
+&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="the-inode">The Inode</h3>
+						<p>
+							The inode is the kernel's representation of a filesystem object - file, directory, symlink,
+							device, pipe, or socket. It encodes ownership, permissions, size, timestamps, and two critical
+							operation tables:
+						</p>
+						<ol>
+							<li><b>'i_op' (inode_operations)</b> - metadata operations: create, link, unlink, mkdir, rename</li>
+							<li><b>'i_fop' (file_operations)</b> - data operations: read, write, llseek, mmap, iterate</li>
+						</ol>
+						<pre class="c">
+// struct inode (include/linux/fs.h) — key fields
+struct inode {
+    umode_t             i_mode;         // S_IFREG, S_IFDIR, S_IFLNK, permissions
+    unsigned short      i_opflags;
+    kuid_t              i_uid;          // owner user ID
+    kgid_t              i_gid;          // owner group ID
+    unsigned int        i_flags;        // S_IMMUTABLE, S_APPEND, S_NOATIME, ...
+    const struct inode_operations *i_op;
+    struct super_block  *i_sb;
+    struct address_space *i_mapping;    // page cache mapping
+    unsigned long       i_ino;          // inode number
+    loff_t              i_size;         // file size in bytes
+    struct timespec64   i_atime;        // last access
+    struct timespec64   i_mtime;        // last modification
+    struct timespec64   i_ctime;        // last metadata change
+    blkcnt_t            i_blocks;       // blocks allocated (512-byte units)
+    unsigned short      i_bytes;        // bytes in last block
+    struct hlist_node   i_hash;         // inode cache hash
+    struct list_head    i_io_list;      // for writeback
+    struct list_head    i_lru;          // LRU list
+    struct list_head    i_sb_list;      // per-superblock list
+    atomic_t            i_count;        // reference count
+    unsigned long       i_state;        // I_NEW, I_FREEING, I_CLEAR, I_DIRTY_SYNC...
+    // ...
+};
+
+struct inode_operations {
+    struct dentry *(*lookup)(struct inode *, struct dentry *, unsigned int);
+    int (*create)(struct mnt_idmap *, struct inode *, struct dentry *, umode_t, bool);
+    int (*link)(struct dentry *, struct inode *, struct dentry *);
+    int (*unlink)(struct inode *, struct dentry *);
+    int (*symlink)(struct mnt_idmap *, struct inode *, struct dentry *, const char *);
+    int (*mkdir)(struct mnt_idmap *, struct inode *, struct dentry *, umode_t);
+    int (*rmdir)(struct inode *, struct dentry *);
+    int (*rename)(struct mnt_idmap *, struct inode *, struct dentry *,
+                  struct inode *, struct dentry *, unsigned int);
+    int (*setattr)(struct mnt_idmap *, struct dentry *, struct iattr *);
+    int (*getattr)(struct mnt_idmap *, const struct path *, struct kstat *, u32, unsigned int);
+    struct posix_acl *(*get_inode_acl)(struct inode *, int, bool);
+    // ...
+};
+						</pre>
+						<pre class="bash">
+# Inspect inodes from userspace
+
+# stat() — the userspace inode inspector
+stat /etc/passwd
+#   File: /etc/passwd
+#   Size: 2742       Blocks: 8          IO Block: 4096   regular file
+# Device: 259,2      Inode: 12345678    Links: 1
+# Access: (0644/-rw-r--r--)  Uid: (    0/    root)   Gid: (    0/    root)
+# Access: 2026-06-26 12:00:00.000000000 +0000
+# Modify: 2026-06-25 18:30:00.000000000 +0000
+# Change: 2026-06-25 18:30:00.000000000 +0000
+#  Birth: 2026-01-15 04:20:00.000000000 +0000
+
+# Inode number view
+ls -i /etc/passwd
+# 12345678 /etc/passwd
+
+# Inode cache statistics
+cat /proc/sys/fs/inode-nr
+# &lt;nr_inodes&gt; &lt;nr_free_inodes&gt;
+cat /proc/sys/fs/inode-state
+# &lt;nr_inodes&gt; &lt;nr_free_inodes&gt; &lt;preshrink&gt;
+
+# Find inode by number
+sudo find / -xdev -inum 12345678 2&gt;/dev/null
+						</pre>
+					</section>
+					<section>
+						<h3 id="the-dentry-cache">The Dentry Cache</h3>
+						<p>
+							The dentry (directory entry) is the VFS cache that maps names to inodes. It's the most performance-critical
+							cache in the kernel - every
+							<code>open()</code>
+							,
+							<code>stat()</code>
+							, and
+							<code>readlink()</code>
+							involves dentry lookups.
+							The dcache is a hash table keyed by (parent dentry, name hash):
+						</p>
+						<pre class="plaintext">
+Dentry Cache (dcache):
+══════════════════════════════════════════════════════════════
+
+dcache hash table (dentry_hashtable):
+┌───+──────────────────────────────────────────────────────┐
+│ 0 │ → dentry(a) → dentry(b) → ...                       │
+│ 1 │ → dentry(c)                                         │
+│ 2 │ → (empty)                                           │
+│...│                                                      │
+│ N │ → dentry(x) → dentry(y) → dentry(z)                 │
+└───+──────────────────────────────────────────────────────┘
+
+Lookup: __d_lookup(parent, name)
+  1. Compute hash = full_name_hash(parent, name-&gt;name, name-&gt;len)
+  2. Index = hash &gt;&gt; d_hash_shift (hashed dentry_hashtable bucket)
+  3. Walk hash chain, comparing parent + name
+  4. If found: dget(dentry), return
+  5. If not: allocate new dentry, call parent→d_inode→i_op→lookup()
+
+Path resolution: /home/user/file.txt
+  start at root dentry (or AT_FDCWD for relative paths)
+  │
+  ├── component &#34;home&#34;:  lookup(root, &#34;home&#34;)  → dentry_home
+  ├── component &#34;user&#34;:   lookup(home, &#34;user&#34;)  → dentry_user
+  └── component &#34;file.txt&#34;: lookup(user, &#34;file.txt&#34;) → dentry_file
+                                                                 
+  Final: dentry_file, with d_inode pointing to the file&#39;s inode
+						</pre>
+						<pre class="bash">
+# Dentry cache inspection
+cat /proc/sys/fs/dentry-state
+# &lt;nr_dentry&gt; &lt;nr_unused&gt; &lt;age_limit&gt; &lt;want_pages&gt; &lt;dummy0&gt; &lt;dummy1&gt;
+
+# Watch dentry lookups in real-time
+sudo bpftrace -e &#39;
+kprobe:__d_lookup {
+    $dentry = (struct dentry *)arg0;
+    $name = $dentry-&gt;d_name;
+    printf(&#34;lookup: %s (len=%d)\n&#34;, str($name.name), $name.len);
+}
+kretprobe:__d_lookup /retval != 0/ {
+    printf(&#34;  → HIT %p\n&#34;, retval);
+}
+kretprobe:__d_lookup /retval == 0/ {
+    printf(&#34;  → MISS\n&#34;);
+}
+&#39; &amp;
+
+# Trigger lookups
+ls -la /etc/ &gt; /dev/null
+kill %1 2&gt;/dev/null
+
+# Dentry allocation tracking
+sudo bpftrace -e &#39;
+kprobe:__d_alloc { @d_alloc[comm] = count(); }
+interval:s:30 { print(@d_alloc); clear(@d_alloc); }
+&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="the-file-object">The File Object</h3>
+						<p>
+							While the dentry+inode represent the on-disk object, the
+							<code>struct file</code>
+							represents an
+							<b>open instance</b>
+							of that object. Multiple processes can open the same file, each getting their own
+							<code>struct file</code>
+							<ul>
+								<li>each with an independent file position, access mode, and credentials:</li>
+							</ul>
+						</p>
+						<pre class="plaintext">
+file objects: one per open() call
+══════════════════════════════════════════════════════════════
+
+Process A (PID 1000)                    Process B (PID 2000)
+  │                                       │
+  │ fd=3 → struct file_A                  │ fd=4 → struct file_B
+  │         f_pos=0                       │         f_pos=4096
+  │         f_cred={uid=1000}             │         f_cred={uid=2000}
+  │         f_mode=FMODE_READ             │         f_mode=FMODE_READ
+  │         │                              │         │
+  └─────────+──────────────────────────────+─────────┘
+            │                              │
+            ▼                              ▼
+        struct file_operations (f_op) — SAME for both
+            │
+            ▼
+        struct dentry → struct inode (shared by all file objects)
+						</pre>
+						<pre class="bash">
+# View file objects (open instances)
+
+# All open files for current process
+ls -la /proc/$$/fd/
+ls -la /proc/$$/fdinfo/
+
+# Show file position and flags
+cat /proc/$$/fdinfo/3
+# pos:    4096          ← current file position
+# flags:  0100000       ← O_RDONLY
+# mnt_id: 27
+# ino:    123456
+
+# Count how many instances of a file are open
+lsof /etc/passwd
+# Output includes PID, user, fd, type, device, size/off, inode
+# Offsets differ per process — each has its own file object
+
+# System-wide open file count
+cat /proc/sys/fs/file-nr
+# &lt;allocated&gt; &lt;unused&gt; &lt;max&gt;
+						</pre>
+					</section>
+					<section>
+						<h3 id="pathname-resolution-walkthrough">Pathname Resolution Walkthrough</h3>
+						<p>
+							Pathname resolution is the process of converting a string path (
+							<code>/home/user/file.txt</code>
+							) into
+							a dentry pointing to the target inode. The core function is
+							<code>link_path_walk()</code>
+							, called by
+							<code>path_lookupat()</code>
+							:
+						</p>
+						<pre class="plaintext">
+path_lookupat(dfd, name, flags, &amp;path):
+    │
+    ├── 1. Determine starting point:
+    │       if name[0] == &#39;/&#39;: start = current-&gt;fs-&gt;root
+    │       else if dfd == AT_FDCWD: start = current-&gt;fs-&gt;pwd
+    │       else: start = file from dfd
+    │
+    ├── 2. link_path_walk(name, &amp;nd):
+    │       for each component in name:
+    │       │
+    │       ├── Handle &#34;.&#34; and &#34;..&#34; specially
+    │       │     &#34;.&#34;: stay in same dentry
+    │       │     &#34;..&#34;: move to d_parent (with mountpoint crossing)
+    │       │
+    │       ├── If component ends with &#39;/&#39;: must be a directory
+    │       │     walk_component() → handle_lookup_down()
+    │       │
+    │       └── For regular components:
+    │             │
+    │             ├── lookup_fast(): try dcache hash
+    │             │     ├── HIT: check dentry is still valid, return
+    │             │     └── MISS: fall through
+    │             │
+    │             └── lookup_slow():
+    │                   ├── Allocate new dentry
+    │                   ├── Call parent-&gt;d_inode-&gt;i_op-&gt;lookup()
+    │                   ├── Filesystem reads directory blocks, finds entry
+    │                   ├── Return inode → set d_inode on dentry
+    │                   └── Insert into dcache hash
+    │
+    ├── 3. Handle trailing symlinks:
+    │       if final component is a symlink and LOOKUP_FOLLOW:
+    │         read symlink target
+    │         restart link_path_walk from target
+    │         (repeat up to MAXSYMLINKS times)
+    │
+    └── 4. Set path-&gt;dentry and path-&gt;mnt, return 0
+						</pre>
+						<pre class="bash">
+# Trace pathname resolution step by step
+strace -e trace=openat,newfstatat ls /etc/hostname 2&gt;&amp;1
+
+# Use namei to walk the path like the kernel does
+namei -l /etc/ssl/certs/ca-certificates.crt
+
+# Trace VFS path walking
+sudo bpftrace -e &#39;
+kprobe:link_path_walk {
+    printf(&#34;path_walk: %s (pid=%d)\n&#34;, str(arg1), pid);
+}
+kprobe:lookup_fast { @fast_lookups = count(); }
+kprobe:__lookup_slow { @slow_lookups = count(); }
+interval:s:10 {
+    $fast = @fast_lookups;
+    $slow = @slow_lookups;
+    printf(&#34;fast=%d slow=%d hit_rate=%.1f%%\n&#34;, $fast, $slow,
+           $fast * 100.0 / ($fast + $slow + 1));
+}
+&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="filesystem-registration">Filesystem Registration</h3>
+						<p>
+							Filesystem drivers register themselves with the VFS using
+							<code>register_filesystem()</code>
+							. This adds
+							the driver to the global
+							<code>file_systems</code>
+							linked list:
+						</p>
+						<pre class="c">
+// include/linux/fs.h
+struct file_system_type {
+    const char *name;                    // &#34;ext4&#34;, &#34;btrfs&#34;, &#34;proc&#34;
+    int fs_flags;                        // FS_REQUIRES_DEV, FS_USERNS_MOUNT, ...
+    struct dentry *(*mount)(struct file_system_type *, int,
+                            const char *, void *);
+    void (*kill_sb)(struct super_block *);
+    struct module *owner;
+    struct file_system_type *next;       // linked list
+    struct hlist_head fs_supers;          // active superblocks
+    // ...
+};
+
+// Example registration (simplified from fs/ext4/super.c):
+static struct file_system_type ext4_fs_type = {
+    .owner    = THIS_MODULE,
+    .name     = &#34;ext4&#34;,
+    .mount    = ext4_mount,
+    .kill_sb  = kill_block_super,
+    .fs_flags = FS_REQUIRES_DEV | FS_ALLOW_IDMAP,
+};
+
+static int __init ext4_init_fs(void) {
+    ...
+    return register_filesystem(&amp;ext4_fs_type);
+}
+						</pre>
+						<pre class="bash">
+# View all registered filesystem types
+cat /proc/filesystems
+# nodev   sysfs          ← virtual filesystems (no backing device)
+# nodev   rootfs
+# nodev   proc
+# nodev   tmpfs
+#         ext4           ← real filesystems (backed by block device)
+#         btrfs
+#         xfs
+
+# Filesystem module info
+ls /sys/fs/
+ls /sys/fs/ext4/
+
+# Check which module provides a filesystem
+modinfo ext4 | grep -E &#34;^filename:|^description:&#34;
+# filename: /lib/modules/6.x/kernel/fs/ext4/ext4.ko
+# description: Fourth Extended Filesystem
+						</pre>
+					</section>
+					<section>
+						<h3 id="mount-namespaces-and-the-mount-tree">Mount Namespaces and the Mount Tree</h3>
+						<p>
+							Linux mount namespaces provide per-process filesystem views. Each namespace has its own mount
+							tree. This is the foundation of containers - each container sees a different root filesystem:
+						</p>
+						<pre class="plaintext">
+Mount Namespace Architecture:
+══════════════════════════════════════════════════════════════
+
+Global Mount Tree (init namespace)
+  /
+  ├── /dev
+  ├── /proc
+  ├── /sys
+  └── /var/lib/containers/ubuntu-rootfs/
+
+Container Mount Namespace (nsenter&#39;d)
+  /                          ← bind-mounted from ubuntu-rootfs
+  ├── /proc                  ← new proc mount
+  ├── /sys                   ← new sysfs mount
+  └── /etc/resolv.conf       ← bind-mounted config
+
+struct mount {
+    struct mount *mnt_parent;    // parent mount
+    struct dentry *mnt_mountpoint; // dentry where mounted
+    struct vfsmount mnt;          // embedded vfsmount
+    struct list_head mnt_mounts;   // list of children
+    struct list_head mnt_child;    // entry in parent&#39;s children list
+    struct list_head mnt_instance; // superblock instance list
+    // ...
+};
+						</pre>
+						<pre class="bash">
+# Explore mount namespaces
+
+# Current mount namespace
+ls -la /proc/$$/ns/mnt
+readlink /proc/$$/ns/mnt
+# mnt:[4026531841]  ← unique mount namespace ID
+
+# All mounts in current namespace
+findmnt -o TARGET,SOURCE,FSTYPE,PROPAGATION
+
+# View mount info (detailed mount table)
+cat /proc/self/mountinfo | head -10
+# &lt;mount_id&gt; &lt;parent_id&gt; &lt;major:minor&gt; &lt;root&gt; &lt;mount_point&gt; &lt;options&gt; ...
+# 55 28 259:2 / / rw,relatime shared:1 - ext4 /dev/nvme0n1p2 rw
+#  ^   ^   ^     ^ ^  ^             ^        ^   ^     ^
+#  |   |   |     | |  |             |        |   |     └ device
+#  |   |   |     | |  |             |        |   └ fstype
+#  |   |   |     | |  |             |        └ separator
+#  |   |   |     | |  |             └ superblock options
+#  |   |   |     | |  └ mount options
+#  |   |   |     | └ root dentry (inside fs)
+#  |   |   |     └ mount point path
+#  |   |   └ device major:minor
+#  |   └ parent mount ID
+#  └ mount ID
+
+# Create a temporary mount namespace
+sudo unshare -m bash -c &#39;
+# Now in a new mount namespace
+mount -t tmpfs none /mnt
+echo &#34;test&#34; &gt; /mnt/testfile
+findmnt /mnt
+cat /mnt/testfile
+# In another terminal: /mnt is NOT visible (different namespace)
+&#39;
+
+# List all mount namespaces on the system
+sudo lsns -t mnt
+						</pre>
+					</section>
+					<section>
+						<h3 id="fscrypt-encryption">fscrypt Encryption</h3>
+						<p>
+							Linux provides filesystem-level encryption via
+							<code>fscrypt</code>
+							(formerly ext4 encryption). It operates
+							at the VFS layer, meaning any filesystem can opt in:
+						</p>
+						<pre class="plaintext">
+fscrypt Architecture:
+══════════════════════════════════════════════════════════════
+
+Policy set on empty directory:
+  fscrypt_set_policy(dir, &amp;policy)  ← ioctl(FS_IOC_SET_ENCRYPTION_POLICY)
+
+Key added to kernel keyring:
+  keyctl add logon fscrypt:&lt;identifier&gt; &lt;raw_key&gt; @s
+
+On file write:
+  VFS → ext4_writepages()
+    │
+    ├── Check: inode has encryption context?
+    │     YES → encrypt page contents before write
+    │     NO  → write plaintext
+    │
+    └── submit_bio(encrypted data)
+
+On file read:
+  VFS → ext4_read_folio()
+    │
+    ├── Read ciphertext from disk
+    ├── Decrypt into page cache
+    └── VFS reads plaintext from page cache
+
+Result:
+  - Data at rest: encrypted on disk
+  - Data in kernel page cache: plaintext (decrypted on read)
+  - Filenames: encrypted ciphertext stored on disk (not readable as UTF-8)
+  - Directory structure: NOT encrypted (just filenames)
+						</pre>
+						<pre class="bash">
+# fscrypt overview (requires filesystem with encryption support)
+# Check if your filesystem supports encryption
+sudo tune2fs -l /dev/sda1 2&gt;/dev/null | grep encrypt || echo &#34;Check with: sudo tune2fs -l &lt;dev&gt;&#34;
+
+# On a supported ext4 with encryption enabled:
+# sudo fscrypt setup            # one-time setup
+# sudo fscrypt setup /mnt          # per-mountpoint setup
+# sudo fscrypt encrypt /mnt/secret --name=mysecret
+# sudo fscrypt unlock /mnt/secret
+						</pre>
+					</section>
+					<section>
+						<h3 id="procfs-sysfs-debugfs">procfs, sysfs, debugfs</h3>
+						<p>
+							The beauty of the VFS design is that
+							<code>/proc</code>
+							,
+							<code>/sys</code>
+							, and
+							<code>/debugfs</code>
+							are full filesystem drivers
+							<ul>
+								<li>they implement the same VFS operations as ext4 or btrfs, but generate content dynamically:</li>
+							</ul>
+						</p>
+						<pre class="plaintext">
+procfs Implementation (fs/proc/):
+══════════════════════════════════════════════════════════════
+
+When you cat /proc/$$/status:
+  1. VFS resolves path → dentry → inode
+  2. Inode&#39;s i_fop→open() → proc_single_open()
+  3. vfs_read() → seq_read() → proc_single_show()
+  4. proc_single_show() calls the registered show function
+  5. show function reads task_struct fields, formats output
+  6. seq_read() copies to userspace buffer
+
+Directory listing (ls /proc):
+  1. VFS&#39;s iterate_dir() → proc_root_readdir()
+  2. Iterates process list (task_struct linked list)
+  3. For each task-&gt;pid, emits a directory entry
+  4. Also emits fixed entries: self, thread-self, mounts, ...
+
+No disk I/O occurs — all content generated from kernel data structures.
+						</pre>
+						<pre class="bash">
+# Explore the filesystem drivers behind virtual filesystems
+mount | grep -E &#34;proc|sys|debugfs|tmpfs&#34;
+
+# Each virtual fs has operations like any real fs:
+# View the proc filesystem driver info
+ls /proc/fs/
+cat /proc/fs/ext4/sda1/mb_groups 2&gt;/dev/null | head
+
+# Debugfs — kernel debugging interface
+sudo mount -t debugfs none /sys/kernel/debug
+ls /sys/kernel/debug/
+# blk_mq_state, bdi, block, btrfs, cleancache, ...
+cat /sys/kernel/debug/extfrag/unusable_index
+
+# Trace procfs read operations
+sudo bpftrace -e &#39;
+kprobe:proc_reg_read {
+    $file = (struct file *)arg0;
+    printf(&#34;proc read: pid=%d comm=%s\n&#34;, pid, comm);
+}
+&#39; &amp;
+
+cat /proc/self/status &gt; /dev/null
+kill %1 2&gt;/dev/null
+						</pre>
+					</section>
+					<section>
+						<h3 id="vfs-hooking-and-security-modules">VFS Hooking and Security Modules</h3>
+						<p>
+							Linux Security Modules (LSMs) like SELinux and AppArmor hook into the VFS layer. Every inode
+							operation, file open, and path resolution can be intercepted:
+						</p>
+						<pre class="c">
+// Security hooks in the VFS (simplified path for open()):
+
+vfs_open(path, file):
+    │
+    ├── security_file_open(file)   ← LSM: may deny access
+    ├── do_dentry_open(file, ...):
+    │     │
+    │     ├── security_inode_permission(inode, MAY_OPEN)  ← LSM check
+    │     ├── f-&gt;f_op-&gt;open(inode, file)                   ← fs-specific
+    │     └── security_file_post_open(file)                ← LSM post-check
+    │
+    └── fsnotify_open(file)        ← notify inotify/fanotify watchers
+						</pre>
+						<pre class="bash">
+# Trace LSM hooks at VFS boundaries
+sudo bpftrace -e &#39;
+kprobe:security_file_open    { printf(&#34;LSM: file_open     pid=%d comm=%s\n&#34;, pid, comm); }
+kprobe:security_inode_create { printf(&#34;LSM: inode_create  pid=%d comm=%s\n&#34;, pid, comm); }
+kprobe:security_inode_unlink { printf(&#34;LSM: inode_unlink  pid=%d comm=%s\n&#34;, pid, comm); }
+&#39;
+
+# View current LSM configuration
+cat /sys/kernel/security/lsm
+# lockdown,capability,yama,landlock,apparmor,bpf
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Build the VFS exploration container, which mounts custom filesystems, runs a FUSE example, and
+							inspects the dentry and inode caches. Then reconcile each observation with the kernel objects
+							described above.
+						</p>
+						<p><a href="/wiki/articles/sysinternals/vfs.Containerfile">vfs.Containerfile</a></p>
+						<pre class="bash">
+podman build -t vfs-lab -f vfs.Containerfile .
+podman run -it --rm --privileged vfs-lab
+						</pre>
+						<pre class="bash">
+# 1. Explore the four VFS objects
+echo &#34;=== Superblock ===&#34;
+findmnt -o TARGET,SOURCE,FSTYPE,OPTIONS | head -10
+
+echo &#34;=== Inode ===&#34;
+stat /etc/hostname
+cat /proc/sys/fs/inode-nr
+
+echo &#34;=== Dentry (dcache) ===&#34;
+cat /proc/sys/fs/dentry-state
+
+echo &#34;=== File (open instances) ===&#34;
+ls -la /proc/$$/fd/
+cat /proc/$$/fdinfo/0
+
+# 2. Trace pathname resolution
+namei -l /etc/passwd
+strace -e trace=openat,newfstatat ls /etc/hostname 2&gt;&amp;1 | head -5
+
+# 3. Inspect filesystem registration
+cat /proc/filesystems
+ls /sys/fs/
+
+# 4. Mount namespace inspection
+findmnt -o TARGET,SOURCE,FSTYPE
+cat /proc/self/mountinfo | awk -F&#39; &#39; &#39;{print $5, $NF}&#39; | head -10
+
+# 5. Create a temporary filesystem and trace operations
+sudo bpftrace -e &#39;
+kprobe:vfs_read,
+kprobe:vfs_write {
+    printf(&#34;%s: pid=%d comm=%s\n&#34;, func, pid, comm);
+}
+&#39; &amp;
+BPFPID=$!
+sleep 0.5
+
+echo &#34;test&#34; &gt; /tmp/vfs_verify_test
+cat /tmp/vfs_verify_test
+rm /tmp/vfs_verify_test
+sleep 0.5
+sudo kill $BPFPID 2&gt;/dev/null
+
+# 6. Dentry cache performance
+# Flush and observe dcache rebuild
+echo 2 | sudo tee /proc/sys/vm/drop_caches  # drop dentries and inodes
+time ls -laR /etc/ &gt; /dev/null  # rebuilds dcache
+cat /proc/sys/fs/dentry-state
+
+# 7. Inode operation tracing
+strace -e trace=creat,mkdir,link,unlink,symlink,rename bash -c &#39;
+cd /tmp
+mkdir -p vfs_test/subdir
+echo hello &gt; vfs_test/file.txt
+ln vfs_test/file.txt vfs_test/hardlink
+ln -s file.txt vfs_test/symlink
+mv vfs_test/file.txt vfs_test/renamed.txt
+rm -rf vfs_test
+&#39; 2&gt;&amp;1 | head -20
+
+# 8. View all mounts and their propagation types
+cat /proc/self/mountinfo | awk -F&#39; &#39; &#39;{printf &#34;%-30s %-20s %s\n&#34;, $5, $NF, $7}&#39;
+
+# 9. Filesystem superblock stats (ext4)
+sudo dumpe2fs -h /dev/$(lsblk -nd -o NAME | head -1) 2&gt;/dev/null | head -20
+
+# 10. Compare VFS operations across filesystem types
+for fs in proc sys dev; do
+    echo &#34;=== $fs cleanup: dropping caches and re-reading ===&#34;
+    time cat /$fs/version 2&gt;/dev/null || true
+done
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://www.kernel.org/doc/html/latest/filesystems/vfs.html" target="_blank">Linux VFS - Documentation/filesystems/vfs.rst</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/include/linux/fs.h" target="_blank">Linux Elixir - struct super_block</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/include/linux/fs.h" target="_blank">Linux Elixir - struct inode</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/include/linux/dcache.h" target="_blank">Linux Elixir - struct dentry</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/include/linux/fs.h" target="_blank">Linux Elixir - struct file</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/fs/namei.c" target="_blank">Linux Elixir - path_lookupat()</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/fs/namei.c" target="_blank">Linux Elixir - link_path_walk()</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/mount.8" target="_blank">mount(8) - mount a filesystem</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/mount_namespaces.7" target="_blank">mount_namespaces(7) - overview of Linux mount namespaces</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/findmnt.8" target="_blank">findmnt(8) - find a filesystem</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/stat.2" target="_blank">stat(2) - get file status</a></li>
+							<li><a class="icon-website" href="https://www.kernel.org/doc/html/latest/filesystems/fscrypt.html" target="_blank">fscrypt - filesystem-level encryption</a></li>
+							<li><a href="/wiki/articles/sysinternals/vfs.Containerfile">vfs.Containerfile</a> - custom filesystem mount demo and FUSE lab</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Log Analysis | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Log Analysis">
+		<meta name="keywords" content="blueteam, correlation, forensics, log-analysis, siem, timeline">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Log Analysis">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Correlating events across systems to reconstruct attacker timelines and detect anomalous patterns.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/blueteam/log-analysis.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Log Analysis">
+		<meta name="twitter:description" itemprop="description" content="Correlating events across systems to reconstruct attacker timelines and detect anomalous patterns.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#time-synchronization">Time Synchronization</a></b>
+					<ul>
+						<li><a href="#ntp-network-time-protocol">NTP (Network Time Protocol)</a></li>
+						<li><a href="#ptp-precision-time-protocol">PTP (Precision Time Protocol)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#distributed-tracing-concepts">Distributed Tracing Concepts</a></b>
+					<ul>
+						<li><a href="#trace-ids-in-practice">Trace IDs in practice</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#log-aggregation-architecture">Log Aggregation Architecture</a></b>
+					<ul>
+						<li><a href="#loki-and-promtail">Loki and Promtail</a></li>
+						<li><a href="#elasticsearch-and-filebeat">Elasticsearch and Filebeat</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#writing-correlation-queries">Writing Correlation Queries</a></b>
+					<ul>
+						<li><a href="#phishing-to-c2-corridor">Phishing to C2 Corridor</a></li>
+						<li><a href="#tracking-lateral-movement-via-sshrdp">Tracking lateral movement via SSH/RDP</a></li>
+						<li><a href="#rdp-lateral-movement">RDP Lateral Movement</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#timeline-reconstruction">Timeline Reconstruction</a></b>
+					<ul>
+						<li><a href="#super-timeline-with-plaso">Super Timeline with Plaso</a></li>
+						<li><a href="#manual-timeline-from-live-logs">Manual Timeline from Live Logs</a></li>
+						<li><a href="#auditd-forensics-rules">auditd Forensics Rules</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#statistical-baseline-outlier-detection">Statistical Baseline & Outlier Detection</a></b>
+					<ul>
+						<li><a href="#practical-baseline-collection-with-loki">Practical baseline collection with Loki</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#worked-example-phishing-to-c2">Worked Example: Phishing to C2</a></b>
+					<ul>
+						<li><a href="#source-1-mail-gateway">Source 1 - Mail Gateway</a></li>
+						<li><a href="#source-2-endpoint">Source 2 - Endpoint</a></li>
+						<li><a href="#source-3-proxy-and-firewall">Source 3 - Proxy and Firewall</a></li>
+						<li><a href="#source-4-persistence">Source 4 - Persistence</a></li>
+						<li><a href="#source-5-c2-callback">Source 5 - C2 Callback</a></li>
+						<li><a href="#reconstructed-timeline">Reconstructed timeline</a></li>
+						<li><a href="#detection-queries">Detection Queries</a></li>
+						<li><a href="#cross-source-correlation">Cross-Source Correlation</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/blueteam/index.html">Blueteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/blueteam/log-analysis.html">Log Analysis</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="log-analysis">Log Analysis</h2>
+					<p>Correlating events across systems to reconstruct attacker timelines and detect anomalous patterns.</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Log analysis is the practice of aggregating, normalizing, and correlating event records from
+							disparate systems to answer two questions:
+							<b>what happened</b>
+							and
+							<b>in what order</b>
+							. An attacker's
+							activity rarely fits within a single log source. The phishing email hits the mail gateway, the
+							payload executes on the workstation, the beacon reaches out through the proxy, and lateral movement
+							traverses domain controllers - each step leaves traces in a different log.
+						</p>
+						<p>The skill is stitching these traces together.</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/http.html">HTTP Protocol</a> - request/response structure, headers, status codes</li>
+							<li><a href="/wiki/articles/fundamentals/dns.html">DNS Protocol</a> - query types, resolution, tunnels, exfiltration channels</li>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - process lifecycle, signals, auditd integration</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="time-synchronization">Time Synchronization</h3>
+						<p>
+							Correlation is meaningless without accurate timestamps. If server A is 47 seconds behind server
+							B, event ordering becomes ambiguous and timeline reconstruction fails.
+						</p>
+						<h4 id="ntp-network-time-protocol">NTP (Network Time Protocol)</h4>
+						<p>
+							Millisecond accuracy over
+							<abbr title="Local Area Network">LAN</abbr>
+							, tens of milliseconds over
+							<abbr title="Wide Area Network">WAN</abbr>
+							:
+						</p>
+						<pre class="bash">
+# ArchLinux: enable and configure NTP
+sudo pacman -S ntp
+sudo systemctl enable --now ntpd
+
+# Verify synchronization status
+ntpq -p
+# Look for &#39;*&#39; in first column — indicates active sync peer
+# Offset should be &lt; 10ms for reasonable correlation
+						</pre>
+						<pre class="yaml">
+# /etc/ntp.conf — minimal client config
+server 0.pool.ntp.org iburst
+server 1.pool.ntp.org iburst
+server 2.pool.ntp.org iburst
+server 3.pool.ntp.org iburst
+
+driftfile /var/lib/ntp/ntp.drift
+restrict default noquery nomodify nopeer notrap
+restrict 127.0.0.1
+						</pre>
+						<h4 id="ptp-precision-time-protocol">PTP (Precision Time Protocol)</h4>
+						<p>
+							Sub-microsecond accuracy for
+							<abbr title="Domain Controller">DC</abbr>
+							-local networks:
+						</p>
+						<pre class="bash">
+# linuxptp for environments needing sub-ms correlation
+sudo pacman -S linuxptp
+sudo ptp4l -i eth0 -m
+						</pre>
+						<p>
+							For
+							<abbr title="Security Information and Event Management">SIEM</abbr>
+							deployments, all log sources must synchronize
+							to the same trusted time source. Enforce this via Group Policy (Windows) or configuration management
+							(Linux). A single host with a skewed clock can ruin an investigation.
+						</p>
+						<pre class="bash">
+# Quick check: compare local time against NTP
+sudo timedatectl set-ntp true
+timedatectl status
+						</pre>
+					</section>
+					<section>
+						<h3 id="distributed-tracing-concepts">Distributed Tracing Concepts</h3>
+						<p>
+							Modern applications use distributed tracing to follow requests across services. The same concepts
+							apply to security log correlation - you need an identifier that survives across system boundaries.
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Concept</th>
+									<th align="center">Security Analog</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Trace ID</td>
+									<td align="center">Session token, SSH connection ID, Kerberos ticket</td>
+								</tr>
+								<tr>
+									<td align="center">Span ID</td>
+									<td align="center">Individual event within a session</td>
+								</tr>
+								<tr>
+									<td align="center">Parent Span</td>
+									<td align="center">The event that triggered this event</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="trace-ids-in-practice">Trace IDs in practice</h4>
+						<pre class="bash">
+# SSH: connection ID ties authentication to session events
+journalctl -u sshd -o json | jq &#39;select(.SSH_CONNECTION != null) | {time: .__REALTIME_TIMESTAMP, conn: .SSH_CONNECTION, user: .USER}&#39;
+
+# HTTP: session cookies or JWT claims for user tracking
+# NGINX log_format with session cookie extraction:
+# log_format trace &#39;$remote_addr - $remote_user [$time_local] &#39;
+#                   &#39;&#34;$request&#34; $status $body_bytes_sent &#39;
+#                   &#39;&#34;$http_referer&#34; &#34;$http_user_agent&#34; &#39;
+#                   &#39;session=$cookie_SESSIONID trace=$http_x_request_id&#39;;
+						</pre>
+					</section>
+					<section>
+						<h3 id="log-aggregation-architecture">Log Aggregation Architecture</h3>
+						<pre class="plaintext">
+[Hosts/Apps] → [Log Shippers] → [Message Queue] → [Indexer] → [Storage] → [Query UI]
+   syslog        filebeat/       kafka/          logstash/    elasticsearch   grafana/
+   journald      promtail        redis           loki          / loki         kibana
+						</pre>
+						<h4 id="loki-and-promtail">Loki and Promtail</h4>
+						<pre class="bash">
+# Install Loki and Promtail on ArchLinux
+sudo pacman -S loki promtail
+
+# Promtail config — ship journald and files
+						</pre>
+						<pre class="yaml">
+# /etc/promtail/config.yml
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+clients:
+  - url: http://localhost:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: journald
+    journal:
+      json: true
+      path: /var/log/journal
+      labels:
+        job: journald
+
+  - job_name: auth_logs
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: auth
+          host: ${HOSTNAME}
+          __path__: /var/log/auth.log
+						</pre>
+						<pre class="bash">
+# Loki API: query auth failures in last hour
+curl -G -s &#39;http://localhost:3100/loki/api/v1/query_range&#39; \
+  --data-urlencode &#39;query={job=&#34;auth&#34;} |= &#34;Failed password&#34;&#39; \
+  --data-urlencode &#39;start=&#39;$(date -d &#39;1 hour ago&#39; +%s)&#39;000000000&#39; \
+  --data-urlencode &#39;end=&#39;$(date +%s)&#39;000000000&#39; \
+  --data-urlencode &#39;limit=100&#39; | jq &#39;.data.result[].values[]&#39;
+						</pre>
+						<h4 id="elasticsearch-and-filebeat">Elasticsearch and Filebeat</h4>
+						<pre class="bash">
+# For larger deployments — note: heavy resource usage
+# Kibana KQL (Kibana Query Language) examples:
+# event.code: 4625 AND user.name: administrator
+# process.command_line: *powershell* AND NOT process.command_line: *Windows\\System32*
+						</pre>
+					</section>
+					<section>
+						<h3 id="writing-correlation-queries">Writing Correlation Queries</h3>
+						<p>
+							The art of log analysis is joining disjoint log sources on a common key. Here are practical
+							patterns for common investigative scenarios.
+						</p>
+						<h4 id="phishing-to-c2-corridor">Phishing to C2 Corridor</h4>
+						<p>Step 1 - Start from the known (phishing email timestamp / sender / subject):</p>
+						<pre class="sql">
+-- Loki LogQL: find mail gateway events matching a suspicious sender
+{job=&#34;mailgw&#34;} |= &#34;evil.domain&#34; | json
+						</pre>
+						<p>Step 2 - Extract attachment hash, trace execution on endpoints:</p>
+						<pre class="bash">
+# Search EDR / sysmon logs for process creation from the downloaded file
+# Sysmon Event ID 1: Process Creation
+# Look for Image path matching the download location and parent = browser/email client
+						</pre>
+						<pre class="sql">
+-- Correlate: process created shortly after email received
+-- Pseudo-SQL joining mail logs with endpoint logs on hostname + time window
+SELECT e.hostname, e.timestamp AS email_time, p.timestamp AS exec_time,
+       p.process_name, p.command_line, p.hashes
+FROM email_logs e
+JOIN process_logs p ON e.hostname = p.hostname
+WHERE e.sender LIKE &#39;%evil.domain%&#39;
+  AND p.timestamp BETWEEN e.timestamp AND (e.timestamp + INTERVAL &#39;5 minutes&#39;)
+  AND p.parent_process IN (&#39;outlook.exe&#39;, &#39;chrome.exe&#39;, &#39;firefox.exe&#39;)
+ORDER BY e.timestamp DESC;
+						</pre>
+						<p>
+							Step 3 - After execution, find the
+							<abbr title="Command and Control">C2</abbr>
+							callback:
+						</p>
+						<pre class="sql">
+-- Join process events with DNS/proxy logs on timestamp proximity
+-- The malware (process_logs.command_line) connects out (proxy_logs.url)
+-- within N seconds of execution
+SELECT p.hostname, p.process_name, p.command_line, p.timestamp AS exec_time,
+       d.query AS dns_query, d.timestamp AS dns_time,
+       pr.url AS proxy_request
+FROM process_logs p
+LEFT JOIN dns_logs d ON p.hostname = d.hostname
+  AND d.timestamp BETWEEN p.timestamp AND (p.timestamp + INTERVAL &#39;10 seconds&#39;)
+LEFT JOIN proxy_logs pr ON p.hostname = pr.hostname
+  AND pr.timestamp BETWEEN p.timestamp AND (p.timestamp + INTERVAL &#39;10 seconds&#39;)
+WHERE p.process_name IN (&#39;powershell.exe&#39;, &#39;cmd.exe&#39;, &#39;wscript.exe&#39;, &#39;rundll32.exe&#39;)
+  AND p.command_line NOT LIKE &#39;%Windows\\System32%&#39;
+ORDER BY p.timestamp DESC;
+						</pre>
+						<h4 id="tracking-lateral-movement-via-sshrdp">Tracking lateral movement via SSH/RDP</h4>
+						<pre class="bash">
+# Linux SSH — trace a user hopping between hosts
+# On each host, journald records SSH authentication and session start
+# Connection ID (e.g., &#34;connection closed by authenticating user root 10.0.0.5 port 51234&#34;)
+# persists across authentication, session, and disconnect events
+
+# Extract all SSH sessions for a compromised user
+journalctl -u sshd --since &#34;2026-06-26 00:00:00&#34; | awk &#39;
+  /Accepted publickey for compromised_user/ {
+    match($0, /from ([0-9.]+) port/, a); from=a[1]
+    match($0, /([0-9]{2}:[0-9]{2}:[0-9]{2})/, t); time=t[1]
+    print time, &#34;LOGIN from&#34;, from
+  }
+  /Disconnected from authenticating user compromised_user/ {
+    match($0, /([0-9]{2}:[0-9]{2}:[0-9]{2})/, t); time=t[1]
+    print time, &#34;LOGOUT&#34;
+  }&#39;
+						</pre>
+						<pre class="bash">
+# Reconstruct the SSH hop chain across servers
+for host in web-01 db-01 app-02; do
+  echo &#34;=== $host ===&#34;
+  ssh &#34;$host&#34; &#34;journalctl -u sshd --since &#39;2026-06-26&#39; --until &#39;2026-06-27&#39; | grep -E &#39;(Accepted|Disconnected|session opened)&#39;&#34;
+done
+						</pre>
+						<h4 id="rdp-lateral-movement">RDP Lateral Movement</h4>
+						<pre class="plaintext">
+Event ID 4624 (Logon) — LogonType 10 = RemoteInteractive (RDP)
+Event ID 4778 (Session Reconnected)
+Event ID 4779 (Session Disconnected)
+Event ID 4648 (Explicit Credential Logon Attempt)
+
+Correlation key: LogonID field ties 4624 to 4634 (Logoff), 4672 (Admin logon), etc.
+						</pre>
+					</section>
+					<section>
+						<h3 id="timeline-reconstruction">Timeline Reconstruction</h3>
+						<p>
+							Timeline analysis arranges every timestamped artifact into a unified chronological view. This
+							reveals the attacker's sequence of actions across filesystem, registry, logs, and network.
+						</p>
+						<h4 id="super-timeline-with-plaso">Super Timeline with Plaso</h4>
+						<pre class="bash">
+# Install on ArchLinux
+sudo pacman -S plaso
+
+# Create a super timeline from a forensic image
+log2timeline.py --storage-file case-001.plaso /mnt/evidence/image.dd
+
+# Extract all events to CSV for analysis
+psort.py -o l2tcsv -w timeline.csv case-001.plaso
+
+# Filter for specific time range and artifacts of interest
+psort.py -o dynamic \
+  --slice &#34;2026-06-26 08:00:00&#34; &#34;2026-06-26 12:00:00&#34; \
+  case-001.plaso
+
+# Common Plaso filters:
+#   date &gt; &#39;2026-06-26 08:00:00&#39;
+#   parser in (&#39;syslog&#39;, &#39;bash_history&#39;, &#39;sqlite/chrome_history&#39;)
+#   filename contains &#39;evil&#39;
+						</pre>
+						<h4 id="manual-timeline-from-live-logs">Manual Timeline from Live Logs</h4>
+						<pre class="bash">
+# Collect timestamps from all available sources
+{
+  echo &#34;=== AUTHENTICATION ===&#34;
+  journalctl --since &#34;2026-06-26&#34; --until &#34;2026-06-27&#34; | grep -E &#39;sshd|sudo|su|login&#39;
+  echo &#34;=== PACKAGE CHANGES ===&#34;
+  journalctl --since &#34;2026-06-26&#34; -u pacman 2&gt;/dev/null || cat /var/log/pacman.log
+  echo &#34;=== PROCESS EXECUTION ===&#34;
+  ausearch -ts 06/26/2026 00:00:00 -te 06/26/2026 23:59:59 -m execve 2&gt;/dev/null
+  echo &#34;=== NETWORK CONNECTIONS ===&#34;
+  ausearch -ts 06/26/2026 00:00:00 -te 06/26/2026 23:59:59 -m connect 2&gt;/dev/null
+} | sort -t&#39; &#39; -k1,3 &gt; attack-timeline.txt
+						</pre>
+						<h4 id="auditd-forensics-rules">auditd Forensics Rules</h4>
+						<pre class="bash">
+# /etc/audit/rules.d/99-forensics.rules
+# Delete previous rules
+-D
+
+# Buffer size — prevent audit backlog under heavy load
+-b 8192
+
+# Monitor process execution
+-a always,exit -F arch=b64 -S execve -k process_execution
+
+# Monitor network connections
+-a always,exit -F arch=b64 -S connect -S accept -k network_connections
+
+# Monitor file access in sensitive paths
+-w /etc/shadow -p rwxa -k credential_access
+-w /etc/passwd -p rwxa -k account_changes
+-w /root/.ssh/authorized_keys -p rwxa -k ssh_keys
+
+# Monitor persistence mechanisms
+-w /etc/systemd/system/ -p wa -k systemd_persistence
+-w /etc/cron.d/ -p wa -k cron_persistence
+-w /home/*/.config/autostart/ -p wa -k user_autostart
+
+# Monitor tools commonly abused by attackers
+-w /usr/bin/wget -p x -k suspicious_downloads
+-w /usr/bin/curl -p x -k suspicious_downloads
+-w /usr/bin/nc -p x -k netcat_usage
+
+# Make rules immutable (requires reboot to change)
+-e 2
+						</pre>
+						<pre class="bash">
+# Load and verify rules
+sudo auditctl -R /etc/audit/rules.d/99-forensics.rules
+sudo auditctl -l
+						</pre>
+					</section>
+					<section>
+						<h3 id="statistical-baseline-outlier-detection">Statistical Baseline & Outlier Detection</h3>
+						<p>
+							Detecting anomalous behavior requires knowing what normal looks like. Statistical baselines
+							identify volumetric and frequency anomalies.
+						</p>
+						<pre class="python">
+# outlier_detect.py — simple statistical outlier detection
+# Run daily against summarized log counts
+
+import json
+import sys
+from collections import defaultdict
+from statistics import mean, stdev
+
+def load_counts(filepath):
+    &#34;&#34;&#34;Load per-hour event counts from JSON log summary.&#34;&#34;&#34;
+    with open(filepath) as f:
+        return json.load(f)
+
+# Example input structure:
+# {&#34;ssh_logins&#34;: {&#34;00&#34;: 3, &#34;01&#34;: 1, ..., &#34;23&#34;: 5},
+#  &#34;dns_queries&#34;: {&#34;00&#34;: 1200, &#34;01&#34;: 987, ...}}
+
+historical = load_counts(&#34;baseline-week-avg.json&#34;)
+current = load_counts(&#34;today-summary.json&#34;)
+
+THRESHOLD = 2.5  # standard deviations
+
+for metric, hourly in current.items():
+    baseline_values = list(historical.get(metric, {}).values())
+    if len(baseline_values) &lt; 24:
+        continue
+    mu = mean(baseline_values)
+    sigma = stdev(baseline_values)
+
+    for hour, count in sorted(hourly.items()):
+        if sigma == 0:
+            continue
+        z_score = (count - mu) / sigma
+        if abs(z_score) &gt; THRESHOLD:
+            print(f&#34;ANOMALY: {metric} at hour {hour}: {count} &#34;
+                  f&#34;(μ={mu:.0f}, σ={sigma:.0f}, z={z_score:.2f})&#34;)
+
+# Example output:
+# ANOMALY: ssh_logins at hour 03: 47 (μ=2, σ=1.5, z=30.00)
+# ANOMALY: dns_queries at hour 02: 8452 (μ=1200, σ=250, z=29.01)
+						</pre>
+						<h4 id="practical-baseline-collection-with-loki">Practical baseline collection with Loki</h4>
+						<pre class="bash">
+# Generate a 7-day baseline of hourly login counts
+for day in {0..6}; do
+  date=$(date -d &#34;$day days ago&#34; +%Y-%m-%d)
+  for hour in $(seq -w 0 23); do
+    count=$(curl -G -s &#39;http://localhost:3100/loki/api/v1/query&#39; \
+      --data-urlencode &#34;query=count_over_time({job=\&#34;auth\&#34;} |= \&#34;Accepted publickey\&#34; [1h] offset ${day}d${hour}h)&#34; \
+      --data-urlencode &#34;time=$(date -d &#34;$date $hour:00:00&#34; +%s)000000000&#34; \
+      | jq &#39;.data.result[0].value[1] // &#34;0&#34;&#39;)
+    echo &#34;$date $hour:00 — $count&#34;
+  done
+done
+						</pre>
+					</section>
+					<section>
+						<h3 id="worked-example-phishing-to-c2">Worked Example: Phishing to C2</h3>
+						<p>
+							An attacker sends a spearphishing email containing a malicious macro document. The user opens
+							it. Within 4 minutes the attacker has shell access and persistence.
+						</p>
+						<h4 id="source-1-mail-gateway">Source 1 - Mail Gateway</h4>
+						<pre class="plaintext">
+Jun 26 09:12:34 mx01 postfix/smtpd[12345]: connect from evil-vps.example[203.0.113.42]
+Jun 26 09:12:35 mx01 postfix/smtpd[12345]: 9A2F34B01: client=evil-vps.example[203.0.113.42]
+Jun 26 09:12:36 mx01 amavis[23456]: (23456-01) Passed CLEAN
+Jun 26 09:12:36 mx01 postfix/cleanup[34567]: 9A2F34B01: message-id=&lt;evilhunter@evil.domain&gt;
+Jun 26 09:12:37 mx01 postfix/lmtp[45678]: 9A2F34B01: to=&lt;victim@company.com&gt;, status=sent
+						</pre>
+						<h4 id="source-2-endpoint">Source 2 - Endpoint</h4>
+						<pre class="plaintext">
+Sysmon Event ID 1 (Process Creation):
+  ParentImage: C:\Program Files\Mozilla Firefox\firefox.exe
+  Image: C:\Windows\System32\cmd.exe
+  CommandLine: &#34;C:\Windows\System32\cmd.exe&#34; /c powershell -enc &lt;base64_blob&gt;
+  UtcTime: 2026-06-26 09:14:02.453
+
+Sysmon Event ID 3 (Network Connection):
+  Image: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+  DestinationIp: 203.0.113.99  (C2 server)
+  DestinationPort: 443
+  UtcTime: 2026-06-26 09:14:07.891
+						</pre>
+						<h4 id="source-3-proxy-and-firewall">Source 3 - Proxy and Firewall</h4>
+						<pre class="plaintext">
+Jun 26 09:14:07 fw01 squid[56789]: 192.168.1.105 TCP_MISS/200 4231 CONNECT 203.0.113.99:443 -
+						</pre>
+						<h4 id="source-4-persistence">Source 4 - Persistence</h4>
+						<pre class="plaintext">
+Sysmon Event ID 13 (Registry Value Set):
+  TargetObject: HKU\...\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\OfficeUpdate
+  Details: powershell.exe -WindowStyle Hidden -enc &lt;c2_beacon&gt;
+  UtcTime: 2026-06-26 09:15:19.024
+
+# Same on Linux via auditd:
+# type=SYSCALL msg=audit(1651869294.024:123): arch=c000003e syscall=257 success=yes
+# exit=3 a0=ffffff9c a1=7ffd... a2=441 a3=1b6 items=2
+# name=&#34;/etc/systemd/system/backdoor.service&#34;
+						</pre>
+						<h4 id="source-5-c2-callback">Source 5 - C2 Callback</h4>
+						<pre class="plaintext">
+Jun 26 09:15:20 fw01 squid[56999]: 192.168.1.105 TCP_MISS/200 187 CONNECT 203.0.113.99:443
+Jun 26 09:16:00 fw01 squid[57000]: 192.168.1.105 TCP_MISS/200 541 CONNECT 203.0.113.99:443
+Jun 26 09:17:00 fw01 squid[57001]: 192.168.1.105 TCP_MISS/200 623 CONNECT 203.0.113.99:443
+# Beacon interval pattern: 60-second callbacks — classic C2 heartbeat
+						</pre>
+						<h4 id="reconstructed-timeline">Reconstructed timeline</h4>
+						<pre class="plaintext">
+09:12:36  Email delivered to victim
+09:14:02  User opens attachment → macro executes → PowerShell launched
+09:14:07  5 seconds later: outbound connection to known C2 IP (203.0.113.99:443)
+09:15:19  Registry Run key created for persistence
+09:15:20  First C2 beacon heartbeat (60s interval confirms)
+						</pre>
+						<h4 id="detection-queries">Detection Queries</h4>
+						<pre class="sql">
+-- Known-bad IP correlation
+{job=&#34;proxy&#34;} | json | dest_ip=&#34;203.0.113.99&#34;
+
+-- PowerShell spawned from Office/browser (not explorer.exe)
+-- Sysmon Event ID 1 with suspicious parent
+{job=&#34;sysmon&#34;} | json
+  | event_id=1
+  | parent_image!~&#34;explorer.exe|services.exe&#34;
+  | image=&#34;*powershell.exe&#34;
+  | command_line!~&#34;*Windows\\System32*&#34;
+
+-- Beacon detection: periodicity check
+-- Regular interval connections to a single IP with low jitter
+-- 60s ± 2s repeated 10+ times → flag
+						</pre>
+						<h4 id="cross-source-correlation">Cross-Source Correlation</h4>
+						<pre class="bash">
+#!/bin/bash
+# correlate.sh — pivot across log sources on IP, hostname, or user
+# Usage: ./correlate.sh 203.0.113.99
+#        ./correlate.sh --user victor
+#        ./correlate.sh --host workstation-42
+
+PIVOT=&#34;$1&#34;
+LOKI_URL=&#34;http://localhost:3100&#34;
+TIME_START=$(date -d &#39;24 hours ago&#39; +%s)000000000
+
+echo &#34;=== Matching IP: $PIVOT ===&#34; &gt;&amp;2
+
+# Query all log streams in parallel
+curl -s &#34;${LOKI_URL}/loki/api/v1/query_range&#34; \
+  --data-urlencode &#34;query={job=~\&#34;proxy|firewall|dns\&#34;} |~ \&#34;(?i)${PIVOT}\&#34;&#34; \
+  --data-urlencode &#34;start=${TIME_START}&#34; \
+  --data-urlencode &#34;limit=500&#34; | jq -r &#39;
+    .data.result[].values[][] |
+    select(length &gt; 0) |
+    .[1]&#39; | sort
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that parses an authentication log and flags credential stuffing: any source
+							address that produces five or more failed passwords and then a successful login. Run it over
+							a sample log, confirm the compromise, then extend it to build a per-host timeline of every event
+							from one address.
+						</p>
+						<pre class="go">
+package main
+
+// authscan - flag credential stuffing from an OpenSSH auth log.
+// Usage: go run authscan.go &lt; auth.log
+
+import (
+	&#34;bufio&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;regexp&#34;
+	&#34;strings&#34;
+)
+
+var (
+	reIP   = regexp.MustCompile(`from ([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)`)
+	reUser = regexp.MustCompile(`for ([A-Za-z0-9._-]+)`)
+)
+
+func main() {
+	scanner := bufio.NewScanner(os.Stdin)
+	failures := map[string]int{}
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		m := reIP.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		ip := m[1]
+
+		if strings.Contains(line, &#34;Failed password&#34;) {
+			failures[ip]++
+			continue
+		}
+
+		if strings.Contains(line, &#34;Accepted&#34;) &amp;&amp; failures[ip] &gt;= 5 {
+			user := &#34;?&#34;
+			if u := reUser.FindStringSubmatch(line); u != nil {
+				user = u[1]
+			}
+			fmt.Printf(&#34;COMPROMISE %s after %d failures as %s\n&#34;, ip, failures[ip], user)
+		}
+	}
+
+	fmt.Println(&#34;--- source addresses ranked by failures ---&#34;)
+	for ip, n := range failures {
+		fmt.Printf(&#34;%-16s %d\n&#34;, ip, n)
+	}
+}
+						</pre>
+						<p>
+							Save the program as
+							<code>authscan.go</code>
+							and feed it a sample log:
+						</p>
+						<pre class="bash">
+cat &gt; auth.log &lt;&lt;&#39;EOF&#39;
+Jun 26 09:12:34 web01 sshd[2211]: Failed password for invalid user admin from 203.0.113.42 port 51234 ssh2
+Jun 26 09:12:36 web01 sshd[2211]: Failed password for invalid user root from 203.0.113.42 port 51235 ssh2
+Jun 26 09:12:38 web01 sshd[2211]: Failed password for invalid user oracle from 203.0.113.42 port 51236 ssh2
+Jun 26 09:12:40 web01 sshd[2211]: Failed password for invalid user postgres from 203.0.113.42 port 51237 ssh2
+Jun 26 09:12:42 web01 sshd[2211]: Failed password for invalid user ubuntu from 203.0.113.42 port 51238 ssh2
+Jun 26 09:13:01 web01 sshd[2212]: Accepted password for deploy from 203.0.113.42 port 51239 ssh2
+EOF
+
+go run authscan.go &lt; auth.log
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://plaso.readthedocs.io/" target="_blank">Plaso (log2timeline) Documentation</a></li>
+							<li><a class="icon-website" href="https://grafana.com/docs/loki/latest/logql/" target="_blank">Loki Query Language (LogQL)</a></li>
+							<li><a class="icon-website" href="https://attack.mitre.org/datasources/" target="_blank">MITRE ATT&CK Data Sources</a></li>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/sysinternals/downloads/sysmon" target="_blank">Sysmon Event ID Reference</a></li>
+							<li><a class="icon-website" href="https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/security_hardening/auditing-the-system_security-hardening" target="_blank">Linux auditd Rule Writing</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

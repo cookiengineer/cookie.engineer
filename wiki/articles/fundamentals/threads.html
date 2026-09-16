@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Threads | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Threads">
+		<meta name="keywords" content="clone, concurrency, mutex, nptl, pthreads, synchronization, techniques, threads">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Threads">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="POSIX threads, synchronization primitives, race conditions, deadlocks, thread-local storage, and the NPTL implementation on Linux.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/fundamentals/threads.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Threads">
+		<meta name="twitter:description" itemprop="description" content="POSIX threads, synchronization primitives, race conditions, deadlocks, thread-local storage, and the NPTL implementation on Linux.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#threads-vs-processes">Threads vs Processes</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#pthreads-api">pthreads API</a></b>
+					<ul>
+						<li><a href="#core-pthread-functions">Core pthread Functions</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#thread-synchronization-mutex">Thread Synchronization: Mutex</a></b>
+					<ul>
+						<li><a href="#mutex-types">Mutex Types</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#race-conditions">Race Conditions</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#condition-variables">Condition Variables</a></b>
+					<ul>
+						<li><a href="#spurious-wakeups">Spurious Wakeups</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#read-write-locks">Read-Write Locks</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#spinlocks">Spinlocks</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#deadlock">Deadlock</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#thread-local-storage">Thread-Local Storage</a></b>
+					<ul>
+						<li><a href="#thread-local-storage-layout">Thread-Local Storage Layout</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#linux-thread-implementation-nptl">Linux Thread Implementation (NPTL)</a></b>
+					<ul>
+						<li><a href="#clone-flags-for-threads">Clone Flags for Threads</a></li>
+						<li><a href="#thread-management-internals">Thread Management Internals</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kernel-threads">Kernel Threads</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#inspecting-threads-on-a-running-system">Inspecting Threads on a Running System</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification-checklist">Verification Checklist</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/fundamentals/index.html">Fundamentals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/fundamentals/threads.html">Threads</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="threads">Threads</h2>
+					<p>
+						<code>POSIX</code>
+						threads, synchronization primitives, race conditions, deadlocks, thread-local storage,
+						and the
+						<code>NPTL</code>
+						implementation on Linux.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							A thread is the smallest unit of execution the kernel schedules. A process is the resource container
+							that owns the address space, file descriptors, signal handlers, and credentials. Threads share
+							that container, so communication is cheap but every concurrent write to shared memory is a potential
+							race. After reading you can use the
+							<code>pthreads</code>
+							library, recognize race conditions and deadlocks,
+							and explain how Linux
+							<code>clone()</code>
+							implements threads as processes.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - process fundamentals, /proc, fork/exec</li>
+							<li><a href="/wiki/articles/fundamentals/system-calls.html">System Calls</a> - syscall entry, the <code>clone()</code> family, errno</li>
+							<li><a href="/wiki/articles/fundamentals/race-conditions.html">Race Conditions</a> - critical sections, atomic operations, interleaving</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="threads-vs-processes">Threads vs Processes</h3>
+						<p>
+							A thread is the smallest unit of execution that the kernel schedules. A process is a resource
+							container - it owns the address space, file descriptors, signal handlers, and credentials. Threads
+							live inside processes.
+						</p>
+						<pre class="plaintext">
+┌────────────────────────────────────────────────┐
+│                   Process                      │
+│                                                │
+│  Shared Resources (one copy):                  │
+│  ┌──────────────────────────────────┐          │
+│  │ Address space (Text, Data, BSS)  │          │
+│  │ File descriptor table            │          │
+│  │ Signal handlers + mask           │          │
+│  │ Current working directory        │          │
+│  │ Credentials (UID, GID, caps)     │          │
+│  │ Resource limits (rlimits)        │          │
+│  └──────────────────────────────────┘          │
+│                                                │
+│  Thread 1           Thread 2        Thread 3   │
+│  ┌────────┐         ┌────────┐      ┌────────┐ │
+│  │ Stack  │         │ Stack  │      │ Stack  │ │
+│  │ RSP/RIP│         │ RSP/RIP│      │ RSP/RIP│ │
+│  │ Regs   │         │ Regs   │      │ Regs   │ │
+│  │ sigmask│         │ sigmask│      │ sigmask│ │
+│  │ errno  │         │ errno  │      │ errno  │ │
+│  └────────┘         └────────┘      └────────┘ │
+└────────────────────────────────────────────────┘
+						</pre>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Property</th>
+									<th align="center">Process</th>
+									<th align="center">Thread</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Creation cost</td>
+									<td align="center">High (fork + CoW page tables)</td>
+									<td align="center">Low (just new stack + task_struct)</td>
+								</tr>
+								<tr>
+									<td align="center">Context switch cost</td>
+									<td align="center">Higher (TLB flush, CR3 change)</td>
+									<td align="center">Lower (same address space)</td>
+								</tr>
+								<tr>
+									<td align="center">Memory isolation</td>
+									<td align="center">Full - cannot corrupt sibling</td>
+									<td align="center">None - any thread can corrupt any memory</td>
+								</tr>
+								<tr>
+									<td align="center">File descriptors</td>
+									<td align="center">Copies at fork; shared open files</td>
+									<td align="center">Identical - closing fd in one closes for all</td>
+								</tr>
+								<tr>
+									<td align="center">Signal delivery</td>
+									<td align="center">Targetable by PID</td>
+									<td align="center">Any thread can receive; thread-directed possible</td>
+								</tr>
+								<tr>
+									<td align="center">Crash resilience</td>
+									<td align="center">Other processes survive</td>
+									<td align="center">One SEGV - entire process dies</td>
+								</tr>
+								<tr>
+									<td align="center">After execve()</td>
+									<td align="center">Replaced entirely</td>
+									<td align="center">All threads destroyed</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="pthreads-api">pthreads API</h3>
+						<p>
+							Linux implements
+							<code>POSIX</code>
+							threads via
+							<code>NPTL</code>
+							(Native
+							<code>POSIX</code>
+							Thread Library). All pthread functions
+							are in
+							<code>libpthread</code>
+							, which is integrated into
+							<code>libc</code>
+							on modern glibc. Compile with
+							<code>-pthread</code>
+							(not
+							<code>-lpthread</code>
+							- the flag enables preprocessor defines too).
+						</p>
+						<pre class="c">
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;pthread.h&gt;
+#include &lt;unistd.h&gt;
+
+void* thread_func(void* arg) {
+    int id = *(int*)arg;
+    printf(&#34;[THREAD %d] PID: %d, TID: %lu\n&#34;, id, getpid(), pthread_self());
+    printf(&#34;[THREAD %d] Argument: %d\n&#34;, id, *(int*)arg);
+    return (void*)(intptr_t)(id * 100);  // Return value via pthread_join
+}
+
+int main() {
+    pthread_t threads[4];
+    int ids[4];
+    int rc;
+
+    for (int i = 0; i &lt; 4; i++) {
+        ids[i] = i + 1;
+        rc = pthread_create(&amp;threads[i], NULL, thread_func, &amp;ids[i]);
+        if (rc) {
+            fprintf(stderr, &#34;pthread_create: %s\n&#34;, strerror(rc));
+            return 1;
+        }
+    }
+
+    printf(&#34;[MAIN] Created %d threads\n&#34;, 4);
+
+    for (int i = 0; i &lt; 4; i++) {
+        void* retval;
+        rc = pthread_join(threads[i], &amp;retval);
+        if (rc == 0)
+            printf(&#34;[MAIN] Thread %d returned: %ld\n&#34;, i, (long)retval);
+    }
+
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+gcc -pthread -o thread-demo thread-demo.c &amp;&amp; ./thread-demo
+						</pre>
+						<h4 id="core-pthread-functions">Core pthread Functions</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Function</th>
+									<th align="center">Purpose</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>pthread_create()</code></td>
+									<td align="center">Create a new thread; starts executing immediately</td>
+								</tr>
+								<tr>
+									<td align="center"><code>pthread_join()</code></td>
+									<td align="center">Block until thread exits; retrieve return value</td>
+								</tr>
+								<tr>
+									<td align="center"><code>pthread_detach()</code></td>
+									<td align="center">Thread cannot be joined; resources freed on exit</td>
+								</tr>
+								<tr>
+									<td align="center"><code>pthread_exit()</code></td>
+									<td align="center">Terminate calling thread</td>
+								</tr>
+								<tr>
+									<td align="center"><code>pthread_cancel()</code></td>
+									<td align="center">Request cancellation of target thread</td>
+								</tr>
+								<tr>
+									<td align="center"><code>pthread_self()</code></td>
+									<td align="center">Return calling thread's ID</td>
+								</tr>
+								<tr>
+									<td align="center"><code>pthread_equal()</code></td>
+									<td align="center">Compare two thread IDs for equality</td>
+								</tr>
+								<tr>
+									<td align="center"><code>pthread_setcancelstate()</code></td>
+									<td align="center">Enable/disable thread cancellation</td>
+								</tr>
+								<tr>
+									<td align="center"><code>pthread_setcanceltype()</code></td>
+									<td align="center">Deferred vs asynchronous cancellation</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="thread-synchronization-mutex">Thread Synchronization: Mutex</h3>
+						<p>
+							A mutex (mutual exclusion) protects a critical section - code that must execute atomically with
+							respect to other threads.
+						</p>
+						<pre class="c">
+#include &lt;stdio.h&gt;
+#include &lt;pthread.h&gt;
+
+#define ITERATIONS 1000000
+
+int counter = 0;
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+
+void* increment(void* arg) {
+    for (int i = 0; i &lt; ITERATIONS; i++) {
+        pthread_mutex_lock(&amp;lock);
+        counter++;  // Critical section: read-modify-write
+        pthread_mutex_unlock(&amp;lock);
+    }
+    return NULL;
+}
+
+int main() {
+    pthread_t t1, t2;
+
+    pthread_create(&amp;t1, NULL, increment, NULL);
+    pthread_create(&amp;t2, NULL, increment, NULL);
+
+    pthread_join(t1, NULL);
+    pthread_join(t2, NULL);
+
+    printf(&#34;Counter: %d (expected: %d)\n&#34;, counter, ITERATIONS * 2);
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+gcc -pthread -o mutex-demo mutex-demo.c &amp;&amp; ./mutex-demo
+# Output: Counter: 2000000 (expected: 2000000)  ← correct
+						</pre>
+						<h4 id="mutex-types">Mutex Types</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Type</th>
+									<th align="center">Attribute</th>
+									<th align="center">Behavior</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Normal (<code>PTHREAD_MUTEX_NORMAL</code>)</td>
+									<td align="center">Default</td>
+									<td align="center">Deadlock on relock; undefined on unlock from other thread</td>
+								</tr>
+								<tr>
+									<td align="center">Error-check (<code>PTHREAD_MUTEX_ERRORCHECK</code>)</td>
+									<td align="center">Explicit</td>
+									<td align="center">Returns EDEADLK on relock; EPERM on wrong-thread unlock</td>
+								</tr>
+								<tr>
+									<td align="center">Recursive (<code>PTHREAD_MUTEX_RECURSIVE</code>)</td>
+									<td align="center">Explicit</td>
+									<td align="center">Allows relock by same thread; count-based unlock</td>
+								</tr>
+								<tr>
+									<td align="center">Default (<code>PTHREAD_MUTEX_DEFAULT</code>)</td>
+									<td align="center">Implementation</td>
+									<td align="center">Undefined behavior on relock/unlock mistakes</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="c">
+pthread_mutex_t rlock;
+pthread_mutexattr_t attr;
+
+pthread_mutexattr_init(&amp;attr);
+pthread_mutexattr_settype(&amp;attr, PTHREAD_MUTEX_RECURSIVE);
+pthread_mutex_init(&amp;rlock, &amp;attr);
+
+// Now the same thread can lock multiple times:
+pthread_mutex_lock(&amp;rlock);
+pthread_mutex_lock(&amp;rlock);    // OK — same thread
+pthread_mutex_unlock(&amp;rlock);
+pthread_mutex_unlock(&amp;rlock);
+						</pre>
+					</section>
+					<section>
+						<h3 id="race-conditions">Race Conditions</h3>
+						<p>
+							A race condition occurs when two threads access shared data concurrently and at least one access
+							is a write. The result depends on the unpredictable interleaving of thread execution.
+						</p>
+						<pre class="c">
+// RACY: Remove the mutex from the counter example and observe:
+int counter = 0;
+
+void* increment_racy(void* arg) {
+    for (int i = 0; i &lt; ITERATIONS; i++) {
+        counter++;  // NOT atomic! Three assembly instructions:
+                    // mov  eax, [counter]     ← load
+                    // inc  eax               ← modify
+                    // mov  [counter], eax     ← store
+    }
+    return NULL;
+}
+						</pre>
+						<pre class="plaintext">
+Timeline of two threads racing on counter++:
+
+Thread 1          Thread 2          counter (memory)
+────────          ────────          ────────────────
+mov eax, [mem]                      0  (T1 reads 0)
+                   mov eax, [mem]   0  (T2 reads 0)
+                   inc eax          T2 has 1
+inc eax                              T1 has 1
+mov [mem], eax                      1  (T1 stores 1)
+                   mov [mem], eax   1  (T2 stores 1)
+                                    
+Expected: 2 increments → counter = 2
+Actual:   counter = 1  (one increment lost)
+						</pre>
+						<p>Verify with the race:</p>
+						<pre class="bash">
+gcc -pthread -o race-demo race-demo.c &amp;&amp; for i in $(seq 1 10); do ./race-demo; done
+# Counter will be below 2000000 every time
+						</pre>
+					</section>
+					<section>
+						<h3 id="condition-variables">Condition Variables</h3>
+						<p>
+							Condition variables allow threads to sleep until a predicate becomes true. They are always paired
+							with a mutex.
+						</p>
+						<pre class="c">
+#include &lt;stdio.h&gt;
+#include &lt;pthread.h&gt;
+#include &lt;stdlib.h&gt;
+
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t  cond  = PTHREAD_COND_INITIALIZER;
+int ready = 0;
+int data  = 0;
+
+void* producer(void* arg) {
+    pthread_mutex_lock(&amp;mutex);
+    data = 42;
+    ready = 1;
+    printf(&#34;[PRODUCER] Data prepared: %d\n&#34;, data);
+    pthread_cond_signal(&amp;cond);        // Wake one waiter
+    // pthread_cond_broadcast(&amp;cond);  // Wake all waiters
+    pthread_mutex_unlock(&amp;mutex);
+    return NULL;
+}
+
+void* consumer(void* arg) {
+    pthread_mutex_lock(&amp;mutex);
+    while (!ready) {  // ALWAYS loop — protects against spurious wakeups
+        pthread_cond_wait(&amp;cond, &amp;mutex);  // Atomically: unlock + sleep
+    }                                       // Re-acquires mutex on wake
+    printf(&#34;[CONSUMER] Received: %d\n&#34;, data);
+    pthread_mutex_unlock(&amp;mutex);
+    return NULL;
+}
+
+int main() {
+    pthread_t prod, cons;
+    pthread_create(&amp;cons, NULL, consumer, NULL);
+    sleep(1);  // Ensure consumer is waiting first
+    pthread_create(&amp;prod, NULL, producer, NULL);
+
+    pthread_join(prod, NULL);
+    pthread_join(cons, NULL);
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+gcc -pthread -o condvar-demo condvar-demo.c &amp;&amp; ./condvar-demo
+						</pre>
+						<h4 id="spurious-wakeups">Spurious Wakeups</h4>
+						<p>
+							<code>POSIX</code>
+							allows spurious wakeups:
+							<code>pthread_cond_wait</code>
+							may return even though no thread signaled.
+							The
+							<code>while (!ready)</code>
+							loop re-checks the predicate, ensuring correctness.
+						</p>
+					</section>
+					<section>
+						<h3 id="read-write-locks">Read-Write Locks</h3>
+						<p>
+							A read-write lock (rwlock) allows multiple readers concurrently but gives writers exclusive
+							access. This optimizes read-heavy workloads.
+						</p>
+						<pre class="c">
+#include &lt;pthread.h&gt;
+#include &lt;stdio.h&gt;
+
+pthread_rwlock_t rwlock = PTHREAD_RWLOCK_INITIALIZER;
+int shared_data = 0;
+
+void* reader(void* arg) {
+    pthread_rwlock_rdlock(&amp;rwlock);
+    printf(&#34;[READER %ld] Data: %d\n&#34;, (long)arg, shared_data);
+    usleep(100000);  // Simulate work
+    pthread_rwlock_unlock(&amp;rwlock);
+    return NULL;
+}
+
+void* writer(void* arg) {
+    pthread_rwlock_wrlock(&amp;rwlock);
+    shared_data++;
+    printf(&#34;[WRITER] Data updated to: %d\n&#34;, shared_data);
+    usleep(200000);  // Simulate work
+    pthread_rwlock_unlock(&amp;rwlock);
+    return NULL;
+}
+						</pre>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Lock Type</th>
+									<th align="center">Concurrent Behavior</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">rdlock</td>
+									<td align="center">Multiple readers can hold simultaneously</td>
+								</tr>
+								<tr>
+									<td align="center">wrlock</td>
+									<td align="center">Writer gets exclusive access; blocks all readers and writers</td>
+								</tr>
+								<tr>
+									<td align="center">rdlock during wrlock</td>
+									<td align="center">Readers block until writer releases</td>
+								</tr>
+								<tr>
+									<td align="center">wrlock during rdlock</td>
+									<td align="center">Writer blocks until all readers release</td>
+								</tr>
+								<tr>
+									<td align="center">wrlock during wrlock</td>
+									<td align="center">Second writer blocks (FIFO or reader-preference depending on impl)</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="spinlocks">Spinlocks</h3>
+						<p>
+							A spinlock busy-waits (spins in a loop) instead of sleeping. The kernel uses spinlocks in contexts
+							where sleeping is impossible (interrupt handlers, while holding other spinlocks). In user space,
+							spinlocks are rarely justified - the kernel scheduler can't preempt a spinning thread until
+							its timeslice expires.
+						</p>
+						<pre class="c">
+#include &lt;pthread.h&gt;
+
+pthread_spinlock_t spin;
+pthread_spin_init(&amp;spin, PTHREAD_PROCESS_PRIVATE);
+
+pthread_spin_lock(&amp;spin);
+// Critical section — very short, no blocking operations!
+pthread_spin_unlock(&amp;spin);
+
+pthread_spin_destroy(&amp;spin);
+						</pre>
+					</section>
+					<section>
+						<h3 id="deadlock">Deadlock</h3>
+						<p>
+							Deadlock occurs when threads wait on each other in a cycle. Four conditions must all hold (Coffman
+							conditions):
+						</p>
+						<ol>
+							<li><b>Mutual Exclusion</b> : Resources cannot be shared.</li>
+							<li><b>Hold and Wait</b> : Threads hold resources while waiting for others.</li>
+							<li><b>No Preemption</b> : Resources cannot be forcibly taken.</li>
+							<li><b>Circular Wait</b> : A cycle exists in the resource dependency graph.</li>
+						</ol>
+						<pre class="c">
+pthread_mutex_t lockA = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t lockB = PTHREAD_MUTEX_INITIALIZER;
+
+void* thread1(void* arg) {
+    pthread_mutex_lock(&amp;lockA);
+    sleep(1);                     // Give time for deadlock to form
+    pthread_mutex_lock(&amp;lockB);   // Thread 1: holds A, needs B
+    printf(&#34;[T1] Got both locks\n&#34;);
+    pthread_mutex_unlock(&amp;lockB);
+    pthread_mutex_unlock(&amp;lockA);
+    return NULL;
+}
+
+void* thread2(void* arg) {
+    pthread_mutex_lock(&amp;lockB);
+    sleep(1);                     // Give time for deadlock to form
+    pthread_mutex_lock(&amp;lockA);   // Thread 2: holds B, needs A
+    printf(&#34;[T2] Got both locks\n&#34;);  // ← Never reached
+    pthread_mutex_unlock(&amp;lockA);
+    pthread_mutex_unlock(&amp;lockB);
+    return NULL;
+}
+						</pre>
+						<p>
+							<b>Deadlock avoidance</b>
+							breaks one of the four conditions: -
+							<b>Lock ordering</b>
+							: Always acquire
+							locks in the same order (A then B everywhere). -
+							<b>Try-lock + backoff</b>
+							:
+							<code>pthread_mutex_trylock()</code>
+							returns EBUSY instead of blocking. -
+							<b>Lock hierarchies</b>
+							: Assign levels; only acquire higher-level
+							locks while holding lower ones. -
+							<b>Timeouts</b>
+							: Use
+							<code>pthread_mutex_timedlock()</code>
+							with a deadline.
+						</p>
+						<pre class="c">
+// Trylock pattern — avoids deadlock
+while (1) {
+    pthread_mutex_lock(&amp;lockA);
+    if (pthread_mutex_trylock(&amp;lockB) == 0) {
+        break;  // Got both
+    }
+    pthread_mutex_unlock(&amp;lockA);  // Release A, retry later
+    usleep(1000);                  // Backoff
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="thread-local-storage">Thread-Local Storage</h3>
+						<p>
+							Each thread can have private data that doesn't require locking because no other thread can access
+							it.
+						</p>
+						<pre class="c">
+#include &lt;stdio.h&gt;
+#include &lt;pthread.h&gt;
+
+// Method 1: __thread keyword (GCC/Clang extension)
+__thread int tls_counter = 0;
+
+// Method 2: pthread_getspecific / pthread_setspecific
+pthread_key_t key;
+
+void destructor(void* value) {
+    printf(&#34;[CLEANUP] Freeing TLS value for thread %lu\n&#34;, pthread_self());
+    free(value);
+}
+
+void* tls_thread(void* arg) {
+    // Method 1: __thread is zero-initialized per thread
+    tls_counter++;
+    printf(&#34;[TLS-__thread] Value: %d\n&#34;, tls_counter);
+
+    // Method 2: pthread key has destructor for cleanup
+    int* data = malloc(sizeof(int));
+    *data = 42;
+    pthread_setspecific(key, data);
+
+    int* retrieved = pthread_getspecific(key);
+    printf(&#34;[TLS-key] Value: %d\n&#34;, *retrieved);
+
+    return NULL;
+}
+
+int main() {
+    pthread_key_create(&amp;key, destructor);
+    pthread_t t1, t2;
+
+    pthread_create(&amp;t1, NULL, tls_thread, NULL);
+    pthread_create(&amp;t2, NULL, tls_thread, NULL);
+
+    pthread_join(t1, NULL);
+    pthread_join(t2, NULL);
+
+    pthread_key_delete(key);
+    return 0;
+}
+						</pre>
+						<h4 id="thread-local-storage-layout">Thread-Local Storage Layout</h4>
+						<p>
+							The ELF binary has
+							<code>.tdata</code>
+							(initialized) and
+							<code>.tbss</code>
+							(zeroed) sections. Each thread gets a
+							private copy; the thread-local storage block sits near the thread's stack and is addressed through
+							the FS segment register on x86-64.
+						</p>
+					</section>
+					<section>
+						<h3 id="linux-thread-implementation-nptl">Linux Thread Implementation (NPTL)</h3>
+						<p>
+							On Linux, threads are not a separate kernel abstraction. They are processes that share more
+							resources than usual. The
+							<code>clone()</code>
+							syscall with different flag combinations creates both processes
+							and threads.
+						</p>
+						<pre class="c">
+#define _GNU_SOURCE
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;sched.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/mman.h&gt;
+#include &lt;string.h&gt;
+
+int thread_func(void* arg) {
+    printf(&#34;[CLONE-CHILD] PID: %d, TID: %d\n&#34;, getpid(), gettid());
+    printf(&#34;[CLONE-CHILD] Argument: %d\n&#34;, *(int*)arg);
+    return 0;
+}
+
+int main() {
+    // Allocate stack for the clone (stacks grow down on x86)
+    const size_t STACK_SIZE = 1024 * 1024;
+    void* stack = mmap(NULL, STACK_SIZE, PROT_READ | PROT_WRITE,
+                       MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
+    void* stack_top = (char*)stack + STACK_SIZE;
+
+    int arg = 123;
+    int flags = CLONE_VM        // Share address space
+              | CLONE_FS        // Share filesystem info (cwd, root, umask)
+              | CLONE_FILES     // Share file descriptor table
+              | CLONE_SIGHAND   // Share signal handlers
+              | CLONE_THREAD    // Place in same thread group (has TID)
+              | CLONE_SYSVSEM   // Share SysV semaphore undo lists
+              | CLONE_PARENT_SETTID
+              | CLONE_CHILD_CLEARTID;
+
+    pid_t tid = clone(thread_func, stack_top, flags, &amp;arg);
+    if (tid == -1) {
+        perror(&#34;clone&#34;);
+        return 1;
+    }
+
+    printf(&#34;[PARENT] Child thread ID: %d\n&#34;, tid);
+    sleep(1);  // Wait for child to print (no pthread_join equivalent)
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+gcc -o clone-demo clone-demo.c &amp;&amp; ./clone-demo
+						</pre>
+						<h4 id="clone-flags-for-threads">Clone Flags for Threads</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">clone() Flag</th>
+									<th align="center">fork()</th>
+									<th align="center">Thread (pthread_create)</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">CLONE_VM</td>
+									<td align="center">No</td>
+									<td align="center"><b>Yes</b>- share address space</td>
+								</tr>
+								<tr>
+									<td align="center">CLONE_FS</td>
+									<td align="center">No</td>
+									<td align="center"><b>Yes</b>- share cwd/root/umask</td>
+								</tr>
+								<tr>
+									<td align="center">CLONE_FILES</td>
+									<td align="center">No</td>
+									<td align="center"><b>Yes</b>- share fd table</td>
+								</tr>
+								<tr>
+									<td align="center">CLONE_SIGHAND</td>
+									<td align="center">No</td>
+									<td align="center"><b>Yes</b>- share signal handlers</td>
+								</tr>
+								<tr>
+									<td align="center">CLONE_THREAD</td>
+									<td align="center">No</td>
+									<td align="center"><b>Yes</b>- same thread group (PID)</td>
+								</tr>
+								<tr>
+									<td align="center">CLONE_VFORK</td>
+									<td align="center">Optional</td>
+									<td align="center">No</td>
+								</tr>
+								<tr>
+									<td align="center">None (0)</td>
+									<td align="center"><b>Yes</b></td>
+									<td align="center">No</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="thread-management-internals">Thread Management Internals</h4>
+						<pre class="plaintext">
+┌────────────────────────────────────────────────┐
+│  /proc/PID/task/                               │
+│                                                │
+│  /proc/PID/task/TID/  ← each thread has entry  │
+│    /proc/PID/task/TID/status                   │
+│    /proc/PID/task/TID/stat                     │
+│    /proc/PID/task/TID/children                 │
+│                                                │
+│  Thread group: PID = getpid() for all threads  │
+│  Thread ID:    TID = gettid()  (unique per th) │
+│                                                │
+│  Sending SIGKILL to PID kills all threads      │
+│  Sending SIGKILL to TID kills that thread      │
+└────────────────────────────────────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="kernel-threads">Kernel Threads</h3>
+						<p>
+							Kernel threads run entirely in kernel space, have no user-space memory, and exist only to perform
+							kernel work. They appear in
+							<code>ps</code>
+							with
+							<code>[]</code>
+							brackets around their name.
+						</p>
+						<pre class="bash">
+ps aux | grep &#39;\[.*\]&#39;
+# Output:
+# [kthreadd]        ← Master kernel thread spawner
+# [ksoftirqd/0]     ← Softirq daemon per CPU
+# [kworker/0:0]     ← Worker thread for deferred work
+# [migration/0]     ← CPU task migration
+# [rcu_sched]       ← RCU (Read-Copy-Update) grace period management
+# [kcompactd0]      ← Memory compaction
+# [kswapd0]         ← Swap daemon
+						</pre>
+						<p>
+							Kernel threads are created by the kernel itself (
+							<code>kthread_create()</code>
+							) and all descend from
+							<code>kthreadd</code>
+							(PID 2). They appear in
+							<code>/proc</code>
+							like any other process, but their memory descriptor
+							is NULL, so they never enter user space.
+						</p>
+					</section>
+					<section>
+						<h3 id="inspecting-threads-on-a-running-system">Inspecting Threads on a Running System</h3>
+						<pre class="bash">
+# Number of threads per process
+ls -d /proc/[0-9]*/task/*/ 2&gt;/dev/null | awk -F/ &#39;{print $3}&#39; | sort | uniq -c | sort -rn | head -10
+
+# Or with ps
+ps -eo pid,nlwp,comm | grep -v &#39;^ *PID&#39; | sort -k2 -rn | head -10
+
+# Thread-level CPU usage
+ps -eLf  # L flag: show threads separately
+
+# Threads of a specific process
+ls /proc/$$/task/
+cat /proc/$$/task/$(pidof bash | cut -d&#39; &#39; -f1)/status | grep -E &#34;Tgid|Pid|PPid&#34;
+
+# top -H: show threads individually
+top -H -p $$
+
+# strace -f on a threaded program shows all thread syscalls
+strace -f -p $(pidof multi-threaded-app)
+
+# GDB: inspect threads
+gdb -p $(pidof app)
+(gdb) info threads
+(gdb) thread 2
+(gdb) bt
+						</pre>
+					</section>
+					<section>
+						<h3 id="verification-checklist">Verification Checklist</h3>
+						<pre class="bash">
+# 1. Count threads in current shell session
+cat /proc/$$/status | grep Threads
+
+# 2. Compare PID vs TID for a multi-threaded process
+ps -eLf | head -20
+
+# 3. Verify clone flags used by pthread_create
+strace -e clone gcc -pthread -o /tmp/t test.c 2&gt;&amp;1 | grep clone || echo &#34;N/A&#34;
+# Run a threaded binary under strace:
+gcc -pthread -o /tmp/td thread-demo.c
+strace -e clone /tmp/td 2&gt;&amp;1 | grep clone
+# Observe: clone(child_stack=..., flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|...)
+
+# 4. View thread TLS area
+cat /proc/$$/task/*/stat | awk &#39;{print $1, $29}&#39; | head -5
+# Field 29 (started with kernel 4.?) is startstack
+
+# 5. List kernel threads
+ps -eo pid,comm | grep &#39;\[.*\]&#39;
+
+# 6. Thread limit (kernel threads-max)
+sysctl kernel.threads-max
+cat /proc/sys/kernel/threads-max
+
+# 7. Verify mutex correctness with helgrind
+valgrind --tool=helgrind ./race-demo
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Port the mutex counter to Go and prove the race with the race detector. The program below spawns
+							1000 goroutines that increment a shared counter without synchronization. Run it with
+							<code>go run -race main.go</code>
+							and observe the lost updates and the reported data race.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;fmt&#34;
+	&#34;sync&#34;
+)
+
+func main() {
+	counter := 0
+
+	var wg sync.WaitGroup
+	for i := 0; i &lt; 1000; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			counter++
+		}()
+	}
+	wg.Wait()
+
+	fmt.Println(&#34;counter:&#34;, counter)
+}
+						</pre>
+						<p>
+							Then fix it with a
+							<code>sync.Mutex</code>
+							and confirm the counter reaches 1000. As an extra step, replace
+							the mutex with
+							<code>sync/atomic</code>
+							and compare the throughput of both versions with
+							<code>go test -bench</code>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/pthreads.7" target="_blank">pthreads(7) - POSIX threads</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/clone.2" target="_blank">clone(2) - create a child process</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/gettid.2" target="_blank">gettid(2) - get thread identification</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/pthread_mutex_lock.3p" target="_blank">pthread_mutex_lock(3p) - lock a mutex</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/pthread_cond_wait.3p" target="_blank">pthread_cond_wait(3p) - wait on a condition</a></li>
+							<li><a class="icon-download" href="https://www.akkadia.org/drepper/futex.pdf" target="_blank">Ulrich Drepper - Futexes Are Tricky (NPTL design)</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/Documentation/arch/x86/x86_64/fsgs.rst" target="_blank">Linux Kernel - NPTL documentation</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

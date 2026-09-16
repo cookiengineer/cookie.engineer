@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Page Cache | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Page Cache">
+		<meta name="keywords" content="dirty-pages, linux, memory, page-cache, readahead, sysinternals, writeback, xarray">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Page Cache">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="The Linux page cache, from address_space and the xarray to writeback, dirty page management, read-ahead, and direct I/O.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/sysinternals/page-cache.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Page Cache">
+		<meta name="twitter:description" itemprop="description" content="The Linux page cache, from address_space and the xarray to writeback, dirty page management, read-ahead, and direct I/O.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#page-cache-io-bridge">Page Cache I/O Bridge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#address-space-per-inode">address_space Per Inode</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#page-cache-radix-tree-xarray">Page Cache Radix Tree / XArray</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#write-through-vs-write-back">Write-Through vs Write-Back</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#dirty-pages-and-writeback">Dirty Pages and Writeback</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#writeback-throttling">Writeback Throttling</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#mmap-and-page-cache-interaction">mmap() and Page Cache Interaction</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#read-ahead-prediction">Read-Ahead Prediction</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#page-cache-coherency-and-invalidation">Page Cache Coherency and Invalidation</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#page-cache-and-memory-pressure">Page Cache and Memory Pressure</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#direct-io-bypassing-the-page-cache">Direct I/O: Bypassing the Page Cache</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#cache-statistics-deep-dive">Cache Statistics Deep Dive</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/sysinternals/index.html">Sysinternals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/sysinternals/page-cache.html">Page Cache</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="page-cache">Page Cache</h2>
+					<p>
+						The Linux page cache, from address_space and the xarray to writeback, dirty page management,
+						read-ahead, and direct I/O.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							The page cache is the bridge between the VFS and the memory manager. It caches file-backed pages
+							so repeated reads return from RAM, absorbs writes for asynchronous writeback, and backs
+							<code>mmap()</code>
+							. After reading this article you can inspect cache residency, tune dirty page limits, explain
+							read-ahead, and decide when
+							<code>O_DIRECT</code>
+							is worth the trouble.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/virtual-memory.html">Virtual Memory</a> - page tables, TLB, page faults, mmap() internals</li>
+							<li><a href="/wiki/articles/sysinternals/memory-manager.html">Memory Manager</a> - physical memory management, page frame reclamation, LRU</li>
+							<li><a href="/wiki/articles/sysinternals/vfs.html">VFS</a> - superblock, inode, dentry, struct file, address_space</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="page-cache-io-bridge">Page Cache I/O Bridge</h3>
+						<p>
+							The page cache is the central bridge between the VFS and the memory manager. It caches file-backed
+							pages in memory so that repeated reads return from RAM instead of going to disk, and writes
+							can be buffered, coalesced, and deferred. Without the page cache, every
+							<code>read()</code>
+							would be a
+							synchronous disk operation, a 10,000x slowdown.
+						</p>
+						<p>The page cache serves three simultaneous roles:</p>
+						<ol>
+							<li><b>Read cache</b> : file data read from disk stays in memory for subsequent reads</li>
+							<li><b>Write buffer</b> : writes are absorbed by the cache and flushed asynchronously (writeback)</li>
+							<li><b>mmap() backing</b> : memory-mapped file pages are the same physical pages as the cache</li>
+						</ol>
+						<pre class="plaintext">
+                    User Space
+                        │
+         ┌──────────────+──────────────┐
+         ▼              ▼              ▼
+      read()         mmap()        write()
+         │              │              │
+         ▼              ▼              ▼
+  ┌──────────────────────────────────────────────┐
+  │            Page Cache                         │
+  │                                              │
+  │  ┌──────────────────────────────────────┐   │
+  │  │  struct address_space (per-inode)     │   │
+  │  │  ┌────────────────────────────────┐  │   │
+  │  │  │  Radix Tree / XArray           │  │   │
+  │  │  │  Indexed by page-&gt;index        │  │   │
+  │  │  │  (offset / PAGE_SIZE)          │  │   │
+  │  │  │                                │  │   │
+  │  │  │  index[0] → struct folio       │  │   │
+  │  │  │  index[1] → struct folio       │  │   │
+  │  │  │  index[2] → NULL (not cached)  │  │   │
+  │  │  │  index[3] → struct folio       │  │   │
+  │  │  │  ...                           │  │   │
+  │  │  └────────────────────────────────┘  │   │
+  │  │  i_pages → XArray (page tree)        │   │
+  │  │  dirty_pages → list of dirty pages   │   │
+  │  │  writeback_index → scan cursor       │   │
+  │  └──────────────────────────────────────┘   │
+  │                                              │
+  │  Clean pages: same as free memory            │
+  │  Dirty pages: must be written before reclaim │
+  └────────────────────+─────────────────────────┘
+                       │
+                       │ writeback (dirty pages only)
+                       ▼
+              ┌────────────────┐
+              │  Block Layer   │
+              │  submit_bio()  │
+              │  → disk driver │
+              └────────────────┘
+						</pre>
+					</section>
+					<section>
+						<h3 id="address-space-per-inode">address_space Per Inode</h3>
+						<p>
+							Every
+							<code>struct inode</code>
+							that supports file-backed data has an embedded
+							<code>struct address_space</code>
+							in
+							<code>i_mapping</code>
+							. The
+							<code>address_space</code>
+							ties together the file's logical offset space with physical
+							memory pages:
+						</p>
+						<pre class="c">
+// include/linux/fs.h — struct address_space (abbreviated)
+struct address_space {
+    struct inode        *host;          // owning inode
+    struct xarray        i_pages;       // radix tree of cached pages (folio → struct folio *)
+    gfp_t                gfp_mask;      // allocation flags for new pages
+    atomic_t             i_mmap_writable; // VM_SHARED mappings count
+    struct rb_root_cached i_mmap;        // tree of VMA mappings
+    struct rw_semaphore  i_mmap_rwsem;   // lock for mapping tree
+    unsigned long        nrpages;        // total number of cached pages
+    unsigned long        nrexceptional;  // shadow / swap entries
+    pgoff_t              writeback_index; // writeback starting offset
+    const struct address_space_operations *a_ops;
+    unsigned long        flags;          // error bits, writeback state
+    spinlock_t           private_lock;
+    struct list_head      private_list;
+    void                 *private_data;
+    errseq_t              wb_err;        // writeback error tracking
+};
+
+// struct folio — the new page cache unit (since 5.16)
+// A folio is a collection of contiguous physical pages (to support large folios)
+struct folio {
+    struct page page;                    // embedded page descriptor
+    // ... accessor macros hide internal layout
+};
+
+// Key folio state flags:
+// PG_locked   — folio is locked for I/O
+// PG_dirty    — folio has been modified and needs writeback
+// PG_uptodate — folio content is valid (either from disk or written recently)
+// PG_writeback— folio is currently being written to disk
+// PG_reclaim  — folio is a candidate for page reclaim
+						</pre>
+						<pre class="bash">
+# Observe the address_space indirectly through page cache stats
+
+# Total pages in the page cache
+cat /proc/meminfo | grep -E &#34;^Cached:|^Buffers:|^SwapCached:&#34;
+# Cached:      8388608 kB  ← file-backed pages in page cache
+# Buffers:       524288 kB  ← block device buffer cache (legacy, small)
+# SwapCached:         0 kB  ← pages in both swap and page cache
+
+# Per-file page cache residency
+# The fincore tool shows cache residency per file (from util-linux)
+fincore /usr/bin/bash /usr/lib/libc.so.6
+# RES  PAGES  SIZE  FILE
+# 720K  180   892K  /usr/bin/bash       ← 180 pages cached
+# 1.2M  328   2.0M  /usr/lib/libc.so.6  ← 328 pages cached
+
+# If fincore not available, use mincore():
+python3 -c &#34;
+import mmap, os
+fd = os.open(&#39;/etc/passwd&#39;, os.O_RDONLY)
+st = os.fstat(fd)
+m = mmap.mmap(fd, st.st_size, mmap.MAP_SHARED, mmap.PROT_READ)
+pagesize = os.sysconf(&#39;SC_PAGE_SIZE&#39;)
+num_pages = (st.st_size + pagesize - 1) // pagesize
+vec = mmap.mincore(m, num_pages * pagesize)
+cached = sum(1 for v in vec if v &amp; 1)
+print(f&#39;Total pages: {num_pages}, cached: {cached}&#39;)
+m.close()
+os.close(fd)
+&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="page-cache-radix-tree-xarray">Page Cache Radix Tree / XArray</h3>
+						<p>
+							The page cache uses an xarray (formerly radix tree) to map file offsets (in page-sized units)
+							to
+							<code>struct folio</code>
+							pointers. This enables O(log n) lookups and efficient range scans:
+						</p>
+						<pre class="plaintext">
+XArray Structure (per-address_space i_pages):
+══════════════════════════════════════════════════════════════
+
+Logical layout for a file with pages at indices 0, 1, 2, 100, 1000:
+
+                    xa_head
+                       │
+                       ▼
+              ┌─────────────────┐
+              │  Slot[0..63]    │  ← top-level node (order 6 = 64 slots)
+              │                 │
+              │  [0] → node_1 ──+──► middle-level node
+              │  [1] → NULL    │       │
+              │  [2] → NULL    │       ▼
+              │  ...           │  ┌──────────┐
+              │  [63] → NULL   │  │ Slots...  │
+              └─────────────────┘  │ [0]→folio│ ← page index 0
+                                   │ [1]→folio│ ← page index 1
+                                   │ [2]→folio│ ← page index 2
+                                   │ ...      │
+                                   │ [36]→NULL│
+                                   │ ...      │
+                                   │ [63]→node_2 │ ← points deeper
+                                   └──────+───┘
+                                          ▼
+                                     ┌──────────┐
+                                     │ Slots...  │
+                                     │ [0]→folio│ ← page index 100
+                                     │ ...       │
+                                     │ [40]→node_3│
+                                     └──────+─────┘
+                                            ▼
+                                       ┌──────────┐
+                                       │ [0]→folio│ ← page index 1000
+                                       └──────────┘
+
+Lookup: xa_load(&amp;mapping-&gt;i_pages, index)
+  - Walk the tree levels following slot pointers
+  - Each level is a 64-entry array (or internal node)
+  - Sparse files are efficient — no memory wasted on gaps
+  - Multi-order entries (large folios) occupy multiple slots
+						</pre>
+						<pre class="bash">
+# Inspect page cache internals
+
+# Pages currently in the cache per address_space (per file)
+# This requires kernel debug access
+sudo bpftrace -e &#39;
+kprobe:add_to_page_cache_lru {
+    $folio = (void *)arg0;
+    printf(&#34;cache+ folio=%p idx=%lu pfn=%lu\n&#34;,
+           $folio, $folio-&gt;index, $folio-&gt;flags &gt;&gt; 12);
+}
+kprobe:delete_from_page_cache_batch {
+    printf(&#34;cache- batch: count=%d\n&#34;, arg1);
+}
+&#39; &amp;
+
+dd if=/dev/zero of=/tmp/cache_test bs=1M count=50
+cat /tmp/cache_test &gt; /dev/null
+rm /tmp/cache_test
+kill %1 2&gt;/dev/null
+						</pre>
+					</section>
+					<section>
+						<h3 id="write-through-vs-write-back">Write-Through vs Write-Back</h3>
+						<p>
+							Linux uses
+							<b>write-back caching</b>
+							by default. Writes are buffered in the page cache and flushed
+							to disk asynchronously. This is far faster than write-through (where every
+							<code>write()</code>
+							blocks
+							until disk I/O completes) but risks data loss on power failure:
+						</p>
+						<pre class="plaintext">
+Write-Through:                          Write-Back (Linux default):
+══════════════                          ═══════════════════════════
+
+write(fd, buf, 4096)                   write(fd, buf, 4096)
+  │                                      │
+  ▼                                      ▼
+┌──────────────┐                       ┌──────────────────────┐
+│ 1. Copy to   │                       │ 1. Copy to page cache│
+│    page cache│                       │    Mark page dirty   │
+│ 2. Submit I/O│                       │ 2. Return immediately│
+│    to disk   │                       └──────────────────────┘
+│ 3. Wait for  │                              │
+│    completion│                         ... later ...
+│ 4. Return    │                              │
+└──────────────┘                              ▼
+                                       ┌──────────────────────┐
+                                       │ Writeback thread     │
+                                       │ flushes dirty pages  │
+                                       │ to disk              │
+                                       └──────────────────────┘
+
+Write-through: safe, slow            Write-back: fast, risky (data in RAM)
+						</pre>
+						<pre class="bash">
+# Compare write-through (sync) vs write-back (async) behavior
+
+# Write-back (default) — fast
+dd if=/dev/zero of=/tmp/wb_test bs=1M count=100 2&gt;&amp;1
+# Output: 104857600 bytes (105 MB) copied, 0.03 s, 3.5 GB/s
+
+# Write-through (sync every write) — slow
+dd if=/dev/zero of=/tmp/wt_test bs=1M count=100 conv=fsync 2&gt;&amp;1
+# Output: 104857600 bytes (105 MB) copied, 1.2 s, 87 MB/s
+
+# Write-through with O_SYNC — even slower (syncs every write() call)
+dd if=/dev/zero of=/tmp/wt_sync_test bs=4K count=2560 conv=fsync oflag=sync 2&gt;&amp;1
+
+# Check what&#39;s still dirty (not yet written to disk)
+cat /proc/meminfo | grep Dirty
+grep -E &#34;^nr_dirty|^nr_writeback|^nr_dirty_threshold&#34; /proc/vmstat
+						</pre>
+					</section>
+					<section>
+						<h3 id="dirty-pages-and-writeback">Dirty Pages and Writeback</h3>
+						<p>
+							Dirty pages are the kernel's responsibility. They must be written to disk before they can be
+							reclaimed or before the system shuts down:
+						</p>
+						<pre class="plaintext">
+Dirty Page Lifecycle:
+══════════════════════════════════════════════════════════════
+
+1. write(fd, buf, 4096)
+   └── generic_perform_write()
+         └── copy_page_from_iter_atomic()  ← copy data to page cache page
+               └── folio_mark_dirty()      ← set PG_dirty flag
+
+2. Page is now dirty — it sits in the page cache until writeback
+
+3. Writeback triggers:
+   ├── Periodic flush (every 5 seconds by default: dirty_writeback_centisecs)
+   ├── Dirty ratio exceeded (dirty_ratio = 20% of memory by default)
+   ├── Explicit sync() / fsync() / fdatasync()
+   ├── Memory pressure (reclaim wants to free dirty pages)
+   └── Filesystem journal commit (ordered mode)
+
+4. Writeback execution:
+   └── wb_workfn() → wb_do_writeback()
+         └── writeback_sb_inodes()
+               └── __writeback_single_inode()
+                     └── do_writepages()
+                           └── mapping-&gt;a_ops-&gt;writepages()
+                                 └── (e.g., ext4_writepages)
+                                       └── submit_bio() → disk
+
+5. After I/O completion:
+   └── end_page_writeback() → clear PG_writeback
+         └── folio_clear_dirty() → clear PG_dirty
+               └── Page is clean — can be reclaimed or stay cached
+						</pre>
+						<pre class="bash">
+# Monitor writeback activity in real-time
+
+# ── Terminal 1: Generate writes ──
+dd if=/dev/zero of=/tmp/wb_watch bs=1M count=500 conv=fsync status=progress
+
+# ── Terminal 2: Watch dirty pages ──
+watch -n 0.5 &#34;grep -E &#39;^Dirty:|^Writeback:&#39; /proc/meminfo&#34;
+
+# ── Terminal 3: Per-backing-device writeback stats ──
+cat /sys/kernel/debug/bdi/*/stats 2&gt;/dev/null || \
+cat /proc/vmstat | grep -E &#34;nr_dirty|nr_writeback|nr_written&#34;
+
+# Detailed writeback statistics
+grep -E &#34;^nr_dirty |^nr_writeback |^nr_written |^dirty_&#34; /proc/vmstat
+
+# Trace writeback functions
+sudo bpftrace -e &#39;
+kprobe:wb_workfn     { printf(&#34;wb start\n&#34;); }
+kprobe:do_writepages { printf(&#34;do_writepages: ino=%lu\n&#34;,
+                        ((struct address_space *)arg0)-&gt;host-&gt;i_ino); }
+kretprobe:do_writepages /retval &gt;= 0/ {
+    printf(&#34;  → wrote %d pages\n&#34;, retval);
+}
+&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="writeback-throttling">Writeback Throttling</h3>
+						<p>
+							When a process writes faster than the disk can absorb, the kernel throttles the writer. The
+							function
+							<code>balance_dirty_pages()</code>
+							is called at the end of each write and blocks the writing process
+							if the system's dirty page limit is exceeded:
+						</p>
+						<pre class="plaintext">
+balance_dirty_pages() Logic:
+══════════════════════════════════════════════════════════════
+
+Thresholds (configurable via /proc/sys/vm/):
+
+  dirty_background_ratio (10%)  ← start background writeback
+  dirty_ratio (20%)             ← synchronous throttling of writers
+  dirty_background_bytes        ← absolute byte alternative
+  dirty_bytes                   ← absolute byte alternative
+
+Memory = 16 GiB, dirty_ratio = 20%
+  → Throttle when 3.2 GiB of dirty pages accumulate
+
+Algorithm (simplified):
+  while (nr_dirty &gt; dirty_limit):
+      │
+      ├── Calculate task&#39;s dirty rate
+      ├── Calculate device&#39;s writeback throughput
+      ├── Pause = (nr_dirty - target) / writeback_rate
+      ├── io_schedule_timeout(pause)
+      └── Recheck nr_dirty
+
+  If a process writes 500 MB/s and the disk writes 200 MB/s:
+    Process is paused for ~60% of the time to keep dirty pages within bounds.
+						</pre>
+						<pre class="bash">
+# Inspect and tune writeback parameters
+
+# Current thresholds
+echo &#34;=== Dirty page limits ===&#34;
+sysctl vm.dirty_background_ratio
+sysctl vm.dirty_ratio
+sysctl vm.dirty_expire_centisecs
+sysctl vm.dirty_writeback_centisecs
+
+# Current dirty state
+echo &#34;=== Current dirty state ===&#34;
+cat /proc/meminfo | grep -E &#34;^Dirty:|^Writeback:|^Cached:&#34;
+grep -E &#34;^nr_dirty |^nr_writeback |^nr_dirty_threshold |^nr_dirty_background_threshold&#34; /proc/vmstat
+
+# Absolute byte limits (override ratios if set)
+sysctl vm.dirty_background_bytes
+sysctl vm.dirty_bytes
+
+# Temporarily reduce dirty limit to observe throttling
+echo &#34;=== Reducing dirty limit to 5% and testing ===&#34;
+sudo sysctl -w vm.dirty_ratio=5
+sudo sysctl -w vm.dirty_background_ratio=2
+
+# Generate writes — should see throttling
+dd if=/dev/zero of=/tmp/throttle_test bs=1M count=1000 conv=fsync status=progress 2&gt;&amp;1
+
+# Restore defaults
+sudo sysctl -w vm.dirty_ratio=20
+sudo sysctl -w vm.dirty_background_ratio=10
+						</pre>
+					</section>
+					<section>
+						<h3 id="mmap-and-page-cache-interaction">mmap() and Page Cache Interaction</h3>
+						<p>
+							Memory-mapped files share pages directly with the page cache. When you
+							<code>mmap()</code>
+							a file and write
+							to the mapped memory, you're modifying the same physical page that a concurrent
+							<code>read()</code>
+							would
+							see:
+						</p>
+						<pre class="plaintext">
+mmap() and Page Cache — Same Pages:
+══════════════════════════════════════════════════════════════
+
+Process A: mmap(file, PROT_READ|PROT_WRITE, MAP_SHARED)
+Process B: read(fd, buf, 4096)
+
+          ┌─────────────────────────────────┐
+          │       Page Cache                 │
+          │                                 │
+          │  struct folio (physical page)    │
+          │  ┌─────────────────────────┐    │
+          │  │  file data: &#34;hello\n&#34;   │    │
+          │  │  PG_uptodate = 1       │    │
+          │  │  PG_dirty = 0          │    │
+          │  └─────────────────────────┘    │
+          └──────────+──────────────────────┘
+                     │
+          ┌──────────+──────────┐
+          ▼                     ▼
+   Process A&#39;s VMA       Process B&#39;s read()
+   (virtual address       (kernel copies from
+    0x7f... pointing      same page cache page
+    to same page)         to user buffer)
+
+Process A writes: *(char *)0x7f... = &#39;H&#39;
+  → PTE becomes writable (minor page fault)
+  → Same page cache page is modified
+  → folio_mark_dirty() → PG_dirty set
+  → Process B&#39;s next read() sees &#34;Hello\n&#34;
+						</pre>
+						<pre class="bash">
+# Demonstrate mmap/page cache sharing
+
+python3 &lt;&lt; &#39;PYEOF&#39;
+import mmap, os, tempfile, threading, time
+
+# Create a file and write initial content
+with tempfile.NamedTemporaryFile(delete=False) as f:
+    f.write(b&#39;A&#39; * 4096)
+    tmpfile = f.name
+
+def writer():
+    &#34;&#34;&#34;mmap the file and modify it.&#34;&#34;&#34;
+    fd = os.open(tmpfile, os.O_RDWR)
+    m = mmap.mmap(fd, 4096, mmap.MAP_SHARED, mmap.PROT_WRITE)
+    print(f&#34;[Writer] Read via mmap: {m[0:10]}&#34;)
+    m[0:5] = b&#39;HELLO&#39;
+    print(f&#34;[Writer] Wrote HELLO at offset 0&#34;)
+    m.flush()
+    time.sleep(1)
+    m.close()
+    os.close(fd)
+
+def reader():
+    &#34;&#34;&#34;read() the file after writer modifies it.&#34;&#34;&#34;
+    time.sleep(0.5)
+    fd = os.open(tmpfile, os.O_RDONLY)
+    data = os.read(fd, 10)
+    print(f&#34;[Reader] Read via read(): {data}&#34;)
+    os.close(fd)
+
+threading.Thread(target=reader).start()
+writer()
+os.unlink(tmpfile)
+PYEOF
+						</pre>
+					</section>
+					<section>
+						<h3 id="read-ahead-prediction">Read-Ahead Prediction</h3>
+						<p>
+							The page cache implements read-ahead to hide I/O latency for sequential readers. When the kernel
+							detects sequential access, it proactively reads pages ahead of the current position:
+						</p>
+						<pre class="plaintext">
+Read-Ahead State Machine:
+══════════════════════════════════════════════════════════════
+
+ondemand_readahead(ractl, ...):
+    │
+    ├── Initial read (sequential detection window):
+    │     ra-&gt;start = 0
+    │     ra-&gt;size = 0 (no readahead yet)
+    │     → read only the requested page
+    │     → if next read is sequential: activate readahead
+    │
+    ├── Sequential read detected:
+    │     ra-&gt;start = current_offset
+    │     ra-&gt;size = initial_size (typically 4 pages = 16KB)
+    │     ra-&gt;async_size = ra-&gt;size / 2 (pages to read ahead)
+    │
+    │     Read pattern:
+    │                    ┌── requested ──┐ ┌── readahead ──┐
+    │                    │               │ │               │
+    │     Page index:   [N] [N+1] [N+2] [N+3] [N+4] [N+5] [N+6]
+    │                    ↑               ↑
+    │                    sync read       async readahead
+    │
+    ├── Sustained sequential:
+    │     ra-&gt;size = min(ra-&gt;size * 2, max_readahead)
+    │     → window grows exponentially (4→8→16→32→64 pages)
+    │     → caps at /sys/block/*/queue/read_ahead_kb (usually 128KB)
+    │
+    └── Random access detected:
+          ra-&gt;size = 0 (disable readahead until next sequential pattern)
+						</pre>
+						<pre class="bash">
+# Inspect and tune read-ahead
+
+# Current read-ahead value (in 512-byte sectors)
+cat /sys/block/nvme0n1/queue/read_ahead_kb
+# Typically 128 KB (256 sectors)
+
+# Change read-ahead
+echo 256 | sudo tee /sys/block/nvme0n1/queue/read_ahead_kb
+
+# Observe read-ahead in action
+sudo bpftrace -e &#39;
+kprobe:page_cache_ra_unbounded {
+    $ractl = (void *)arg0;
+    printf(&#34;readahead: idx=%lu nr=%lu\n&#34;, arg1, arg2);
+}
+kprobe:ondemand_readahead {
+    printf(&#34;ondemand_readahead: offset=%lu\n&#34;, arg1);
+}
+&#39; &amp;
+
+# Do a sequential read to trigger read-ahead
+dd if=/dev/sda of=/dev/null bs=64K count=10 2&gt;/dev/null
+kill %1 2&gt;/dev/null
+
+# Compare buffered vs direct sequential read performance
+echo &#34;=== Buffered (with read-ahead) ===&#34;
+dd if=/dev/sda of=/dev/null bs=4K count=10000 2&gt;&amp;1 | tail -1
+
+echo &#34;=== Direct (no read-ahead, no cache) ===&#34;
+dd if=/dev/sda of=/dev/null bs=4K count=10000 iflag=direct 2&gt;&amp;1 | tail -1
+						</pre>
+					</section>
+					<section>
+						<h3 id="page-cache-coherency-and-invalidation">Page Cache Coherency and Invalidation</h3>
+						<p>The page cache must stay coherent with on-disk data. Several mechanisms ensure this:</p>
+						<pre class="c">
+// Cache invalidation scenarios:
+
+invalidate_mapping_pages(mapping, start, end):
+    // Remove clean pages from the cache (dirty pages stay)
+    // Used when: truncating a file, unmounting, memory pressure
+
+truncate_inode_pages(mapping, start):
+    // Remove all pages beyond start offset
+    // Used when: ftruncate() shrinks a file
+    // Dirty pages are written back first
+
+// Coherency with external modifications:
+// If another process/machine (NFS client) modifies the file,
+// the local cache must be invalidated:
+//  - NFS: uses file handle + attribute cache timeout
+//  - Local: no issue (same page cache for all local access)
+//  - O_DIRECT: bypasses cache entirely → always reads from disk
+						</pre>
+						<pre class="bash">
+# Demonstrate cache coherency
+
+# 1. Read to fill cache, modify externally, observe stale read
+echo &#34;original&#34; &gt; /tmp/coherence_test
+cat /tmp/coherence_test &gt; /dev/null        # Populate cache
+# Modify via shell redirection (bypasses the same page cache)
+echo &#34;modified&#34; &gt; /tmp/coherence_test
+cat /tmp/coherence_test                    # Sees &#34;modified&#34; — local coherency works!
+
+# 2. Drop caches to force re-read from disk
+fincore /tmp/coherence_test 2&gt;/dev/null
+echo 3 | sudo tee /proc/sys/vm/drop_caches &gt; /dev/null
+fincore /tmp/coherence_test 2&gt;/dev/null    # Now 0 pages cached
+
+# 3. O_DIRECT — always reads current on-disk data
+# The page cache is bypassed entirely
+dd if=/tmp/coherence_test of=/dev/null bs=4K iflag=direct 2&gt;&amp;1
+rm /tmp/coherence_test
+						</pre>
+					</section>
+					<section>
+						<h3 id="page-cache-and-memory-pressure">Page Cache and Memory Pressure</h3>
+						<p>
+							Under memory pressure, the page allocator invokes page reclaim. Clean file-backed pages are
+							the
+							<b>preferred</b>
+							reclaim targets: they can be freed instantly (just drop the page, data is
+							on disk). Dirty pages must be written back before reclaim. Anonymous pages (process heap/stack)
+							must be swapped out, which is slower and more expensive:
+						</p>
+						<pre class="plaintext">
+Reclaim Priority Order (simplified):
+══════════════════════════════════════════════════════════════
+
+1. Clean file-backed pages     ← cheapest: just free the page
+2. Dirty file-backed pages     ← must writeback first, then free
+3. Anonymous pages (swap)      ← most expensive: swap out to disk
+
+This is why Linux uses &#34;swappiness&#34; — it&#39;s a tuning knob:
+  vm.swappiness = 60 (default)
+    Low value  → prefer reclaiming file-backed pages over swapping
+    High value → more willing to swap out anonymous pages
+    Value 0    → only swap under extreme memory pressure
+						</pre>
+						<pre class="bash">
+# Observe page cache under memory pressure
+
+# 1. Current cache and swap state
+cat /proc/meminfo | grep -E &#34;^Cached:|^SwapTotal:|^SwapFree:|^SwapCached:&#34;
+sysctl vm.swappiness
+
+# 2. Fill page cache with a large file read
+# (Pick a file that&#39;s 2x RAM for visible effect on small VMs)
+LARGE=$(find / -type f -size +100M 2&gt;/dev/null | head -1)
+echo &#34;Reading $LARGE (this will fill page cache)...&#34;
+cat &#34;$LARGE&#34; &gt; /dev/null 2&gt;/dev/null
+echo &#34;Cache after read:&#34;
+cat /proc/meminfo | grep &#34;^Cached:&#34;
+
+# 3. Drop caches and observe reclaim
+echo &#34;=== Dropping page cache ===&#34;
+echo 1 | sudo tee /proc/sys/vm/drop_caches &gt; /dev/null  # drop page cache
+cat /proc/meminfo | grep &#34;^Cached:&#34;
+echo &#34;=== Dropping all (page cache + dentries + inodes) ===&#34;
+echo 3 | sudo tee /proc/sys/vm/drop_caches &gt; /dev/null
+cat /proc/meminfo | grep &#34;^Cached:&#34;
+
+# 4. Page reclaim stats
+grep -E &#34;^pgsteal_|^pgscan_|^kswapd_|^compact_&#34; /proc/vmstat | head -20
+# pgsteal_kswapd: pages reclaimed by kswapd
+# pgscan_kswapd:  pages scanned by kswapd
+# High scan-to-steal ratio = memory pressure
+
+# 5. Per-zone memory states
+cat /proc/zoneinfo | grep -A5 &#34;Node 0, zone&#34; | head -30
+
+# 6. Watch reclaim in action (needs bpftrace)
+sudo bpftrace -e &#39;
+kprobe:shrink_page_list {
+    printf(&#34;reclaim: nr_to_scan=%lu\n&#34;, arg1);
+}
+kretprobe:shrink_page_list /retval &gt;= 0/ {
+    printf(&#34;  → freed %lu pages\n&#34;, retval);
+}&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="direct-io-bypassing-the-page-cache">Direct I/O: Bypassing the Page Cache</h3>
+						<p>
+							Applications that manage their own caching (databases, virtual machines) can use
+							<code>O_DIRECT</code>
+							to bypass the page cache entirely. Direct I/O transfers data directly between the user buffer
+							and the block device:
+						</p>
+						<pre class="plaintext">
+Direct I/O Path vs Buffered I/O:
+══════════════════════════════════════════════════════════════
+
+Buffered (default):
+  read(fd, buf, 4096)
+      │
+      ▼
+  generic_file_read_iter()
+      │
+      ├── Hit: copy_page_to_iter() ← page cache
+      └── Miss: readahead → submit_bio() → page cache → copy to user
+
+Direct (O_DIRECT):
+  read(fd, buf, 4096)
+      │
+      ▼
+  generic_file_direct_read()
+      │
+      ├── Flush any dirty cached pages for this range
+      ├── Allocate DIO structure
+      ├── submit_bio() directly to block layer
+      │     ← No page cache involved!
+      ├── Wait for completion
+      └── Return data directly to user buffer
+
+Requirements for O_DIRECT:
+  - Buffer, length, and file offset aligned to the device logical block size
+    (512 bytes on older disks, 4096 bytes on most modern SSDs and NVMe)
+  - No memory pressure on cache (good for DBs)
+  - No read-ahead, no write buffering, no cache coherency issues
+						</pre>
+						<pre class="bash">
+# Direct I/O demonstration
+
+# Attempt O_DIRECT with a 1K transfer (fails on 4K logical-block devices)
+dd if=/dev/zero of=/tmp/direct_test bs=1K count=10 oflag=direct 2&gt;&amp;1
+# Output: dd: error writing &#39;/tmp/direct_test&#39;: Invalid argument
+# Reason: 1K is a multiple of 512 but not of the 4K logical block size
+
+# Correct: 4K aligned, valid for 512-byte and 4K logical-block devices
+dd if=/dev/zero of=/tmp/direct_test bs=4K count=100 oflag=direct 2&gt;&amp;1
+
+# Check cache residency — O_DIRECT write should NOT populate cache
+echo &#34;=== Before O_DIRECT ===&#34;
+fincore /tmp/direct_test 2&gt;/dev/null || echo &#34;(file not in cache yet)&#34;
+cat /proc/meminfo | grep &#34;^Cached:&#34;
+
+dd if=/dev/zero of=/tmp/direct_test bs=1M count=100 oflag=direct conv=notrunc 2&gt;/dev/null
+
+echo &#34;=== After O_DIRECT ===&#34;
+fincore /tmp/direct_test 2&gt;/dev/null || echo &#34;(still not cached)&#34;
+
+# For comparison, buffered write fills cache:
+dd if=/dev/zero of=/tmp/cached_test bs=1M count=100 2&gt;/dev/null
+fincore /tmp/cached_test 2&gt;/dev/null
+# Shows pages in cache!
+cat /proc/meminfo | grep &#34;^Cached:&#34;
+
+# Clean up
+rm -f /tmp/direct_test /tmp/cached_test
+						</pre>
+					</section>
+					<section>
+						<h3 id="cache-statistics-deep-dive">Cache Statistics Deep Dive</h3>
+						<pre class="bash">
+# Comprehensive page cache statistics
+
+echo &#34;═══════ Memory Info ═══════&#34;
+grep -E &#34;^Cached:|^Dirty:|^Writeback:|^Buffers:|^SwapCached:|^MemAvailable:&#34; /proc/meminfo
+
+echo &#34;&#34;
+echo &#34;═══════ VM Statistics ═══════&#34;
+grep -E &#34;^nr_dirty|^nr_writeback|^nr_written|^nr_dirtied|^dirty_|^pageoutrun|^allocstall&#34; /proc/vmstat
+
+echo &#34;&#34;
+echo &#34;═══════ Writeback Tuning ═══════&#34;
+echo &#34;dirty_background_ratio = $(sysctl -n vm.dirty_background_ratio)&#34;
+echo &#34;dirty_ratio = $(sysctl -n vm.dirty_ratio)&#34;
+echo &#34;dirty_expire_centisecs = $(sysctl -n vm.dirty_expire_centisecs)&#34;
+echo &#34;dirty_writeback_centisecs = $(sysctl -n vm.dirty_writeback_centisecs)&#34;
+echo &#34;vfs_cache_pressure = $(sysctl -n vm.vfs_cache_pressure)&#34;
+
+echo &#34;&#34;
+echo &#34;═══════ Per-BlockDevice Stats ═══════&#34;
+for dev in /sys/block/sd*/stat /sys/block/nvme*/stat /sys/block/vd*/stat; do
+    [ -f &#34;$dev&#34; ] || continue
+    read -r rd _ _ _ _ wr _ _ _ _ _ _ &lt; &#34;$dev&#34;
+    echo &#34;$(dirname $dev | xargs basename): reads=$rd writes=$wr&#34;
+done
+
+echo &#34;&#34;
+echo &#34;═══════ Files in Page Cache ═══════&#34;
+# Show top 10 files by cache residency
+sudo fincore /usr/bin/* /usr/lib/* 2&gt;/dev/null | sort -k2 -rn | head -10
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Run the page cache container lab. It walks through cache population, dirty page writeback, buffered
+							versus direct I/O, read-ahead, and mmap() sharing.
+						</p>
+						<p><a href="/wiki/articles/sysinternals/page-cache.Containerfile">page-cache.Containerfile</a></p>
+						<pre class="bash">
+podman build -t page-cache-lab -f page-cache.Containerfile .
+podman run -it --rm --privileged page-cache-lab
+						</pre>
+						<p>The commands below repeat the same checks directly on the host:</p>
+						<pre class="bash">
+# 1. Baseline page cache stats
+echo &#34;=== Page Cache Baseline ===&#34;
+cat /proc/meminfo | grep -E &#34;^Cached:|^Dirty:|^Writeback:|^SwapCached:&#34;
+
+# 2. Populate cache with a file read
+echo &#34;=== Populating page cache ===&#34;
+dd if=/dev/zero of=/tmp/pgcache_verify bs=1M count=100 2&gt;/dev/null
+cat /tmp/pgcache_verify &gt; /dev/null
+fincore /tmp/pgcache_verify 2&gt;/dev/null || \
+  python3 -c &#34;
+import mmap, os
+fd = os.open(&#39;/tmp/pgcache_verify&#39;, os.O_RDONLY)
+sz = os.fstat(fd).st_size
+m = mmap.mmap(fd, sz, mmap.MAP_SHARED, mmap.PROT_READ)
+vec = mmap.mincore(m, sz)
+cached = sum(1 for v in vec if v &amp; 1)
+print(f&#39;Pages cached: {cached}/{sz//4096}&#39;)
+m.close()
+os.close(fd)
+&#34;
+
+# 3. Create dirty pages and observe
+echo &#34;=== Creating dirty pages ===&#34;
+echo &#34;dirty data&#34; &gt; /tmp/pgcache_verify  # Makes one page dirty
+grep -E &#34;^Dirty:&#34; /proc/meminfo
+sleep 6  # Wait for writeback (default 5s interval)
+grep -E &#34;^Dirty:|^Writeback:&#34; /proc/meminfo
+
+# 4. Trigger explicit writeback
+echo &#34;=== Explicit fsync ===&#34;
+dd if=/dev/zero of=/tmp/pgcache_verify bs=1M count=50 conv=fsync 2&gt;/dev/null
+echo &#34;Dirty after fsync:&#34;
+grep -E &#34;^Dirty:&#34; /proc/meminfo
+
+# 5. Drop caches and verify
+echo &#34;=== Dropping page cache ===&#34;
+echo 1 | sudo tee /proc/sys/vm/drop_caches &gt; /dev/null
+grep -E &#34;^Cached:&#34; /proc/meminfo
+echo &#34;Cache after drop: $(grep &#39;^Cached:&#39; /proc/meminfo)&#34;
+
+# 6. Demonstrate O_DIRECT vs Buffered
+echo &#34;=== Buffered vs O_DIRECT ===&#34;
+dd if=/dev/zero of=/tmp/pgcache_direct bs=4K count=100 oflag=direct conv=notrunc 2&gt;/dev/null
+dd if=/dev/zero of=/tmp/pgcache_buffered bs=4K count=100 2&gt;/dev/null
+
+# 7. Read-ahead behavior
+echo &#34;=== Read-ahead ===&#34;
+cat /sys/block/*/queue/read_ahead_kb 2&gt;/dev/null | head -3
+
+echo &#34;=== Sequential read (triggers read-ahead) ===&#34;
+dd if=/tmp/pgcache_verify of=/dev/null bs=4K count=1000 2&gt;&amp;1 | tail -1
+
+echo &#34;=== Random read (no read-ahead) ===&#34;
+dd if=/tmp/pgcache_verify of=/dev/null bs=4K count=1000 iflag=direct 2&gt;&amp;1 | tail -1
+
+# Cleanup
+rm -f /tmp/pgcache_verify /tmp/pgcache_direct /tmp/pgcache_buffered
+
+# 8. Writeback throttling demonstration (reduce dirty ratio)
+echo &#34;=== Writeback throttling demo ===&#34;
+OLD_RATIO=$(sysctl -n vm.dirty_ratio)
+sudo sysctl -w vm.dirty_ratio=5 &gt; /dev/null
+sudo sysctl -w vm.dirty_background_ratio=2 &gt; /dev/null
+
+# Generate writes fast — should get throttled
+dd if=/dev/zero of=/tmp/throttle_demo bs=1M count=500 conv=fsync status=progress 2&gt;&amp;1
+
+# Restore
+sudo sysctl -w vm.dirty_ratio=$OLD_RATIO &gt; /dev/null
+sudo sysctl -w vm.dirty_background_ratio=10 &gt; /dev/null
+rm -f /tmp/throttle_demo
+
+# 9. mmap() page cache sharing
+echo &#34;=== mmap() sharing ===&#34;
+python3 -c &#34;
+import mmap, os
+tmpf = &#39;/tmp/pgcache_mmap&#39;
+with open(tmpf, &#39;wb&#39;) as f:
+    f.write(b&#39;X&#39; * 4096)
+fd = os.open(tmpf, os.O_RDWR)
+m = mmap.mmap(fd, 4096, mmap.MAP_SHARED, mmap.PROT_WRITE)
+m[0:4] = b&#39;DATA&#39;
+m.flush()
+os.lseek(fd, 0, os.SEEK_SET)
+data = os.read(fd, 4)
+print(f&#39;read() sees same data: {data}&#39;)
+m.close()
+os.close(fd)
+os.unlink(tmpf)
+&#34;
+
+# 10. Page cache and memory pressure
+echo &#34;=== Memory reclaim stats ===&#34;
+grep -E &#34;^pgsteal_|^pgscan_|^kswapd_steals&#34; /proc/vmstat | head -5
+sysctl vm.swappiness
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/mm/filemap.c" target="_blank">Linux kernel: mm/filemap.c - page cache, read and write paths</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/mm/page-writeback.c" target="_blank">Linux kernel: mm/page-writeback.c - dirty pages and throttling</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/mm/readahead.c" target="_blank">Linux kernel: mm/readahead.c - read-ahead state machine</a></li>
+							<li><a class="icon-website" href="https://www.kernel.org/doc/html/latest/admin-guide/sysctl/vm.html" target="_blank">Linux kernel: Documentation/admin-guide/sysctl/vm.rst - dirty ratios and swappiness</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/mmap.2" target="_blank">man page: mmap(2)</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/mincore.2" target="_blank">man page: mincore(2)</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/fincore.1" target="_blank">man page: fincore(1)</a></li>
+							<li><a class="icon-website" href="https://lwn.net/Articles/849538/" target="_blank">LWN: The folio project</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

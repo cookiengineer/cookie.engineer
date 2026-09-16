@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Application Whitelisting | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Application Whitelisting">
+		<meta name="keywords" content="application-whitelisting, applocker, blueteam, code-signing, fapolicyd, wdac">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Application Whitelisting">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Restricting executable code to known-good binaries through fapolicyd, AppLocker/WDAC, and code signing trust anchors.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/blueteam/application-whitelisting.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Application Whitelisting">
+		<meta name="twitter:description" itemprop="description" content="Restricting executable code to known-good binaries through fapolicyd, AppLocker/WDAC, and code signing trust anchors.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#concept">Concept</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#linux-fapolicyd">Linux fapolicyd</a></b>
+					<ul>
+						<li><a href="#architecture">Architecture</a></li>
+						<li><a href="#installation">Installation</a></li>
+						<li><a href="#trust-database">Trust Database</a></li>
+						<li><a href="#rule-configuration">Rule Configuration</a></li>
+						<li><a href="#integrity-checking">Integrity Checking</a></li>
+						<li><a href="#audit-mode">Audit Mode</a></li>
+						<li><a href="#custom-policies">Custom Policies</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#windows-applocker">Windows AppLocker</a></b>
+					<ul>
+						<li><a href="#rule-types">Rule Types</a></li>
+						<li><a href="#default-rules">Default Rules</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#windows-wdac">Windows WDAC</a></b>
+					<ul>
+						<li><a href="#wdac-vs-applocker">WDAC vs AppLocker</a></li>
+						<li><a href="#wdac-policy-example">WDAC Policy Example</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#macos-gatekeeper-and-sip">macOS Gatekeeper and SIP</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#code-signing-trust-anchors">Code Signing Trust Anchors</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#bypass-techniques">Bypass Techniques</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#audit-before-enforce">Audit Before Enforce</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#detection-rules">Detection Rules</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/blueteam/index.html">Blueteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/blueteam/application-whitelisting.html">Application Whitelisting</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="application-whitelisting">Application Whitelisting</h2>
+					<p>
+						Restricting executable code to known-good binaries through fapolicyd, AppLocker/
+						<abbr title="Windows Defender Application Control">WDAC</abbr>
+						, and code signing trust anchors.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Application whitelisting inverts antivirus: instead of listing known-bad files, it lists known-good
+							files and denies everything else. That removes whole attack classes, but every legitimate binary
+							and library must be approved first. After reading this article you can configure
+							<code>fapolicyd</code>
+							on Linux, AppLocker and
+							<abbr title="Windows Defender Application Control">WDAC</abbr>
+							on Windows, and reason
+							about the bypasses each one fails to stop.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/elf.html">ELF (Executable and Linkable Format)</a> - <abbr title="Executable and Linkable Format">ELF</abbr> headers, segments, interpreter, dynamic linker</li>
+							<li><a href="/wiki/articles/fundamentals/pe.html">PE (Portable Executable)</a> - PE headers, sections, import/export, digital signatures</li>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - execve(), process lifecycle, memory layout</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="concept">Concept</h3>
+						<p>
+							Application whitelisting (allowlisting) inverts signature-based antivirus: instead of maintaining
+							a list of known-bad executables and hoping to catch them all, you maintain a list of known-good
+							executables and deny everything else. This eliminates entire classes of attacks, including malware
+							downloaders, fileless malware, and living-off-the-land binaries, because the malicious code
+							never executes.
+						</p>
+						<p>
+							The trade-off is operational: every legitimate executable and shared library must be pre-approved.
+							This requires understanding your software inventory at a granular level.
+						</p>
+					</section>
+					<section>
+						<h3 id="linux-fapolicyd">Linux fapolicyd</h3>
+						<p>
+							<code>fapolicyd</code>
+							(File Access Policy Daemon) is the primary application control framework on Linux.
+							It intercepts file execution via the
+							<code>fanotify</code>
+							kernel interface and makes allow/deny decisions
+							based on a trust database.
+						</p>
+						<h4 id="architecture">Architecture</h4>
+						<pre class="plaintext">
++--------------------------------------------------+
+|                  execve(path)                    |
++--------------------------------------------------+
+                     |
++--------------------v-----------------------------+
+|              fanotify (FAN_OPEN_EXEC)            |
+|            Kernel passes event to fapolicyd      |
++--------------------+-----------------------------+
+                     |
++--------------------v-----------------------------+
+|           fapolicyd Decision Engine              |
+|                                                  |
+|  1. Check rules.d/ rules (first match wins)      |
+|  2. Check trust database (hash, signature)       |
+|  3. Default: deny                                |
++--------------------+-----------------------------+
+                     |
+            +--------v--------+
+            |  ALLOW  |  DENY  |
+            +-----------------+
+						</pre>
+						<h4 id="installation">Installation</h4>
+						<pre class="bash">
+# Install from the AUR
+yay -S fapolicyd
+
+# Or build manually
+git clone https://github.com/linux-application-whitelisting/fapolicyd.git
+cd fapolicyd
+./autogen.sh &amp;&amp; ./configure --with-audit --sysconfdir=/etc
+make &amp;&amp; sudo make install
+
+# Enable and start
+sudo systemctl enable --now fapolicyd
+						</pre>
+						<h4 id="trust-database">Trust Database</h4>
+						<p>
+							The trust database is the core of fapolicyd. It keeps a list of known-good files identified
+							by hash (SHA-256) or by filesystem source (RPM/dpkg package origin, or a custom trust entry).
+						</p>
+						<pre class="bash">
+# Initialize the trust database from installed packages
+sudo fapolicyd-cli --update
+
+# The trust database is populated from:
+# 1. RPM/dpkg database - all files from installed packages
+# 2. Custom trust files you define
+# 3. Integrity measurement (IMA) if configured
+
+# List the trust database
+sudo fapolicyd-cli --dump-db
+
+# Check if a specific file is trusted
+sudo fapolicyd-cli --check-file /usr/bin/bash
+
+# Manually add a file to the trust database (by hash)
+sudo fapolicyd-cli --file add /usr/local/bin/my-custom-app
+
+# Add a directory to the trust database
+sudo fapolicyd-cli --trust add /opt/my-company/
+						</pre>
+						<h4 id="rule-configuration">Rule Configuration</h4>
+						<p>
+							Rules in
+							<code>/etc/fapolicyd/rules.d/</code>
+							are evaluated top-to-bottom, first-match-wins:
+						</p>
+						<pre class="bash">
+# /etc/fapolicyd/rules.d/10-base.rules
+
+# Allow everything from trusted RPM/DKMS sources
+allow perm=any all : ftype=application/x-executable trust=1
+
+# Allow scripts interpreted by trusted interpreters
+allow perm=any all : ftype=text/x-shellscript trust=1
+allow perm=any all : ftype=text/x-python trust=1
+
+# Deny execution from /tmp, /dev/shm, /var/tmp (common malware staging)
+deny_audit perm=any uid=0 gid=0 : dir=/tmp/ ftype=application/x-executable
+deny_audit perm=any all : dir=/tmp/ ftype=application/x-executable
+deny_audit perm=any all : dir=/dev/shm/ ftype=application/x-executable
+deny_audit perm=any all : dir=/var/tmp/ ftype=application/x-executable
+
+# Deny execution from user home directories (except specific paths)
+deny_audit perm=any all : dir=/home/ ftype=application/x-executable
+deny_audit perm=any all : dir=/root/ ftype=application/x-executable
+
+# Allow specific company software from /opt
+allow perm=any all : dir=/opt/my-company/ ftype=application/x-executable trust=1
+
+# Default - deny everything not matched above
+deny_audit perm=any all : all
+						</pre>
+						<h4 id="integrity-checking">Integrity Checking</h4>
+						<p>fapolicyd integrates with IMA (Integrity Measurement Architecture) to detect tampered binaries:</p>
+						<pre class="bash">
+# Enable IMA in the kernel cmdline (grub)
+# /etc/default/grub
+GRUB_CMDLINE_LINUX=&#34;... ima=on ima_template=ima-ng ima_hash=sha256 ima_appraise=enforce&#34;
+
+# IMA policy - measure and appraise executables
+# /etc/ima/ima-policy
+measure func=BPRM_CHECK
+appraise func=BPRM_CHECK appraise_type=imasig
+
+# Regenerate grub config
+sudo grub-mkconfig -o /boot/grub/grub.cfg
+						</pre>
+						<h4 id="audit-mode">Audit Mode</h4>
+						<p>Always deploy fapolicyd in audit mode first to avoid breaking production:</p>
+						<pre class="bash">
+# /etc/fapolicyd/rules.d/ - use deny_audit instead of deny
+# deny_audit logs but does not block
+
+# Monitor denials
+sudo journalctl -u fapolicyd -f
+
+# Check the audit log for fapolicyd events
+sudo ausearch -m FANOTIFY -ts recent
+
+# After 1-2 weeks of operation with no unexpected denials,
+# switch deny_audit rules to deny
+						</pre>
+						<h4 id="custom-policies">Custom Policies</h4>
+						<pre class="bash">
+# /etc/fapolicyd/rules.d/20-development.rules
+
+# Allow developers to execute their own compiled binaries from ~/projects/
+allow perm=any uid=1000-1999 gid=1000-1999 : dir=/home/%/projects/ ftype=application/x-executable
+
+# Allow pip-installed binaries in user virtualenvs
+allow perm=any uid=1000-1999 : dir=/home/%/.local/bin/ ftype=application/x-executable
+allow perm=any uid=1000-1999 : dir=/home/%/.virtualenvs/ ftype=application/x-executable
+
+# But still deny from ~/Downloads (spear phishing attachment execution)
+deny_audit perm=any all : dir=/home/%/Downloads/ ftype=application/x-executable
+						</pre>
+					</section>
+					<section>
+						<h3 id="windows-applocker">Windows AppLocker</h3>
+						<p>
+							AppLocker is the built-in Windows application control mechanism, available in Enterprise and
+							Education editions. It supports rules based on publisher, path, and hash.
+						</p>
+						<h4 id="rule-types">Rule Types</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Rule Type</th>
+									<th align="center">Granularity</th>
+									<th align="center">Maintenance</th>
+									<th align="center">Security</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><b>Path</b></td>
+									<td align="center">File path</td>
+									<td align="center">Low</td>
+									<td align="center">Low (rename bypass)</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Hash</b></td>
+									<td align="center">Specific file</td>
+									<td align="center">High (every update)</td>
+									<td align="center">Medium</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Publisher</b></td>
+									<td align="center">Code signing certificate</td>
+									<td align="center">Medium</td>
+									<td align="center">High</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							Publisher rules are the recommended approach: "Allow anything signed by Microsoft Corporation,
+							version >= X."
+						</p>
+						<h4 id="default-rules">Default Rules</h4>
+						<p>
+							Generate the default rules first; without them Windows will not boot. In production these are
+							created by the AppLocker MMC snap-in. The
+							<abbr title="Extensible Markup Language">XML</abbr>
+							below shows the
+							shape of a publisher allow rule:
+						</p>
+						<pre class="xml">
+&lt;!-- Default rules - allow signed software and the standard Windows paths --&gt;
+&lt;RuleCollection Type=&#34;Exe&#34; EnforcementMode=&#34;Enabled&#34;&gt;
+  &lt;FilePublisherRule Id=&#34;11111111-1111-1111-1111-111111111111&#34; Name=&#34;All signed software&#34;
+    Description=&#34;&#34; UserOrGroupSid=&#34;S-1-1-0&#34; Action=&#34;Allow&#34;&gt;
+    &lt;Conditions&gt;
+      &lt;FilePublisherCondition PublisherName=&#34;*&#34; ProductName=&#34;*&#34; BinaryName=&#34;*&#34;&gt;
+        &lt;BinaryVersionRange LowSection=&#34;*&#34; HighSection=&#34;*&#34; /&gt;
+      &lt;/FilePublisherCondition&gt;
+    &lt;/Conditions&gt;
+  &lt;/FilePublisherRule&gt;
+  &lt;FilePathRule Id=&#34;22222222-2222-2222-2222-222222222222&#34; Name=&#34;Default Windows Path&#34;
+    Description=&#34;&#34; UserOrGroupSid=&#34;S-1-1-0&#34; Action=&#34;Allow&#34;&gt;
+    &lt;Conditions&gt;
+      &lt;FilePathCondition Path=&#34;%WINDIR%\*&#34; /&gt;
+    &lt;/Conditions&gt;
+  &lt;/FilePathRule&gt;
+  &lt;FilePathRule Id=&#34;33333333-3333-3333-3333-333333333333&#34; Name=&#34;Default Program Files Path&#34;
+    Description=&#34;&#34; UserOrGroupSid=&#34;S-1-1-0&#34; Action=&#34;Allow&#34;&gt;
+    &lt;Conditions&gt;
+      &lt;FilePathCondition Path=&#34;%PROGRAMFILES%\*&#34; /&gt;
+    &lt;/Conditions&gt;
+  &lt;/FilePathRule&gt;
+&lt;/RuleCollection&gt;
+						</pre>
+						<pre class="powershell">
+# Deploy the AppLocker policy
+Set-AppLockerPolicy -XmlPolicy C:\Policies\AppLocker.xml
+
+# Verify the service is running
+Get-Service AppIDSvc | Format-List Name,Status,StartType
+Set-Service AppIDSvc -StartupType Automatic
+Start-Service AppIDSvc
+
+# Audit events
+Get-AppLockerFileInformation -EventLog -LogName &#34;AppLocker - EXE and DLL&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="windows-wdac">Windows WDAC</h3>
+						<p>
+							<abbr title="Windows Defender Application Control">WDAC</abbr>
+							is the kernel-level successor to AppLocker. It
+							operates at the Code Integrity level: if
+							<abbr title="Windows Defender Application Control">WDAC</abbr>
+							blocks
+							something, it cannot execute. AppLocker operates in user mode.
+						</p>
+						<h4 id="wdac-vs-applocker">WDAC vs AppLocker</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center"></th>
+									<th align="center">WDAC</th>
+									<th align="center">AppLocker</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Enforcement level</td>
+									<td align="center">Kernel (CI)</td>
+									<td align="center">User-mode</td>
+								</tr>
+								<tr>
+									<td align="center">Bypass difficulty</td>
+									<td align="center">Requires kernel exploit</td>
+									<td align="center">User-mode bypasses possible</td>
+								</tr>
+								<tr>
+									<td align="center">Managed installer</td>
+									<td align="center">Yes</td>
+									<td align="center">No</td>
+								</tr>
+								<tr>
+									<td align="center">Supplemental policies</td>
+									<td align="center">Yes (merge)</td>
+									<td align="center">No</td>
+								</tr>
+								<tr>
+									<td align="center">DLL control</td>
+									<td align="center">Yes</td>
+									<td align="center">Yes (high maintenance)</td>
+								</tr>
+								<tr>
+									<td align="center">Script enforcement</td>
+									<td align="center">Yes (via AMSI)</td>
+									<td align="center">Yes</td>
+								</tr>
+								<tr>
+									<td align="center">Management complexity</td>
+									<td align="center">High</td>
+									<td align="center">Medium</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="wdac-policy-example">WDAC Policy Example</h4>
+						<pre class="xml">
+&lt;!-- WDAC.xml - Base policy: Allow Microsoft + WHQL signed --&gt;
+&lt;?xml version=&#34;1.0&#34; encoding=&#34;utf-8&#34;?&gt;
+&lt;SiPolicy xmlns=&#34;urn:schemas-microsoft-com:sipolicy&#34;
+          PolicyType=&#34;Base Policy&#34;&gt;
+  &lt;VersionEx&gt;10.0.0.0&lt;/VersionEx&gt;
+  &lt;PolicyID&gt;{A244370E-44C9-4C06-B551-F6016E563076}&lt;/PolicyID&gt;
+  &lt;BasePolicyID&gt;{A244370E-44C9-4C06-B551-F6016E563076}&lt;/BasePolicyID&gt;
+  &lt;Rules&gt;
+    &lt;Rule&gt;
+      &lt;Option&gt;Enabled:UMCI&lt;/Option&gt;
+    &lt;/Rule&gt;
+    &lt;Rule&gt;
+      &lt;Option&gt;Enabled:Update Policy No Reboot&lt;/Option&gt;
+    &lt;/Rule&gt;
+    &lt;Rule&gt;
+      &lt;Option&gt;Required:WHQL&lt;/Option&gt;
+    &lt;/Rule&gt;
+  &lt;/Rules&gt;
+  &lt;FileRules&gt;
+    &lt;!-- Allow Microsoft-signed kernel drivers --&gt;
+    &lt;Allow ID=&#34;ID_ALLOW_MICROSOFT_KERNEL&#34;
+           FileName=&#34;*&#34;
+           MinimumFileVersion=&#34;0.0.0.0&#34;
+           PackageFamilyName=&#34;Microsoft.Windows.Kernel&#34;/&gt;
+  &lt;/FileRules&gt;
+  &lt;Signers&gt;
+    &lt;Signer ID=&#34;ID_SIGNER_MICROSOFT&#34; Name=&#34;Microsoft Corporation&#34;&gt;
+      &lt;CertRoot Type=&#34;TBS&#34; Value=&#34;FC9EDE71EC7B935A96F14E2F3F01E70E82B7B0F3F8E5CB14EB4E2D3FA3A3C3ED&#34; /&gt;
+    &lt;/Signer&gt;
+  &lt;/Signers&gt;
+  &lt;SigningScenarios&gt;
+    &lt;SigningScenario Value=&#34;131&#34; ID=&#34;ID_SIGNINGSCENARIO_KMCI&#34; FriendlyName=&#34;Kernel Mode&#34;&gt;
+      &lt;ProductSigners&gt;
+        &lt;AllowedSigners&gt;
+          &lt;AllowedSigner SignerId=&#34;ID_SIGNER_MICROSOFT&#34; /&gt;
+        &lt;/AllowedSigners&gt;
+      &lt;/ProductSigners&gt;
+    &lt;/SigningScenario&gt;
+    &lt;SigningScenario Value=&#34;12&#34; ID=&#34;ID_SIGNINGSCENARIO_UMCI&#34; FriendlyName=&#34;User Mode&#34;&gt;
+      &lt;ProductSigners&gt;
+        &lt;AllowedSigners&gt;
+          &lt;AllowedSigner SignerId=&#34;ID_SIGNER_MICROSOFT&#34; /&gt;
+        &lt;/AllowedSigners&gt;
+      &lt;/ProductSigners&gt;
+    &lt;/SigningScenario&gt;
+  &lt;/SigningScenarios&gt;
+&lt;/SiPolicy&gt;
+						</pre>
+						<pre class="powershell">
+# Convert and deploy
+ConvertFrom-CIPolicy -XmlFilePath WDAC.xml -BinaryFilePath WDAC.bin
+Copy-Item WDAC.bin C:\Windows\System32\CodeIntegrity\SiPolicy.p7b
+
+# On newer Windows versions the deployed policy file is SiPolicy.cip
+# Audit events: Event ID 3076
+# Applications and Services Logs &gt; Microsoft &gt; Windows &gt; CodeIntegrity &gt; Operational
+						</pre>
+					</section>
+					<section>
+						<h3 id="macos-gatekeeper-and-sip">macOS Gatekeeper and SIP</h3>
+						<p>Reference information only; the concepts translate across platforms.</p>
+						<ul>
+							<li><b>Gatekeeper</b> : checks code signatures on first launch, using the quarantine flag from downloaded files.</li>
+							<li><b>SIP (System Integrity Protection)</b> : kernel-level protection that prevents modification of system files even by root.</li>
+							<li><b>Notarization</b> : Apple scans submitted software for malware before signing.</li>
+							<li><b>Hardened Runtime</b> : opt-in sandbox and entitlement capabilities for macOS apps.</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="code-signing-trust-anchors">Code Signing Trust Anchors</h3>
+						<p>All three platforms depend on code signing:</p>
+						<pre class="bash">
+# Linux: check ELF binary signatures
+# (requires IMA appraisal or RPM GPG signatures)
+rpm -Kv /usr/bin/bash
+# Shows: Digest, Signature (GPG key ID)
+
+# Verify a detached signature
+gpg --verify /usr/bin/some-binary.sig /usr/bin/some-binary
+						</pre>
+						<pre class="powershell">
+# Windows: check the Authenticode signature
+Get-AuthenticodeSignature -FilePath C:\Windows\System32\notepad.exe
+
+# Output includes:
+# SignerCertificate: CN=Microsoft Windows, O=Microsoft Corporation...
+# Status: Valid
+# Path: C:\Windows\System32\notepad.exe
+						</pre>
+						<pre class="bash">
+# macOS: check the code signature
+codesign -dvvv /Applications/Safari.app
+# Shows: Identifier, Authority (cert chain), TeamIdentifier
+						</pre>
+					</section>
+					<section>
+						<h3 id="bypass-techniques">Bypass Techniques</h3>
+						<p>Understanding bypasses is essential for building effective policies:</p>
+						<ul>
+							<li><b>Path-rule bypass</b> : malware writes to an allowed path, for example a writable subdirectory of <code>%PROGRAMFILES%</code> .</li>
+							<li><b>Hash-rule bypass</b> : any file modification invalidates the hash; impractical for frequently updated software.</li>
+							<li><b>LOLBin abuse</b> : a trusted binary (PowerShell, mshta, regsvr32, certutil) executes malicious code. Mitigation: <abbr title="Windows Defender Application Control">WDAC</abbr> plus Constrained Language Mode for PowerShell.</li>
+							<li><b>DLL side-loading</b> : a trusted signed executable loads an unsigned malicious <abbr title="Dynamic Link Library">DLL</abbr> . Mitigation: <abbr title="Windows Defender Application Control">WDAC</abbr>  <abbr title="Dynamic Link Library">DLL</abbr> rules and app-specific search path restrictions.</li>
+							<li><b>Script interpreters</b> : Python, PowerShell, Windows Script Host, and CScript are trusted but can execute arbitrary scripts. Mitigation: script enforcement via <abbr title="Anti Malware Scan Interface">AMSI</abbr> , <abbr title="Windows Defender Application Control">WDAC</abbr> script rules, and software restriction policies.</li>
+							<li><b>Linux preloading</b> : <code>LD_PRELOAD</code> loads a shared library into a trusted binary. Mitigation: block untrusted shared libraries with <code>ftype=application/x-sharedlib</code> rules, and combine with IMA appraisal so modified libraries are caught.</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="audit-before-enforce">Audit Before Enforce</h3>
+						<p>Every platform supports an audit or log-only mode. The sequence is always:</p>
+						<pre class="plaintext">
+1. Deploy in audit mode
+2. Collect logs for 1-2 weeks of normal operation
+3. Analyze deny_audit events:
+   - Legitimate software that needs an allow rule -&gt; add rule
+   - Expected malware/attack -&gt; these will be blocked in enforcement mode
+   - False positives -&gt; adjust rules
+4. Once deny_audit events are only for expected-malicious patterns:
+   - Switch deny_audit to deny
+   - Monitor for 1 week
+5. Fully operational
+						</pre>
+						<p>
+							For in-house developed or locally compiled software, trust it by path (less secure, easier),
+							by hash with
+							<code>fapolicyd-cli --file add</code>
+							(more secure, manual), or by signing key (most secure,
+							but you must package the software as RPMs or import your public key).
+						</p>
+					</section>
+					<section>
+						<h3 id="detection-rules">Detection Rules</h3>
+						<pre class="yaml">
+# Sigma - Application Control Block Event (Windows)
+title: Software Blocked by Application Control
+status: experimental
+logsource:
+  product: windows
+  service: application
+detection:
+  selection_wdac:
+    EventID: 3076
+  selection_applocker:
+    EventID: 8004  # EXE blocked
+  selection_applocker2:
+    EventID: 8007  # DLL blocked
+  condition: selection_wdac or selection_applocker or selection_applocker2
+level: medium
+						</pre>
+						<pre class="bash">
+# Auditd rule for a fapolicyd deny event
+-a always,exit -F arch=b64 -S execve -F success=0 -k fapolicyd_deny
+						</pre>
+						<pre class="bash">
+# Monitor fapolicyd in real-time
+sudo journalctl -u fapolicyd -f | grep -i deny
+
+# Count denies per executable (triage)
+sudo journalctl -u fapolicyd --since &#34;1 hour ago&#34; | \
+  grep &#34;deny&#34; | awk -F&#39;exe=&#39; &#39;{print $2}&#39; | awk &#39;{print $1}&#39; | \
+  sort | uniq -c | sort -rn | head -20
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go policy evaluator with fapolicyd-style first-match-wins semantics. It reads a rules
+							file of
+							<code>allow &lt;prefix&gt;</code>
+							and
+							<code>deny &lt;prefix&gt;</code>
+							lines and an executable path, then prints ALLOW
+							or DENY. The default action is DENY.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;bufio&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;strings&#34;
+)
+
+type rule struct {
+	allow  bool
+	prefix string
+}
+
+func loadRules(path string) ([]rule, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	rules := make([]rule, 0)
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == &#34;&#34; || strings.HasPrefix(line, &#34;#&#34;) {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) != 2 {
+			continue
+		}
+		rules = append(rules, rule{allow: fields[0] == &#34;allow&#34;, prefix: fields[1]})
+	}
+	return rules, scanner.Err()
+}
+
+func decide(rules []rule, path string) (bool, string) {
+	for _, r := range rules {
+		if strings.HasPrefix(path, r.prefix) {
+			return r.allow, r.prefix
+		}
+	}
+	return false, &#34;default&#34;
+}
+
+func main() {
+	if len(os.Args) != 3 {
+		fmt.Fprintf(os.Stderr, &#34;usage: %s &lt;rules.txt&gt; &lt;path&gt;\n&#34;, os.Args[0])
+		os.Exit(2)
+	}
+
+	rules, err := loadRules(os.Args[1])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	allowed, matched := decide(rules, os.Args[2])
+	verdict := &#34;DENY&#34;
+	if allowed {
+		verdict = &#34;ALLOW&#34;
+	}
+	fmt.Printf(&#34;%s %s (matched: %s)\n&#34;, verdict, os.Args[2], matched)
+}
+						</pre>
+						<p>Try it with a small rules file and the interesting paths:</p>
+						<pre class="bash">
+cat &gt; rules.txt &lt;&lt;&#39;EOF&#39;
+# trusted system paths
+allow /usr/
+allow /opt/myapp/
+# never execute from staging directories
+deny /tmp/
+deny /home/
+EOF
+
+go run fapolicy.go rules.txt /usr/bin/bash
+go run fapolicy.go rules.txt /tmp/payload
+go run fapolicy.go rules.txt /home/student/.cache/run
+						</pre>
+						<p>
+							Then add a rule that allows a developer path before the broad
+							<code>deny /home/</code>
+							line and confirm
+							that first-match-wins ordering is what decides the outcome.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-github" href="https://github.com/linux-application-whitelisting/fapolicyd" target="_blank">fapolicyd GitHub</a></li>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/design/wdac-design-guide" target="_blank">WDAC Design Guide (Microsoft)</a></li>
+							<li><a class="icon-website" href="https://learn.microsoft.com/en-us/windows/security/application-security/application-control/app-control-for-business/applocker/applocker-overview" target="_blank">AppLocker Documentation</a></li>
+							<li><a class="icon-website" href="https://sourceforge.net/p/linux-ima/wiki/Home/" target="_blank">IMA/EVM Documentation</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

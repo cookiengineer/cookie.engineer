@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Packet Analysis | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Packet Analysis">
+		<meta name="keywords" content="blueteam, packet-analysis, pcap, tcpdump, tshark, wireshark">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Packet Analysis">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Investigating attacks using packet captures with tcpdump, tshark, protocol dissection, and real-world pcap analysis.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/blueteam/packet-analysis.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Packet Analysis">
+		<meta name="twitter:description" itemprop="description" content="Investigating attacks using packet captures with tcpdump, tshark, protocol dissection, and real-world pcap analysis.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#why-packet-analysis">Why Packet Analysis</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tcpdump">tcpdump</a></b>
+					<ul>
+						<li><a href="#capture-filters-bpf">Capture Filters (BPF)</a></li>
+						<li><a href="#output-options">Output Options</a></li>
+						<li><a href="#statistical-summaries">Statistical Summaries</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tshark-wireshark">tshark / Wireshark</a></b>
+					<ul>
+						<li><a href="#display-filters">Display Filters</a></li>
+						<li><a href="#field-extraction">Field Extraction</a></li>
+						<li><a href="#follow-tcp-stream">Follow TCP Stream</a></li>
+						<li><a href="#statistics">Statistics</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#protocol-dissection">Protocol Dissection</a></b>
+					<ul>
+						<li><a href="#tcp-flags-scan-detection">TCP Flags: Scan Detection</a></li>
+						<li><a href="#http-request-extraction">HTTP Request Extraction</a></li>
+						<li><a href="#dns-tunneling-detection">DNS Tunneling Detection</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#pcap-file-format">PCAP File Format</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#analyzing-real-world-captures">Analyzing Real-World Captures</a></b>
+					<ul>
+						<li><a href="#identifying-c2-traffic">Identifying C2 Traffic</a></li>
+						<li><a href="#data-exfiltration">Data Exfiltration</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tcpreplay">tcpreplay</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/blueteam/index.html">Blueteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/blueteam/packet-analysis.html">Packet Analysis</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="packet-analysis">Packet Analysis</h2>
+					<p>
+						Investigating attacks using packet captures with tcpdump, tshark, protocol dissection, and real-world
+						pcap analysis.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Logs record that a connection happened; packets record exactly what moved across the wire. This
+							article covers capture and display filters, protocol dissection, and the analysis of real-world
+							captures with tcpdump, tshark, and tcpreplay.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/tcp.html">TCP</a> - <abbr title="Transmission Control Protocol">TCP</abbr> flags, connection state machine, sequence numbers</li>
+							<li><a href="/wiki/articles/fundamentals/network-scanning.html">Network Scanning</a> - scan types ( <abbr title="Synchronize">SYN</abbr> , ACK, NULL, XMAS) and scan detection</li>
+							<li><a href="/wiki/articles/fundamentals/http.html">HTTP</a> - <abbr title="Hypertext Transfer Protocol">HTTP</abbr> request/response structure, headers, methods</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="why-packet-analysis">Why Packet Analysis</h3>
+						<p>
+							Logs tell you that a connection happened. Packets tell you exactly what data moved across the
+							wire. When investigating an intrusion, the pcap is the ground truth - it captures what actually
+							transpired, not what an application chose to log. Packet analysis is the skill that separates
+							<abbr title="Security Operations Center">SOC</abbr>
+							analysts from
+							<abbr title="Incident Response">IR</abbr>
+							investigators.
+						</p>
+					</section>
+					<section>
+						<h3 id="tcpdump">tcpdump</h3>
+						<p>
+							tcpdump is the universal packet capture tool. It uses Berkeley Packet Filter (BPF) syntax for
+							filtering, which compiles to BPF bytecode and executes in kernel context before data reaches
+							userspace.
+						</p>
+						<h4 id="capture-filters-bpf">Capture Filters (BPF)</h4>
+						<p>
+							BPF filters discard packets in kernel space, before tcpdump processes them. This is essential
+							for high-throughput links.
+						</p>
+						<pre class="bash">
+# Capture only TCP traffic to/from 192.168.1.100
+tcpdump -i eth0 host 192.168.1.100 and tcp
+
+# Capture only SYN packets (connection initiation / scanning)
+tcpdump -i eth0 &#39;tcp[tcpflags] &amp; (tcp-syn) != 0 and tcp[tcpflags] &amp; (tcp-ack) == 0&#39;
+
+# Capture only the first 5 packets of each TCP connection (handshake)
+tcpdump -i eth0 &#39;tcp[tcpflags] &amp; (tcp-syn|tcp-ack|tcp-fin) != 0&#39;
+
+# Exclude SSH (port 22) and our management IP
+tcpdump -i eth0 not port 22 and not host 10.0.0.1
+
+# Capture DNS queries (port 53) — both TCP and UDP
+tcpdump -i eth0 port 53
+
+# Capture traffic from a subnet excluding broadcast
+tcpdump -i eth0 &#39;src net 192.168.1.0/24 and not broadcast and not multicast&#39;
+
+# Capture ICMP (excluding echo-reply noise)
+tcpdump -i eth0 &#39;icmp[icmptype] != icmp-echoreply&#39;
+
+# Capture HTTP GET/POST requests
+tcpdump -i eth0 -A &#39;tcp port 80 and (tcp[((tcp[12:1] &amp; 0xf0) &gt;&gt; 2):4] = 0x47455420 or tcp[((tcp[12:1] &amp; 0xf0) &gt;&gt; 2):4] = 0x504f5354)&#39;
+
+# Capture only packets with payload (ignore SYN/ACK/FIN-only)
+tcpdump -i eth0 &#39;tcp port 443 and (tcp[((tcp[12:1] &amp; 0xf0) &gt;&gt; 2):] &gt; 0)&#39;
+
+# VLAN-tagged traffic
+tcpdump -i eth0 &#39;vlan 100&#39;
+						</pre>
+						<h4 id="output-options">Output Options</h4>
+						<pre class="bash">
+# Standard verbose output
+tcpdump -i eth0 -nn -v
+
+# -n  : no name resolution (faster, no DNS leaks)
+# -nn : no port name resolution either
+# -v  : verbose (TTL, ID, offset, flags, options)
+# -vv : more verbose (checksum)
+# -vvv: even more (full decode)
+# -X  : hex + ASCII dump of packet payload
+# -A  : ASCII only (useful for HTTP, SMTP)
+# -x  : hex only
+# -XX : hex + ASCII for entire frame (including link layer)
+# -e  : show link-layer headers (MAC addresses)
+
+# Capture with readable timestamps to file
+tcpdump -i eth0 -nn -tttt -w capture.pcap host 192.168.1.100
+
+# Read pcap and display
+tcpdump -r capture.pcap -nn -v
+
+# Rotating capture files (50MB each, keep 10)
+tcpdump -i eth0 -nn -w capture.pcap -C 50 -W 10
+
+# Capture limited number of packets
+tcpdump -i eth0 -c 1000 -w capture.pcap
+
+# Apply time unit
+tcpdump -i eth0 -nn -ttt  # delta from previous packet
+tcpdump -i eth0 -nn -tttt # human-readable timestamp
+tcpdump -i eth0 -nn -ttttt # epoch with microseconds
+						</pre>
+						<h4 id="statistical-summaries">Statistical Summaries</h4>
+						<pre class="bash">
+# Print stats on signal (SIGINT / SIGTERM)
+tcpdump -i eth0 -nn -c 1000
+
+# Count packets matching filter
+tcpdump -r capture.pcap &#39;tcp port 443&#39; | wc -l
+
+# Summarize unique source IPs
+tcpdump -r capture.pcap -nn &#39;ip&#39; | awk &#39;{print $3}&#39; | cut -d. -f1-4 | \
+    sort | uniq -c | sort -rn | head -20
+						</pre>
+					</section>
+					<section>
+						<h3 id="tshark-wireshark">tshark / Wireshark</h3>
+						<p>
+							tshark is the command-line version of Wireshark. It can read pcaps, apply display filters, and
+							output structured data. The key distinction:
+							<b>capture filters</b>
+							(BPF, applied at capture time)
+							vs
+							<b>display filters</b>
+							(Wireshark syntax, applied post-capture).
+						</p>
+						<h4 id="display-filters">Display Filters</h4>
+						<p>
+							Display filters use a packet-field-oriented syntax. They run after capture and can decode protocol
+							layers that BPF cannot express.
+						</p>
+						<pre class="bash">
+# Read pcap with display filter
+tshark -r capture.pcap -Y &#39;http.request.method == &#34;GET&#34;&#39;
+
+# Common display filters
+tshark -r capture.pcap -Y &#39;tcp.flags.syn == 1 and tcp.flags.ack == 0&#39;     # SYN only
+tshark -r capture.pcap -Y &#39;tcp.flags.reset == 1&#39;                           # RST packets
+tshark -r capture.pcap -Y &#39;http.request or http.response&#39;                  # All HTTP
+tshark -r capture.pcap -Y &#39;http.user_agent contains &#34;curl&#34;&#39;                # curl clients
+tshark -r capture.pcap -Y &#39;dns.qry.name contains &#34;malware&#34;&#39;                # DNS queries
+tshark -r capture.pcap -Y &#39;ssl.handshake.type == 1&#39;                        # TLS ClientHello
+tshark -r capture.pcap -Y &#39;tcp.analysis.retransmission&#39;                    # Retransmissions
+tshark -r capture.pcap -Y &#39;ip.dst == 10.0.0.1 and not tcp.port == 22&#39;     # Combined
+tshark -r capture.pcap -Y &#39;tcp.window_size &lt; 1000&#39;                         # Small windows
+tshark -r capture.pcap -Y &#39;tcp.flags == 0x29&#39;                              # SYN+FIN (nmap XMAS)
+tshark -r capture.pcap -Y &#39;tcp.flags == 0x00&#39;                              # NULL scan
+tshark -r capture.pcap -Y &#39;frame contains &#34;password&#34;&#39;                      # Packet grep
+tshark -r capture.pcap -Y &#39;http.file_data contains &#34;base64&#34;&#39;               # File data search
+						</pre>
+						<h4 id="field-extraction">Field Extraction</h4>
+						<pre class="bash">
+# Extract specific fields with headers
+tshark -r capture.pcap -T fields \
+    -e frame.time \
+    -e ip.src \
+    -e ip.dst \
+    -e tcp.srcport \
+    -e tcp.dstport \
+    -e tcp.flags.syn \
+    -e tcp.flags.ack \
+    -E header=y -E separator=,
+
+# Extract HTTP host and URI
+tshark -r capture.pcap -T fields -e http.host -e http.request.uri -Y &#39;http.request&#39;
+
+# Extract DNS queries and responses
+tshark -r capture.pcap -T fields -e dns.qry.name -e dns.a -Y &#39;dns.flags.response == 1&#39;
+
+# Extract TLS server names (SNI)
+tshark -r capture.pcap -T fields -e tls.handshake.extensions_server_name -Y &#39;ssl.handshake.extensions_server_name&#39;
+						</pre>
+						<h4 id="follow-tcp-stream">Follow TCP Stream</h4>
+						<pre class="bash">
+# Extract and follow a TCP stream by number
+tshark -r capture.pcap -z follow,tcp,ascii,0
+
+# Export HTTP objects (files transferred over HTTP)
+tshark -r capture.pcap --export-objects &#34;http,/tmp/http-objects&#34;
+
+# Extract all TCP payloads for a specific connection
+tshark -r capture.pcap -Y &#39;ip.addr == 192.168.1.100 and tcp.port == 80&#39; -T fields -e tcp.payload
+						</pre>
+						<h4 id="statistics">Statistics</h4>
+						<pre class="bash">
+# Protocol hierarchy statistics
+tshark -r capture.pcap -z io,phs
+
+# Endpoint statistics (traffic per host)
+tshark -r capture.pcap -z endpoints,tcp
+
+# Conversation statistics (traffic per host pair)
+tshark -r capture.pcap -z conv,tcp
+
+# HTTP request statistics
+tshark -r capture.pcap -z http,req,tree
+
+# TCP stream graph (RTT vs time)
+tshark -r capture.pcap -z io,stat,0,&#34;AVG(tcp.analysis.ack_rtt)tcp.analysis.ack_rtt&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="protocol-dissection">Protocol Dissection</h3>
+						<h4 id="tcp-flags-scan-detection">TCP Flags: Scan Detection</h4>
+						<p>
+							Different scan types set different flag combinations. Identifying them in a pcap reveals attacker
+							activity.
+						</p>
+						<pre class="bash">
+# SYN scan: many SYN packets to different ports, few completions
+tcpdump -r scan.pcap -nn &#39;tcp[tcpflags] &amp; (tcp-syn) != 0 and tcp[tcpflags] &amp; (tcp-ack) == 0&#39; | wc -l
+
+# tshark: Identify scan type by flag pattern
+tshark -r scan.pcap -T fields -e tcp.flags -e ip.src -e tcp.dstport | \
+    awk &#39;{flags[$1]++} END {for (f in flags) print f, flags[f]}&#39;
+
+# Output explanation:
+# 0x02 = SYN alone (SYN scan)
+# 0x12 = SYN+ACK (from open port)
+# 0x14 = RST+ACK (from closed port after SYN)
+# 0x04 = RST alone (response to unexpected packet)
+# 0x29 = SYN+FIN+URG (XMAS scan)
+# 0x00 = no flags (NULL scan)
+						</pre>
+						<h4 id="http-request-extraction">HTTP Request Extraction</h4>
+						<pre class="bash">
+# Extract all HTTP GET request paths
+tshark -r capture.pcap -Y &#39;http.request.method == &#34;GET&#34;&#39; \
+    -T fields -e http.request.uri | sort | uniq -c | sort -rn
+
+# Extract full HTTP requests with host headers
+tshark -r capture.pcap -Y &#39;http.request&#39; -T fields \
+    -e frame.time -e ip.src -e http.host -e http.request.method \
+    -e http.request.uri -e http.user_agent
+
+# Identify directory enumeration (many 404 responses)
+tshark -r capture.pcap -Y &#39;http.response.code == 404&#39; \
+    -T fields -e ip.src -e http.request.uri | awk &#39;{a[$1]++} END {for (i in a) print i, a[i]}&#39;
+
+# Detect SQL injection patterns in URI
+tshark -r capture.pcap -Y &#39;http.request.uri contains &#34;UNION&#34; or http.request.uri contains &#34;SELECT&#34;&#39; \
+    -T fields -e ip.src -e http.request.uri
+						</pre>
+						<h4 id="dns-tunneling-detection">DNS Tunneling Detection</h4>
+						<p>
+							<abbr title="Domain Name System">DNS</abbr>
+							tunneling encodes data in
+							<abbr title="Domain Name System">DNS</abbr>
+							queries/responses.
+							Indicators: - Unusually long query names - High entropy in subdomain labels - High volume of
+							queries to a single domain - Unusual record types (TXT, NULL)
+						</p>
+						<pre class="bash">
+# Find long DNS query names
+tshark -r capture.pcap -Y &#39;dns.qry.name.len &gt; 50&#39; \
+    -T fields -e ip.src -e dns.qry.name -e dns.qry.type
+
+# Count queries per client per domain
+tshark -r capture.pcap -Y &#39;dns.flags.response == 0&#39; -T fields \
+    -e ip.src -e dns.qry.name | sort | uniq -c | sort -rn | head -20
+
+# Extract all TXT record responses (common tunneling vector)
+tshark -r capture.pcap -Y &#39;dns.txt&#39; -T fields -e dns.txt
+
+# Identify entropy of subdomains
+tshark -r capture.pcap -Y &#39;dns.qry.name matches &#34;^[a-z0-9]{20,}\\.&#34;&#39; \
+    -T fields -e dns.qry.name
+						</pre>
+					</section>
+					<section>
+						<h3 id="pcap-file-format">PCAP File Format</h3>
+						<p>
+							A pcap file consists of: 1. Global header (magic number 0xa1b2c3d4 or 0xd4c3b2a1, version, timezone,
+							snaplen, link type) 1. Packet records: (timestamp, captured length, original length, link-layer
+							data)
+						</p>
+						<p>
+							pcapng (next-generation) adds: multiple interfaces, packet comments, name resolution records,
+							dropped packet counters.
+						</p>
+						<pre class="bash">
+# Inspect pcap file metadata
+capinfos capture.pcap
+
+# Merge multiple pcaps
+mergecap capture1.pcap capture2.pcap -w merged.pcap
+
+# Split by time
+editcap -A &#34;2026-06-26 08:00:00&#34; -B &#34;2026-06-26 12:00:00&#34; capture.pcap window.pcap
+
+# Split by packet count
+editcap -c 10000 capture.pcap split.pcap
+
+# Strip VLAN tags
+editcap -L capture.pcap stripped.pcap
+						</pre>
+					</section>
+					<section>
+						<h3 id="analyzing-real-world-captures">Analyzing Real-World Captures</h3>
+						<h4 id="identifying-c2-traffic">Identifying C2 Traffic</h4>
+						<pre class="bash">
+# 1. Find long-lived, low-data connections (beacons)
+tshark -r capture.pcap -T fields \
+    -e tcp.stream -e frame.time_epoch -e ip.src -e ip.dst -e tcp.dstport | \
+    python3 -c &#34;
+import sys
+from collections import defaultdict
+streams = defaultdict(list)
+for line in sys.stdin:
+    parts = line.strip().split(&#39;\t&#39;)
+    if len(parts) &gt;= 3:
+        streams[(parts[2], parts[3])].append(float(parts[1]))
+for (src, dst), times in streams.items():
+    if len(times) &gt;= 3:
+        intervals = [times[i]-times[i-1] for i in range(1, len(times))]
+        if len(set(round(i)) for i in intervals) &lt;= 2:
+            print(f&#39;Beacon: {src} -&gt; {dst}: {len(times)} conns, ~{intervals[0]:.0f}s interval&#39;)
+&#34;
+
+# 2. Find unusual outbound ports
+tshark -r capture.pcap -T fields -e ip.src -e tcp.dstport | \
+    grep -vE &#39;\t(80|443|53|22|25|587|993|995|8080|8443)$&#39; | \
+    sort | uniq -c | sort -rn | head -20
+
+# 3. Find user-agent strings (malware often uses none or custom)
+tshark -r capture.pcap -Y &#39;http.user_agent&#39; -T fields -e ip.src -e http.user_agent | \
+    sort | uniq -c | sort -rn
+						</pre>
+						<h4 id="data-exfiltration">Data Exfiltration</h4>
+						<pre class="bash">
+# Asymmetric traffic ratio (much more outbound than inbound)
+tshark -r capture.pcap -T fields -e ip.src -e ip.dst -e frame.len | \
+    python3 -c &#34;
+import sys
+from collections import defaultdict
+out, inb = defaultdict(int), defaultdict(int)
+for line in sys.stdin:
+    parts = line.strip().split(&#39;\t&#39;)
+    if len(parts) == 3:
+        out[parts[0]] += int(parts[2])  # source sent
+        inb[parts[1]] += int(parts[2])  # dest received
+for ip in set(list(out.keys()) + list(inb.keys())):
+    ratio = out.get(ip,0) / max(inb.get(ip,0), 1)
+    if ratio &gt; 10 and out[ip] &gt; 1000000:
+        print(f&#39;Exfiltration candidate: {ip} sent {out[ip]} bytes, ratio {ratio:.1f}&#39;)
+&#34;
+
+# POST requests with large body
+tshark -r capture.pcap -T fields -e ip.src -e http.request.method -e ip.dst -e frame.len \
+    -Y &#39;http.request.method == &#34;POST&#34;&#39; | \
+    awk &#39;$4 &gt; 100000 {print $1&#34; POST &#34;$3, $4&#34; bytes&#34;}&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="tcpreplay">tcpreplay</h3>
+						<p>
+							Replay captured traffic onto a live network for testing detection rules,
+							<abbr title="Intrusion Detection System">IDS</abbr>
+							tuning, and training.
+						</p>
+						<pre class="bash">
+pacman -S tcpreplay
+
+# Replay pcap at captured speed
+tcpreplay -i eth0 capture.pcap
+
+# Replay at 10x speed
+tcpreplay -i eth0 --multiplier=10 capture.pcap
+
+# Replay at constant Mbps
+tcpreplay -i eth0 --mbps=100 capture.pcap
+
+# Loop replay indefinitely
+tcpreplay -i eth0 --loop=0 capture.pcap
+
+# Preload into RAM for consistent timing
+tcpreplay -i eth0 --preload-pcap capture.pcap
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							The container ships tcpdump, tshark, and tcpreplay, and builds
+							<code>/root/attack-traffic.pcap</code>
+							from
+							a simulated attack run. Identify the scan, the injection attempt, the beaconing, and the exfiltration
+							using only the capture.
+						</p>
+						<p><a href="/wiki/articles/blueteam/packet-analysis.Containerfile">packet-analysis.Containerfile</a></p>
+						<pre class="bash">
+podman build -f blueteam/packet-analysis.Containerfile -t packet-analysis-ctf .
+podman run -it --rm packet-analysis-ctf
+						</pre>
+						<p>Start with the port scan and the beacon interval:</p>
+						<pre class="bash">
+tshark -r attack-traffic.pcap -Y &#39;tcp.flags.syn == 1 and tcp.flags.ack == 0&#39; \
+    -T fields -e ip.src -e tcp.dstport | sort -n | uniq -c
+tshark -r attack-traffic.pcap -Y &#39;ip.dst == 203.0.113.99&#39; -T fields -e frame.time_epoch
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/tcpdump.1" target="_blank">man: tcpdump(1)</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/pcap-filter.7" target="_blank">man: pcap-filter(7)</a></li>
+							<li><a class="icon-website" href="https://www.wireshark.org/docs/man-pages/tshark.html" target="_blank">tshark Documentation</a></li>
+							<li><a class="icon-website" href="https://wiki.wireshark.org/DisplayFilters" target="_blank">Wireshark Display Filters Reference</a></li>
+							<li><a class="icon-website" href="https://tcpreplay.appneta.com/" target="_blank">tcpreplay Documentation</a></li>
+							<li><a class="icon-website" href="https://pcapng.com/" target="_blank">pcap-ng Format Specification</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

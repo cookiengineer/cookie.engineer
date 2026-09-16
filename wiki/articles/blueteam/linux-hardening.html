@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Linux Hardening | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Linux Hardening">
+		<meta name="keywords" content="apparmor, blueteam, hardening, linux, seccomp, selinux, sysctl, systemd">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Linux Hardening">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Kernel, services, and filesystem hardening for production Linux servers - sysctl, systemd, AppArmor, seccomp, SSH, PAM, and auditd.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/blueteam/linux-hardening.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Linux Hardening">
+		<meta name="twitter:description" itemprop="description" content="Kernel, services, and filesystem hardening for production Linux servers - sysctl, systemd, AppArmor, seccomp, SSH, PAM, and auditd.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#concept">Concept</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kernel-hardening-sysctl">Kernel Hardening - sysctl</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#apparmor">AppArmor</a></b>
+					<ul>
+						<li><a href="#apparmor-profile-structure">AppArmor Profile Structure</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#selinux-reference">SELinux (Reference)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#systemd-service-hardening">systemd Service Hardening</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#seccomp-filters">Seccomp Filters</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#grsecurity-pax-concepts">grsecurity / PaX Concepts</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#filesystem-hardening">Filesystem Hardening</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ssh-hardening">SSH Hardening</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#pam-configuration">PAM Configuration</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#auditd-critical-path-monitoring">auditd - Critical Path Monitoring</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/blueteam/index.html">Blueteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/blueteam/linux-hardening.html">Linux Hardening</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="linux-hardening">Linux Hardening</h2>
+					<p>
+						Kernel, services, and filesystem hardening for production Linux servers - sysctl, systemd, AppArmor,
+						seccomp,
+						<abbr title="Secure Shell">SSH</abbr>
+						,
+						<abbr title="Pluggable Authentication Modules">PAM</abbr>
+						, and auditd.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Hardening reduces the attack surface of a host by turning off features it does not need and
+							confining the ones that remain. This article covers independent enforcement layers: kernel
+							<code>sysctl</code>
+							parameters, Mandatory Access Control with AppArmor and SELinux, systemd sandboxing, seccomp
+							filters, filesystem mount options,
+							<abbr title="Secure Shell">SSH</abbr>
+							policy,
+							<abbr title="Pluggable Authentication Modules">PAM</abbr>
+							, and auditd. The goal is a single-purpose appliance in which every process, file, and socket
+							has a documented justification.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - process lifecycle, signals, namespaces, cgroups</li>
+							<li><a href="/wiki/articles/fundamentals/unix-permissions.html">Unix Permissions</a> - user/group/other, setuid, setgid, sticky</li>
+							<li><a href="/wiki/articles/fundamentals/capabilities.html">Capabilities</a> - Linux capabilities, bounding sets, ambient sets</li>
+							<li><a href="/wiki/articles/fundamentals/system-calls.html">System Calls</a> - syscall mechanism, tables, seccomp interaction</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="concept">Concept</h3>
+						<p>
+							Linux hardening operates on the principle that the kernel, services, and filesystem each provide
+							independent enforcement layers. A misconfiguration in one layer should be contained by the others.
+							The goal is to progress from a general-purpose installation toward a single-purpose appliance
+							where every process, file, and network socket has a documented justification.
+						</p>
+					</section>
+					<section>
+						<h3 id="kernel-hardening-sysctl">Kernel Hardening - sysctl</h3>
+						<p>
+							Kernel parameters control low-level security properties. These should be set early in boot (via
+							sysctl.d) because some are irreversible once modules are loaded or namespaces are created.
+						</p>
+						<pre class="bash">
+# /etc/sysctl.d/99-hardening.conf
+
+# ============================================================
+# Address Space Layout Randomization
+# ============================================================
+# 0 = disabled, 1 = stack + mmap, 2 = full (brk, stack, mmap, VDSO)
+kernel.randomize_va_space = 2
+
+# ============================================================
+# Kernel Address Leak Prevention
+# ============================================================
+# 0 = unrestricted, 1 = CAP_SYSLOG required, 2 = all restricted
+kernel.kptr_restrict = 2
+
+# Restrict dmesg to CAP_SYSLOG
+kernel.dmesg_restrict = 1
+
+# ============================================================
+# Ptrace Restrictions (Yama LSM)
+# ============================================================
+# 0 = traditional (ptrace any process), 1 = restricted (parent/child only),
+# 2 = admin-only (CAP_SYS_PTRACE), 3 = completely disabled
+kernel.yama.ptrace_scope = 2
+
+# ============================================================
+# Module Loading
+# ============================================================
+# Set to 1 after boot once all required modules are loaded.
+# This cannot be reversed without a reboot.
+# kernel.modules_disabled = 1
+
+# ============================================================
+# Core Dumps
+# ============================================================
+# Set a handler instead of writing core dumps
+kernel.core_pattern = |/bin/false
+
+# Disable SUID binary core dumps (info leak)
+fs.suid_dumpable = 0
+
+# ============================================================
+# Network Stack Hardening
+# ============================================================
+# SYN flood protection
+net.ipv4.tcp_syncookies = 1
+
+# IP forwarding (disable on non-router hosts)
+net.ipv4.ip_forward = 0
+net.ipv6.conf.all.forwarding = 0
+
+# Source route validation (prevent spoofing)
+net.ipv4.conf.all.rp_filter = 1
+net.ipv4.conf.default.rp_filter = 1
+
+# Ignore redirects (man-in-the-middle vector)
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv4.conf.default.accept_redirects = 0
+net.ipv6.conf.all.accept_redirects = 0
+net.ipv6.conf.default.accept_redirects = 0
+
+# Ignore gratuitous ARP (ARP poisoning vector)
+net.ipv4.conf.all.arp_ignore = 1
+net.ipv4.conf.all.arp_announce = 2
+
+# Ignore ICMP broadcast probes (Smurf Amplification)
+net.ipv4.icmp_echo_ignore_broadcasts = 1
+net.ipv4.icmp_ignore_bogus_error_responses = 1
+
+# Disable IP source routing (packet forging vector)
+net.ipv4.conf.all.accept_source_route = 0
+net.ipv6.conf.all.accept_source_route = 0
+
+# ============================================================
+# Memory Allocation Hardening
+# ============================================================
+# ASLR for mmap base
+vm.mmap_rnd_bits = 32
+vm.mmap_rnd_compat_bits = 16
+
+# Restrict perf_event_paranoid (hardware performance counter info leak)
+kernel.perf_event_paranoid = 3
+						</pre>
+						<p>Apply and verify:</p>
+						<pre class="bash">
+sudo sysctl --system
+
+# Verify selected parameters
+sysctl kernel.kptr_restrict kernel.dmesg_restrict kernel.yama.ptrace_scope
+						</pre>
+					</section>
+					<section>
+						<h3 id="apparmor">AppArmor</h3>
+						<p>
+							AppArmor is the default Mandatory Access Control (
+							<abbr title="Mandatory Access Control">MAC</abbr>
+							) system
+							on Debian/Ubuntu and available on ArchLinux. It uses path-based profiles, which are simpler
+							than SELinux's label-based approach but less granular.
+						</p>
+						<pre class="bash">
+# Install and enable on ArchLinux
+sudo pacman -S apparmor
+sudo systemctl enable --now apparmor.service
+
+# Check status — list all loaded profiles and their modes
+sudo aa-status
+
+# Number of profiles in enforce mode and complain mode
+# Complain mode = logs but does not block (audit/development)
+# Enforce mode = blocks unauthorized access
+						</pre>
+						<h4 id="apparmor-profile-structure">AppArmor Profile Structure</h4>
+						<pre class="plaintext">
+# /etc/apparmor.d/usr.bin.myapp
+
+#include &lt;tunables/global&gt;
+
+/usr/bin/myapp {
+    #include &lt;abstractions/base&gt;
+    #include &lt;abstractions/nameservice&gt;
+
+    # File access — read only
+    /usr/bin/myapp r,
+    /etc/myapp/config r,
+    /usr/lib/myapp/** mr,
+
+    # File access — read/write
+    /var/lib/myapp/data/** rw,
+    /var/log/myapp.log rw,
+
+    # Network access
+    network inet tcp,
+    network inet6 tcp,
+
+    # Deny everything not explicitly allowed
+    deny /etc/shadow r,
+    deny /root/** rwxlkm,
+
+    # Signal handling
+    signal (receive) peer=unconfined,
+}
+						</pre>
+						<pre class="bash">
+# Set profile to enforce mode
+sudo aa-enforce /etc/apparmor.d/usr.bin.myapp
+
+# Set profile to complain mode (audit only, no blocking)
+sudo aa-complain /etc/apparmor.d/usr.bin.myapp
+
+# Generate a profile from program behavior
+sudo aa-genprof /usr/bin/myapp
+
+# Reload all profiles
+sudo systemctl reload apparmor
+
+# Check denial logs
+sudo journalctl -u apparmor -f
+sudo aa-notify -p     # Show recent denials
+						</pre>
+					</section>
+					<section>
+						<h3 id="selinux-reference">SELinux (Reference)</h3>
+						<p>
+							SELinux uses label-based
+							<abbr title="Mandatory Access Control">MAC</abbr>
+							. Every file, process, port, and object
+							has a context label. Policy defines which labels can interact.
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">AppArmor</th>
+									<th align="center">SELinux</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Path-based</td>
+									<td align="center">Label-based (inode)</td>
+								</tr>
+								<tr>
+									<td align="center">Simpler profiles</td>
+									<td align="center">Finer granularity</td>
+								</tr>
+								<tr>
+									<td align="center"><code>aa-status</code></td>
+									<td align="center"><code>getenforce</code>,<code>sestatus</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>/etc/apparmor.d/</code></td>
+									<td align="center"><code>/etc/selinux/targeted/policy/</code></td>
+								</tr>
+								<tr>
+									<td align="center">Common on: Ubuntu, SUSE</td>
+									<td align="center">Common on: RHEL, Fedora, Android</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# SELinux quick-reference (RHEL systems)
+getenforce                   # Enforcing / Permissive / Disabled
+setenforce 0                 # Switch to permissive (debugging)
+semanage port -l             # List port label assignments
+restorecon -Rv /var/www      # Restore default file contexts
+audit2allow -a -M mypolicy   # Generate policy from audit denials
+						</pre>
+					</section>
+					<section>
+						<h3 id="systemd-service-hardening">systemd Service Hardening</h3>
+						<p>
+							systemd provides over 50 directives for restricting what a service can do. These apply at the
+							cgroup/namespace level and are enforced by the kernel, so bypassing them requires a kernel exploit.
+						</p>
+						<pre class="ini">
+# /etc/systemd/system/hardened-service.service
+
+[Unit]
+Description=Hardened Application Server
+
+[Service]
+Type=simple
+User=myapp
+Group=myapp
+
+# === Privilege dropping ===
+NoNewPrivileges=yes
+# No SUID/SGID binaries, no new capabilities via exec
+
+# === Capabilities ===
+CapabilityBoundingSet=
+AmbientCapabilities=
+# Empty = no capabilities whatsoever
+
+# === Filesystem hardening ===
+ProtectSystem=strict
+# Mounts /usr, /boot, /etc read-only
+# Use ReadWritePaths for writable directories
+
+ProtectHome=true
+# /home, /root, /run/user are inaccessible
+
+PrivateTmp=true
+# Service gets its own /tmp and /var/tmp (mount namespace)
+
+ReadWritePaths=/var/lib/myapp
+ReadOnlyPaths=/etc/myapp
+# Only these paths are writable outside PrivateTmp
+
+InaccessiblePaths=/root /etc/ssh
+# Paths completely hidden from the service
+
+# === Seccomp ===
+SystemCallFilter=@system-service
+# Allow only syscalls in the @system-service group
+
+SystemCallFilter=~@privileged @resources @mount @swap
+# Blacklist risky syscall groups
+
+SystemCallArchitectures=native
+# Block 32-bit syscalls on 64-bit systems (prevents compat attacks)
+
+# === Device access ===
+PrivateDevices=true
+# Minimal /dev (only null, zero, random, urandom, tty, pts)
+
+DeviceAllow=/dev/null rw
+DeviceAllow=char-tpm rw
+# If service needs specific device access
+
+# === Kernel interaction ===
+ProtectKernelTunables=yes
+# /proc/sys, /sys are read-only
+
+ProtectKernelModules=yes
+# Prevent kernel module loading
+
+ProtectKernelLogs=yes
+# Prevent reading kernel log buffer
+
+ProtectClock=yes
+# Prevent clock manipulation
+
+ProtectControlGroups=yes
+# Prevent cgroup filesystem modification
+
+# === Namespace restrictions ===
+PrivateNetwork=true
+# Service gets its own network namespace (use if no network needed)
+
+RestrictNamespaces=true
+# Prevent creating new namespaces (blocks unshare/container escapes)
+
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# Limit socket types
+
+# === Memory hardening ===
+MemoryDenyWriteExecute=true
+# Prevents mmap with PROT_WRITE|PROT_EXEC (W^X)
+
+LockPersonality=true
+# Prevent personality() syscall (ASLR disable, legacy emulation)
+
+RestrictRealtime=true
+# Prevent SCHED_FIFO/SCHED_RR realtime scheduling
+
+RestrictSUIDSGID=true
+# Prevent SUID/SGID execution
+
+# === Process resources ===
+LimitNOFILE=65536
+LimitNPROC=512
+LimitCORE=0
+# Core dump limit = 0 prevents core dumps
+
+[Install]
+WantedBy=multi-user.target
+						</pre>
+						<p>Audit service hardening level:</p>
+						<pre class="bash">
+# Score: lower is better, 0 = fully hardened
+systemd-analyze security hardened-service.service
+
+# Show missing hardening directives
+systemd-analyze security --no-pager hardened-service.service | grep -E &#39;✗|EXPOSED&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="seccomp-filters">Seccomp Filters</h3>
+						<p>
+							seccomp (secure computing mode) restricts which system calls a process can make. systemd's
+							<code>SystemCallFilter</code>
+							uses seccomp internally, but custom BPF-based filters allow finer control.
+						</p>
+						<pre class="c">
+// seccomp_filter.c — Custom seccomp BPF filter
+// Compile: gcc -o seccomp_filter seccomp_filter.c -lseccomp
+
+#include &lt;seccomp.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;unistd.h&gt;
+
+int main(void) {
+    scmp_filter_ctx ctx;
+
+    // Initialize with default kill action
+    ctx = seccomp_init(SCMP_ACT_KILL);
+
+    // Allow essential syscalls
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(read), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(exit), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(exit_group), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(rt_sigreturn), 0);
+
+    // Allow write only to stdout (fd 1)
+    // This is argument filtering, more granular than a bare syscall allow
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(write), 1,
+        SCMP_A0(SCMP_CMP_EQ, 1));  // arg0 == 1 (fd)
+
+    // Load filter, cannot be removed afterwards
+    seccomp_load(ctx);
+
+    // From here on, any disallowed syscall kills the process.
+    // Use write(2) directly: printf() may call mmap/futex and be killed.
+    write(1, &#34;seccomp filter active. All other syscalls blocked.\n&#34;, 51);
+
+    seccomp_release(ctx);
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+# Inspect seccomp status of a running process
+cat /proc/$(pidof nginx)/status | grep -i seccomp
+# 0 = disabled, 1 = strict, 2 = filter
+
+# strace shows when a syscall is killed by seccomp
+strace -f -e trace=all ./seccomp_filter 2&gt;&amp;1 | head
+						</pre>
+					</section>
+					<section>
+						<h3 id="grsecurity-pax-concepts">grsecurity / PaX Concepts</h3>
+						<p>
+							grsecurity is a set of kernel patches providing advanced hardening. While it is not in mainline,
+							its concepts influence modern hardening:
+						</p>
+						<ul>
+							<li><b>PaX</b> : Enforces W^X (pages either writable or executable, never both). Mainline equivalent: <code>MemoryDenyWriteExecute</code> in systemd, or a seccomp filter that rejects <code>mprotect(PROT_EXEC)</code> .</li>
+							<li><b>RBAC</b> : Role-Based Access Control integrated into the kernel. Mainline equivalent: AppArmor / SELinux.</li>
+							<li><b>Chroot restrictions</b> : Prevents breaking out of chroot jails. Mainline equivalent: namespaces + <code>ProtectSystem=strict</code> .</li>
+							<li><b>/proc restrictions</b> : Hides processes from other users. Mainline equivalent: <code>hidepid=2</code> mount option on /proc.</li>
+							<li><b>Trusted Path Execution (TPE)</b> : Only root can execute files in non-root-owned writable directories.</li>
+						</ul>
+						<pre class="bash">
+# Mainline equivalent of TPE: mount /proc with hidepid
+# /etc/fstab
+proc /proc proc defaults,hidepid=2,gid=proc 0 0
+
+# This hides process directories from non-root users
+# gid=proc allows members of the &#39;proc&#39; group to see processes
+sudo groupadd proc
+sudo usermod -aG proc monitoring-agent
+						</pre>
+					</section>
+					<section>
+						<h3 id="filesystem-hardening">Filesystem Hardening</h3>
+						<pre class="bash">
+# /etc/fstab entries with hardening mount options
+
+# /tmp — noexec prevents attacker scripts/binary execution
+tmpfs /tmp tmpfs defaults,noexec,nosuid,nodev 0 0
+
+# /dev/shm — shared memory, commonly used for loading shellcode
+tmpfs /dev/shm tmpfs defaults,noexec,nosuid,nodev 0 0
+
+# /var/tmp — bind mount with noexec
+# /etc/fstab:
+# /tmp /var/tmp none bind,noexec,nosuid,nodev 0 0
+
+# /boot — read-only except during kernel updates
+UUID=xxx /boot ext4 defaults,noexec,nosuid,nodev,ro 0 2
+
+# /proc — hide processes from other users
+proc /proc proc defaults,hidepid=2,gid=proc 0 0
+						</pre>
+						<pre class="bash">
+# Remount /boot read-only (after kernel updates)
+sudo mount -o remount,ro /boot
+
+# Find all world-writable files/dirs
+sudo find / -xdev -type f -perm -0002 -ls 2&gt;/dev/null
+sudo find / -xdev -type d -perm -0002 -ls 2&gt;/dev/null
+
+# Find unowned files (orphaned by package removal)
+sudo find / -xdev -nouser -o -nogroup -ls 2&gt;/dev/null
+						</pre>
+					</section>
+					<section>
+						<h3 id="ssh-hardening">SSH Hardening</h3>
+						<pre class="bash">
+# /etc/ssh/sshd_config.d/99-hardening.conf
+
+# Only key-based authentication
+PubkeyAuthentication yes
+PasswordAuthentication no
+ChallengeResponseAuthentication no
+PermitEmptyPasswords no
+AuthenticationMethods publickey
+
+# Root login disabled
+PermitRootLogin no
+
+# Cryptographic policy
+HostKeyAlgorithms ssh-ed25519,ssh-ed25519-cert-v01@openssh.com
+KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org
+Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com
+MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com
+
+# Disable forwarding
+X11Forwarding no
+AllowTcpForwarding no
+AllowAgentForwarding no
+PermitTunnel no
+GatewayPorts no
+
+# Restrict users
+AllowUsers alice@192.168.1.0/24 bob@10.0.0.0/8
+AllowGroups ssh-users
+
+# Session limits
+MaxAuthTries 3
+MaxSessions 4
+MaxStartups 10:30:60
+ClientAliveInterval 300
+ClientAliveCountMax 2
+LoginGraceTime 30
+						</pre>
+						<pre class="bash">
+# Validate and apply
+sudo sshd -t
+sudo systemctl reload sshd
+						</pre>
+					</section>
+					<section>
+						<h3 id="pam-configuration">PAM Configuration</h3>
+						<pre class="bash">
+# /etc/security/pwquality.conf
+minlen = 14
+dcredit = -1
+ucredit = -1
+lcredit = -1
+ocredit = -1
+minclass = 3       # Require at least 3 character classes
+maxrepeat = 3      # No more than 3 consecutive same chars
+maxsequence = 4    # No sequences longer than 4 (e.g., abcd)
+dictcheck = 1      # Check against dictionary
+usercheck = 1      # Not contain username
+enforcing = 1
+						</pre>
+						<pre class="bash">
+# /etc/security/faillock.conf
+deny = 5
+unlock_time = 600       # 10 minutes
+fail_interval = 900     # Failures within 15 minutes
+						</pre>
+						<pre class="bash">
+# /etc/pam.d/system-auth (ArchLinux)
+# Password quality enforcement
+password    required    pam_pwquality.so
+
+# Account lockout
+auth        required    pam_faillock.so preauth
+auth        [success=1 default=ignore]   pam_unix.so
+auth        [default=die]                pam_faillock.so authfail
+auth        sufficient                   pam_faillock.so authsucc
+
+# Restrict root login to console
+auth        required    pam_securetty.so
+						</pre>
+					</section>
+					<section>
+						<h3 id="auditd-critical-path-monitoring">auditd - Critical Path Monitoring</h3>
+						<pre class="bash">
+# /etc/audit/rules.d/99-hardening.rules
+
+# Delete all existing rules
+-D
+
+# Buffer configuration
+-b 8192                  # 8 MB buffer
+-f 1                     # Kernel panic on audit failure
+
+# === SUID/SGID execution monitoring ===
+-a always,exit -F arch=b64 -S execve -F euid=0 -k root_exec
+-a always,exit -F arch=b64 -S execve -F uid&gt;=1000 -F euid=0 -k privilege_escalation
+
+# === Sensitive file access ===
+-w /etc/shadow -p rwa -k shadow_access
+-w /etc/passwd -p wa -k passwd_modify
+-w /etc/sudoers -p wa -k sudoers_change
+-w /etc/sudoers.d/ -p wa -k sudoers_change
+-w /etc/apparmor.d/ -p wa -k apparmor_policy
+
+# === System configuration changes ===
+-w /etc/sysctl.d/ -p wa -k sysctl_change
+-w /etc/systemd/system/ -p wa -k systemd_units
+-w /etc/ssh/sshd_config.d/ -p wa -k sshd_config
+-w /etc/pam.d/ -p wa -k pam_config
+
+# === Kernel changes ===
+-a always,exit -F arch=b64 -S init_module -S finit_module -S delete_module -k kernel_modules
+-w /etc/modprobe.d/ -p wa -k modprobe_config
+
+# === User/group changes ===
+-w /etc/group -p wa -k group_change
+-w /etc/gshadow -p wa -k gshadow_access
+
+# Make rules immutable (requires reboot to change)
+-e 2
+						</pre>
+						<pre class="bash">
+# Load rules
+sudo auditctl -R /etc/audit/rules.d/99-hardening.rules
+
+# Verify
+sudo auditctl -l
+
+# Search audit logs
+sudo ausearch -k shadow_access -ts recent
+sudo ausearch -k privilege_escalation -i
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							A deliberately insecure container with misconfigured services. Harden it step by step and verify
+							each measure. It starts with
+							<abbr title="Secure Shell">SSH</abbr>
+							password authentication and root login enabled,
+							a world-writable
+							<code>/etc/shadow</code>
+							, a world-executable
+							<code>/tmp</code>
+							, no AppArmor profiles, unhardened
+							sysctl values, a SUID script, and no auditd rules. Prove that
+							<code>bob</code>
+							cannot read
+							<code>/root/flag.txt</code>
+							.
+						</p>
+						<p><a href="/wiki/articles/blueteam/linux-hardening.Containerfile">linux-hardening.Containerfile</a></p>
+						<pre class="bash">
+podman build -t linux-hardening -f linux-hardening.Containerfile .
+podman run -it --rm linux-hardening
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://kernsec.org/wiki/index.php/Kernel_Self_Protection_Project" target="_blank">Kernel Self-Protection Project</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/systemd.exec.5" target="_blank">systemd.exec manual</a></li>
+							<li><a class="icon-gitlab" href="https://gitlab.com/apparmor/apparmor/-/wikis/home" target="_blank">AppArmor Wiki</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/seccomp_init.3" target="_blank">seccomp library documentation</a></li>
+							<li><a class="icon-github" href="https://github.com/Neo23x0/auditd" target="_blank">auditd rules guide</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

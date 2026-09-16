@@ -1,0 +1,1352 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>ELF Reversing | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="ELF Reversing">
+		<meta name="keywords" content="elf, linux, malware-analysis, objdump, readelf, reverse-engineering">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="ELF Reversing">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Structural analysis of ELF binaries for malware reverse-engineering to detect suspicious layouts, packers, and anti-analysis tricks.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/reverse-engineering/elf-reversing.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="ELF Reversing">
+		<meta name="twitter:description" itemprop="description" content="Structural analysis of ELF binaries for malware reverse-engineering to detect suspicious layouts, packers, and anti-analysis tricks.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#malware-analysis-mindset">Malware Analysis Mindset</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#suspicious-elf-characteristics">Suspicious ELF Characteristics</a></b>
+					<ul>
+						<li><a href="#init-array-and-fini-array-hijacking">.init_array and .fini_array Hijacking</a></li>
+						<li><a href="#segment-permission-anomalies">Segment Permission Anomalies</a></li>
+						<li><a href="#unusual-interp">Unusual INTERP</a></li>
+						<li><a href="#dt-rpath-and-dt-runpath-abuse">DT_RPATH and DT_RUNPATH Abuse</a></li>
+						<li><a href="#dynamic-anomalies">.dynamic Anomalies</a></li>
+						<li><a href="#pt-note-to-pt-load-conversion">PT_NOTE to PT_LOAD Conversion</a></li>
+						<li><a href="#comment-section-analysis">.comment Section Analysis</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#stripped-vs-unstripped">Stripped vs Unstripped</a></b>
+					<ul>
+						<li><a href="#function-identification">Function Identification</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#readelf-for-reversing">readelf for Reversing</a></b>
+					<ul>
+						<li><a href="#readelf-h-elf-header">readelf -h : ELF Header</a></li>
+						<li><a href="#readelf-l-program-headers">readelf -l : Program Headers</a></li>
+						<li><a href="#readelf-s-section-headers">readelf -S : Section Headers</a></li>
+						<li><a href="#readelf-d-dynamic-section">readelf -d : Dynamic Section</a></li>
+						<li><a href="#readelf-s-symbols">readelf -s : Symbols</a></li>
+						<li><a href="#readelf-r-relocations">readelf -r : Relocations</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#objdump-for-reversing">objdump for Reversing</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#nm-for-symbol-listing">nm for Symbol Listing</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#elf-suspicion-scanner">ELF Suspicion Scanner</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/reverse-engineering/index.html">Reverse Engineering</a></li>
+						<li aria-current="page"><a href="/wiki/articles/reverse-engineering/elf-reversing.html">Elf Reversing</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="elf-reversing">ELF Reversing</h2>
+					<p>
+						Structural analysis of ELF binaries for malware reverse-engineering to detect suspicious layouts,
+						packers, and anti-analysis tricks.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							ELF reversing dissects a Linux executable without running it, reading its headers, segments,
+							sections, and symbols to learn what it does. Hostile software leaves structural deviations from
+							normal builds, and those deviations point straight at its capabilities. After reading, you can
+							inspect an ELF with readelf, objdump, and nm, recognize packers and anti-analysis tricks, and
+							triage a suspicious sample.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/elf.html">/wiki/articles/fundamentals/elf.html</a> - complete ELF format reference: sections, segments, dynamic linking, and symbol tables</li>
+							<li><a href="/wiki/articles/reverse-engineering/binary-identification.html">articles/reverse-engineering/binary-identification.html</a> - file type identification and initial triage before deep ELF analysis</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="malware-analysis-mindset">Malware Analysis Mindset</h3>
+						<p>
+							You are not debugging a crashing application. You are dissecting hostile software. Every byte
+							in the ELF was placed there by an attacker to achieve a goal: persistence, exfiltration,
+							<abbr title="Command and Control">C2</abbr>
+							, defense evasion. Your job is to understand what the binary does without executing it, by reading
+							its structure.
+						</p>
+						<p>
+							Normal binaries follow predictable patterns. Malware deviates - that deviation is the signal.
+							This article catalogues the deviations.
+						</p>
+					</section>
+					<section>
+						<h3 id="suspicious-elf-characteristics">Suspicious ELF Characteristics</h3>
+						<h4 id="init-array-and-fini-array-hijacking">.init_array and .fini_array Hijacking</h4>
+						<p>
+							The
+							<code>.init_array</code>
+							section contains function pointers that run before
+							<code>main()</code>
+							. The dynamic
+							linker calls them in order during initialization. The
+							<code>.fini_array</code>
+							runs at exit, triggered
+							by
+							<code>__cxa_finalize</code>
+							.
+						</p>
+						<p>
+							Normal usage: C++ static constructors, runtime setup. Malware usage: anti-debug checks, decryption
+							routines, and payload execution that happens before any debugger can break on
+							<code>main()</code>
+							.
+						</p>
+						<pre class="bash">
+$ readelf -S suspicious.bin | grep -E &#39;init|fini&#39;
+  [16] .init_array       INIT_ARRAY      0000000000403e10  00003e10
+       0000000000000018  0000000000000008  WA       0     0     8
+  [17] .fini_array       FINI_ARRAY      0000000000403e28  00003e28
+       0000000000000008  0000000000000008  WA       0     0     8
+						</pre>
+						<p>
+							A size of
+							<code>0x18</code>
+							for
+							<code>.init_array</code>
+							on x86-64 means three function pointers (3 x 8 bytes). A
+							simple C program has one (call to
+							<code>__libc_csu_init</code>
+							). More than two is suspicious.
+						</p>
+						<pre class="bash">
+$ objdump -d -j .init_array suspicious.bin
+
+Disassembly of section .init_array:
+
+0000000000403e10 &lt;__init_array_start&gt;:
+  403e10:       00 11 40 00 00 00 00 00
+  403e18:       60 11 40 00 00 00 00 00
+  403e20:       90 22 40 00 00 00 00 00
+						</pre>
+						<p>
+							Three entries:
+							<code>0x401100</code>
+							,
+							<code>0x401160</code>
+							,
+							<code>0x402290</code>
+							. The first is the standard libc init. The
+							other two are suspicious. They run before
+							<code>main()</code>
+							. In a debugger,
+							<code>break main</code>
+							never fires
+							if the
+							<code>.init_array</code>
+							function calls
+							<code>exit(0)</code>
+							after detecting
+							<code>ptrace</code>
+							.
+						</p>
+						<p>To check what these functions do, disassemble them:</p>
+						<pre class="bash">
+$ objdump -d suspicious.bin --start-address=0x401160 --stop-address=0x401180
+						</pre>
+						<h4 id="segment-permission-anomalies">Segment Permission Anomalies</h4>
+						<p>The LOAD segments declare memory permissions. Normal mapping:</p>
+						<pre class="bash">
+$ readelf -l normal_binary
+
+Program Headers:
+  Type   Offset             VirtAddr           PhysAddr
+         FileSiz            MemSiz              Flags  Align
+  LOAD   0x0000000000000000 0x0000000000400000 0x0000000000400000
+         0x00000000000008e0 0x00000000000008e0  R      0x1000
+  LOAD   0x0000000000001000 0x0000000000401000 0x0000000000401000
+         0x00000000000001e5 0x00000000000001e5  R E    0x1000
+  LOAD   0x0000000000002000 0x0000000000402000 0x0000000000402000
+         0x0000000000000108 0x0000000000000108  R      0x1000
+  LOAD   0x0000000000002e10 0x0000000000403e10 0x0000000000403e10
+         0x0000000000000200 0x0000000000000210  RW     0x1000
+						</pre>
+						<p>Four LOAD segments: R (read-only headers), RE (code), R (rodata), RW (data+bss). Never RWX.</p>
+						<p>RWX segment (read+write+execute) means self-modifying code:</p>
+						<pre class="bash">
+$ readelf -l malicious.bin
+
+  LOAD   0x0000000000001000 0x0000000000401000 0x0000000000401000
+         0x0000000000008000 0x0000000000008000  RWE    0x1000
+						</pre>
+						<p>
+							RWE =
+							<code>Flags 7</code>
+							(read=4 + write=2 + execute=1). This permits the code to modify itself at runtime
+							<ul>
+								<li>JIT compilation, self-decrypting shellcode, polymorphism. The ELF loader maps a <code>PT_LOAD</code></li>
+							</ul>
+						</p>
+						<p>
+							segment with the permissions declared in its program header, so an RWX segment is mapped RWX
+							even though
+							<code>CONFIG_X86_64_MPROTECT_NOWRITE_EXEC</code>
+							restricts later writable and executable
+							<code>mmap</code>
+							calls. The presence of an RWX LOAD segment is a strong packer/exploit indicator.
+						</p>
+						<p>
+							Empty
+							<code>.text</code>
+							section: the binary has code mapped at the segment level but the
+							<code>.text</code>
+							section
+							has zero size. This means the code region is populated at runtime - shellcode injection, unpacking
+							stubs, or staged loading:
+						</p>
+						<pre class="bash">
+$ readelf -S suspicious.bin | grep &#39;.text&#39;
+  [13] .text             PROGBITS        0000000000401040  00001040
+       0000000000000000  0000000000000000  AX       0     0     16
+						</pre>
+						<p>
+							Size
+							<code>0x0</code>
+							. At runtime, code appears here from unpacking or network download.
+						</p>
+						<h4 id="unusual-interp">Unusual INTERP</h4>
+						<p>
+							The
+							<code>.interp</code>
+							section specifies the dynamic linker path. Normally
+							<code>/lib64/ld-linux-x86-64.so.2</code>
+							:
+						</p>
+						<pre class="bash">
+$ readelf -p .interp suspicious.bin
+
+String dump of section &#39;.interp&#39;:
+  [     0]  /lib/ld-musl-x86_64.so.1
+						</pre>
+						<p>
+							A musl interpreter means the binary was compiled against musl libc, not glibc. This is unusual
+							for malware but common in embedded Linux. Statically compiled, it may have no DT_NEEDED entries
+							at all.
+						</p>
+						<p>
+							An empty or missing interpreter means the binary is statically linked or uses a custom loader
+							<ul>
+								<li>both worth investigating.</li>
+							</ul>
+						</p>
+						<pre class="bash">
+$ readelf -p .interp suspicious.bin
+readelf: Error: No .interp section
+						</pre>
+						<h4 id="dt-rpath-and-dt-runpath-abuse">DT_RPATH and DT_RUNPATH Abuse</h4>
+						<p>
+							R
+							<abbr title="Port Address Translation">PAT</abbr>
+							H and RUN
+							<abbr title="Port Address Translation">PAT</abbr>
+							H entries in
+							<code>.dynamic</code>
+							tell the dynamic linker where to search for shared libraries
+							<em>before</em>
+							the standard paths:
+						</p>
+						<pre class="bash">
+$ readelf -d suspicious.bin | grep -E &#39;RPATH|RUNPATH&#39;
+ 0x000000000000000f (RPATH)              Library rpath: [$ORIGIN/../lib]
+ 0x000000000000001d (RUNPATH)            Library runpath: [$ORIGIN/../lib]
+						</pre>
+						<p>
+							<code>$ORIGIN</code>
+							resolves to the binary's directory at runtime. If the binary uses
+							<code>$ORIGIN</code>
+							with a
+							relative path like
+							<code>../lib</code>
+							, it loads libraries from a relative location. An attacker places
+							malicious
+							<code>.so</code>
+							files alongside the binary - LD_LIBRARY_
+							<abbr title="Port Address Translation">PAT</abbr>
+							H hijacking
+							without environment variables.
+						</p>
+						<p>
+							Writable R
+							<abbr title="Port Address Translation">PAT</abbr>
+							H:
+							<code>/tmp/.hidden/</code>
+							. The binary loads shared libraries
+							from a world-writable directory. Drop a malicious
+							<code>libc.so.6</code>
+							there and it gets loaded.
+						</p>
+						<pre class="plaintext">
+ 0x000000000000000f (RPATH)              Library rpath: [/tmp/.cache]
+						</pre>
+						<p>
+							Absolute writable paths in R
+							<abbr title="Port Address Translation">PAT</abbr>
+							H = library planting attack vector.
+						</p>
+						<h4 id="dynamic-anomalies">.dynamic Anomalies</h4>
+						<p>
+							The
+							<code>.dynamic</code>
+							section is the runtime instruction manual for
+							<code>ld.so</code>
+							. Every entry directs the
+							loader. Entries pointing to writable segments are suspicious:
+						</p>
+						<pre class="bash">
+$ readelf -d suspicious.bin | grep -E &#39;INIT|FINI|PLTGOT&#39;
+ 0x000000000000000c (INIT)               0x401120
+ 0x000000000000000d (FINI)               0x402340
+ 0x0000000000000003 (PLTGOT)            0x404000
+						</pre>
+						<p>
+							Compare these addresses against the LOAD segment ranges. If INIT or FINI addresses fall within
+							RW segments (not RE), the binary modifies its own init/fini functions.
+						</p>
+						<p>Cross-reference manually:</p>
+						<pre class="bash">
+$ readelf -l suspicious.bin | grep LOAD
+  LOAD  0x0000000000400000 0x0000000000400000  ... R E  0x1000
+  LOAD  0x0000000000404000 0x0000000000404000  ... RW   0x1000
+						</pre>
+						<p>
+							PLTGOT at
+							<code>0x404000</code>
+							is in the RW segment - normal (GOT is writable). But if INIT at
+							<code>0x401120</code>
+							is in RW territory, that is abnormal - init functions should be read-execute only.
+						</p>
+						<h4 id="pt-note-to-pt-load-conversion">PT_NOTE to PT_LOAD Conversion</h4>
+						<p>
+							Intel CET (Control-flow Enforcement Technology) and other features use
+							<code>PT_NOTE</code>
+							segments for
+							metadata. Some malware converts
+							<code>PT_NOTE</code>
+							to
+							<code>PT_LOAD</code>
+							:
+						</p>
+						<pre class="bash">
+$ readelf -l suspicious.bin
+
+  Type  Offset             VirtAddr           PhysAddr
+        FileSiz            MemSiz              Flags  Align
+  NOTE  0x0000000000000338 0x0000000000400338 0x0000000000400338
+        0x0000000000000030 0x0000000000000030  R E    0x4
+						</pre>
+						<p>
+							A
+							<code>PT_NOTE</code>
+							segment with
+							<code>R E</code>
+							(executable) flags is unusual. Normal
+							<abbr title="Penetration Test">PT</abbr>
+							_NOTE segments are read-only and contain
+							<code>.note.ABI-tag</code>
+							,
+							<code>.note.gnu.build-id</code>
+							. If a
+							<abbr title="Penetration Test">PT</abbr>
+							_NOTE segment is executable, it may contain shellcode disguised as note data.
+						</p>
+						<p>
+							The conversion technique is a static file modification, not a runtime trick: the malware rewrites
+							a
+							<code>PT_NOTE</code>
+							entry's
+							<code>p_type</code>
+							to
+							<code>PT_LOAD</code>
+							, sets
+							<code>p_flags</code>
+							to
+							<code>R E</code>
+							, points
+							<code>p_offset</code>
+							and
+							<code>p_vaddr</code>
+							at shellcode appended to the file, and patches
+							<code>e_entry</code>
+							to that virtual address.
+							When the kernel later executes the file, the loader maps the forged segment and jumps straight
+							into the payload. This "
+							<abbr title="Penetration Test">PT</abbr>
+							_NOTE infection" is a well-known ELF backdoor
+							technique because the program header change is easy to script and survives a simple structural
+							review.
+						</p>
+						<h4 id="comment-section-analysis">.comment Section Analysis</h4>
+						<p>
+							The
+							<code>.comment</code>
+							section stores the compiler version string. It survives stripping. Every binary
+							built on the attacker's machine carries metadata:
+						</p>
+						<pre class="bash">
+$ readelf -p .comment suspicious.bin
+
+String dump of section &#39;.comment&#39;:
+  [     0]  GCC: (GNU) 5.4.0
+  [     f]  GCC: (Ubuntu 5.4.0-6ubuntu1~16.04.12) 5.4.0 20160609
+						</pre>
+						<p>
+							This tells you the attacker used Ubuntu 16.04 with GCC 5.4.0. If the binary targets ARM but
+							was compiled on Ubuntu 16.04 x86-64, the attacker used a cross-compiler - the binary is not
+							native to its build host.
+						</p>
+						<p>
+							Missing
+							<code>.comment</code>
+							section is also a signal. Some build systems intentionally strip it. Some
+							malware builds do too. Not conclusive, but part of the picture.
+						</p>
+					</section>
+					<section>
+						<h3 id="stripped-vs-unstripped">Stripped vs Unstripped</h3>
+						<p>
+							Stripping removes
+							<code>.symtab</code>
+							and
+							<code>.strtab</code>
+							(static symbol table and string table). The dynamic
+							symbol table (
+							<code>.dynsym</code>
+							) remains for shared library imports. This leaves:
+						</p>
+						<ul>
+							<li>No function names in disassembly (functions are <code>sub_401000</code> in Ghidra/I <abbr title="Domain Admin">DA</abbr> ).</li>
+							<li>No local variable names or source file paths.</li>
+							<li>No static function names for statically linked libraries.</li>
+						</ul>
+						<pre class="bash">
+$ readelf -S unstripped.bin | grep symtab
+  [27] .symtab           SYMTAB          0000000000000000  00003040
+       0000000000000360  0000000000000018          28    18     8
+
+$ readelf -S stripped.bin | grep symtab
+# No output -- .symtab removed entirely.
+						</pre>
+						<p>
+							Verify with
+							<code>file</code>
+							:
+						</p>
+						<pre class="bash">
+$ file binary
+binary: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 2.6.32, not stripped
+
+binary: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 2.6.32, stripped
+						</pre>
+						<h4 id="function-identification">Function Identification</h4>
+						<p>
+							Without symbol names, identify functions by their prologue pattern. x86-64 functions typically
+							begin with:
+						</p>
+						<pre class="x86asm">
+push   rbp
+mov    rbp, rsp
+sub    rsp, 0xN
+						</pre>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;
+find_functions.py -- identify function boundaries by x86-64 prologues
+Usage: python3 find_functions.py &lt;binary&gt;
+&#34;&#34;&#34;
+import subprocess
+import re
+import sys
+
+def find_prologues(filepath):
+    out = subprocess.run(
+        [&#39;objdump&#39;, &#39;-d&#39;, filepath],
+        capture_output=True, text=True
+    )
+    prologue_pattern = re.compile(
+        r&#39;^\s+([0-9a-f]+):\s+55\s+push\s+%rbp\s*$&#39;,
+        re.MULTILINE
+    )
+    functions = []
+    for match in prologue_pattern.finditer(out.stdout):
+        addr = int(match.group(1), 16)
+        functions.append(addr)
+    return functions
+
+if __name__ == &#39;__main__&#39;:
+    funcs = find_prologues(sys.argv[1])
+    print(f&#34;Found {len(funcs)} function prologues (push rbp)&#34;)
+    for addr in funcs[:20]:
+        print(f&#34;  0x{addr:x}&#34;)
+    if len(funcs) &gt; 20:
+        print(f&#34;  ... and {len(funcs) - 20} more&#34;)
+						</pre>
+					</section>
+					<section>
+						<h3 id="readelf-for-reversing">readelf for Reversing</h3>
+						<p>
+							<code>readelf</code>
+							is your primary ELF inspection tool. It never executes the binary - pure static analysis.
+							The essential flags for reversing:
+						</p>
+						<h4 id="readelf-h-elf-header"><code>readelf -h</code> : ELF Header</h4>
+						<pre class="bash">
+$ readelf -h suspicious.bin
+ELF Header:
+  Magic:   7f 45 4c 46 02 01 01 00 00 00 00 00 00 00 00 00
+  Class:                             ELF64
+  Data:                              2&#39;s complement, little endian
+  Version:                           1 (current)
+  OS/ABI:                            UNIX - System V
+  ABI Version:                       0
+  Type:                              EXEC (Executable file)
+  Machine:                           Advanced Micro Devices X86-64
+  Version:                           0x1
+  Entry point address:               0x401040
+  Start of program headers:          64 (bytes into file)
+  Start of section headers:          14320 (bytes into file)
+  Flags:                             0x0
+  Size of this header:               64 (bytes)
+  Size of program headers:           56 (bytes)
+  Number of program headers:         11
+  Size of section headers:           64 (bytes)
+  Number of section headers:         29
+  Section header string table index: 28
+						</pre>
+						<p>Key fields for malware analysis:</p>
+						<ul>
+							<li><b>Type</b> : <code>EXEC</code> (standalone), <code>DYN</code> (PIE position-independent, also shared library), <code>REL</code> (relocatable object). PIE binaries have randomized base addresses - ASLR.</li>
+							<li><b>Entry point</b> : <code>0x401040</code> - first instruction executed. This is normally <code>_start</code> , not <code>main</code> . Check what lives there:</li>
+						</ul>
+						<pre class="bash">
+$ objdump -d suspicious.bin --start-address=0x401040 --stop-address=0x401080
+						</pre>
+						<ul>
+							<li><b>Machine</b> : <code>Advanced Micro Devices X86-64</code> , <code>AArch64</code> , <code>Intel 80386</code> , <code>MIPS R3000</code> . Tells you the target architecture.</li>
+							<li><b>Number of program headers</b> : unusually high count (20+) may indicate corrupted header manipulation.</li>
+						</ul>
+						<h4 id="readelf-l-program-headers"><code>readelf -l</code> : Program Headers</h4>
+						<pre class="bash">
+$ readelf -l suspicious.bin
+
+Elf file type is EXEC (Executable file)
+Entry point 0x401040
+There are 11 program headers, starting at offset 64
+
+Program Headers:
+  Type           Offset             VirtAddr           PhysAddr
+                 FileSiz            MemSiz              Flags  Align
+  PHDR           0x0000000000000040 0x0000000000400040 0x0000000000400040
+                 0x0000000000000268 0x0000000000000268  R      0x8
+  INTERP         0x00000000000002a8 0x00000000004002a8 0x00000000004002a8
+                 0x000000000000001c 0x000000000000001c  R      0x1
+      [Requesting program interpreter: /lib64/ld-linux-x86-64.so.2]
+  LOAD           0x0000000000000000 0x0000000000400000 0x0000000000400000
+                 0x00000000000008e0 0x00000000000008e0  R      0x1000
+  LOAD           0x0000000000001000 0x0000000000401000 0x0000000000401000
+                 0x00000000000001e5 0x00000000000001e5  R E    0x1000
+  LOAD           0x0000000000002000 0x0000000000402000 0x0000000000402000
+                 0x0000000000000108 0x0000000000000108  R      0x1000
+  LOAD           0x0000000000002e10 0x0000000000403e10 0x0000000000403e10
+                 0x0000000000000200 0x0000000000000210  RW     0x1000
+  DYNAMIC        0x0000000000002e20 0x0000000000403e20 0x0000000000403e20
+                 0x00000000000001d0 0x00000000000001d0  RW     0x8
+  NOTE           0x00000000000002c4 0x00000000004002c4 0x00000000004002c4
+                 0x0000000000000044 0x0000000000000044  R      0x4
+  GNU_EH_FRAME   0x0000000000002048 0x0000000000402048 0x0000000000402048
+                 0x0000000000000034 0x0000000000000034  R      0x4
+  GNU_STACK      0x0000000000000000 0x0000000000000000 0x0000000000000000
+                 0x0000000000000000 0x0000000000000000  RW     0x10
+  GNU_RELRO      0x0000000000002e10 0x0000000000403e10 0x0000000000403e10
+                 0x00000000000001f0 0x00000000000001f0  R      0x1
+						</pre>
+						<p>What to look for:</p>
+						<ul>
+							<li><b>GNU_STACK with E (execute) flag</b> : Stack is executable - the binary places and runs code on the stack. Shellcode execution. Normal binaries have <code>RW</code> only (NX bit).</li>
+							<li><b>GNU_STACK missing</b> : Older binaries or explicitly removed - stack may default to executable on older kernels.</li>
+							<li><b>LOAD segments with 'FileSiz' = 0 but 'MemSiz' > 0</b> : Space reserved in memory but not populated from file. The binary writes there at runtime (unpacking, .bss expansion).</li>
+							<li><b>LOAD segments with 'FileSiz' > 'MemSiz'</b> : Extra data loaded from file that is not mapped to memory - hidden payload appended to the binary.</li>
+							<li><b>Multiple LOAD segments overlapping</b> : One segment maps over another - the second overwrites the first. Sophisticated obfuscation.</li>
+						</ul>
+						<h4 id="readelf-s-section-headers"><code>readelf -S</code> : Section Headers</h4>
+						<pre class="bash">
+$ readelf -S suspicious.bin
+There are 29 section headers, starting at offset 0x37f0
+
+Section Headers:
+  [Nr] Name              Type             Address           Offset
+       Size              EntSize          Flags  Link  Info  Align
+  [ 0]                   NULL             0000000000000000  00000000
+       0000000000000000  0000000000000000           0     0     0
+  [ 1] .interp           PROGBITS         00000000004002a8  000002a8
+       000000000000001c  0000000000000000   A       0     0     1
+  [ 2] .note.ABI-tag     NOTE             00000000004002c4  000002c4
+       0000000000000020  0000000000000000   A       0     0     4
+  ...
+						</pre>
+						<p>Suspicious sections:</p>
+						<ul>
+							<li><b>Non-standard section names</b> : <code>.xyz</code> , <code>.abc</code> , <code>.custom</code> , single-character names. Malware and packers use non-standard names to signal custom data regions.</li>
+							<li><b>Writable '.text'</b> : Normally 'AX'. If 'WAX', the code is self-modifying.</li>
+							<li><b>Oversized '.data'</b> relative to '.text': Large data sections suggest embedded payloads, resources, or configuration blobs.</li>
+							<li><b>Missing standard sections</b> : No <code>.comment</code> , no <code>.eh_frame</code> - deliberate stripping or custom build process.</li>
+							<li><b>Duplicate section names</b> : Two sections with the same name - one may be a decoy.</li>
+							<li><b>Section with 'sh_offset' beyond EOF</b> : The section claims to be at an offset past the end of the file - the file was truncated or the header is corrupted to hide data.</li>
+							<li><b>'SHT_NOBITS' sections with huge sizes</b> : '.bss' sections with hundreds of megabytes - memory exhaustion attack.</li>
+						</ul>
+						<h4 id="readelf-d-dynamic-section"><code>readelf -d</code> : Dynamic Section</h4>
+						<pre class="bash">
+$ readelf -d suspicious.bin
+
+Dynamic section at offset 0x2e20 contains 24 entries:
+  Tag        Type                         Name/Value
+ 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libpthread.so.0]
+ 0x0000000000000001 (NEEDED)             Shared library: [libcurl.so.4]
+ 0x000000000000000c (INIT)               0x401000
+ 0x000000000000000d (FINI)               0x402200
+ 0x0000000000000019 (INIT_ARRAY)         0x403e10
+ 0x000000000000001b (INIT_ARRAYSZ)       24 (bytes)
+ 0x000000000000001a (FINI_ARRAY)         0x403e28
+ 0x000000000000001c (FINI_ARRAYSZ)       8 (bytes)
+ 0x0000000000000004 (HASH)               0x4002e0
+ 0x0000000000000005 (STRTAB)             0x4003a0
+ 0x0000000000000006 (SYMTAB)             0x400310
+ 0x000000000000000a (STRSZ)              183 (bytes)
+ 0x000000000000000b (SYMENT)             24 (bytes)
+ 0x0000000000000015 (DEBUG)              0x0
+ 0x0000000000000003 (PLTGOT)             0x404000
+ 0x0000000000000002 (PLTRELSZ)           48 (bytes)
+ 0x0000000000000014 (PLTREL)             RELA
+ 0x0000000000000017 (JMPREL)             0x4005a0
+ 0x0000000000000007 (RELA)               0x400550
+ 0x0000000000000008 (RELASZ)             72 (bytes)
+ 0x0000000000000009 (RELAENT)            24 (bytes)
+ 0x0000000000000000 (NULL)               0x0
+						</pre>
+						<p>Imported libraries (DT_NEEDED) tell you the binary's capabilities:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Imported Library</th>
+									<th align="center">Capability Indicated</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>libc.so.6</code></td>
+									<td align="center">Standard C library - nothing notable</td>
+								</tr>
+								<tr>
+									<td align="center"><code>libpthread.so.0</code></td>
+									<td align="center">Threading</td>
+								</tr>
+								<tr>
+									<td align="center"><code>libcurl.so.4</code></td>
+									<td align="center">HTTP/HTTPS/FTP network operations</td>
+								</tr>
+								<tr>
+									<td align="center"><code>libssl.so</code>/<code>libcrypto.so</code></td>
+									<td align="center">TLS, cryptographic operations</td>
+								</tr>
+								<tr>
+									<td align="center"><code>libpcap.so</code></td>
+									<td align="center">Packet capture - network sniffing</td>
+								</tr>
+								<tr>
+									<td align="center"><code>libssh2.so</code></td>
+									<td align="center">SSH client/server functionality</td>
+								</tr>
+								<tr>
+									<td align="center"><code>libsqlite3.so</code></td>
+									<td align="center">Embedded database - configuration or exfiltration cache</td>
+								</tr>
+								<tr>
+									<td align="center"><code>libX11.so</code></td>
+									<td align="center">X11 display access - keylogging, screenshots</td>
+								</tr>
+								<tr>
+									<td align="center"><code>libpam.so</code></td>
+									<td align="center">Authentication - credential interception</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							No DT_NEEDED entries + large binary = statically linked. The binary contains all libraries internally.
+							Use
+							<code>nm</code>
+							to identify embedded library code:
+						</p>
+						<pre class="bash">
+$ nm -n static_binary | grep &#39; T &#39;
+						</pre>
+						<p>
+							Sort by address. Clusters of symbols with similar prefixes indicate library boundaries (e.g.,
+							all
+							<code>__libc_*</code>
+							symbols grouped together).
+						</p>
+						<h4 id="readelf-s-symbols"><code>readelf -s</code> : Symbols</h4>
+						<pre class="bash">
+$ readelf -s suspicious.bin
+
+Symbol table &#39;.dynsym&#39; contains 15 entries:
+   Num:    Value          Size Type    Bind   Vis      Ndx Name
+     0: 0000000000000000     0 NOTYPE  LOCAL  DEFAULT  UND
+     1: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND socket@GLIBC_2.2.5 (2)
+     2: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND connect@GLIBC_2.2.5 (2)
+     3: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND send@GLIBC_2.2.5 (2)
+     4: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND recv@GLIBC_2.2.5 (2)
+     5: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND system@GLIBC_2.2.5 (2)
+     6: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND execve@GLIBC_2.2.5 (2)
+     7: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND ptrace@GLIBC_2.2.5 (2)
+     8: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND fopen@GLIBC_2.2.5 (2)
+     9: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND fwrite@GLIBC_2.2.5 (2)
+    10: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND crypt@GLIBC_2.2.5 (2)
+    11: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND pthread_create@GLIBC_2.2.5 (2)
+    12: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND dlopen@GLIBC_2.2.5 (2)
+    13: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND dlsym@GLIBC_2.2.5 (2)
+    14: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND __libc_start_main@GLIBC_2.2.5 (2)
+						</pre>
+						<p>
+							This import table is a confession:
+							<code>socket</code>
+							+
+							<code>connect</code>
+							+
+							<code>send</code>
+							+
+							<code>recv</code>
+							= network
+							<abbr title="Command and Control">C2</abbr>
+							.
+							<code>system</code>
+							+
+							<code>execve</code>
+							= shell execution.
+							<code>ptrace</code>
+							= anti-debugging.
+							<code>dlopen</code>
+							+
+							<code>dlsym</code>
+							= runtime
+							dynamic loading (hiding what gets loaded from static import analysis).
+							<code>crypt</code>
+							= encryption/ransomware.
+						</p>
+						<pre class="bash">
+$ readelf -s --wide suspicious.bin | grep -E &#39;FILE|OBJECT|FUNC&#39; | grep -v &#39;UND&#39;
+						</pre>
+						<p>
+							Shows defined symbols (exports). For shared libraries, this reveals the
+							<abbr title="Application Programming Interface">API</abbr>
+							. For executables, mostly internal plumbing - but backdoor binaries sometimes export helper
+							functions by accident.
+						</p>
+						<h4 id="readelf-r-relocations"><code>readelf -r</code> : Relocations</h4>
+						<p>
+							Relocations show what addresses need patching at load time. Each relocation reveals a function
+							call or data access:
+						</p>
+						<pre class="bash">
+$ readelf -r suspicious.bin
+
+Relocation section &#39;.rela.dyn&#39; at offset 0x550 contains 4 entries:
+  Offset          Info           Type           Sym. Value    Sym. Name + Addend
+000000404000  000100000006 R_X86_64_GLOB_DAT 0000000000000000 __libc_start_main@GLIBC_2.34 + 0
+000000404008  000300000006 R_X86_64_GLOB_DAT 0000000000000000 __gmon_start__ + 0
+
+Relocation section &#39;.rela.plt&#39; at offset 0x5a0 contains 6 entries:
+  Offset          Info           Type           Sym. Value    Sym. Name + Addend
+000000404018  000200000007 R_X86_64_JUMP_SLO 0000000000000000 socket@GLIBC_2.2.5 + 0
+000000404020  000400000007 R_X86_64_JUMP_SLO 0000000000000000 connect@GLIBC_2.2.5 + 0
+000000404028  000500000007 R_X86_64_JUMP_SLO 0000000000000000 send@GLIBC_2.2.5 + 0
+000000404030  000600000007 R_X86_64_JUMP_SLO 0000000000000000 system@GLIBC_2.2.5 + 0
+000000404038  000700000007 R_X86_64_JUMP_SLO 0000000000000000 execve@GLIBC_2.2.5 + 0
+000000404040  000800000007 R_X86_64_JUMP_SLO 0000000000000000 ptrace@GLIBC_2.2.5 + 0
+						</pre>
+						<p>
+							Each
+							<code>.rela.plt</code>
+							entry is a PLT stub - a lazily resolved function call. The presence of
+							<code>ptrace</code>
+							in the PLT means the binary calls
+							<code>ptrace()</code>
+							directly somewhere in its code. Cross-reference
+							the GOT address (
+							<code>0x404040</code>
+							for ptrace) with the disassembly.
+						</p>
+					</section>
+					<section>
+						<h3 id="objdump-for-reversing">objdump for Reversing</h3>
+						<p>
+							<code>objdump -d</code>
+							disassembles the binary:
+						</p>
+						<pre class="bash">
+$ objdump -d -M intel suspicious.bin
+						</pre>
+						<p>
+							Intel syntax is more readable for manual analysis. AT&T syntax (default) has reversed operand
+							order.
+						</p>
+						<pre class="bash">
+$ objdump -d -M intel --start-address=0x401040 --stop-address=0x401200 suspicious.bin
+						</pre>
+						<p>
+							Disassemble a specific range - useful after finding suspicious addresses with
+							<code>readelf</code>
+							.
+						</p>
+						<pre class="bash">
+$ objdump -t suspicious.bin | grep -E &#39; \.text| FUNC&#39;
+						</pre>
+						<p>
+							List all symbols in
+							<code>.text</code>
+							. For stripped binaries, this returns nothing from
+							<code>.symtab</code>
+							but
+							still works on
+							<code>.dynsym</code>
+							.
+						</p>
+						<pre class="bash">
+$ objdump -R suspicious.bin
+						</pre>
+						<p>Shows dynamic relocations only - the functions called through PLT/GOT.</p>
+					</section>
+					<section>
+						<h3 id="nm-for-symbol-listing">nm for Symbol Listing</h3>
+						<p>
+							<code>nm</code>
+							lists symbols from the symbol table. For stripped binaries, use
+							<code>-D</code>
+							(dynamic):
+						</p>
+						<pre class="bash">
+$ nm -D suspicious.bin
+                 U connect@GLIBC_2.2.5
+                 U execve@GLIBC_2.2.5
+                 U fopen@GLIBC_2.2.5
+                 U fwrite@GLIBC_2.2.5
+                 U ptrace@GLIBC_2.2.5
+                 U recv@GLIBC_2.2.5
+                 U send@GLIBC_2.2.5
+                 U socket@GLIBC_2.2.5
+                 U system@GLIBC_2.2.5
+0000000000401040 T _start
+0000000000402000 T main
+						</pre>
+						<p>
+							<code>U</code>
+							= undefined (imported).
+							<code>T</code>
+							= defined in
+							<code>.text</code>
+							. The
+							<code>_start</code>
+							and
+							<code>main</code>
+							symbols survive
+							stripping if they are dynamic symbols - some binaries keep them for debugging.
+						</p>
+					</section>
+					<section>
+						<h3 id="elf-suspicion-scanner">ELF Suspicion Scanner</h3>
+						<p>Automate the detection of suspicious characteristics:</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;
+elf_suspicion_scanner.py -- scan an ELF for malware indicators
+Usage: python3 elf_suspicion_scanner.py &lt;binary&gt;
+&#34;&#34;&#34;
+import sys
+from elftools.elf.elffile import ELFFile
+from elftools.elf.constants import P_FLAGS
+
+PF_X = 1
+PF_W = 2
+PF_R = 4
+
+def scan_rwx_segments(elf):
+    flags = []
+    for seg in elf.iter_segments():
+        if seg.header.p_type == &#39;PT_LOAD&#39;:
+            pflags = seg.header.p_flags
+            if (pflags &amp; (PF_R | PF_W | PF_X)) == (PF_R | PF_W | PF_X):
+                flags.append(f&#34;RWX LOAD segment at {seg.header.p_vaddr:#x}&#34;)
+    return flags
+
+def scan_suspicious_sections(elf):
+    normal_sections = {
+        &#39;.text&#39;, &#39;.rodata&#39;, &#39;.data&#39;, &#39;.bss&#39;, &#39;.interp&#39;,
+        &#39;.plt&#39;, &#39;.got&#39;, &#39;.got.plt&#39;, &#39;.dynamic&#39;, &#39;.dynsym&#39;,
+        &#39;.dynstr&#39;, &#39;.shstrtab&#39;, &#39;.symtab&#39;, &#39;.strtab&#39;, &#39;.comment&#39;,
+        &#39;.note&#39;, &#39;.note.ABI-tag&#39;, &#39;.note.gnu.build-id&#39;,
+        &#39;.note.GNU-stack&#39;, &#39;.eh_frame&#39;, &#39;.eh_frame_hdr&#39;,
+        &#39;.init&#39;, &#39;.fini&#39;, &#39;.init_array&#39;, &#39;.fini_array&#39;,
+        &#39;.rela.dyn&#39;, &#39;.rela.plt&#39;, &#39;.gnu.version&#39;,
+        &#39;.gnu.version_r&#39;, &#39;.gnu.hash&#39;, &#39;.gnu.build.attributes&#39;,
+        &#39;.jcr&#39;, &#39;.tdata&#39;, &#39;.tbss&#39;, &#39;.ctors&#39;, &#39;.dtors&#39;,
+        &#39;.preinit_array&#39;, &#39;.stab&#39;, &#39;.stabstr&#39;, &#39;.debug_*&#39;
+    }
+    flags = []
+    for section in elf.iter_sections():
+        name = section.name
+
+        # Non-standard section names
+        if name not in normal_sections and not name.startswith(&#39;.debug_&#39;):
+            flags.append(f&#34;Non-standard section: {name}&#34;)
+
+        # Writable .text
+        if name == &#39;.text&#39; and section.header.sh_flags &amp; 0x2:  # SHF_WRITE
+            flags.append(&#34;.text section is WRITABLE&#34;)
+
+        # Large .bss (memory exhaustion)
+        if name == &#39;.bss&#39; and section.header.sh_size &gt; 100 * 1024 * 1024:
+            flags.append(f&#34;.bss size {section.header.sh_size:,} bytes (huge)&#34;)
+
+        # Empty .text
+        if name == &#39;.text&#39; and section.header.sh_size == 0:
+            flags.append(&#34;.text section has zero size&#34;)
+
+        # UPX sections
+        if name in {&#39;UPX0&#39;, &#39;UPX1&#39;}:
+            flags.append(f&#34;UPX packer section: {name}&#34;)
+
+    return flags
+
+def scan_init_array(elf):
+    flags = []
+    for section in elf.iter_sections():
+        if section.name == &#39;.init_array&#39;:
+            num_entries = section.header.sh_size // 8  # 64-bit pointers
+            if num_entries &gt; 2:
+                flags.append(f&#34;.init_array has {num_entries} entries (&gt; 2)&#34;)
+    return flags
+
+def scan_rpath(elf):
+    flags = []
+    for section in elf.iter_sections():
+        if section.name == &#39;.dynamic&#39;:
+            for tag in section.iter_tags():
+                if tag.entry.d_tag == &#39;DT_RPATH&#39; or tag.entry.d_tag == &#39;DT_RUNPATH&#39;:
+                    path = tag.rpath if hasattr(tag, &#39;rpath&#39;) else tag.runpath
+                    flags.append(f&#34;{tag.entry.d_tag}: {path}&#34;)
+                    if path.startswith(&#39;/tmp&#39;):
+                        flags.append(&#34;  [!] RPATH points to world-writable /tmp&#34;)
+                    if &#39;$ORIGIN&#39; in path and &#39;../&#39; in path:
+                        flags.append(&#34;  [!] RPATH uses relative $ORIGIN traversal&#34;)
+    return flags
+
+def scan_interp(elf):
+    flags = []
+    for section in elf.iter_sections():
+        if section.name == &#39;.interp&#39;:
+            path = section.data().decode(&#39;utf-8&#39;, errors=&#39;ignore&#39;).rstrip(&#39;\x00&#39;)
+            if &#39;/lib64/ld-linux-x86-64.so.2&#39; not in path:
+                flags.append(f&#34;Unusual interpreter: {path}&#34;)
+            return flags
+    flags.append(&#34;No .interp section (static binary or custom loader)&#34;)
+    return flags
+
+def scan_imports(elf):
+    &#34;&#34;&#34;Categorize imported symbols by behavior.&#34;&#34;&#34;
+    categories = {
+        &#39;network&#39;: {&#39;socket&#39;, &#39;connect&#39;, &#39;send&#39;, &#39;recv&#39;, &#39;sendto&#39;, &#39;recvfrom&#39;,
+                    &#39;bind&#39;, &#39;listen&#39;, &#39;accept&#39;, &#39;gethostbyname&#39;, &#39;getaddrinfo&#39;,
+                    &#39;curl_&#39;, &#39;InternetOpen&#39;, &#39;WinHttp&#39;},
+        &#39;execution&#39;: {&#39;system&#39;, &#39;popen&#39;, &#39;execve&#39;, &#39;execvp&#39;, &#39;execl&#39;, &#39;execle&#39;,
+                     &#39;execv&#39;, &#39;CreateProcess&#39;, &#39;WinExec&#39;, &#39;ShellExecute&#39;},
+        &#39;file&#39;: {&#39;fopen&#39;, &#39;fwrite&#39;, &#39;fread&#39;, &#39;fclose&#39;, &#39;open&#39;, &#39;write&#39;, &#39;read&#39;,
+                &#39;close&#39;, &#39;unlink&#39;, &#39;rename&#39;, &#39;chmod&#39;, &#39;chown&#39;, &#39;stat&#39;, &#39;lstat&#39;,
+                &#39;openat&#39;, &#39;unlinkat&#39;, &#39;CreateFile&#39;, &#39;WriteFile&#39;, &#39;ReadFile&#39;,
+                &#39;DeleteFile&#39;, &#39;MoveFile&#39;, &#39;CopyFile&#39;},
+        &#39;crypto&#39;: {&#39;crypt&#39;, &#39;encrypt&#39;, &#39;decrypt&#39;, &#39;AES_&#39;, &#39;RC4_&#39;, &#39;MD5_&#39;,
+                  &#39;SHA256_&#39;, &#39;EVP_&#39;, &#39;CryptEncrypt&#39;, &#39;CryptDecrypt&#39;},
+        &#39;anti_analysis&#39;: {&#39;ptrace&#39;, &#39;prctl&#39;, &#39;isDebuggerPresent&#39;, &#39;CheckRemoteDebuggerPresent&#39;,
+                         &#39;NtQueryInformationProcess&#39;, &#39;OutputDebugString&#39;},
+        &#39;injection&#39;: {&#39;ptrace&#39;, &#39;dlopen&#39;, &#39;dlsym&#39;, &#39;VirtualAlloc&#39;, &#39;VirtualProtect&#39;,
+                     &#39;WriteProcessMemory&#39;, &#39;CreateRemoteThread&#39;, &#39;NtCreateThreadEx&#39;},
+        &#39;persistence&#39;: {&#39;RegCreateKey&#39;, &#39;RegSetValue&#39;, &#39;RegDeleteKey&#39;, &#39;SetFileAttributes&#39;},
+        &#39;info_gathering&#39;: {&#39;uname&#39;, &#39;gethostname&#39;, &#39;getuid&#39;, &#39;geteuid&#39;, &#39;getpid&#39;,
+                          &#39;GetComputerName&#39;, &#39;GetUserName&#39;},
+    }
+    findings = {cat: set() for cat in categories}
+
+    for section in elf.iter_sections():
+        if section.name == &#39;.dynsym&#39;:
+            for symbol in section.iter_symbols():
+                name = symbol.name.lower()
+                for cat, keywords in categories.items():
+                    for kw in keywords:
+                        if kw.lower() in name:
+                            findings[cat].add(name)
+
+    return {k: sorted(v) for k, v in findings.items() if v}
+
+def main():
+    if len(sys.argv) &lt; 2:
+        print(f&#34;Usage: {sys.argv[0]} &lt;elf_binary&gt;&#34;)
+        sys.exit(1)
+
+    filename = sys.argv[1]
+
+    with open(filename, &#39;rb&#39;) as f:
+        elf = ELFFile(f)
+
+        print(&#34;=&#34; * 64)
+        print(f&#34;  ELF SUSPICION SCANNER&#34;)
+        print(f&#34;  TARGET: {filename}&#34;)
+        print(&#34;=&#34; * 64)
+
+        # Entry point
+        print(f&#34;\n  Entry point: {elf.header.e_entry:#010x}&#34;)
+        print(f&#34;  ELF type:    {elf.header.e_type}&#34;)
+        print(f&#34;  Machine:     {elf.header.e_machine}&#34;)
+
+        # Segments
+        print(f&#34;\n  --- SEGMENT ANALYSIS ---&#34;)
+        rwx = scan_rwx_segments(elf)
+        if rwx:
+            for f in rwx:
+                print(f&#34;  [!] {f}&#34;)
+        else:
+            print(f&#34;  No RWX segments&#34;)
+
+        # Sections
+        print(f&#34;\n  --- SECTION ANALYSIS ---&#34;)
+        sec_flags = scan_suspicious_sections(elf)
+        if sec_flags:
+            for f in sec_flags:
+                print(f&#34;  [!] {f}&#34;)
+        else:
+            print(f&#34;  All sections appear normal&#34;)
+
+        # .init_array
+        print(f&#34;\n  --- INIT/FINI ---&#34;)
+        init_flags = scan_init_array(elf)
+        if init_flags:
+            for f in init_flags:
+                print(f&#34;  [!] {f}&#34;)
+        else:
+            print(f&#34;  .init_array normal&#34;)
+
+        # Interp
+        print(f&#34;\n  --- INTERPRETER ---&#34;)
+        interp_flags = scan_interp(elf)
+        for f in interp_flags:
+            print(f&#34;  [*] {f}&#34;)
+
+        # RPATH
+        print(f&#34;\n  --- RPATH ---&#34;)
+        rpath_flags = scan_rpath(elf)
+        if rpath_flags:
+            for f in rpath_flags:
+                print(f&#34;  [*] {f}&#34;)
+        else:
+            print(f&#34;  No RPATH/RUNPATH&#34;)
+
+        # Imports
+        print(f&#34;\n  --- IMPORT ANALYSIS ---&#34;)
+        imports = scan_imports(elf)
+        if imports:
+            for cat, syms in imports.items():
+                print(f&#34;  [{cat}]: {&#39;, &#39;.join(syms[:10])}&#34;)
+        else:
+            print(f&#34;  No dynamic imports (static binary)&#34;)
+
+        # UPX check
+        print(f&#34;\n  --- PACKER CHECK ---&#34;)
+        upx = any(s.name.startswith(&#39;UPX&#39;) for s in elf.iter_sections())
+        if upx:
+            print(f&#34;  [!] UPX packing detected (UPX0/UPX1 sections)&#34;)
+        else:
+            print(f&#34;  No UPX signatures&#34;)
+
+        # Binary stats
+        print(f&#34;\n  --- BINARY STATS ---&#34;)
+        import os
+        fsize = os.path.getsize(filename)
+        num_sections = elf.header.e_shnum
+        num_segments = elf.header.e_phnum
+        print(f&#34;  File size:     {fsize:,} bytes&#34;)
+        print(f&#34;  Sections:      {num_sections}&#34;)
+        print(f&#34;  Segments:      {num_segments}&#34;)
+
+        print(&#34;=&#34; * 64)
+
+if __name__ == &#39;__main__&#39;:
+    main()
+						</pre>
+						<p>Install the dependency:</p>
+						<pre class="bash">
+$ pip install pyelftools
+						</pre>
+						<p>Run against a sample:</p>
+						<pre class="bash">
+$ python3 elf_suspicion_scanner.py suspicious.bin
+================================================================
+  ELF SUSPICION SCANNER
+  TARGET: suspicious.bin
+================================================================
+  Entry point: 0x00001040
+  ELF type:    ET_EXEC
+  Machine:     EM_X86_64
+
+  --- SEGMENT ANALYSIS ---
+  [!] RWX LOAD segment at 0x401000
+
+  --- SECTION ANALYSIS ---
+  [*] UPX packer section: UPX0
+  [*] UPX packer section: UPX1
+  [!] .text section has zero size
+
+  --- INIT/FINI ---
+  [!] .init_array has 5 entries (&gt; 2)
+
+  --- INTERPRETER ---
+  [*] /lib64/ld-linux-x86-64.so.2
+
+  --- RPATH ---
+  [*] DT_RPATH: /tmp/.hidden
+  [!] RPATH points to world-writable /tmp
+
+  --- IMPORT ANALYSIS ---
+  [network]: connect, recv, send, socket
+  [execution]: execve, system
+  [file]: fopen, fwrite, unlink
+  [crypto]: crypt
+  [anti_analysis]: ptrace
+  [injection]: dlopen, dlsym
+
+  --- PACKER CHECK ---
+  [!] UPX packing detected (UPX0/UPX1 sections)
+
+  --- BINARY STATS ---
+  File size:     45,120 bytes
+  Sections:      8
+  Segments:      3
+================================================================
+						</pre>
+						<p>
+							This output tells a story: UPX-packed binary with an RWX segment, writable R
+							<abbr title="Port Address Translation">PAT</abbr>
+							H, execution and network capabilities, plus anti-debug (ptrace). This is almost certainly malware.
+						</p>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that triages an ELF by parsing its header and program headers directly. Report
+							the class, machine, entry point, and type, list every
+							<code>PT_LOAD</code>
+							segment with its flags, and
+							flag executable stacks, writable-and-executable segments, and zero-file-size-but-mapped segments.
+							Run it on a normal
+							<code>/bin/ls</code>
+							and on a packed sample.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;encoding/binary&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+)
+
+func main() {
+	if len(os.Args) != 2 {
+		fmt.Fprintf(os.Stderr, &#34;usage: %s &lt;elf&gt;\n&#34;, os.Args[0])
+		os.Exit(1)
+	}
+	data, err := os.ReadFile(os.Args[1])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if len(data) &lt; 64 || string(data[:4]) != &#34;\x7fELF&#34; {
+		fmt.Fprintln(os.Stderr, &#34;not an ELF file&#34;)
+		os.Exit(1)
+	}
+	class := data[4]
+	order := binary.ByteOrder(binary.LittleEndian)
+	if data[5] == 2 {
+		order = binary.BigEndian
+	}
+	var entry, phoff uint64
+	var phnum uint16
+	if class == 2 {
+		entry = order.Uint64(data[0x18:0x20])
+		phoff = order.Uint64(data[0x20:0x28])
+		phnum = order.Uint16(data[0x38:0x3a])
+	} else {
+		entry = uint64(order.Uint32(data[0x18:0x1c]))
+		phoff = uint64(order.Uint32(data[0x1c:0x20]))
+		phnum = order.Uint16(data[0x2c:0x2e])
+	}
+	machine := order.Uint16(data[0x12:0x14])
+	fmt.Printf(&#34;class=%d machine=%d entry=0x%x phnum=%d\n&#34;, class, machine, entry, phnum)
+	for i := 0; i &lt; int(phnum); i++ {
+		base := int(phoff)
+		if class == 2 {
+			base += i * 56
+		} else {
+			base += i * 32
+		}
+		var pType uint32
+		var offset, vaddr, filesz, memsz uint64
+		var flags uint32
+		if class == 2 {
+			pType = order.Uint32(data[base : base+4])
+			flags = order.Uint32(data[base+4 : base+8])
+			offset = order.Uint64(data[base+8 : base+16])
+			vaddr = order.Uint64(data[base+16 : base+24])
+			filesz = order.Uint64(data[base+32 : base+40])
+			memsz = order.Uint64(data[base+40 : base+48])
+		} else {
+			pType = order.Uint32(data[base : base+4])
+			offset = uint64(order.Uint32(data[base+4 : base+8]))
+			vaddr = uint64(order.Uint32(data[base+8 : base+12]))
+			filesz = uint64(order.Uint32(data[base+16 : base+20]))
+			memsz = uint64(order.Uint32(data[base+20 : base+24]))
+			flags = order.Uint32(data[base+24 : base+28])
+		}
+		if pType != 1 {
+			continue
+		}
+		fmt.Printf(&#34;PT_LOAD off=0x%x vaddr=0x%x filesz=0x%x memsz=0x%x flags=%d\n&#34;,
+			offset, vaddr, filesz, memsz, flags)
+		if flags&amp;1 != 0 &amp;&amp; flags&amp;2 != 0 {
+			fmt.Println(&#34;  [!] writable and executable segment&#34;)
+		}
+		if filesz == 0 &amp;&amp; memsz &gt; 0 {
+			fmt.Println(&#34;  [!] zero file size but mapped&#34;)
+		}
+	}
+}
+						</pre>
+						<p>
+							Extend it to flag a
+							<code>PT_GNU_STACK</code>
+							segment with the execute bit set, which indicates shellcode
+							running from the stack.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man5/elf.5.html" target="_blank">elf(5) - ELF file format</a> - header, program header, and section header layout</li>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man1/readelf.1.html" target="_blank">readelf(1) - display information about ELF files</a> - the primary static inspection tool</li>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man1/objdump.1.html" target="_blank">objdump(1) - display object file information</a> - disassembly and dynamic relocations</li>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man1/nm.1.html" target="_blank">nm(1) - list symbols from object files</a> - static and dynamic symbol tables</li>
+							<li><a class="icon-github" href="https://github.com/eliben/pyelftools" target="_blank">pyelftools</a> - Python library used by the scanner example</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

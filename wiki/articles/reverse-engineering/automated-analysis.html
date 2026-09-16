@@ -1,0 +1,1773 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Automated Analysis Pipelines | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Automated Analysis Pipelines">
+		<meta name="keywords" content="automation, ghidra-headless, malware-analysis, pipeline, reverse-engineering, sandbox, yara">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Automated Analysis Pipelines">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Building malware analysis pipelines with triage, static analysis, dynamic sandboxing, and Ghidra headless scripting.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/reverse-engineering/automated-analysis.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Automated Analysis Pipelines">
+		<meta name="twitter:description" itemprop="description" content="Building malware analysis pipelines with triage, static analysis, dynamic sandboxing, and Ghidra headless scripting.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#pipeline-architecture">Pipeline Architecture</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#stage-1-ingestion">Stage 1: Ingestion</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#stage-2-triage-fast-pre-filtering">Stage 2: Triage - Fast Pre-Filtering</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#stage-3-headless-ghidra">Stage 3: Headless Ghidra</a></b>
+					<ul>
+						<li><a href="#python-wrapper-for-headless-ghidra">Python wrapper for headless Ghidra</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#stage-4-podman-sandbox">Stage 4: podman Sandbox</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#stage-4b-sandbox-containerfile">Stage 4b: Sandbox Containerfile</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#stage-5-correlation-and-clustering">Stage 5: Correlation and Clustering</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#stage-6-web-dashboard-flask">Stage 6: Web Dashboard (Flask)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#full-pipeline-orchestration">Full Pipeline Orchestration</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#running-the-full-pipeline">Running the Full Pipeline</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#yara-rule-auto-generation">YARA Rule Auto-Generation</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#recommended-deployment">Recommended Deployment</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/reverse-engineering/index.html">Reverse Engineering</a></li>
+						<li aria-current="page"><a href="/wiki/articles/reverse-engineering/automated-analysis.html">Automated Analysis</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="automated-analysis-pipelines">Automated Analysis Pipelines</h2>
+					<p>
+						Building malware analysis pipelines with triage, static analysis, dynamic sandboxing, and Ghidra
+						headless scripting.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							A single malware sample can take hours to analyze by hand. A pipeline automates the repetitive
+							first passes so that only interesting samples reach an analyst. This article builds a staged
+							Linux pipeline: directory ingestion, fast triage, headless Ghidra analysis, a podman sandbox,
+							similarity clustering, and a small results dashboard. After reading it you can run the whole
+							pipeline end to end and extend any stage.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/reverse-engineering/sandbox-analysis.html">Sandbox Analysis</a> - contained execution environments, strace, tcpdump</li>
+							<li><a href="/wiki/articles/reverse-engineering/ghidra-scripting.html">Ghidra Scripting</a> - headless Ghidra, Python and Java scripting</li>
+							<li><a href="/wiki/articles/reverse-engineering/symbolic-execution.html">Symbolic Execution</a> - angr integration for constraint solving</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="pipeline-architecture">Pipeline Architecture</h3>
+						<p>
+							A production malware analysis pipeline processes samples through discrete stages, each enriching
+							the analysis with additional data. The stages are designed so early fast filters reduce load
+							on expensive later stages:
+						</p>
+						<pre class="plaintext">
+INGESTION  →  TRIAGE  →  STATIC  →  DYNAMIC  →  CORRELATION  →  REPORT
+  (API)      (&lt;5s)      (5-60s)    (60-180s)     (async)        (JSON/HTML)
+						</pre>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Stage</th>
+									<th align="center">Input</th>
+									<th align="center">Output</th>
+									<th align="center">Time Budget</th>
+									<th align="center">Tools</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Ingestion</td>
+									<td align="center">Sample file</td>
+									<td align="center">Queued job</td>
+									<td align="center"><1s</td>
+									<td align="center">HTTP API, inotify watch</td>
+								</tr>
+								<tr>
+									<td align="center">Triage</td>
+									<td align="center">Raw file</td>
+									<td align="center">Hash, type, entropy, strings, YARA hits</td>
+									<td align="center"><5s</td>
+									<td align="center">Python, ssdeep, YARA, magic</td>
+								</tr>
+								<tr>
+									<td align="center">Static</td>
+									<td align="center">ELF/PE file</td>
+									<td align="center">Functions, imports, crypto, capabilities</td>
+									<td align="center">30-120s</td>
+									<td align="center">Ghidra headless, readelf</td>
+								</tr>
+								<tr>
+									<td align="center">Dynamic</td>
+									<td align="center">ELF/PE file</td>
+									<td align="center">Behavioral trace, syscalls, network</td>
+									<td align="center">60-300s</td>
+									<td align="center">podman, strace, tcpdump</td>
+								</tr>
+								<tr>
+									<td align="center">Correlation</td>
+									<td align="center">All reports</td>
+									<td align="center">Clusters, family attribution</td>
+									<td align="center">Async</td>
+									<td align="center">ssdeep, Jaccard, API hashes</td>
+								</tr>
+								<tr>
+									<td align="center">Report</td>
+									<td align="center">Analysis data</td>
+									<td align="center">JSON, dashboard, alerts</td>
+									<td align="center">Async</td>
+									<td align="center">Flask, Elastic</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="stage-1-ingestion">Stage 1: Ingestion</h3>
+						<p>
+							The simplest ingestion is a watched directory. Any file dropped to
+							<code>/opt/samples/incoming</code>
+							triggers
+							analysis:
+						</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;ingest.py — Watch directory and queue samples for analysis&#34;&#34;&#34;
+
+import os
+import json
+import time
+import hashlib
+import shutil
+from pathlib import Path
+from datetime import datetime
+
+INCOMING_DIR  = Path(&#39;/opt/samples/incoming&#39;)
+PROCESSED_DIR = Path(&#39;/opt/samples/processed&#39;)
+FAILED_DIR    = Path(&#39;/opt/samples/failed&#39;)
+QUEUE_FILE    = Path(&#39;/opt/samples/queue.jsonl&#39;)
+
+for d in [INCOMING_DIR, PROCESSED_DIR, FAILED_DIR]:
+    d.mkdir(parents=True, exist_ok=True)
+
+
+def compute_hashes(filepath: Path) -&gt; dict:
+    &#34;&#34;&#34;Compute MD5, SHA1, SHA256, and ssdeep for a file.&#34;&#34;&#34;
+    hashes = {&#39;md5&#39;: hashlib.md5(), &#39;sha1&#39;: hashlib.sha1(),
+              &#39;sha256&#39;: hashlib.sha256()}
+
+    with open(filepath, &#39;rb&#39;) as f:
+        while chunk := f.read(65536):
+            for h in hashes.values():
+                h.update(chunk)
+
+    result = {name: h.hexdigest() for name, h in hashes.items()}
+
+    # ssdeep requires full file read — compute separately
+    try:
+        import ssdeep
+        with open(filepath, &#39;rb&#39;) as f:
+            result[&#39;ssdeep&#39;] = ssdeep.hash(f.read())
+    except ImportError:
+        result[&#39;ssdeep&#39;] = None
+
+    return result
+
+
+def ingest_sample(filepath: Path) -&gt; dict:
+    &#34;&#34;&#34;Ingest one sample → compute hashes → move to processed → queue job.&#34;&#34;&#34;
+    hashes = compute_hashes(filepath)
+
+    # Check if already processed (deduplicate by SHA256)
+    for processed in PROCESSED_DIR.rglob(&#39;*.meta.json&#39;):
+        try:
+            meta = json.loads(processed.read_text())
+            if meta.get(&#39;sha256&#39;) == hashes[&#39;sha256&#39;]:
+                print(f&#34;[SKIP] Duplicate: {filepath.name} (SHA256 match)&#34;)
+                filepath.unlink()
+                return None
+        except:
+            pass
+
+    # Move to processed with metadata
+    dest = PROCESSED_DIR / filepath.name
+    shutil.move(str(filepath), str(dest))
+
+    meta = {
+        &#39;original_name&#39;: filepath.name,
+        &#39;processed_path&#39;: str(dest),
+        &#39;ingested_at&#39;: datetime.utcnow().isoformat(),
+        **hashes
+    }
+
+    meta_path = dest.with_suffix(dest.suffix + &#39;.meta.json&#39;)
+    meta_path.write_text(json.dumps(meta, indent=2))
+
+    # Write to queue
+    with open(QUEUE_FILE, &#39;a&#39;) as q:
+        q.write(json.dumps(meta) + &#39;\n&#39;)
+
+    print(f&#34;[INGEST] {filepath.name} → {dest.name} &#34;
+          f&#34;(SHA256: {hashes[&#39;sha256&#39;][:16]})&#34;)
+    return meta
+
+
+def watch_directory():
+    &#34;&#34;&#34;Poll incoming directory for new files.&#34;&#34;&#34;
+    print(f&#34;[*] Watching {INCOMING_DIR} for new samples...&#34;)
+    seen = set()
+
+    while True:
+        for filepath in INCOMING_DIR.iterdir():
+            if filepath.is_file() and filepath.name not in seen:
+                seen.add(filepath.name)
+                try:
+                    ingest_sample(filepath)
+                except Exception as e:
+                    print(f&#34;[ERROR] Failed to ingest {filepath}: {e}&#34;)
+                    FAILED_DIR.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(filepath), str(FAILED_DIR / filepath.name))
+
+        time.sleep(2)
+
+
+if __name__ == &#39;__main__&#39;:
+    watch_directory()
+						</pre>
+					</section>
+					<section>
+						<h3 id="stage-2-triage-fast-pre-filtering">Stage 2: Triage - Fast Pre-Filtering</h3>
+						<p>
+							Triage extracts maximum information in minimum time. The goal: determine whether the sample
+							warrants deep analysis.
+						</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;triage.py — Fast malware triage (&lt;5 seconds per sample)&#34;&#34;&#34;
+
+import os
+import re
+import json
+import math
+import struct
+import subprocess
+import tempfile
+from pathlib import Path
+from collections import Counter
+from typing import Dict, List, Optional
+
+
+class SampleTriage:
+    def __init__(self, filepath: Path):
+        self.path = Path(filepath)
+        self.data = self.path.read_bytes() if self.path.stat().st_size &lt; 100_000_000 else b&#39;&#39;
+        self.results = {
+            &#39;file&#39;: str(self.path),
+            &#39;size&#39;: self.path.stat().st_size,
+            &#39;name&#39;: self.path.name,
+        }
+
+    def entropy(self, data: bytes) -&gt; float:
+        &#34;&#34;&#34;Shannon entropy.&#34;&#34;&#34;
+        if not data:
+            return 0.0
+        counts = Counter(data)
+        length = len(data)
+        return -sum((c / length) * math.log2(c / length) for c in counts.values())
+
+    def check_file_type(self) -&gt; Dict:
+        &#34;&#34;&#34;Determine file type via magic bytes and file command.&#34;&#34;&#34;
+        result = {}
+
+        # Run file command
+        try:
+            proc = subprocess.run([&#39;file&#39;, &#39;-b&#39;, str(self.path)],
+                                  capture_output=True, text=True)
+            result[&#39;file_type&#39;] = proc.stdout.strip()
+        except:
+            result[&#39;file_type&#39;] = &#39;unknown&#39;
+
+        # Check ELF header
+        if len(self.data) &gt;= 4 and self.data[:4] == b&#39;\x7fELF&#39;:
+            result[&#39;format&#39;] = &#39;ELF&#39;
+            if len(self.data) &gt;= 18:
+                result[&#39;bits&#39;] = 64 if self.data[4] == 2 else 32
+                endian = &#39;LE&#39; if self.data[5] == 1 else &#39;BE&#39;
+                machine_map = {
+                    0x03: &#39;i386&#39;, 0x3E: &#39;x86-64&#39;, 0x28: &#39;ARM&#39;,
+                    0xB7: &#39;AArch64&#39;, 0x08: &#39;MIPS&#39;, 0x14: &#39;PPC&#39;,
+                    0xF3: &#39;RISC-V&#39;
+                }
+                machine = struct.unpack_from(&#39;&lt;H&#39;, self.data, 18)[0]
+                result[&#39;arch&#39;] = f&#34;{machine_map.get(machine, hex(machine))}-{endian}&#34;
+
+                # Linked type
+                e_type = struct.unpack_from(&#39;&lt;H&#39;, self.data, 16)[0]
+                type_map = {0: &#39;NONE&#39;, 1: &#39;REL&#39;, 2: &#39;EXEC&#39;, 3: &#39;DYN&#39;, 4: &#39;CORE&#39;}
+                result[&#39;elf_type&#39;] = type_map.get(e_type, str(e_type))
+
+        elif len(self.data) &gt;= 2 and self.data[:2] == b&#39;MZ&#39;:
+            result[&#39;format&#39;] = &#39;PE&#39;
+        else:
+            result[&#39;format&#39;] = &#39;unknown&#39;
+
+        return result
+
+    def compute_entropy_profile(self) -&gt; Dict:
+        &#34;&#34;&#34;Compute entropy for the whole file and per-256-byte window.&#34;&#34;&#34;
+        profile = {}
+
+        # Overall entropy
+        sample = self.data[:min(len(self.data), 1_000_000)]
+        profile[&#39;overall&#39;] = round(self.entropy(sample), 4)
+
+        # Windowed entropy (detect packed/encrypted regions)
+        window_size = 256
+        entropies = []
+        for i in range(0, min(len(self.data), 100_000), window_size):
+            entropies.append(self.entropy(self.data[i:i + window_size]))
+
+        if entropies:
+            profile[&#39;mean&#39;] = round(sum(entropies) / len(entropies), 4)
+            profile[&#39;max&#39;]  = round(max(entropies), 4)
+            profile[&#39;min&#39;]  = round(min(entropies), 4)
+
+        return profile
+
+    def extract_strings(self, min_len: int = 6) -&gt; List[str]:
+        &#34;&#34;&#34;Extract printable ASCII strings.&#34;&#34;&#34;
+        pattern = re.compile(rb&#39;[\x20-\x7e]{%d,}&#39; % min_len)
+        strings = []
+        seen = set()
+
+        for match in pattern.finditer(self.data):
+            s = match.group().decode(&#39;ascii&#39;, errors=&#39;ignore&#39;)
+            if s not in seen and len(s) &lt;= 200:
+                seen.add(s)
+                strings.append(s)
+                if len(strings) &gt; 10000:
+                    break
+
+        return strings
+
+    def detect_packer(self, strings: List[str]) -&gt; Dict:
+        &#34;&#34;&#34;Detect packing based on strings and section names.&#34;&#34;&#34;
+        result = {&#39;packed&#39;: False, &#39;packer&#39;: None}
+
+        packer_signatures = {
+            &#39;UPX&#39;: [&#39;UPX0&#39;, &#39;UPX1&#39;, &#39;UPX!&#39;, &#39;UPX&#39;],
+            &#39;MPRESS&#39;: [&#39;MPRESS&#39;, &#39;.MPRESS&#39;],
+            &#39;ASPack&#39;: [&#39;.aspack&#39;, &#39;.adata&#39;],
+        }
+
+        for i, s in enumerate(strings):
+            for packer, sigs in packer_signatures.items():
+                for sig in sigs:
+                    if sig in s:
+                        result[&#39;packed&#39;] = True
+                        result[&#39;packer&#39;] = packer
+                        result[&#39;matched_string&#39;] = s
+                        return result
+
+        # High entropy + few strings = probably packed
+        if len(strings) &lt; 50 and len(self.data) &gt; 10000:
+            ent = self.entropy(self.data[:100000])
+            if ent &gt; 7.5:
+                result[&#39;packed&#39;] = True
+                result[&#39;packer&#39;] = &#39;unknown (high entropy)&#39;
+
+        return result
+
+    def detect_crypto_constants(self, strings: List[str]) -&gt; List[str]:
+        &#34;&#34;&#34;Detect crypto implementations from strings.&#34;&#34;&#34;
+        crypto_strings = {
+            &#39;AES&#39;: [&#39;aes&#39;, &#39;rijndael&#39;, &#39;sbox&#39;],
+            &#39;RC4&#39;: [&#39;arcfour&#39;, &#39;rc4&#39;],
+            &#39;MD5&#39;: [&#39;md5&#39;, &#39;MD5_Init&#39;, &#39;MD5_Update&#39;, &#39;MD5_Final&#39;],
+            &#39;SHA1&#39;: [&#39;sha1&#39;, &#39;SHA1_Init&#39;],
+            &#39;SHA256&#39;: [&#39;sha256&#39;, &#39;SHA256_Init&#39;],
+            &#39;RSA&#39;: [&#39;rsa&#39;, &#39;RSA_&#39;, &#39;bigint&#39;],
+            &#39;DES&#39;: [&#39;des_&#39;, &#39;DES_&#39;],
+            &#39;ChaCha&#39;: [&#39;chacha&#39;, &#39;chacha20&#39;],
+            &#39;Blowfish&#39;: [&#39;blowfish&#39;, &#39;BF_&#39;],
+            &#39;Base64&#39;: [&#39;base64&#39;, &#39;B64_&#39;],
+            &#39;Zlib&#39;: [&#39;zlib&#39;, &#39;deflate&#39;, &#39;inflate&#39;],
+        }
+
+        detected = []
+        found = set()
+        for s in strings:
+            s_lower = s.lower()
+            for algo, keywords in crypto_strings.items():
+                if algo not in found:
+                    for kw in keywords:
+                        if kw in s_lower:
+                            detected.append(algo)
+                            found.add(algo)
+                            break
+
+        return detected
+
+    def scan_yara(self) -&gt; List[Dict]:
+        &#34;&#34;&#34;Run YARA rules against the sample.&#34;&#34;&#34;
+        yara_hits = []
+
+        # Try standard rule paths
+        rule_paths = [
+            Path(&#39;/opt/yara/rules&#39;),
+            Path(&#39;/usr/share/yara&#39;),
+            Path.home() / &#39;.yara/rules&#39;,
+        ]
+
+        for rules_dir in rule_paths:
+            if not rules_dir.exists():
+                continue
+
+            for rule_file in rules_dir.rglob(&#39;*.yar&#39;):
+                try:
+                    proc = subprocess.run(
+                        [&#39;yara&#39;, &#39;-C&#39;, str(rule_file), str(self.path)],
+                        capture_output=True, text=True, timeout=30
+                    )
+                    if proc.stdout.strip():
+                        for line in proc.stdout.strip().split(&#39;\n&#39;):
+                            parts = line.split(&#39; &#39;, 1)
+                            if len(parts) == 2:
+                                yara_hits.append({
+                                    &#39;rule&#39;: parts[0],
+                                    &#39;file&#39;: rule_file.name,
+                                    &#39;match&#39;: parts[1]
+                                })
+                except subprocess.TimeoutExpired:
+                    continue
+                except FileNotFoundError:
+                    break  # yara not installed
+
+        return yara_hits
+
+    def extract_ip_urls(self, strings: List[str]) -&gt; Dict:
+        &#34;&#34;&#34;Extract IPs and URLs from strings.&#34;&#34;&#34;
+        ips = set()
+        urls = set()
+
+        ip_pattern = re.compile(r&#39;\b(?:\d{1,3}\.){3}\d{1,3}\b&#39;)
+        url_pattern = re.compile(r&#39;https?://[^\s&#34;\&#39;&lt;&gt;]+&#39;)
+
+        for s in strings:
+            for match in ip_pattern.finditer(s):
+                ips.add(match.group())
+            for match in url_pattern.finditer(s):
+                urls.add(match.group()[:120])
+
+        return {
+            &#39;ips&#39;: sorted(ips)[:50],
+            &#39;urls&#39;: sorted(urls)[:50],
+            &#39;ip_count&#39;: len(ips),
+            &#39;url_count&#39;: len(urls),
+        }
+
+    def run(self) -&gt; Dict:
+        &#34;&#34;&#34;Execute all triage checks.&#34;&#34;&#34;
+        print(f&#34;[TRIAGE] {self.path.name} ({self.results[&#39;size&#39;]} bytes)&#34;)
+
+        # File type
+        self.results[&#39;type&#39;] = self.check_file_type()
+
+        # Entropy
+        self.results[&#39;entropy&#39;] = self.compute_entropy_profile()
+
+        # Strings
+        strings = self.extract_strings()
+        self.results[&#39;string_count&#39;] = len(strings)
+        self.results[&#39;top_strings&#39;] = strings[:100]
+
+        # Packer detection
+        self.results[&#39;packer&#39;] = self.detect_packer(strings)
+
+        # Crypto detection
+        self.results[&#39;crypto_hints&#39;] = self.detect_crypto_constants(strings)
+
+        # Network indicators
+        self.results[&#39;network&#39;] = self.extract_ip_urls(strings)
+
+        # YARA
+        if self.path.stat().st_size &lt; 50_000_000:
+            self.results[&#39;yara&#39;] = self.scan_yara()
+
+        # Triage verdict
+        verdict = self._compute_verdict()
+        self.results[&#39;verdict&#39;] = verdict
+
+        return self.results
+
+    def _compute_verdict(self) -&gt; str:
+        &#34;&#34;&#34;Heuristic verdict based on triage results.&#34;&#34;&#34;
+        score = 0
+
+        if self.results[&#39;packer&#39;][&#39;packed&#39;]:
+            score += 30
+        if self.results[&#39;entropy&#39;].get(&#39;overall&#39;, 0) &gt; 7.5:
+            score += 20
+        if self.results[&#39;network&#39;][&#39;ip_count&#39;] &gt; 5:
+            score += 10
+        if self.results.get(&#39;crypto_hints&#39;):
+            score += 10
+        if self.results.get(&#39;yara&#39;) and len(self.results[&#39;yara&#39;]) &gt; 0:
+            score += 25
+        if self.results[&#39;string_count&#39;] &lt; 30 and self.results[&#39;size&#39;] &gt; 50000:
+            score += 15
+
+        if score &gt;= 50:
+            return &#39;MALICIOUS&#39;
+        elif score &gt;= 25:
+            return &#39;SUSPICIOUS&#39;
+        else:
+            return &#39;BENIGN&#39;
+
+
+if __name__ == &#39;__main__&#39;:
+    import sys
+    for path in sys.argv[1:]:
+        triage = SampleTriage(Path(path))
+        results = triage.run()
+
+        out_path = Path(path).with_suffix(&#39;.triage.json&#39;)
+        out_path.write_text(json.dumps(results, indent=2))
+        print(f&#34;  → {out_path}&#34;)
+        print(f&#34;  Verdict: {results[&#39;verdict&#39;]}&#34;)
+        print(f&#34;  Packer:  {results[&#39;packer&#39;]}&#34;)
+        print(f&#34;  Entropy: {results[&#39;entropy&#39;].get(&#39;overall&#39;)}&#34;)
+        print(f&#34;  Strings: {results[&#39;string_count&#39;]}&#34;)
+						</pre>
+					</section>
+					<section>
+						<h3 id="stage-3-headless-ghidra">Stage 3: Headless Ghidra</h3>
+						<p>
+							Ghidra's
+							<code>analyzeHeadless</code>
+							command runs scripts without
+							<abbr title="Graphical User Interface">GUI</abbr>
+							:
+						</p>
+						<pre class="bash">
+$ analyzeHeadless /opt/ghidra/projects MalwareProj \
+    -import /opt/samples/sample.elf \
+    -postScript ExportAnalysis.java \
+    -deleteProject \
+    -noanalysis
+						</pre>
+						<p>
+							The
+							<code>-postScript</code>
+							runs after auto-analysis. A production export script:
+						</p>
+						<pre class="java">
+/* ExportAnalysis.java — Export all analysis data to JSON */
+import ghidra.app.script.GhidraScript;
+import ghidra.program.model.listing.*;
+import ghidra.program.model.symbol.*;
+import ghidra.program.model.pcode.*;
+import com.google.gson.*;
+import java.io.*;
+import java.util.*;
+
+public class ExportAnalysis extends GhidraScript {
+
+    @Override
+    public void run() throws Exception {
+        JsonObject report = new JsonObject();
+
+        // Basic info
+        report.addProperty(&#34;name&#34;, currentProgram.getName());
+        report.addProperty(&#34;md5&#34;, getMD5());
+        AddressIterator entryPoints = currentProgram.getSymbolTable()
+            .getExternalEntryPointIterator();
+        report.addProperty(&#34;entry_point&#34;,
+            entryPoints.hasNext() ? entryPoints.next().toString() : &#34;unknown&#34;);
+
+        // Functions
+        JsonArray functions = new JsonArray();
+        FunctionIterator funcs = currentProgram.getFunctionManager()
+            .getFunctions(true);
+        int funcCount = 0;
+
+        while (funcs.hasNext() &amp;&amp; funcCount &lt; 5000) {
+            Function func = funcs.next();
+            JsonObject fobj = new JsonObject();
+            fobj.addProperty(&#34;name&#34;, func.getName());
+            fobj.addProperty(&#34;addr&#34;, func.getEntryPoint().toString());
+            fobj.addProperty(&#34;size&#34;, (int)func.getBody().getNumAddresses());
+
+            // Signature (instructions count, calls count)
+            fobj.addProperty(&#34;is_thunk&#34;, func.isThunk());
+            fobj.addProperty(&#34;has_loop&#34;, hasLoop(func));
+
+            // Called functions
+            JsonArray calls = new JsonArray();
+            Set&lt;Function&gt; called = func.getCalledFunctions(monitor);
+            for (Function callee : called) {
+                calls.add(new JsonPrimitive(callee.getEntryPoint().toString()));
+            }
+            fobj.add(&#34;calls&#34;, calls);
+
+            functions.add(fobj);
+            funcCount++;
+        }
+        report.addProperty(&#34;function_count&#34;, funcCount);
+        report.add(&#34;functions&#34;, functions);
+
+        // Imports (external functions)
+        JsonArray imports = new JsonArray();
+        SymbolIterator syms = currentProgram.getSymbolTable()
+            .getExternalSymbols();
+        while (syms.hasNext()) {
+            Symbol sym = syms.next();
+            JsonObject imp = new JsonObject();
+            imp.addProperty(&#34;name&#34;, sym.getName());
+            imp.addProperty(&#34;lib&#34;, sym.getParentNamespace().getName());
+            imports.add(imp);
+        }
+        report.add(&#34;imports&#34;, imports);
+
+        // Strings (first 10000)
+        JsonArray strings = new JsonArray();
+        DataIterator data = currentProgram.getListing()
+            .getDefinedData(true);
+        int strCount = 0;
+
+        while (data.hasNext() &amp;&amp; strCount &lt; 10000) {
+            Data d = data.next();
+            if (d.hasStringValue()) {
+                String s = d.getDefaultValueRepresentation();
+                if (s.length() &gt;= 4) {
+                    JsonObject strobj = new JsonObject();
+                    strobj.addProperty(&#34;addr&#34;, d.getAddress().toString());
+                    strobj.addProperty(&#34;value&#34;, s);
+                    strings.add(strobj);
+                    strCount++;
+                }
+            }
+        }
+        report.addProperty(&#34;string_count&#34;, strCount);
+        report.add(&#34;strings&#34;, strings);
+
+        // Write to output file
+        String outPath = getScriptArgs()[0];
+        FileWriter writer = new FileWriter(outPath);
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        gson.toJson(report, writer);
+        writer.close();
+
+        printf(&#34;Exported to %s\n&#34;, outPath);
+    }
+
+    private String getMD5() {
+        String md5 = currentProgram.getExecutableMD5();
+        return md5 != null ? md5 : &#34;unknown&#34;;
+    }
+
+    private boolean hasLoop(Function func) {
+        // Check if CFG has loops (back edges)
+        // Simplified — use PcodeBlockBasic iteration
+        return false;
+    }
+}
+						</pre>
+						<h4 id="python-wrapper-for-headless-ghidra">Python wrapper for headless Ghidra</h4>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;ghidra_headless.py — Run Ghidra analysis from Python&#34;&#34;&#34;
+
+import os
+import json
+import subprocess
+import tempfile
+from pathlib import Path
+
+GHIDRA_HOME = Path(os.environ.get(&#39;GHIDRA_HOME&#39;, &#39;/opt/ghidra&#39;))
+HEADLESS_BIN = GHIDRA_HOME / &#39;support&#39; / &#39;analyzeHeadless&#39;
+
+def analyze_sample(sample_path: Path, project_dir: Path = None) -&gt; Path:
+    &#34;&#34;&#34;
+    Run headless Ghidra on a sample, export results to JSON.
+    Returns path to JSON output file.
+    &#34;&#34;&#34;
+    if project_dir is None:
+        project_dir = Path(tempfile.mkdtemp(prefix=&#39;ghidra_proj_&#39;))
+
+    project_name = f&#34;analysis_{sample_path.stem}&#34;
+    output_json = sample_path.with_suffix(&#39;.ghidra.json&#39;)
+
+    cmd = [
+        str(HEADLESS_BIN),
+        str(project_dir),
+        project_name,
+        &#39;-import&#39;, str(sample_path),
+        &#39;-postScript&#39;, &#39;ExportAnalysis.java&#39;, str(output_json),
+        &#39;-deleteProject&#39;,
+        &#39;-max-cpu&#39;, &#39;4&#39;,
+    ]
+
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=300  # 5 minute timeout
+        )
+
+        if output_json.exists():
+            with open(output_json) as f:
+                report = json.load(f)
+                print(f&#34;[GHIDRA] {report.get(&#39;function_count&#39;, 0)} functions, &#34;
+                      f&#34;{report.get(&#39;string_count&#39;, 0)} strings&#34;)
+            return output_json
+        else:
+            print(f&#34;[GHIDRA] Error: {proc.stderr[:500]}&#34;)
+            return None
+
+    except subprocess.TimeoutExpired:
+        print(f&#34;[GHIDRA] Timeout analyzing {sample_path.name}&#34;)
+        return None
+    except Exception as e:
+        print(f&#34;[GHIDRA] Exception: {e}&#34;)
+        return None
+						</pre>
+					</section>
+					<section>
+						<h3 id="stage-4-podman-sandbox">Stage 4: podman Sandbox</h3>
+						<p>
+							The dynamic stage runs the sample in an isolated container, capturing system calls and network
+							traffic:
+						</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;sandbox_runner.py — podman-based dynamic analysis sandbox&#34;&#34;&#34;
+
+import os
+import json
+import time
+import shlex
+import subprocess
+import tempfile
+from pathlib import Path
+from datetime import datetime
+
+SANDBOX_IMAGE = &#39;malware-sandbox:latest&#39;
+SANDBOX_TIMEOUT = 60  # seconds
+
+
+class SandboxRunner:
+    def __init__(self, sample_path: Path, timeout: int = SANDBOX_TIMEOUT):
+        self.sample_path = sample_path.resolve()
+        self.sample_name = sample_path.name
+        self.timeout = timeout
+        self.work_dir = Path(tempfile.mkdtemp(prefix=&#39;sandbox_&#39;))
+        self.results = {
+            &#39;sample&#39;: str(sample_path),
+            &#39;started_at&#39;: datetime.utcnow().isoformat(),
+            &#39;timeout&#39;: timeout,
+        }
+
+        # Copy sample into work directory (read-only inside container)
+        import shutil
+        self.container_sample = self.work_dir / self.sample_name
+        shutil.copy2(sample_path, self.container_sample)
+
+    def build_sandbox_image(self):
+        &#34;&#34;&#34;Build the analysis sandbox container image.&#34;&#34;&#34;
+        dockerfile = self.work_dir / &#39;Containerfile&#39;
+        dockerfile.write_text(&#39;&#39;&#39;
+FROM archlinux:latest
+RUN pacman -Syu --noconfirm &amp;&amp; pacman -S --noconfirm \
+    strace tcpdump procps-ng binutils file curl wget
+RUN useradd -m -s /bin/bash malware
+USER malware
+WORKDIR /home/malware
+&#39;&#39;&#39;)
+        subprocess.run([&#39;podman&#39;, &#39;build&#39;, &#39;-t&#39;, SANDBOX_IMAGE,
+                        str(self.work_dir)], check=True,
+                       capture_output=True)
+
+    def run_strace(self) -&gt; Path:
+        &#34;&#34;&#34;Run the sample under strace, capture all syscalls.&#34;&#34;&#34;
+        output_path = self.work_dir / &#39;strace.log&#39;
+
+        # strace arguments: -f (follow forks), -v (verbose),
+        # -o (output file), -e trace=all (all syscalls)
+        strace_cmd = (
+            f&#39;strace -f -v -x -o /tmp/analysis/strace.log &#39;
+            f&#39;-e trace=all &#39;
+            f&#39;/tmp/analysis/{shlex.quote(self.sample_name)}&#39;
+        )
+
+        return self._run_container(strace_cmd, output_path)
+
+    def run_tcpdump(self) -&gt; Path:
+        &#34;&#34;&#34;Run the sample while capturing network traffic.&#34;&#34;&#34;
+        output_path = self.work_dir / &#39;network.pcap&#39;
+
+        tcpdump_cmd = (
+            f&#39;tcpdump -i any -w /tmp/analysis/network.pcap &#39;
+            f&#39;-s 65535 &gt; /dev/null 2&gt;&amp;1 &amp; &#39;
+            f&#39;TCPDUMP_PID=$! ; &#39;
+            f&#39;sleep 1 ; &#39;
+            f&#39;/tmp/analysis/{shlex.quote(self.sample_name)} ; &#39;
+            f&#39;EXIT_CODE=$? ; &#39;
+            f&#39;sleep 2 ; &#39;
+            f&#39;kill $TCPDUMP_PID 2&gt;/dev/null ; &#39;
+            f&#39;wait $TCPDUMP_PID 2&gt;/dev/null ; &#39;
+            f&#39;exit $EXIT_CODE&#39;
+        )
+
+        return self._run_container(tcpdump_cmd, output_path)
+
+    def run_combined(self) -&gt; Path:
+        &#34;&#34;&#34;Run with both strace AND tcpdump simultaneously.&#34;&#34;&#34;
+        output_path = self.work_dir / &#39;combined.log&#39;
+
+        cmd = (
+            f&#39;tcpdump -i any -w /tmp/analysis/network.pcap &#39;
+            f&#39;-s 65535 &gt; /dev/null 2&gt;&amp;1 &amp; &#39;
+            f&#39;TCPDUMP_PID=$! ; &#39;
+            f&#39;sleep 1 ; &#39;
+            f&#39;strace -f -v -x -o /tmp/analysis/strace.log &#39;
+            f&#39;-e trace=all &#39;
+            f&#39;/tmp/analysis/{shlex.quote(self.sample_name)} ; &#39;
+            f&#39;EXIT_CODE=$? ; &#39;
+            f&#39;sleep 2 ; &#39;
+            f&#39;kill $TCPDUMP_PID 2&gt;/dev/null ; &#39;
+            f&#39;wait $TCPDUMP_PID 2&gt;/dev/null ; &#39;
+            f&#39;echo &#34;EXIT_CODE:$EXIT_CODE&#34; &gt; /tmp/analysis/exit_code.txt&#39;
+        )
+
+        return self._run_container(cmd, output_path)
+
+    def _run_container(self, cmd: str, output_path: Path) -&gt; Path:
+        &#34;&#34;&#34;Execute command inside podman container and capture output.&#34;&#34;&#34;
+        container_name = f&#34;sandbox_{self.sample_name[:20]}_{int(time.time())}&#34;
+
+        podman_cmd = [
+            &#39;podman&#39;, &#39;run&#39;,
+            &#39;--rm&#39;,
+            &#39;--name&#39;, container_name,
+            &#39;--network&#39;, &#39;none&#39;,          # No network (or &#39;bridge&#39; for tcpdump)
+            &#39;--cpus&#39;, &#39;1&#39;,
+            &#39;--memory&#39;, &#39;512m&#39;,
+            &#39;--pids-limit&#39;, &#39;100&#39;,
+            &#39;--security-opt&#39;, &#39;no-new-privileges&#39;,
+            &#39;--read-only&#39;, &#39;--tmpfs&#39;, &#39;/tmp:rw,noexec,nosuid,size=100m&#39;,
+            &#39;--tmpfs&#39;, &#39;/var/tmp:rw,noexec,nosuid,size=100m&#39;,
+            &#39;--tmpfs&#39;, &#39;/home/malware:rw,noexec,nosuid,size=50m&#39;,
+            &#39;-v&#39;, f&#39;{self.work_dir}:/tmp/analysis:Z&#39;,
+            SANDBOX_IMAGE,
+            &#39;bash&#39;, &#39;-c&#39;, cmd,
+        ]
+
+        if &#39;tcpdump&#39; in cmd:
+            # Replace --network none with user-mode networking so tcpdump
+            # has an interface to capture, while keeping inbound blocked.
+            podman_cmd[6] = &#39;slirp4netns&#39;
+
+        print(f&#34;[SANDBOX] Running: {container_name}&#34;)
+
+        try:
+            proc = subprocess.run(
+                podman_cmd,
+                capture_output=True,
+                text=True,
+                timeout=self.timeout + 10
+            )
+            self.results[&#39;container_stdout&#39;] = proc.stdout[-5000:]
+            self.results[&#39;container_stderr&#39;] = proc.stderr[-5000:]
+            self.results[&#39;returncode&#39;] = proc.returncode
+
+            # Parse exit code
+            exit_file = self.work_dir / &#39;exit_code.txt&#39;
+            if exit_file.exists():
+                exit_content = exit_file.read_text().strip()
+                if &#39;EXIT_CODE:&#39; in exit_content:
+                    self.results[&#39;sample_exit_code&#39;] = \
+                        int(exit_content.split(&#39;:&#39;)[1])
+        except subprocess.TimeoutExpired:
+            self.results[&#39;timed_out&#39;] = True
+            # Force remove container
+            subprocess.run([&#39;podman&#39;, &#39;kill&#39;, container_name],
+                           capture_output=True)
+            subprocess.run([&#39;podman&#39;, &#39;rm&#39;, &#39;-f&#39;, container_name],
+                           capture_output=True)
+
+        # Collect results
+        for artifact in [&#39;strace.log&#39;, &#39;network.pcap&#39;, &#39;exit_code.txt&#39;]:
+            path = self.work_dir / artifact
+            if path.exists():
+                self.results[f&#39;{artifact}_size&#39;] = path.stat().st_size
+
+        return output_path
+
+    def parse_strace(self) -&gt; Dict:
+        &#34;&#34;&#34;Parse strace output to extract syscall statistics.&#34;&#34;&#34;
+        strace_path = self.work_dir / &#39;strace.log&#39;
+        if not strace_path.exists():
+            return {}
+
+        syscalls = {}
+        with open(strace_path, errors=&#39;replace&#39;) as f:
+            for line in f:
+                # Format: pid syscall(args) = result
+                if &#39;(&#39; in line and &#39;=&#39; in line:
+                    syscall = line.split(&#39;(&#39;, 1)[0].strip()
+                    # Remove PID prefix
+                    parts = syscall.split()
+                    if len(parts) &gt; 1:
+                        syscall = parts[-1]
+                    syscalls[syscall] = syscalls.get(syscall, 0) + 1
+
+        return {
+            &#39;total_syscalls&#39;: sum(syscalls.values()),
+            &#39;unique_syscalls&#39;: len(syscalls),
+            &#39;top_syscalls&#39;: dict(sorted(syscalls.items(),
+                                        key=lambda x: x[1], reverse=True)[:20]),
+        }
+
+    def save_results(self) -&gt; Path:
+        &#34;&#34;&#34;Save all sandbox results to JSON.&#34;&#34;&#34;
+        self.results[&#39;syscall_analysis&#39;] = self.parse_strace()
+
+        # List all output files
+        artifacts = {}
+        for f in self.work_dir.iterdir():
+            if f.is_file():
+                artifacts[f.name] = f.stat().st_size
+        self.results[&#39;artifacts&#39;] = artifacts
+
+        output = self.sample_path.with_suffix(&#39;.sandbox.json&#39;)
+        output.write_text(json.dumps(self.results, indent=2, default=str))
+        print(f&#34;[SANDBOX] Results: {output}&#34;)
+        return output
+
+    def cleanup(self):
+        &#34;&#34;&#34;Remove temporary work directory.&#34;&#34;&#34;
+        import shutil
+        shutil.rmtree(self.work_dir, ignore_errors=True)
+
+
+if __name__ == &#39;__main__&#39;:
+    import sys
+    runner = SandboxRunner(Path(sys.argv[1]), timeout=60)
+
+    try:
+        runner.build_sandbox_image()
+        runner.run_combined()
+        runner.save_results()
+    finally:
+        runner.cleanup()
+						</pre>
+					</section>
+					<section>
+						<h3 id="stage-4b-sandbox-containerfile">Stage 4b: Sandbox Containerfile</h3>
+						<pre class="dockerfile">
+# malware-sandbox.Containerfile - Analysis sandbox container
+FROM archlinux:latest
+
+RUN pacman -Syu --noconfirm &amp;&amp; \
+    pacman -S --noconfirm \
+    strace \
+    tcpdump \
+    procps-ng \
+    binutils \
+    file \
+    curl \
+    wget \
+    lsof \
+    net-tools \
+    iproute2 \
+    python
+
+RUN useradd -m -s /bin/bash malware
+RUN mkdir -p /tmp/analysis &amp;&amp; chown malware:malware /tmp/analysis
+
+# Simulate a realistic user environment
+USER malware
+RUN touch /home/malware/.bash_history &amp;&amp; \
+    echo &#39;ls -la&#39; &gt;&gt; /home/malware/.bash_history &amp;&amp; \
+    echo &#39;cd /tmp&#39; &gt;&gt; /home/malware/.bash_history &amp;&amp; \
+    mkdir -p /home/malware/.ssh /home/malware/Documents /home/malware/Downloads &amp;&amp; \
+    echo &#39;ssh-rsa AAAAfake... user@host&#39; &gt; /home/malware/.ssh/known_hosts
+
+WORKDIR /home/malware
+						</pre>
+					</section>
+					<section>
+						<h3 id="stage-5-correlation-and-clustering">Stage 5: Correlation and Clustering</h3>
+						<p>Group similar samples to identify malware families:</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;correlate.py — Cluster similar samples&#34;&#34;&#34;
+
+import json
+from pathlib import Path
+from collections import defaultdict
+
+try:
+    import ssdeep
+except ImportError:
+    ssdeep = None
+
+
+class SampleCorrelator:
+    def __init__(self, analysis_dir: Path):
+        self.dir = Path(analysis_dir)
+        self.samples = self._load_all()
+
+    def _load_all(self) -&gt; Dict:
+        &#34;&#34;&#34;Load all triage/sandbox/ghidra JSON results.&#34;&#34;&#34;
+        samples = {}
+        for json_file in self.dir.rglob(&#39;*.triage.json&#39;):
+            try:
+                data = json.loads(json_file.read_text())
+                samples[json_file.stem.replace(&#39;.triage&#39;, &#39;&#39;)] = data
+            except:
+                pass
+        return samples
+
+    def cluster_by_ssdeep(self, threshold: int = 80) -&gt; Dict:
+        &#34;&#34;&#34;Cluster samples by ssdeep similarity (threshold 0-100).&#34;&#34;&#34;
+        if not ssdeep:
+            return {}
+
+        clusters = []
+        processed = set()
+
+        for name_a, data_a in self.samples.items():
+            if name_a in processed:
+                continue
+
+            ssdeep_a = data_a.get(&#39;ssdeep&#39;)
+            if not ssdeep_a:
+                continue
+
+            cluster = {name_a}
+            processed.add(name_a)
+
+            for name_b, data_b in self.samples.items():
+                if name_b in processed:
+                    continue
+
+                ssdeep_b = data_b.get(&#39;ssdeep&#39;)
+                if not ssdeep_b:
+                    continue
+
+                try:
+                    score = ssdeep.compare(ssdeep_a, ssdeep_b)
+                    if score &gt;= threshold:
+                        cluster.add(name_b)
+                        processed.add(name_b)
+                except:
+                    pass
+
+            if len(cluster) &gt; 1:
+                clusters.append({
+                    &#39;members&#39;: list(cluster),
+                    &#39;size&#39;: len(cluster),
+                    &#39;representative&#39;: name_a,
+                })
+
+        return {&#39;ssdeep_clusters&#39;: clusters}
+
+    def cluster_by_imports(self, threshold: float = 0.7) -&gt; Dict:
+        &#34;&#34;&#34;Cluster by Jaccard similarity of imported functions.&#34;&#34;&#34;
+        # Requires ghidra.json results
+        ghidra_files = list(self.dir.rglob(&#39;*.ghidra.json&#39;))
+        if not ghidra_files:
+            return {}
+
+        imports_by_sample = {}
+        for gf in ghidra_files:
+            try:
+                data = json.loads(gf.read_text())
+                imports = {imp[&#39;name&#39;] for imp in data.get(&#39;imports&#39;, [])}
+                sample_name = gf.stem.replace(&#39;.ghidra&#39;, &#39;&#39;)
+                imports_by_sample[sample_name] = imports
+            except:
+                pass
+
+        clusters = []
+        processed = set()
+
+        for name_a, imports_a in imports_by_sample.items():
+            if name_a in processed or not imports_a:
+                continue
+
+            cluster = {name_a}
+            processed.add(name_a)
+
+            for name_b, imports_b in imports_by_sample.items():
+                if name_b in processed or not imports_b:
+                    continue
+
+                intersection = imports_a &amp; imports_b
+                union = imports_a | imports_b
+                if union:
+                    jaccard = len(intersection) / len(union)
+                    if jaccard &gt;= threshold:
+                        cluster.add(name_b)
+                        processed.add(name_b)
+
+            if len(cluster) &gt; 1:
+                clusters.append({
+                    &#39;members&#39;: list(cluster),
+                    &#39;size&#39;: len(cluster),
+                    &#39;common_imports&#39;: sorted(list(imports_a))[:20],
+                })
+
+        return {&#39;import_clusters&#39;: clusters}
+
+    def cluster_by_bucket(self) -&gt; Dict:
+        &#34;&#34;&#34;Group by packer type and architecture.&#34;&#34;&#34;
+        buckets = defaultdict(list)
+
+        for name, data in self.samples.items():
+            packer = data.get(&#39;packer&#39;, {}).get(&#39;packer&#39;, &#39;unknown&#39;)
+            arch = data.get(&#39;type&#39;, {}).get(&#39;arch&#39;, &#39;unknown&#39;)
+            bucket_key = f&#34;{arch}|{packer}&#34;
+            buckets[bucket_key].append(name)
+
+        return {
+            &#39;buckets&#39;: {
+                k: {&#39;count&#39;: len(v), &#39;samples&#39;: v}
+                for k, v in sorted(buckets.items())
+            }
+        }
+
+
+if __name__ == &#39;__main__&#39;:
+    import sys
+    corr = SampleCorrelator(Path(sys.argv[1]))
+    results = {}
+    results.update(corr.cluster_by_ssdeep())
+    results.update(corr.cluster_by_imports())
+    results.update(corr.cluster_by_bucket())
+    print(json.dumps(results, indent=2))
+						</pre>
+					</section>
+					<section>
+						<h3 id="stage-6-web-dashboard-flask">Stage 6: Web Dashboard (Flask)</h3>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;dashboard.py — Minimal web dashboard for analysis results&#34;&#34;&#34;
+
+from flask import Flask, render_template_string, jsonify
+from pathlib import Path
+import json
+
+app = Flask(__name__)
+ANALYSIS_DIR = Path(&#39;/opt/samples/processed&#39;)
+
+HTML_TEMPLATE = &#39;&#39;&#39;
+&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+    &lt;title&gt;Malware Analysis Dashboard&lt;/title&gt;
+    &lt;meta charset=&#34;utf-8&#34;&gt;
+    &lt;style&gt;
+        body { font-family: monospace; background: #1a1a2e; color: #e0e0e0;
+               margin: 2em; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { padding: 8px 12px; border: 1px solid #333; text-align: left; }
+        th { background: #16213e; }
+        tr:hover { background: #0f3460; }
+        .MALICIOUS { color: #ff4444; font-weight: bold; }
+        .SUSPICIOUS { color: #ffaa00; font-weight: bold; }
+        .BENIGN { color: #44ff44; }
+        a { color: #4da6ff; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+    &lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+    &lt;h1&gt;Malware Analysis Dashboard&lt;/h1&gt;
+    &lt;table&gt;
+        &lt;tr&gt;
+            &lt;th&gt;Sample&lt;/th&gt;
+            &lt;th&gt;SHA256&lt;/th&gt;
+            &lt;th&gt;Verdict&lt;/th&gt;
+            &lt;th&gt;Packer&lt;/th&gt;
+            &lt;th&gt;Entropy&lt;/th&gt;
+            &lt;th&gt;Arch&lt;/th&gt;
+            &lt;th&gt;Size&lt;/th&gt;
+            &lt;th&gt;Reports&lt;/th&gt;
+        &lt;/tr&gt;
+        {% for s in samples %}
+        &lt;tr&gt;
+            &lt;td&gt;{{ s.name[:40] }}&lt;/td&gt;
+            &lt;td style=&#34;font-size:0.8em&#34;&gt;{{ s.sha256[:16] if s.sha256 else &#39;?&#39; }}&lt;/td&gt;
+            &lt;td class=&#34;{{ s.verdict }}&#34;&gt;{{ s.verdict }}&lt;/td&gt;
+            &lt;td&gt;{{ s.packer }}&lt;/td&gt;
+            &lt;td&gt;{{ s.entropy }}&lt;/td&gt;
+            &lt;td&gt;{{ s.arch }}&lt;/td&gt;
+            &lt;td&gt;{{ s.size_bytes | filesizeformat if s.size_bytes else &#39;?&#39; }}&lt;/td&gt;
+            &lt;td&gt;
+                {% if s.triage_json %}
+                &lt;a href=&#34;/api/report/{{ s.name }}&#34;&gt;triage&lt;/a&gt;
+                {% endif %}
+            &lt;/td&gt;
+        &lt;/tr&gt;
+        {% endfor %}
+    &lt;/table&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+&#39;&#39;&#39;
+
+
+def load_samples():
+    &#34;&#34;&#34;Load all sample metadata from analysis directory.&#34;&#34;&#34;
+    samples = []
+    for meta_file in ANALYSIS_DIR.rglob(&#39;*.meta.json&#39;):
+        try:
+            meta = json.loads(meta_file.read_text())
+            name = meta_file.stem.replace(&#39;.meta&#39;, &#39;&#39;)
+
+            # Try to load corresponding triage JSON
+            triage_file = meta_file.with_name(name + &#39;.triage.json&#39;)
+            triage = {}
+            if triage_file.exists():
+                triage = json.loads(triage_file.read_text())
+
+            samples.append({
+                &#39;name&#39;: name,
+                &#39;sha256&#39;: meta.get(&#39;sha256&#39;, &#39;?&#39;)[:32],
+                &#39;size_bytes&#39;: meta.get(&#39;size&#39;, 0),
+                &#39;verdict&#39;: triage.get(&#39;verdict&#39;, &#39;UNKNOWN&#39;),
+                &#39;packer&#39;: triage.get(&#39;packer&#39;, {}).get(&#39;packer&#39;, &#39;-&#39;),
+                &#39;entropy&#39;: triage.get(&#39;entropy&#39;, {}).get(&#39;overall&#39;, &#39;?&#39;),
+                &#39;arch&#39;: triage.get(&#39;type&#39;, {}).get(&#39;arch&#39;, &#39;?&#39;),
+                &#39;triage_json&#39;: triage_file.exists(),
+            })
+        except:
+            pass
+
+    return sorted(samples, key=lambda s: s.get(&#39;name&#39;, &#39;&#39;), reverse=True)
+
+
+@app.route(&#39;/&#39;)
+def index():
+    samples = load_samples()
+    return render_template_string(HTML_TEMPLATE, samples=samples)
+
+
+@app.route(&#39;/api/report/&lt;sample_name&gt;&#39;)
+def get_report(sample_name):
+    triage_file = ANALYSIS_DIR / (sample_name + &#39;.triage.json&#39;)
+    if triage_file.exists():
+        return jsonify(json.loads(triage_file.read_text()))
+    return jsonify({&#39;error&#39;: &#39;Report not found&#39;}), 404
+
+
+if __name__ == &#39;__main__&#39;:
+    app.run(host=&#39;0.0.0.0&#39;, port=8080, debug=False)
+						</pre>
+					</section>
+					<section>
+						<h3 id="full-pipeline-orchestration">Full Pipeline Orchestration</h3>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;pipeline.py — Orchestrate the full analysis pipeline&#34;&#34;&#34;
+
+import os
+import json
+import time
+import signal
+import threading
+from pathlib import Path
+from datetime import datetime
+
+# Import stage modules
+from ingest import watch_directory  # Stage 1
+from triage import SampleTriage     # Stage 2
+# Stage 3: ghidra_headless (subprocess)
+# Stage 4: sandbox_runner (subprocess)
+# Stage 5: correlate (background)
+
+QUEUE_FILE = Path(&#39;/opt/samples/queue.jsonl&#39;)
+PROCESSED_DIR = Path(&#39;/opt/samples/processed&#39;)
+RESULTS_DIR  = Path(&#39;/opt/samples/results&#39;)
+RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+class PipelineWorker:
+    def __init__(self):
+        self.running = True
+        self.processed = set()
+
+    def process_queue(self):
+        &#34;&#34;&#34;Process jobs from the queue file.&#34;&#34;&#34;
+        while self.running:
+            if not QUEUE_FILE.exists():
+                time.sleep(5)
+                continue
+
+            lines = QUEUE_FILE.read_text().strip().split(&#39;\n&#39;)
+            for line in lines:
+                if not line.strip():
+                    continue
+
+                try:
+                    job = json.loads(line)
+                    sample_path = Path(job[&#39;processed_path&#39;])
+
+                    if sample_path.name in self.processed:
+                        continue
+
+                    self.analyze_sample(sample_path, job)
+                    self.processed.add(sample_path.name)
+
+                except Exception as e:
+                    print(f&#34;[PIPELINE] Error processing job: {e}&#34;)
+
+            time.sleep(5)
+
+    def analyze_sample(self, sample_path: Path, meta: dict):
+        &#34;&#34;&#34;Run all analysis stages on one sample.&#34;&#34;&#34;
+        name = sample_path.name
+        print(f&#34;\n{&#39;=&#39;*60}\n[PIPELINE] Analyzing: {name}\n{&#39;=&#39;*60}&#34;)
+
+        # Stage 2: Triage
+        print(f&#34;[2/4] Triage...&#34;)
+        try:
+            triage = SampleTriage(sample_path)
+            triage_results = triage.run()
+            triage_out = sample_path.with_suffix(&#39;.triage.json&#39;)
+            triage_out.write_text(json.dumps(triage_results, indent=2))
+        except Exception as e:
+            print(f&#34;  Triage failed: {e}&#34;)
+            return
+
+        # Skip deep analysis if benign
+        if triage_results.get(&#39;verdict&#39;) == &#39;BENIGN&#39;:
+            print(f&#34;  Verdict: BENIGN — skipping deep analysis&#34;)
+            return
+
+        # Stage 3: Static Analysis (Ghidra)
+        print(f&#34;[3/4] Static analysis (Ghidra)...&#34;)
+        try:
+            from ghidra_headless import analyze_sample
+            analyze_sample(sample_path, project_dir=RESULTS_DIR / &#39;ghidra_projects&#39;)
+        except Exception as e:
+            print(f&#34;  Ghidra analysis failed: {e}&#34;)
+
+        # Stage 4: Dynamic Analysis (Sandbox)
+        print(f&#34;[4/4] Dynamic analysis (Sandbox)...&#34;)
+        try:
+            from sandbox_runner import SandboxRunner
+            runner = SandboxRunner(sample_path, timeout=60)
+            runner.build_sandbox_image()
+            runner.run_combined()
+            runner.save_results()
+            runner.cleanup()
+        except Exception as e:
+            print(f&#34;  Sandbox analysis failed: {e}&#34;)
+
+        print(f&#34;[PIPELINE] Complete: {name}&#34;)
+
+    def stop(self):
+        self.running = False
+
+
+def main():
+    worker = PipelineWorker()
+
+    # Start ingestion watcher in background
+    ingest_thread = threading.Thread(target=watch_directory, daemon=True)
+    ingest_thread.start()
+
+    # Set up signal handlers
+    def shutdown(sig, frame):
+        worker.stop()
+        print(&#34;\n[PIPELINE] Shutting down...&#34;)
+    signal.signal(signal.SIGINT, shutdown)
+    signal.signal(signal.SIGTERM, shutdown)
+
+    # Start processing queue
+    worker.process_queue()
+
+
+if __name__ == &#39;__main__&#39;:
+    main()
+						</pre>
+					</section>
+					<section>
+						<h3 id="running-the-full-pipeline">Running the Full Pipeline</h3>
+						<pre class="bash">
+# 1. Build the sandbox container
+$ podman build -t malware-sandbox -f malware-sandbox.Containerfile .
+
+# 2. Create directories
+$ mkdir -p /opt/samples/{incoming,processed,failed,results}
+$ mkdir -p /opt/yara/rules
+
+# 3. Download some YARA rules (community malware rules)
+$ git clone https://github.com/Yara-Rules/rules /opt/yara/rules/community
+
+# 4. Start the pipeline
+$ python3 pipeline.py &amp;
+[PIPELINE] Watching /opt/samples/incoming...
+
+# 5. Drop a sample
+$ cp suspicious.elf /opt/samples/incoming/
+[INGEST] suspicious.elf → suspicious.elf
+[TRIAGE] suspicious.elf (45872 bytes)
+  Verdict: SUSPICIOUS
+[GHIDRA] 234 functions, 567 strings
+[SANDBOX] Running: sandbox_suspicious.elf_1719000000
+[PIPELINE] Complete: suspicious.elf
+
+# 6. Check results
+$ ls /opt/samples/processed/suspicious.elf*
+suspicious.elf
+suspicious.elf.meta.json
+suspicious.elf.triage.json
+suspicious.elf.ghidra.json
+suspicious.elf.sandbox.json
+						</pre>
+					</section>
+					<section>
+						<h3 id="yara-rule-auto-generation">YARA Rule Auto-Generation</h3>
+						<p>
+							When new malware families are discovered, generate
+							<abbr title="Yet Another Recursive Acronym">YARA</abbr>
+							rules
+							automatically:
+						</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;yara_gen.py — Auto-generate YARA rules from clustered samples&#34;&#34;&#34;
+
+import json
+import random
+import hashlib
+from pathlib import Path
+from collections import Counter
+
+
+def generate_yara_rule(cluster_name: str, samples: list,
+                       analysis_dir: Path) -&gt; str:
+    &#34;&#34;&#34;
+    Generate a YARA rule that detects a malware cluster.
+    Uses strings common to all samples but rare in benign files.
+    &#34;&#34;&#34;
+    # Collect strings from all samples in the cluster
+    cluster_strings = Counter()
+    string_sources = {}
+
+    for sample_name in samples:
+        triage_path = analysis_dir / f&#34;{sample_name}.triage.json&#34;
+        if not triage_path.exists():
+            continue
+
+        try:
+            data = json.loads(triage_path.read_text())
+            sample_strings = set(data.get(&#39;top_strings&#39;, []))
+            for s in sample_strings:
+                if len(s) &gt;= 8 and len(s) &lt;= 100:
+                    cluster_strings[s] += 1
+                    if s not in string_sources:
+                        string_sources[s] = []
+                    string_sources[s].append(sample_name)
+        except:
+            continue
+
+    # Find strings present in most cluster members
+    threshold = max(2, len(samples) // 2)
+    candidate_strings = [
+        s for s, count in cluster_strings.items()
+        if count &gt;= threshold
+    ]
+
+    if not candidate_strings:
+        return None
+
+    # Sort by string length (prefer longer for specificity)
+    candidate_strings.sort(key=len, reverse=True)
+
+    # Build YARA rule
+    rule_id = hashlib.md5(cluster_name.encode()).hexdigest()[:8]
+    escaped = candidate_strings[:15]  # Top 15 strings
+
+    rule_parts = []
+    rule_parts.append(f&#39;rule malware_cluster_{rule_id} {{&#39;)
+    rule_parts.append(f&#39;    meta:&#39;)
+    rule_parts.append(f&#39;        description = &#34;Auto-generated rule for {cluster_name}&#34;&#39;)
+    rule_parts.append(f&#39;        date = &#34;2026-06-26&#34;&#39;)
+    rule_parts.append(f&#39;        hash = &#34;{rule_id}&#34;&#39;)
+    rule_parts.append(f&#39;    strings:&#39;)
+
+    for i, s in enumerate(escaped):
+        # Escape YARA-special characters in strings
+        safe_s = s.replace(&#39;\\&#39;, &#39;\\\\&#39;).replace(&#39;&#34;&#39;, &#39;\\&#34;&#39;)
+        rule_parts.append(f&#39;        $s{i} = &#34;{safe_s}&#34;&#39;)
+
+    # Require at least 3 of the strings (or all, if fewer)
+    names = [f&#39;$s{i}&#39; for i in range(len(escaped))]
+    required = min(3, len(names))
+    rule_parts.append(f&#39;    condition:&#39;)
+    rule_parts.append(f&#39;        {required} of ({&#34;, &#34;.join(names)})&#39;)
+    rule_parts.append(f&#39;}}&#39;)
+
+    return &#39;\n&#39;.join(rule_parts)
+
+
+if __name__ == &#39;__main__&#39;:
+    import sys
+    cluster_name = sys.argv[1]
+    samples = sys.argv[2:]
+    analysis_dir = Path(sys.argv[3]) if len(sys.argv) &gt; 3 else Path(&#39;/opt/samples/processed&#39;)
+
+    rule = generate_yara_rule(cluster_name, samples, analysis_dir)
+    if rule:
+        print(rule)
+        output = Path(f&#39;{cluster_name}.yar&#39;)
+        output.write_text(rule)
+        print(f&#39;Rule written to {output}&#39;)
+    else:
+        print(&#39;Could not generate rule — insufficient common strings&#39;)
+						</pre>
+					</section>
+					<section>
+						<h3 id="recommended-deployment">Recommended Deployment</h3>
+						<p>For production deployment, use systemd services:</p>
+						<pre class="ini">
+# /etc/systemd/system/malware-pipeline.service
+[Unit]
+Description=Malware Analysis Pipeline
+After=network.target podman.service
+
+[Service]
+Type=simple
+User=malware
+WorkingDirectory=/opt/pipeline
+ExecStart=/opt/pipeline/venv/bin/python /opt/pipeline/pipeline.py
+Restart=on-failure
+RestartSec=10
+LimitNOFILE=65536
+MemoryMax=8G
+
+[Install]
+WantedBy=multi-user.target
+						</pre>
+						<pre class="bash">
+$ sudo systemctl enable --now malware-pipeline.service
+$ sudo systemctl status malware-pipeline.service
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Reimplement the ingestion stage in Go. Watch a directory for new files, compute each file's
+							SHA-256, and append a job record to a queue file. Drop a sample into the watched directory and
+							confirm that a queued job appears; the remaining stages read that queue.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;crypto/sha256&#34;
+	&#34;encoding/hex&#34;
+	&#34;encoding/json&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;path/filepath&#34;
+	&#34;time&#34;
+)
+
+type Job struct {
+	Name     string `json:&#34;name&#34;`
+	SHA256   string `json:&#34;sha256&#34;`
+	Size     int64  `json:&#34;size&#34;`
+	Ingested string `json:&#34;ingested_at&#34;`
+}
+
+func hashFile(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return &#34;&#34;, err
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+func main() {
+	if len(os.Args) != 3 {
+		fmt.Fprintln(os.Stderr, &#34;usage: ingest &lt;incoming-dir&gt; &lt;queue.jsonl&gt;&#34;)
+		os.Exit(1)
+	}
+	incoming, queue := os.Args[1], os.Args[2]
+	seen := map[string]bool{}
+
+	fmt.Printf(&#34;[*] watching %s\n&#34;, incoming)
+	for {
+		entries, err := os.ReadDir(incoming)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		for _, e := range entries {
+			if e.IsDir() || seen[e.Name()] {
+				continue
+			}
+			seen[e.Name()] = true
+			info, _ := e.Info()
+			sum, err := hashFile(filepath.Join(incoming, e.Name()))
+			if err != nil {
+				fmt.Fprintf(os.Stderr, &#34;[-] %s: %v\n&#34;, e.Name(), err)
+				continue
+			}
+			job := Job{
+				Name:     e.Name(),
+				SHA256:   sum,
+				Size:     info.Size(),
+				Ingested: time.Now().UTC().Format(time.RFC3339),
+			}
+			line, _ := json.Marshal(job)
+			f, err := os.OpenFile(queue, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				continue
+			}
+			f.Write(append(line, &#39;\n&#39;))
+			f.Close()
+			fmt.Printf(&#34;[INGEST] %s sha256=%s\n&#34;, job.Name, job.SHA256[:16])
+		}
+		time.Sleep(2 * time.Second)
+	}
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a href="/wiki/articles/reverse-engineering/sandbox-analysis.html">Sandbox Analysis</a> - detailed sandbox construction and evasion techniques</li>
+							<li><a href="/wiki/articles/reverse-engineering/ghidra-scripting.html">Ghidra Scripting</a> - advanced Ghidra headless automation</li>
+							<li><a class="icon-website" href="https://cuckoosandbox.org/" target="_blank">Cuckoo Sandbox</a> - the original automated malware analysis system</li>
+							<li><a class="icon-website" href="https://www.misp-project.org/" target="_blank">MISP Threat Sharing</a> - open source threat intelligence platform for correlation</li>
+							<li><a class="icon-website" href="https://yara.readthedocs.io/" target="_blank">YARA Documentation</a> - pattern matching rules for malware classification</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

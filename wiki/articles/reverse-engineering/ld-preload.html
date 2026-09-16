@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>LD_PRELOAD Hooking | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="LD_PRELOAD Hooking">
+		<meta name="keywords" content="dynamic-linking, hooking, interception, ld-preload, libc, reverse-engineering">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="LD_PRELOAD Hooking">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Intercepting function calls at the dynamic linker level to trace, modify, and hijack library calls in Linux binaries.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/reverse-engineering/ld-preload.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="LD_PRELOAD Hooking">
+		<meta name="twitter:description" itemprop="description" content="Intercepting function calls at the dynamic linker level to trace, modify, and hijack library calls in Linux binaries.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#symbol-resolution-order">Symbol Resolution Order</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-minimal-hook-library">The Minimal Hook Library</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#constructors-and-destructors">Constructors and Destructors</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#file-access-monitor">File Access Monitor</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#network-connection-monitor">Network Connection Monitor</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#command-execution-interceptor">Command Execution Interceptor</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#readwrite-data-capture">Read/Write Data Capture</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#rtld-next-vs-rtld-default">RTLD_NEXT vs RTLD_DEFAULT</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#compilation-gotchas">Compilation Gotchas</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#hooking-variadic-functions">Hooking Variadic Functions</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#setuid-and-capabilities">Setuid and Capabilities</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#static-binaries">Static Binaries</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#raw-syscalls">Raw Syscalls</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#general-purpose-spy-library">General-Purpose Spy Library</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#combining-with-strace">Combining With strace</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#library-injection">Library Injection</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ldsopreload-persistence">ld.so.preload Persistence</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#summary">Summary</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/reverse-engineering/index.html">Reverse Engineering</a></li>
+						<li aria-current="page"><a href="/wiki/articles/reverse-engineering/ld-preload.html">Ld Preload</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="ld-preload-hooking">LD_PRELOAD Hooking</h2>
+					<p>
+						Intercepting function calls at the dynamic linker level to trace, modify, and hijack library
+						calls in Linux binaries.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							LD_PRELOAD exploits the dynamic linker's symbol resolution order: when resolving a function
+							name,
+							<code>ld.so</code>
+							searches the libraries named in
+							<code>LD_PRELOAD</code>
+							before
+							<code>libc</code>
+							and other system libraries,
+							so a hook that exports the same symbol shadows the real implementation. Any dynamically linked
+							binary - malware, closed-source tools, a CI runner - calls your code instead. This requires
+							no ptrace, no breakpoints, and no kernel modules, only a
+							<code>.so</code>
+							file and an environment variable.
+							After reading, you can hook file, network, and execution calls, chain to the original functions
+							with
+							<code>dlsym</code>
+							, and recognize when malware uses the same trick for persistence.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/dynamic-linking.html">Dynamic Linking</a> - the dynamic linker, symbol resolution order, PLT/GOT mechanics</li>
+							<li><a href="/wiki/articles/reverse-engineering/gdb-malware.html">GDB for Malware Analysis</a> - debugging malware dynamically</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="symbol-resolution-order">Symbol Resolution Order</h3>
+						<p>
+							When a binary calls
+							<code>open(&#34;/etc/shadow&#34;, O_RDONLY)</code>
+							, the compiler emits a
+							<code>call open@plt</code>
+							instruction.
+							On first call, the PLT stub invokes
+							<code>_dl_runtime_resolve</code>
+							which walks the symbol tables of all
+							loaded shared objects in order:
+						</p>
+						<ol>
+							<li><code>LD_PRELOAD</code> libraries (searched first, left to right)</li>
+							<li><code>DT_NEEDED</code> libraries from the binary itself (linked at compile time)</li>
+							<li>The dynamic linker itself ( <code>ld-linux.so</code> )</li>
+							<li><code>libc.so</code> and other system libraries</li>
+						</ol>
+						<p>
+							The first matching symbol wins. If
+							<code>libpreload.so</code>
+							exports
+							<code>open</code>
+							, that definition is used.
+							No relocation, no GOT overwrite - the resolver simply returns your function's address.
+						</p>
+						<p>
+							This is not a security bypass; it's a deliberate debugging/extension mechanism of the ELF dynamic
+							linking model.
+						</p>
+					</section>
+					<section>
+						<h3 id="the-minimal-hook-library">The Minimal Hook Library</h3>
+						<p>
+							A hook library exports functions with the same symbol name as the target. To chain to the original,
+							use
+							<code>dlsym(RTLD_NEXT, &#34;function_name&#34;)</code>
+							:
+						</p>
+						<pre class="c">
+/*
+ * hook.c - minimal LD_PRELOAD hook for open(2)
+ *
+ * Compile:
+ *   gcc -shared -fPIC -o hook.so hook.c -ldl
+ * Usage:
+ *   LD_PRELOAD=./hook.so /path/to/binary
+ */
+
+#define _GNU_SOURCE
+#include &lt;dlfcn.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;stdarg.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;string.h&gt;
+#include &lt;sys/types.h&gt;
+
+/* Type definition matching the real open() signature */
+typedef int (*orig_open_t)(const char *pathname, int flags, ...);
+
+int open(const char *pathname, int flags, ...)
+{
+    /* Handle variadic mode argument */
+    mode_t mode = 0;
+    if (flags &amp; O_CREAT) {
+        va_list args;
+        va_start(args, flags);
+        mode = va_arg(args, mode_t);
+        va_end(args);
+    }
+
+    /* Resolve the original function - must be per-call or cached */
+    orig_open_t orig_open = (orig_open_t)dlsym(RTLD_NEXT, &#34;open&#34;);
+    if (!orig_open) {
+        fprintf(stderr, &#34;[-] dlsym(open) failed: %s\n&#34;, dlerror());
+        return -1;
+    }
+
+    fprintf(stderr, &#34;[HOOK] open(\&#34;%s\&#34;, 0x%x, 0%o)\n&#34;, pathname, flags, mode);
+
+    int fd = orig_open(pathname, flags, mode);
+
+    fprintf(stderr, &#34;[HOOK]   -&gt; fd = %d\n&#34;, fd);
+    return fd;
+}
+						</pre>
+						<p>
+							Every call to
+							<code>open()</code>
+							- from the binary, from any library it loads, from any thread - passes
+							through this hook. The
+							<code>fprintf</code>
+							output goes to stderr so it doesn't contaminate normal output
+							pipes.
+						</p>
+					</section>
+					<section>
+						<h3 id="constructors-and-destructors">Constructors and Destructors</h3>
+						<p>
+							<code>__attribute__((constructor))</code>
+							and
+							<code>__attribute__((destructor))</code>
+							run automatically at load and
+							unload time:
+						</p>
+						<pre class="c">
+__attribute__((constructor))
+static void hook_init(void)
+{
+    fprintf(stderr, &#34;[*] hook.so loaded - intercepting functions\n&#34;);
+    fprintf(stderr, &#34;[*] PID: %d\n&#34;, getpid());
+}
+
+__attribute__((destructor))
+static void hook_fini(void)
+{
+    fprintf(stderr, &#34;[*] hook.so unloaded - total syscalls intercepted: %lu\n&#34;,
+            (unsigned long)intercept_count);
+}
+						</pre>
+						<p>
+							Constructors run before
+							<code>main()</code>
+							, after
+							<code>LD_PRELOAD</code>
+							libraries are mapped into the process
+							address space. They fire even if the binary calls
+							<code>execve</code>
+							- each new process inherits
+							<code>LD_PRELOAD</code>
+							and runs constructors again.
+						</p>
+					</section>
+					<section>
+						<h3 id="file-access-monitor">File Access Monitor</h3>
+						<p>A general-purpose file-access spy reveals every file a binary reads or writes:</p>
+						<pre class="c">
+#define _GNU_SOURCE
+#include &lt;dlfcn.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;stdarg.h&gt;
+
+/* open / open64 / openat - all file-opening variants */
+typedef int (*orig_open_t)(const char *, int, ...);
+typedef int (*orig_open64_t)(const char *, int, ...);
+typedef int (*orig_openat_t)(int, const char *, int, ...);
+
+static orig_open_t   real_open   = NULL;
+static orig_open64_t real_open64 = NULL;
+static orig_openat_t real_openat = NULL;
+
+__attribute__((constructor))
+static void init(void)
+{
+    real_open   = (orig_open_t)dlsym(RTLD_NEXT, &#34;open&#34;);
+    real_open64 = (orig_open64_t)dlsym(RTLD_NEXT, &#34;open64&#34;);
+    real_openat = (orig_openat_t)dlsym(RTLD_NEXT, &#34;openat&#34;);
+}
+
+int open(const char *path, int flags, ...)
+{
+    mode_t mode = 0;
+    if (flags &amp; O_CREAT) {
+        va_list ap;
+        va_start(ap, flags);
+        mode = va_arg(ap, mode_t);
+        va_end(ap);
+    }
+
+    const char *op = (flags &amp; O_WRONLY || flags &amp; O_RDWR) ? &#34;WRITE&#34; : &#34;READ&#34;;
+    fprintf(stderr, &#34;[OPEN] %-6s | %s\n&#34;, op, path);
+
+    return real_open ? real_open(path, flags, mode) : -1;
+}
+
+int open64(const char *path, int flags, ...)
+{
+    mode_t mode = 0;
+    if (flags &amp; O_CREAT) {
+        va_list ap;
+        va_start(ap, flags);
+        mode = va_arg(ap, mode_t);
+        va_end(ap);
+    }
+    fprintf(stderr, &#34;[OPEN64] %s\n&#34;, path);
+    return real_open64 ? real_open64(path, flags, mode) : -1;
+}
+
+int openat(int dirfd, const char *path, int flags, ...)
+{
+    mode_t mode = 0;
+    if (flags &amp; O_CREAT) {
+        va_list ap;
+        va_start(ap, flags);
+        mode = va_arg(ap, mode_t);
+        va_end(ap);
+    }
+    fprintf(stderr, &#34;[OPENAT] dirfd=%d path=%s\n&#34;, dirfd, path);
+    return real_openat ? real_openat(dirfd, path, flags, mode) : -1;
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="network-connection-monitor">Network Connection Monitor</h3>
+						<p>
+							Intercept all outbound connections, revealing
+							<abbr title="Command and Control">C2</abbr>
+							infrastructure:
+						</p>
+						<pre class="c">
+#define _GNU_SOURCE
+#include &lt;dlfcn.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+#include &lt;sys/socket.h&gt;
+#include &lt;netinet/in.h&gt;
+#include &lt;arpa/inet.h&gt;
+#include &lt;unistd.h&gt;
+
+typedef int (*orig_connect_t)(int, const struct sockaddr *, socklen_t);
+
+static orig_connect_t real_connect = NULL;
+
+__attribute__((constructor))
+static void init(void)
+{
+    real_connect = (orig_connect_t)dlsym(RTLD_NEXT, &#34;connect&#34;);
+}
+
+int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+{
+    char ip_str[INET6_ADDRSTRLEN] = {0};
+    int port = 0;
+
+    if (addr-&gt;sa_family == AF_INET) {
+        struct sockaddr_in *sin = (struct sockaddr_in *)addr;
+        inet_ntop(AF_INET, &amp;sin-&gt;sin_addr, ip_str, sizeof(ip_str));
+        port = ntohs(sin-&gt;sin_port);
+    } else if (addr-&gt;sa_family == AF_INET6) {
+        struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)addr;
+        inet_ntop(AF_INET6, &amp;sin6-&gt;sin6_addr, ip_str, sizeof(ip_str));
+        port = ntohs(sin6-&gt;sin6_port);
+    }
+
+    fprintf(stderr, &#34;[CONNECT] fd=%d -&gt; %s:%d\n&#34;, sockfd, ip_str, port);
+
+    int ret = real_connect ? real_connect(sockfd, addr, addrlen) : -1;
+    fprintf(stderr, &#34;[CONNECT]   result=%d\n&#34;, ret);
+    return ret;
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="command-execution-interceptor">Command Execution Interceptor</h3>
+						<p>
+							Malware often calls
+							<code>execve</code>
+							,
+							<code>system</code>
+							, or
+							<code>popen</code>
+							to spawn shells or install additional payloads.
+							Hook all three:
+						</p>
+						<pre class="c">
+#define _GNU_SOURCE
+#include &lt;dlfcn.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;signal.h&gt;
+
+typedef int    (*orig_execve_t)(const char *, char *const[], char *const[]);
+typedef int    (*orig_system_t)(const char *);
+typedef FILE * (*orig_popen_t)(const char *, const char *);
+
+static orig_execve_t real_execve = NULL;
+static orig_system_t real_system = NULL;
+static orig_popen_t  real_popen  = NULL;
+
+__attribute__((constructor))
+static void init(void)
+{
+    real_execve = (orig_execve_t)dlsym(RTLD_NEXT, &#34;execve&#34;);
+    real_system = (orig_system_t)dlsym(RTLD_NEXT, &#34;system&#34;);
+    real_popen  = (orig_popen_t)dlsym(RTLD_NEXT, &#34;popen&#34;);
+}
+
+int execve(const char *pathname, char *const argv[], char *const envp[])
+{
+    fprintf(stderr, &#34;[EXECVE] %s&#34;, pathname);
+    if (argv) {
+        for (int i = 0; argv[i]; i++)
+            fprintf(stderr, &#34; [%d]=\&#34;%s\&#34;&#34;, i, argv[i]);
+    }
+    fprintf(stderr, &#34;\n&#34;);
+    return real_execve ? real_execve(pathname, argv, envp) : -1;
+}
+
+int system(const char *command)
+{
+    fprintf(stderr, &#34;[SYSTEM] %s\n&#34;, command ? command : &#34;(null)&#34;);
+    return real_system ? real_system(command) : -1;
+}
+
+FILE *popen(const char *command, const char *type)
+{
+    fprintf(stderr, &#34;[POPEN] mode=%s cmd=%s\n&#34;, type, command);
+    return real_popen ? real_popen(command, type) : NULL;
+}
+						</pre>
+						<p>Testing against a simple C program:</p>
+						<pre class="c">
+/* test_target.c */
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+int main(void) {
+    system(&#34;id&#34;);
+    execl(&#34;/bin/ls&#34;, &#34;ls&#34;, &#34;-la&#34;, NULL);
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+gcc -o test_target test_target.c
+gcc -shared -fPIC -o cmd_hook.so cmd_hook.c -ldl
+LD_PRELOAD=./cmd_hook.so ./test_target
+
+# Output:
+# [SYSTEM] id
+# uid=1000(user) gid=1000(user) ...
+# [EXECVE] /bin/ls [0]=&#34;ls&#34; [1]=&#34;-la&#34;
+# total 64
+# drwxr-xr-x ...
+						</pre>
+					</section>
+					<section>
+						<h3 id="readwrite-data-capture">Read/Write Data Capture</h3>
+						<p>
+							Intercept
+							<code>read()</code>
+							and
+							<code>write()</code>
+							to capture data flowing over file descriptors:
+						</p>
+						<pre class="c">
+#define _GNU_SOURCE
+#include &lt;dlfcn.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;ctype.h&gt;
+
+typedef ssize_t (*orig_read_t)(int, void *, size_t);
+typedef ssize_t (*orig_write_t)(int, const void *, size_t);
+
+static orig_read_t  real_read  = NULL;
+static orig_write_t real_write = NULL;
+
+__attribute__((constructor))
+static void init(void)
+{
+    real_read  = (orig_read_t)dlsym(RTLD_NEXT, &#34;read&#34;);
+    real_write = (orig_write_t)dlsym(RTLD_NEXT, &#34;write&#34;);
+}
+
+static void hexdump(const void *data, size_t len, const char *prefix)
+{
+    const unsigned char *p = data;
+    fprintf(stderr, &#34;%s len=%zu\n&#34;, prefix, len);
+    for (size_t i = 0; i &lt; len; i += 16) {
+        fprintf(stderr, &#34;  %04zx  &#34;, i);
+        for (size_t j = 0; j &lt; 16 &amp;&amp; (i + j) &lt; len; j++)
+            fprintf(stderr, &#34;%02x &#34;, p[i + j]);
+        for (size_t j = 16 - (len - i &lt; 16 ? len - i : 0); j &gt; 0; j--)
+            fprintf(stderr, &#34;   &#34;);
+        fprintf(stderr, &#34; |&#34;);
+        for (size_t j = 0; j &lt; 16 &amp;&amp; (i + j) &lt; len; j++)
+            fprintf(stderr, &#34;%c&#34;, isprint(p[i + j]) ? p[i + j] : &#39;.&#39;);
+        fprintf(stderr, &#34;|\n&#34;);
+    }
+}
+
+ssize_t read(int fd, void *buf, size_t count)
+{
+    ssize_t ret = real_read ? real_read(fd, buf, count) : -1;
+    if (ret &gt; 0 &amp;&amp; ret &lt; 1024) {
+        fprintf(stderr, &#34;[READ] fd=%d &#34;, fd);
+        hexdump(buf, (size_t)ret, &#34;&#34;);
+    }
+    return ret;
+}
+
+ssize_t write(int fd, const void *buf, size_t count)
+{
+    fprintf(stderr, &#34;[WRITE] fd=%d &#34;, fd);
+    hexdump(buf, count, &#34;&#34;);
+    return real_write ? real_write(fd, buf, count) : -1;
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="rtld-next-vs-rtld-default">RTLD_NEXT vs RTLD_DEFAULT</h3>
+						<p>
+							Two search modes for
+							<code>dlsym</code>
+							:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Constant</th>
+									<th align="center">Behavior</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>RTLD_NEXT</code></td>
+									<td align="center">Find NEXT definition after the current library. Finds the real function.</td>
+								</tr>
+								<tr>
+									<td align="center"><code>RTLD_DEFAULT</code></td>
+									<td align="center">Search in default library search order. Starts from the beginning.</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							<code>RTLD_NEXT</code>
+							is the correct choice in hook libraries.
+							<code>RTLD_DEFAULT</code>
+							would find your own hook
+							function (an infinite loop otherwise avoided by caching). The distinction matters when multiple
+							<code>LD_PRELOAD</code>
+							libraries stack:
+						</p>
+						<pre class="bash">
+# Stacking hooks: hook_A intercepts open, hook_B also intercepts open
+LD_PRELOAD=./hook_A.so:./hook_B.so ./target
+# Resolution order: hook_A, hook_B, libc
+# hook_A&#39;s dlsym(RTLD_NEXT, &#34;open&#34;) -&gt; finds hook_B&#39;s open
+# hook_B&#39;s dlsym(RTLD_NEXT, &#34;open&#34;) -&gt; finds libc&#39;s open
+						</pre>
+					</section>
+					<section>
+						<h3 id="compilation-gotchas">Compilation Gotchas</h3>
+						<p>Hook libraries have strict compilation requirements:</p>
+						<pre class="bash">
+# Correct compilation flags for x86_64:
+gcc -shared -fPIC -o hook.so hook.c -ldl -fno-builtin
+
+# CRUCIAL flags explained:
+# -shared     : produce a shared object (.so), not executable
+# -fPIC       : position-independent code (required for shared libs)
+# -ldl        : link against libdl (provides dlopen/dlsym/dlclose/dlerror)
+# -fno-builtin: do not replace standard function calls with builtins
+#               without this, gcc may inline strlen() instead of calling it,
+#               causing hook functions to break
+						</pre>
+						<p>
+							<b>Without '-fno-builtin'</b>
+							: GCC recognizes
+							<code>memset</code>
+							and
+							<code>memcpy</code>
+							as builtins and may inline
+							them, bypassing your hook. Your hook's own internal calls to these functions might also be optimized
+							away, making dlsym resolution fail silently.
+						</p>
+						<p>
+							<b>Without '-ldl'</b>
+							:
+							<code>undefined reference to &#39;dlsym&#39;</code>
+							- you must link against
+							<code>libdl</code>
+							explicitly.
+						</p>
+						<p>
+							<b>Caching is mandatory</b>
+							: Calling
+							<code>dlsym(RTLD_NEXT, ...)</code>
+							on every invocation of the hooked
+							function is correct but slow. Cache the result in a constructor or a static variable:
+						</p>
+						<pre class="c">
+static orig_open_t real_open = NULL;
+static pthread_once_t once = PTHREAD_ONCE_INIT;
+
+static void resolve_once(void) {
+    real_open = (orig_open_t)dlsym(RTLD_NEXT, &#34;open&#34;);
+}
+
+int open(const char *path, int flags, ...) {
+    pthread_once(&amp;once, resolve_once);
+    // ... use real_open
+}
+						</pre>
+						<p>
+							For single-threaded targets, constructor-based caching suffices. For multi-threaded malware
+							(botnets), use
+							<code>pthread_once</code>
+							for thread safety.
+						</p>
+					</section>
+					<section>
+						<h3 id="hooking-variadic-functions">Hooking Variadic Functions</h3>
+						<p>
+							Variadic functions like
+							<code>printf</code>
+							,
+							<code>open</code>
+							(with O_CREAT),
+							<code>ioctl</code>
+							,
+							<code>fcntl</code>
+							are tricky because
+							the number and types of arguments vary. Use
+							<code>va_list</code>
+							and explicitly check flags:
+						</p>
+						<pre class="c">
+int open(const char *pathname, int flags, ...)
+{
+    mode_t mode = 0;
+    if (flags &amp; O_CREAT) {
+        va_list ap;
+        va_start(ap, flags);
+        mode = va_arg(ap, mode_t);
+        va_end(ap);
+    }
+
+    /* The callee only reads mode when O_CREAT is set, so passing it always is safe. */
+    return real_open(pathname, flags, mode);
+}
+						</pre>
+						<p>
+							Read the variadic argument exactly once. The kernel ignores the mode argument unless
+							<code>O_CREAT</code>
+							is set, so forward it unconditionally and never call
+							<code>va_arg</code>
+							twice.
+						</p>
+					</section>
+					<section>
+						<h3 id="setuid-and-capabilities">Setuid and Capabilities</h3>
+						<p>
+							LD_PRELOAD is disabled for setuid binaries and binaries with filesystem capabilities. This is
+							a deliberate security measure in
+							<code>glibc</code>
+							:
+						</p>
+						<pre class="bash">
+$ sudo chmod u+s ./setuid_binary
+$ LD_PRELOAD=./hook.so ./setuid_binary
+# Hook NOT loaded. glibc ignores LD_PRELOAD for secure-execution mode.
+
+						</pre>
+						<p>
+							The kernel exposes secure-execution mode through the auxiliary vector. This tiny program prints
+							the
+							<code>AT_SECURE</code>
+							flag, which is non-zero for setuid binaries and binaries with file capabilities:
+						</p>
+						<pre class="c">
+/* secure-check.c - getauxval(AT_SECURE) is 0 normally, 1 in secure-execution mode. */
+#include &lt;stdio.h&gt;
+#include &lt;sys/auxv.h&gt;
+
+int main(void)
+{
+    printf(&#34;AT_SECURE = %lu\n&#34;, getauxval(AT_SECURE));
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+gcc -o secure-check secure-check.c
+./secure-check            # AT_SECURE = 0
+sudo chmod u+s ./secure-check
+./secure-check            # AT_SECURE = 1
+						</pre>
+						<p>
+							For setuid binaries, use
+							<code>ptrace</code>
+							-based hooking (GDB) or kernel-level tracing (BPF/ftrace)
+							instead of LD_PRELOAD.
+						</p>
+					</section>
+					<section>
+						<h3 id="static-binaries">Static Binaries</h3>
+						<p>
+							Statically linked binaries have no dynamic linker -
+							<code>ld.so</code>
+							is never invoked,
+							<code>LD_PRELOAD</code>
+							is
+							never processed:
+						</p>
+						<pre class="bash">
+$ file ./static_binary
+static_binary: ELF 64-bit LSB executable, x86-64, statically linked
+$ LD_PRELOAD=./hook.so ./static_binary
+# Hook library is silently ignored. No constructor runs.
+# Use strace, Frida, or patching techniques instead.
+						</pre>
+						<p>Detect static linking:</p>
+						<pre class="bash">
+readelf -d ./binary | grep NEEDED   # empty -&gt; statically linked, or
+ldd ./binary | grep &#34;not a dynamic&#34; # explicitly says &#34;not a dynamic executable&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="raw-syscalls">Raw Syscalls</h3>
+						<p>
+							Malware may bypass libc wrappers entirely by invoking syscalls directly. An
+							<code>LD_PRELOAD</code>
+							hook
+							on
+							<code>write()</code>
+							cannot intercept:
+						</p>
+						<pre class="c">
+/* Bypasses LD_PRELOAD hooks on write() */
+#include &lt;unistd.h&gt;
+#include &lt;sys/syscall.h&gt;
+
+int main(void) {
+    const char *msg = &#34;hidden message\n&#34;;
+    syscall(SYS_write, 1, msg, 15); /* raw syscall - no libc wrapper */
+    return 0;
+}
+						</pre>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Interception Layer</th>
+									<th align="center">Catches libc wrappers</th>
+									<th align="center">Catches raw syscalls</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">LD_PRELOAD</td>
+									<td align="center">yes</td>
+									<td align="center">no</td>
+								</tr>
+								<tr>
+									<td align="center">strace (ptrace)</td>
+									<td align="center">yes</td>
+									<td align="center">yes</td>
+								</tr>
+								<tr>
+									<td align="center">Frida</td>
+									<td align="center">yes</td>
+									<td align="center">yes (via syscall)</td>
+								</tr>
+								<tr>
+									<td align="center">eBPF tracepoints</td>
+									<td align="center">no</td>
+									<td align="center">yes</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>Combine LD_PRELOAD with strace for full coverage.</p>
+					</section>
+					<section>
+						<h3 id="general-purpose-spy-library">General-Purpose Spy Library</h3>
+						<p>A production-ready spy library that logs every significant call:</p>
+						<pre class="c">
+/*
+ * spy.c - General-purpose LD_PRELOAD interception library
+ *
+ * Compile: gcc -shared -fPIC -fno-builtin -o spy.so spy.c -ldl
+ * Usage:   LD_PRELOAD=./spy.so SPY_LOG=./spy.log ./target
+ *          SPY_FILTER=open,execve ./target  # only these functions
+ */
+
+#define _GNU_SOURCE
+#include &lt;dlfcn.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;stdarg.h&gt;
+#include &lt;time.h&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;sys/socket.h&gt;
+#include &lt;netinet/in.h&gt;
+#include &lt;arpa/inet.h&gt;
+
+static FILE *spy_log = NULL;
+static int spy_count = 0;
+
+__attribute__((constructor))
+static void spy_init(void)
+{
+    const char *logpath = getenv(&#34;SPY_LOG&#34;);
+    if (logpath) {
+        spy_log = fopen(logpath, &#34;a&#34;);
+    }
+    if (!spy_log) spy_log = stderr;
+
+    time_t now = time(NULL);
+    fprintf(spy_log, &#34;=== SPY START PID=%d TIME=%s&#34;, getpid(), ctime(&amp;now));
+}
+
+__attribute__((destructor))
+static void spy_fini(void)
+{
+    fprintf(spy_log, &#34;=== SPY END total_calls=%d\n&#34;, spy_count);
+    if (spy_log != stderr) fclose(spy_log);
+}
+
+/* -- open ---------------------------------------------------------------- */
+
+typedef int (*orig_open_t)(const char *, int, ...);
+int open(const char *pathname, int flags, ...)
+{
+    orig_open_t f = (orig_open_t)dlsym(RTLD_NEXT, &#34;open&#34;);
+
+    va_list ap;
+    va_start(ap, flags);
+    mode_t mode = (flags &amp; O_CREAT) ? va_arg(ap, mode_t) : 0;
+    va_end(ap);
+
+    int ret = f ? f(pathname, flags, mode) : -1;
+    fprintf(spy_log, &#34;[%d] open(\&#34;%s\&#34;, 0x%x) = %d\n&#34;, ++spy_count, pathname, flags, ret);
+    return ret;
+}
+
+/* -- connect ------------------------------------------------------------- */
+
+typedef int (*orig_connect_t)(int, const struct sockaddr *, socklen_t);
+int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+{
+    orig_connect_t f = (orig_connect_t)dlsym(RTLD_NEXT, &#34;connect&#34;);
+
+    char ip[INET6_ADDRSTRLEN] = &#34;?&#34;;
+    int port = 0;
+    if (addr-&gt;sa_family == AF_INET) {
+        struct sockaddr_in *s = (struct sockaddr_in *)addr;
+        inet_ntop(AF_INET, &amp;s-&gt;sin_addr, ip, sizeof(ip));
+        port = ntohs(s-&gt;sin_port);
+    }
+
+    int ret = f ? f(sockfd, addr, addrlen) : -1;
+    fprintf(spy_log, &#34;[%d] connect(%d, \&#34;%s\&#34;, %d) = %d\n&#34;,
+            ++spy_count, sockfd, ip, port, ret);
+    return ret;
+}
+
+/* -- execve -------------------------------------------------------------- */
+
+typedef int (*orig_execve_t)(const char *, char *const[], char *const[]);
+int execve(const char *pathname, char *const argv[], char *const envp[])
+{
+    orig_execve_t f = (orig_execve_t)dlsym(RTLD_NEXT, &#34;execve&#34;);
+
+    fprintf(spy_log, &#34;[%d] execve(\&#34;%s\&#34;, [&#34;, ++spy_count, pathname);
+    if (argv)
+        for (int i = 0; argv[i]; i++)
+            fprintf(spy_log, &#34;\&#34;%s\&#34;%s&#34;, argv[i], argv[i+1] ? &#34;, &#34; : &#34;&#34;);
+    fprintf(spy_log, &#34;])\n&#34;);
+
+    return f ? f(pathname, argv, envp) : -1;
+}
+
+/* -- system -------------------------------------------------------------- */
+
+typedef int (*orig_system_t)(const char *);
+int system(const char *command)
+{
+    orig_system_t f = (orig_system_t)dlsym(RTLD_NEXT, &#34;system&#34;);
+    fprintf(spy_log, &#34;[%d] system(\&#34;%s\&#34;)\n&#34;, ++spy_count, command ? command : &#34;&#34;);
+    return f ? f(command) : -1;
+}
+
+/* -- dlopen / dlsym (detect dynamic API resolution) ---------------------- */
+
+typedef void * (*orig_dlopen_t)(const char *, int);
+void *dlopen(const char *filename, int flags)
+{
+    orig_dlopen_t f = (orig_dlopen_t)dlsym(RTLD_NEXT, &#34;dlopen&#34;);
+    fprintf(spy_log, &#34;[%d] dlopen(\&#34;%s\&#34;, 0x%x)\n&#34;, ++spy_count, filename, flags);
+    return f ? f(filename, flags) : NULL;
+}
+
+typedef void * (*orig_dlsym_t)(void *, const char *);
+void *dlsym(void *handle, const char *symbol)
+{
+    orig_dlsym_t f = (orig_dlsym_t)dlsym(RTLD_NEXT, &#34;dlsym&#34;);
+    fprintf(spy_log, &#34;[%d] dlsym(%p, \&#34;%s\&#34;)\n&#34;, ++spy_count, handle, symbol);
+    return f ? f(handle, symbol) : NULL;
+}
+
+/* -- socket / bind / listen (backdoor detection) ------------------------- */
+
+typedef int (*orig_socket_t)(int, int, int);
+int socket(int domain, int type, int protocol)
+{
+    orig_socket_t f = (orig_socket_t)dlsym(RTLD_NEXT, &#34;socket&#34;);
+    int ret = f ? f(domain, type, protocol) : -1;
+    fprintf(spy_log, &#34;[%d] socket(%d, %d, %d) = %d\n&#34;,
+            ++spy_count, domain, type, protocol, ret);
+    return ret;
+}
+
+typedef int (*orig_bind_t)(int, const struct sockaddr *, socklen_t);
+int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+{
+    orig_bind_t f = (orig_bind_t)dlsym(RTLD_NEXT, &#34;bind&#34;);
+    int port = 0;
+    if (addr-&gt;sa_family == AF_INET)
+        port = ntohs(((struct sockaddr_in *)addr)-&gt;sin_port);
+    fprintf(spy_log, &#34;[%d] bind(%d, *, %d)\n&#34;, ++spy_count, sockfd, port);
+    return f ? f(sockfd, addr, addrlen) : -1;
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="combining-with-strace">Combining With strace</h3>
+						<p>For complete coverage where LD_PRELOAD misses raw syscalls, run both simultaneously:</p>
+						<pre class="bash">
+# LD_PRELOAD catches libc-level functions, strace catches everything else
+LD_PRELOAD=./spy.so strace -o strace.log -f ./target
+
+# Filter strace for raw syscalls your LD_PRELOAD hooks don&#39;t see:
+grep &#39;^write\|^read\|^openat&#39; strace.log
+						</pre>
+					</section>
+					<section>
+						<h3 id="library-injection">Library Injection</h3>
+						<p>
+							LD_PRELOAD only affects newly started processes. To inject into an already-running process,
+							use
+							<code>gdb</code>
+							:
+						</p>
+						<pre class="bash">
+gdb -p $(pgrep target_process)
+(gdb) call (int)dlopen(&#34;/path/to/hook.so&#34;, 2)   # RTLD_NOW = 2
+(gdb) detach
+(gdb) quit
+
+# The hook library&#39;s constructor runs upon dlopen.
+# Hook functions are now active in the running process.
+# WARNING: This crashes if the process is mid-syscall or holds locks.
+						</pre>
+						<p>Safer: use Frida for runtime injection into production processes.</p>
+					</section>
+					<section>
+						<h3 id="ldsopreload-persistence">ld.so.preload Persistence</h3>
+						<p>
+							Malware often writes to
+							<code>/etc/ld.so.preload</code>
+							for persistence - this file is read by the dynamic
+							linker on every process start, applying the specified libraries system-wide:
+						</p>
+						<pre class="bash">
+# Detect LD_PRELOAD-based persistence:
+cat /etc/ld.so.preload
+# If it contains suspicious paths, a userland rootkit may be installed.
+
+# The ld.so.preload file allows one library path per line:
+# /lib/librootkit.so
+# /usr/local/lib/libhide.so
+						</pre>
+						<p>
+							The analysis technique (LD_PRELOAD interception) and the malware technique (ld.so.preload persistence)
+							are the same mechanism used for different purposes. When analyzing a binary that writes to
+							<code>/etc/ld.so.preload</code>
+							, you've found a userland rootkit installer.
+						</p>
+					</section>
+					<section>
+						<h3 id="summary">Summary</h3>
+						<p>
+							LD_PRELOAD hooks intercept every dynamically-linked function call -
+							<code>open</code>
+							,
+							<code>connect</code>
+							,
+							<code>execve</code>
+							,
+							<code>system</code>
+							,
+							<code>dlopen</code>
+							,
+							<code>read</code>
+							,
+							<code>write</code>
+							- giving you complete observability of a binary's interaction
+							with the OS. It is the first tool to reach for when analyzing unknown Linux binaries. No kernel
+							modules, no ptrace overhead, no performance penalty beyond your logging code. Combine with
+							<code>strace</code>
+							for syscall-level gaps, with GDB for interactive debugging, and with Frida for runtime injection.
+							The compiled
+							<code>.so</code>
+							is portable across any Linux system with the same architecture and glibc
+							version.
+						</p>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that prints the effective symbol search order for a binary without running it.
+							Parse the ELF dynamic section for
+							<code>DT_NEEDED</code>
+							,
+							<code>DT_RPATH</code>
+							, and
+							<code>DT_RUNPATH</code>
+							, then combine
+							that with the
+							<code>LD_PRELOAD</code>
+							environment variable and
+							<code>/etc/ld.so.preload</code>
+							. Run it with and without
+							<code>LD_PRELOAD</code>
+							set and confirm that the preload libraries are searched before the
+							<code>DT_NEEDED</code>
+							libraries.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;bufio&#34;
+	&#34;debug/elf&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;strings&#34;
+)
+
+func main() {
+	if len(os.Args) != 2 {
+		fmt.Fprintln(os.Stderr, &#34;usage: loadorder &lt;elf-binary&gt;&#34;)
+		os.Exit(1)
+	}
+
+	f, err := elf.Open(os.Args[1])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, &#34;open:&#34;, err)
+		os.Exit(1)
+	}
+	defer f.Close()
+
+	fmt.Println(&#34;preload sources (searched before DT_NEEDED):&#34;)
+	for _, lib := range strings.Split(os.Getenv(&#34;LD_PRELOAD&#34;), &#34;:&#34;) {
+		if lib = strings.TrimSpace(lib); lib != &#34;&#34; {
+			fmt.Printf(&#34;  LD_PRELOAD      %s\n&#34;, lib)
+		}
+	}
+	if file, err := os.Open(&#34;/etc/ld.so.preload&#34;); err == nil {
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line != &#34;&#34; &amp;&amp; !strings.HasPrefix(line, &#34;#&#34;) {
+				fmt.Printf(&#34;  ld.so.preload   %s\n&#34;, line)
+			}
+		}
+		file.Close()
+	}
+
+	fmt.Println(&#34;DT_NEEDED (breadth-first link order):&#34;)
+	for _, lib := range f.ImportedLibraries() {
+		fmt.Printf(&#34;  %s\n&#34;, lib)
+	}
+
+	for _, tag := range []elf.DynTag{elf.DT_RPATH, elf.DT_RUNPATH} {
+		if paths, err := f.DynString(tag); err == nil &amp;&amp; len(paths) &gt; 0 {
+			fmt.Printf(&#34;%s:\n&#34;, tag)
+			for _, p := range paths {
+				fmt.Printf(&#34;  %s\n&#34;, p)
+			}
+		}
+	}
+}
+						</pre>
+						<p>Build it and compare the two runs:</p>
+						<pre class="bash">
+go build -o loadorder loadorder.go
+./loadorder /bin/ls
+
+gcc -shared -fPIC -o hook.so hook.c -ldl
+LD_PRELOAD=$PWD/hook.so ./loadorder /bin/ls
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/ld.so.8" target="_blank">ld.so(8) man page</a> - the dynamic linker, LD_PRELOAD, and ld.so.preload</li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/dlsym.3" target="_blank">dlsym(3) man page</a> - RTLD_NEXT and RTLD_DEFAULT semantics</li>
+							<li><a class="icon-website" href="https://www.gnu.org/software/libc/manual/html_node/Dynamic-Linker.html" target="_blank">GNU C Library - Dynamic Linker</a> - official behavior of the loader</li>
+							<li><a class="icon-website" href="https://en.wikipedia.org/wiki/Executable_and_Linkable_Format" target="_blank">Executable and Linkable Format</a> - DT_NEEDED, R <abbr title="Port Address Translation">PAT</abbr> H, and RUN <abbr title="Port Address Translation">PAT</abbr> H</li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/ltrace.1" target="_blank">ltrace(1) man page</a> - library call tracing that complements LD_PRELOAD</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

@@ -1,0 +1,1546 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>ELF (Executable and Linkable Format) | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="ELF (Executable and Linkable Format)">
+		<meta name="keywords" content="binary-format, elf, executable, kernel, linux, loader, reverse-engineering, sections, segments, techniques">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="ELF (Executable and Linkable Format)">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="The ELF binary format on Linux - headers, segments, sections, the program header table, section header table, and how the kernel loads an executable into memory.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/fundamentals/elf.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="ELF (Executable and Linkable Format)">
+		<meta name="twitter:description" itemprop="description" content="The ELF binary format on Linux - headers, segments, sections, the program header table, section header table, and how the kernel loads an executable into memory.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#why-elf-exists">Why ELF Exists</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#magic-bytes-and-file-identification">Magic Bytes and File Identification</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#elf-header-structure-c-definition">ELF Header Structure (C Definition)</a></b>
+					<ul>
+						<li><a href="#type-what-kind-of-elf-file-this-is">e_type - what kind of ELF file this is</a></li>
+						<li><a href="#machine-target-architecture">e_machine - target architecture</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#program-header-table-the-loaders-view">Program Header Table - The Loader's View</a></b>
+					<ul>
+						<li><a href="#segment-types-p-type">Segment types (p_type)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#section-header-table-the-linkers-view">Section Header Table - The Linker's View</a></b>
+					<ul>
+						<li><a href="#standard-sections-every-elf-has">Standard sections every ELF has</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#key-sections-in-detail">Key Sections in Detail</a></b>
+					<ul>
+						<li><a href="#data-and-bss">.data and .bss</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#static-vs-dynamic-elf">Static vs Dynamic ELF</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#how-the-kernel-loads-an-elf">How the Kernel Loads an ELF</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#symbol-tables-symtab-and-dynsym">Symbol Tables - .symtab and .dynsym</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#relocations-fixing-address-references">Relocations - Fixing Address References</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#from-source-to-executable">From Source to Executable</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#minimal-elf-parser-in-python">Minimal ELF Parser in Python</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#stripping-debug-information">Stripping Debug Information</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tools-reference">Tools Reference</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#check-elf-integrity">Check ELF Integrity</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/fundamentals/index.html">Fundamentals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/fundamentals/elf.html">Elf</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="elf-executable-and-linkable-format">ELF (Executable and Linkable Format)</h2>
+					<p>
+						The ELF binary format on Linux - headers, segments, sections, the program header table, section
+						header table, and how the kernel loads an executable into memory.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							ELF is the container format Linux uses for executables, shared libraries, relocatable objects,
+							and core dumps. It is deliberately split into two views: sections for the linker and segments
+							for the kernel loader. Every binary you disassemble, patch, or exploit on Linux is an ELF file,
+							so reading its headers by hand is a prerequisite for reverse engineering and memory-corruption
+							work. After reading this article you can parse an ELF header from a hex dump, map segments and
+							sections to their purposes, and explain how
+							<code>execve()</code>
+							turns a file into a running process.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/filesystems.html">Filesystems</a> - how files are stored, inodes, and the VFS layer that loads ELF from disk</li>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - process creation, fork/execve, and how the kernel transitions from disk image to running process</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="why-elf-exists">Why ELF Exists</h3>
+						<p>
+							Before ELF, Unix used
+							<code>a.out</code>
+							(assembler output) and COFF (Common Object File Format).
+							<code>a.out</code>
+							had no dynamic linking support and assumed a fixed memory layout. COFF had limited extensibility
+							and no 64-bit support. ELF replaced both with a single, extensible format that serves three
+							purposes simultaneously: executables, shared libraries, and relocatable object files.
+						</p>
+						<p>
+							ELF's design separates the
+							<em>linker's view</em>
+							(Sections) from the
+							<em>loader's view</em>
+							(Segments). The
+							linker reads the Section Header Table to combine
+							<code>.o</code>
+							files into an executable. The kernel reads
+							the Program Header Table to map the executable into memory. This dual-view architecture is the
+							key insight of ELF.
+						</p>
+					</section>
+					<section>
+						<h3 id="magic-bytes-and-file-identification">Magic Bytes and File Identification</h3>
+						<p>Every ELF file begins with 16 bytes of identification in the ELF header:</p>
+						<pre class="plaintext">
+00000000  7f 45 4c 46 02 01 01 00  00 00 00 00 00 00 00 00  |.ELF............|
+						</pre>
+						<p>
+							The 4 magic bytes (
+							<code>\x7fELF</code>
+							) identify the file. Byte 4 specifies the class (1 = 32-bit, 2
+							= 64-bit). Byte 5 specifies endianness (1 = little, 2 = big). Byte 6 is the ELF header version
+							(always 1). Byte 7 is the OS/ABI identifier:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Value</th>
+									<th align="center">OS/ABI</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">0x00</td>
+									<td align="center">UNIX System V</td>
+								</tr>
+								<tr>
+									<td align="center">0x03</td>
+									<td align="center">Linux</td>
+								</tr>
+								<tr>
+									<td align="center">0x06</td>
+									<td align="center">Solaris</td>
+								</tr>
+								<tr>
+									<td align="center">0x09</td>
+									<td align="center">FreeBSD</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							File with
+							<code>hd</code>
+							:
+						</p>
+						<pre class="bash">
+$ hd -n 32 /bin/ls
+00000000  7f 45 4c 46 02 01 01 00  00 00 00 00 00 00 00 00  |.ELF............|
+00000010  03 00 3e 00 01 00 00 00  40 41 00 00 00 00 00 00  |..&gt;.....@A......|
+						</pre>
+						<p>
+							Confirm with
+							<code>readelf</code>
+							:
+						</p>
+						<pre class="bash">
+$ readelf -h /bin/ls | head -14
+ELF Header:
+  Magic:   7f 45 4c 46 02 01 01 00 00 00 00 00 00 00 00 00
+  Class:                             ELF64
+  Data:                              2&#39;s complement, little endian
+  Version:                           1 (current)
+  OS/ABI:                            UNIX - System V
+  ABI Version:                       0
+  Type:                              DYN (Position-Independent Executable file)
+  Machine:                           Advanced Micro Devices X86-64
+  Version:                           0x1
+  Entry point address:               0x6b10
+						</pre>
+					</section>
+					<section>
+						<h3 id="elf-header-structure-c-definition">ELF Header Structure (C Definition)</h3>
+						<p>
+							The ELF header is defined in
+							<code>/usr/include/elf.h</code>
+							:
+						</p>
+						<pre class="c">
+#define EI_NIDENT 16
+
+typedef struct {
+    unsigned char e_ident[EI_NIDENT];  // Magic + identification
+    uint16_t      e_type;              // Object file type
+    uint16_t      e_machine;           // Target architecture
+    uint32_t      e_version;           // Object file version
+    Elf64_Addr    e_entry;             // Entry point virtual address
+    Elf64_Off     e_phoff;             // Program header table file offset
+    Elf64_Off     e_shoff;             // Section header table file offset
+    uint32_t      e_flags;             // Processor-specific flags
+    uint16_t      e_ehsize;            // ELF header size in bytes (64)
+    uint16_t      e_phentsize;         // Program header entry size
+    uint16_t      e_phnum;             // Program header entry count
+    uint16_t      e_shentsize;         // Section header entry size
+    uint16_t      e_shnum;             // Section header entry count
+    uint16_t      e_shstrndx;          // Section name string table index
+} Elf64_Ehdr;
+						</pre>
+						<h4 id="type-what-kind-of-elf-file-this-is">e_type - what kind of ELF file this is</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Value</th>
+									<th align="center">Type</th>
+									<th align="center">Description</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">0x00</td>
+									<td align="center">ET_NONE</td>
+									<td align="center">No file type</td>
+								</tr>
+								<tr>
+									<td align="center">0x01</td>
+									<td align="center">ET_REL</td>
+									<td align="center">Relocatable file (.o)</td>
+								</tr>
+								<tr>
+									<td align="center">0x02</td>
+									<td align="center">ET_EXEC</td>
+									<td align="center">Executable file</td>
+								</tr>
+								<tr>
+									<td align="center">0x03</td>
+									<td align="center">ET_DYN</td>
+									<td align="center">Shared object file (.so or PIE)</td>
+								</tr>
+								<tr>
+									<td align="center">0x04</td>
+									<td align="center">ET_CORE</td>
+									<td align="center">Core dump</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							Modern Linux executables are usually
+							<code>ET_DYN</code>
+							(PIE) rather than
+							<code>ET_EXEC</code>
+							, because Position-Independent
+							Executables are compiled with
+							<code>-fPIE -pie</code>
+							by default. You can verify:
+						</p>
+						<pre class="bash">
+$ readelf -h /bin/ls | grep Type
+  Type:                              DYN (Position-Independent Executable file)
+$ readelf -h /bin/bash | grep Type
+  Type:                              EXEC (Executable file)
+						</pre>
+						<h4 id="machine-target-architecture">e_machine - target architecture</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Value</th>
+									<th align="center">Architecture</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">0x02</td>
+									<td align="center">SPARC</td>
+								</tr>
+								<tr>
+									<td align="center">0x03</td>
+									<td align="center">x86</td>
+								</tr>
+								<tr>
+									<td align="center">0x08</td>
+									<td align="center">MIPS</td>
+								</tr>
+								<tr>
+									<td align="center">0x14</td>
+									<td align="center">PowerPC</td>
+								</tr>
+								<tr>
+									<td align="center">0x28</td>
+									<td align="center">ARM</td>
+								</tr>
+								<tr>
+									<td align="center">0x2A</td>
+									<td align="center">SuperH</td>
+								</tr>
+								<tr>
+									<td align="center">0x3E</td>
+									<td align="center">x86-64</td>
+								</tr>
+								<tr>
+									<td align="center">0xB7</td>
+									<td align="center">AArch64</td>
+								</tr>
+								<tr>
+									<td align="center">0xF3</td>
+									<td align="center">RISC-V</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="program-header-table-the-loaders-view">Program Header Table - The Loader's View</h3>
+						<p>
+							The Program Header Table is an array of
+							<code>Elf64_Phdr</code>
+							entries. Each entry describes a
+							<em>segment</em>
+							<ul>
+								<li>a contiguous region in the file that the kernel maps into memory.</li>
+							</ul>
+						</p>
+						<pre class="c">
+typedef struct {
+    uint32_t p_type;     // Segment type
+    uint32_t p_flags;    // Segment flags (PF_R=4, PF_W=2, PF_X=1)
+    Elf64_Off p_offset;  // File offset of segment data
+    Elf64_Addr p_vaddr;  // Virtual address to map segment
+    Elf64_Addr p_paddr;  // Physical address (unused on Linux)
+    uint64_t p_filesz;   // Size of segment in file
+    uint64_t p_memsz;    // Size of segment in memory
+    uint64_t p_align;    // Alignment (must be power of 2)
+} Elf64_Phdr;
+						</pre>
+						<h4 id="segment-types-p-type">Segment types (p_type)</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Value</th>
+									<th align="center">Type</th>
+									<th align="center">Purpose</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">0x00</td>
+									<td align="center">PT_NULL</td>
+									<td align="center">Unused entry</td>
+								</tr>
+								<tr>
+									<td align="center">0x01</td>
+									<td align="center">PT_LOAD</td>
+									<td align="center">Loadable segment - kernel mmaps this</td>
+								</tr>
+								<tr>
+									<td align="center">0x02</td>
+									<td align="center">PT_DYNAMIC</td>
+									<td align="center">Dynamic linking information</td>
+								</tr>
+								<tr>
+									<td align="center">0x03</td>
+									<td align="center">PT_INTERP</td>
+									<td align="center">Path to dynamic linker (ld.so)</td>
+								</tr>
+								<tr>
+									<td align="center">0x04</td>
+									<td align="center">PT_NOTE</td>
+									<td align="center">Auxiliary information (ABI, build ID)</td>
+								</tr>
+								<tr>
+									<td align="center">0x05</td>
+									<td align="center">PT_SHLIB</td>
+									<td align="center">Reserved</td>
+								</tr>
+								<tr>
+									<td align="center">0x06</td>
+									<td align="center">PT_PHDR</td>
+									<td align="center">Location of program header table itself</td>
+								</tr>
+								<tr>
+									<td align="center">0x6474e550</td>
+									<td align="center">PT_GNU_EH_FRAME</td>
+									<td align="center">GCC exception handler table</td>
+								</tr>
+								<tr>
+									<td align="center">0x6474e551</td>
+									<td align="center">PT_GNU_STACK</td>
+									<td align="center">Stack executability flag (NX)</td>
+								</tr>
+								<tr>
+									<td align="center">0x6474e552</td>
+									<td align="center">PT_GNU_RELRO</td>
+									<td align="center">Read-only after relocation</td>
+								</tr>
+								<tr>
+									<td align="center">0x6474e553</td>
+									<td align="center">PT_GNU_PROPERTY</td>
+									<td align="center">CET/IBT properties</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							Examine program headers with
+							<code>readelf -l</code>
+							:
+						</p>
+						<pre class="bash">
+$ readelf -l /bin/ls
+
+Elf file type is DYN (Position-Independent Executable file)
+Entry point 0x6b10
+There are 13 program headers, starting at offset 64
+
+Program Headers:
+  Type           Offset             VirtAddr           PhysAddr
+                 FileSiz            MemSiz              Flags  Align
+  PHDR           0x0000000000000040 0x0000000000000040 0x0000000000000040
+                 0x00000000000002d8 0x00000000000002d8  R      0x8
+  INTERP         0x0000000000000318 0x0000000000000318 0x0000000000000318
+                 0x000000000000001c 0x000000000000001c  R      0x1
+  LOAD           0x0000000000000000 0x0000000000000000 0x0000000000000000
+                 0x0000000000002f50 0x0000000000002f50  R      0x1000
+  LOAD           0x0000000000003000 0x0000000000003000 0x0000000000003000
+                 0x000000000000c521 0x000000000000c521  R E    0x1000
+  LOAD           0x0000000000010000 0x0000000000010000 0x0000000000010000
+                 0x00000000000091bd 0x00000000000091bd  R      0x1000
+  LOAD           0x000000000001a188 0x000000000001b188 0x000000000001b188
+                 0x0000000000001330 0x00000000000026c0  RW     0x1000
+  GNU_STACK      0x0000000000000000 0x0000000000000000 0x0000000000000000
+                 0x0000000000000000 0x0000000000000000  RW     0x10
+  GNU_RELRO      0x000000000001a188 0x000000000001b188 0x000000000001b188
+                 0x0000000000000e78 0x0000000000000e78  R      0x1
+						</pre>
+						<p>
+							<b>PT_LOAD</b>
+							is the only segment type the kernel cares about during
+							<code>execve()</code>
+							. Everything else
+							(DYNAMIC, INTERP, NOTE) is metadata consumed by the dynamic linker after the process starts.
+						</p>
+						<p>
+							<b>PT_GNU_STACK</b>
+							- if the
+							<code>PF_X</code>
+							bit is absent, the kernel marks the stack as non-executable
+							(NX). This is the hardware-enforced W^X policy. Without
+							<code>PT_GNU_STACK</code>
+							, the kernel defaults
+							to executable stack (for ABI compatibility).
+						</p>
+						<pre class="bash">
+$ readelf -lW /bin/ls | grep -A1 GNU_STACK
+  GNU_STACK      0x000000 0x0000000000000000 0x0000000000000000
+                 0x000000 0x000000              RW     0x10
+						</pre>
+						<p>
+							<code>RW</code>
+							without
+							<code>E</code>
+							means no-execute stack.
+							<code>RWE</code>
+							means executable stack (deprecated, rarely seen).
+						</p>
+						<p>
+							<b>PT_GNU_RELRO</b>
+							- segments containing the GOT and
+							<code>.dynamic</code>
+							section must be writable during
+							relocation so the dynamic linker can fill in addresses. After relocation,
+							<code>PT_GNU_RELRO</code>
+							tells
+							the loader to
+							<code>mprotect()</code>
+							those pages as read-only, preventing GOT overwrite attacks.
+						</p>
+					</section>
+					<section>
+						<h3 id="section-header-table-the-linkers-view">Section Header Table - The Linker's View</h3>
+						<p>
+							The linker uses Sections. The Section Header Table is an array of
+							<code>Elf64_Shdr</code>
+							entries:
+						</p>
+						<pre class="c">
+typedef struct {
+    uint32_t    sh_name;       // Offset into .shstrtab for section name
+    uint32_t    sh_type;       // Section type
+    uint64_t    sh_flags;      // Section flags
+    Elf64_Addr  sh_addr;       // Virtual address (0 for relocatable)
+    Elf64_Off   sh_offset;     // Offset in file
+    uint64_t    sh_size;       // Size in bytes
+    uint32_t    sh_link;       // Link to another section (symbol table index)
+    uint32_t    sh_info;       // Extra info (section-specific)
+    uint64_t    sh_addralign;  // Alignment
+    uint64_t    sh_entsize;    // Entry size for fixed-size entry tables
+} Elf64_Shdr;
+						</pre>
+						<h4 id="standard-sections-every-elf-has">Standard sections every ELF has</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Section</th>
+									<th align="center">Purpose</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">.text</td>
+									<td align="center">Executable machine code</td>
+								</tr>
+								<tr>
+									<td align="center">.rodata</td>
+									<td align="center">Read-only data (string constants, const globals)</td>
+								</tr>
+								<tr>
+									<td align="center">.data</td>
+									<td align="center">Initialized writable global/static data</td>
+								</tr>
+								<tr>
+									<td align="center">.bss</td>
+									<td align="center">Uninitialized writable data (occupies no file space)</td>
+								</tr>
+								<tr>
+									<td align="center">.plt</td>
+									<td align="center">Procedure Linkage Table (lazy binding stubs)</td>
+								</tr>
+								<tr>
+									<td align="center">.got</td>
+									<td align="center">Global Offset Table (addresses of global symbols)</td>
+								</tr>
+								<tr>
+									<td align="center">.got.plt</td>
+									<td align="center">GOT entries for PLT (function pointers)</td>
+								</tr>
+								<tr>
+									<td align="center">.init</td>
+									<td align="center">Initialization code (runs before main)</td>
+								</tr>
+								<tr>
+									<td align="center">.fini</td>
+									<td align="center">Finalization code (runs after main)</td>
+								</tr>
+								<tr>
+									<td align="center">.dynamic</td>
+									<td align="center">Dynamic linking information</td>
+								</tr>
+								<tr>
+									<td align="center">.symtab</td>
+									<td align="center">Symbol table (all symbols, may be stripped)</td>
+								</tr>
+								<tr>
+									<td align="center">.strtab</td>
+									<td align="center">String table for .symtab</td>
+								</tr>
+								<tr>
+									<td align="center">.dynsym</td>
+									<td align="center">Dynamic symbol table (needed at runtime)</td>
+								</tr>
+								<tr>
+									<td align="center">.dynstr</td>
+									<td align="center">String table for .dynsym</td>
+								</tr>
+								<tr>
+									<td align="center">.interp</td>
+									<td align="center">Dynamic linker path</td>
+								</tr>
+								<tr>
+									<td align="center">.shstrtab</td>
+									<td align="center">Section name string table</td>
+								</tr>
+								<tr>
+									<td align="center">.comment</td>
+									<td align="center">Compiler version info</td>
+								</tr>
+								<tr>
+									<td align="center">.note.gnu.build-id</td>
+									<td align="center">Build ID hash</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>Listing sections:</p>
+						<pre class="bash">
+$ readelf -SW /bin/ls
+There are 31 section headers, starting at offset 0x1c5e8:
+
+Section Headers:
+  [Nr] Name              Type            Address          Off    Size   ES Flg Lk Inf Al
+  [ 0]                   NULL            0000000000000000 000000 000000 00      0   0  0
+  [ 1] .interp           PROGBITS        0000000000000318 000318 00001c 00   A  0   0  1
+  [ 2] .note.gnu.build-id NOTE            0000000000000338 000338 000024 00   A  0   0  4
+  [ 3] .note.ABI-tag     NOTE            000000000000035c 00035c 000020 00   A  0   0  4
+  [ 4] .gnu.hash         GNU_HASH        0000000000000380 000380 00005c 00   A  5   0  8
+  [ 5] .dynsym           DYNSYM          00000000000003e0 0003e0 000cc0 18   A  6   1  8
+  [ 6] .dynstr           STRTAB          00000000000010a0 0010a0 0005fb 00   A  0   0  1
+  [ 7] .gnu.version      VERSYM          000000000000169c 00169c 000110 02   A  5   0  2
+  [ 8] .gnu.version_r    VERNEED         00000000000017b0 0017b0 000120 00   A  6   3  8
+  [ 9] .rela.dyn         RELA            00000000000018d0 0018d0 001638 18   A  5   0  8
+  [10] .rela.plt         RELA            0000000000002f08 002f08 000048 18  AI  5  26  8
+  [11] .init             PROGBITS        0000000000003000 003000 00001b 00  AX  0   0  4
+  [12] .plt              PROGBITS        0000000000003020 003020 000040 10  AX  0   0 16
+  [13] .plt.got          PROGBITS        0000000000003060 003060 000020 10  AX  0   0 16
+  [14] .text             PROGBITS        0000000000003080 003080 00c38c 00  AX  0   0 16
+  [15] .fini             PROGBITS        000000000000f40c 00f40c 00000d 00  AX  0   0  4
+  [16] .rodata           PROGBITS        0000000000010000 010000 00510a 00   A  0   0 32
+  [17] .eh_frame_hdr     PROGBITS        000000000001510c 01510c 0002bc 00   A  0   0  4
+  [18] .eh_frame         PROGBITS        00000000000153c8 0153c8 001494 00   A  0   0  8
+  [19] .init_array       INIT_ARRAY      000000000001b188 01a188 000008 08  WA  0   0  8
+  [20] .fini_array       FINI_ARRAY      000000000001b190 01a190 000008 08  WA  0   0  8
+  [21] .data.rel.ro      PROGBITS        000000000001b198 01a198 000e68 00  WA  0   0 32
+  [22] .dynamic          DYNAMIC         000000000001c000 01b000 000200 10  WA  6   0  8
+  [23] .got              PROGBITS        000000000001c200 01b200 0003f8 08  WA  0   0  8
+  [24] .data             PROGBITS        000000000001c600 01b600 000008 00  WA  0   0 8
+  [25] .bss              NOBITS          000000000001c620 01b620 001388 00  WA  0   0 32
+  ...
+						</pre>
+					</section>
+					<section>
+						<h3 id="key-sections-in-detail">Key Sections in Detail</h3>
+						<p>
+							<b>.text</b>
+							- contains the compiled machine instructions. Flags
+							<code>AX</code>
+							(allocatable + executable).
+							The
+							<abbr title="Central Processing Unit">CPU</abbr>
+							fetches and executes bytes from this region:
+						</p>
+						<pre class="bash">
+$ objdump -d /bin/ls -j .text | head -20
+
+/bin/ls:     file format elf64-x86-64
+
+Disassembly of section .text:
+
+0000000000003080 &lt;__text_start&gt;:
+    3080:       f3 0f 1e fa             endbr64
+    3084:       31 ed                   xor    %ebp,%ebp
+    3086:       49 89 d1                mov    %rdx,%r9
+    3089:       5e                      pop    %rsi
+    308a:       48 89 e2                mov    %rsp,%rdx
+    308d:       48 83 e4 f0             and    $0xfffffffffffffff0,%rsp
+    3091:       50                      push   %rax
+    3092:       54                      push   %rsp
+    3093:       4c 8d 05 06 c4 00 00    lea    0xc406(%rip),%r8        # 000000000000f4a0 &lt;__libc_csu_fini&gt;
+    309a:       48 8d 0d 8f c3 00 00    lea    0xc38f(%rip),%rcx        # 000000000000f430 &lt;__libc_csu_init&gt;
+    30a1:       48 8d 3d d8 88 00 00    lea    0x88d8(%rip),%rdi        # 000000000000b980 &lt;main&gt;
+    30a8:       67 e8 52 40 00 00       addr32 call   70ff &lt;__libc_start_main@Base+0x70ff&gt;
+						</pre>
+						<p>
+							<b>.rodata</b>
+							- read-only data. String constants live here:
+						</p>
+						<pre class="bash">
+$ objdump -s -j .rodata /bin/ls | head -10
+
+/bin/ls:     file format elf64-x86-64
+
+Contents of section .rodata:
+ 10000 01000200 00000000 00000000 00000000  ................
+ 10010 01000000 00000000 00000000 00000000  ................
+ 10020 00000000 00000000 ffffff00 00000000  ................
+						</pre>
+						<h4 id="data-and-bss">.data and .bss</h4>
+						<p>
+							<code>.data</code>
+							holds initialized writable globals and static variables with non-zero initial values.
+							<code>.bss</code>
+							holds uninitialized data: it takes memory at runtime but no space in the file, and the
+							loader allocates and zeroes it:
+						</p>
+						<pre class="bash">
+$ readelf -S /bin/ls | grep -E &#39;\.(data|bss)&#39;
+  [24] .data             PROGBITS         000000000001c600  0001b600
+  [25] .bss              NOBITS           000000000001c620  0001b620
+						</pre>
+						<p>
+							<code>.data</code>
+							is
+							<code>PROGBITS</code>
+							(actual bytes in file),
+							<code>.bss</code>
+							is
+							<code>NOBITS</code>
+							(no file bytes, zero-filled
+							at load).
+						</p>
+						<p>
+							<b>.plt</b>
+							(Procedure Linkage Table) - trampoline code for lazy function resolution:
+						</p>
+						<pre class="bash">
+$ objdump -d -j .plt /bin/ls
+
+/bin/ls:     file format elf64-x86-64
+
+Disassembly of section .plt:
+
+0000000000003020 &lt;.plt&gt;:
+    3020:       ff 35 e2 91 01 00       push   0x191e2(%rip)        # 1c208 &lt;_GLOBAL_OFFSET_TABLE_+0x8&gt;
+    3026:       f2 ff 25 e3 91 01 00    bnd jmp *0x191e3(%rip)      # 1c210 &lt;_GLOBAL_OFFSET_TABLE_+0x10&gt;
+    302d:       0f 1f 00                nopl   (%rax)
+    3030:       f3 0f 1e fa             endbr64
+    3034:       68 00 00 00 00          push   $0x0
+    3039:       e9 e2 ff ff ff          jmp    3020 &lt;.plt&gt;
+    303e:       66 90                   xchg   %ax,%ax
+    3040:       f3 0f 1e fa             endbr64
+    3044:       68 01 00 00 00          push   $0x1
+    3049:       e9 d2 ff ff ff          jmp    3020 &lt;.plt&gt;
+						</pre>
+					</section>
+					<section>
+						<h3 id="static-vs-dynamic-elf">Static vs Dynamic ELF</h3>
+						<p>
+							A statically linked ELF contains all library code in the executable itself. No dynamic linker,
+							no shared libraries, no PLT/GOT. Produced with
+							<code>gcc -static</code>
+							:
+						</p>
+						<pre class="bash">
+$ gcc -static -o hello_static hello.c
+$ readelf -d hello_static
+There is no dynamic section in this file.
+$ ldd hello_static
+        not a dynamic executable
+$ ls -lh hello_static
+-rwxr-xr-x 1 user user 893K Jun 26 12:00 hello_static
+						</pre>
+						<p>
+							The kernel loads the static ELF directly - it mmaps the
+							<code>PT_LOAD</code>
+							segments, sets up the stack,
+							and jumps to e_entry. No intermediary. The dynamic case is more complex:
+						</p>
+						<pre class="bash">
+$ gcc -o hello_dyn hello.c
+$ readelf -d hello_dyn | grep NEEDED
+ 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+$ ldd hello_dyn
+        linux-vdso.so.1 (0x00007ffff7fc1000)
+        libc.so.6 =&gt; /usr/lib/libc.so.6 (0x00007ffff7c00000)
+        /lib64/ld-linux-x86-64.so.2 (0x00007ffff7fc3000)
+						</pre>
+						<p>
+							The kernel loads the dynamic ELF, but then hands control to
+							<code>ld.so</code>
+							(specified in
+							<code>.interp</code>
+							), which resolves all shared library dependencies before jumping to the executable's entry point.
+						</p>
+					</section>
+					<section>
+						<h3 id="how-the-kernel-loads-an-elf">How the Kernel Loads an ELF</h3>
+						<p>
+							The
+							<code>execve()</code>
+							syscall triggers the ELF loader in the kernel (
+							<code>fs/binfmt_elf.c</code>
+							). The loading
+							sequence:
+						</p>
+						<pre class="plaintext">
+1. execve(path, argv, envp)
+2. Kernel reads first 128 bytes into a buffer (to identify the format)
+3. Checks magic bytes: if &#34;\x7fELF&#34;, calls load_elf_binary()
+4. Reads full ELF header (Elf64_Ehdr)
+5. Validates e_ident, e_type, e_machine against current arch
+6. Reads Program Header Table (e_phoff, e_phnum entries)
+7. For each PT_LOAD segment:
+   a. Calculates memory region: [vaddr, vaddr + memsz)
+   b. mmap() with appropriate prot (from p_flags)
+   c. Reads p_filesz bytes from file offset into memory
+   d. Zero-fills remaining (memsz - filesz) bytes for .bss
+8. If PT_INTERP exists, loads the interpreter ELF and hands control to it
+9. Otherwise (static ELF), sets up stack, sets RIP = e_entry
+10. Sets up the auxiliary vector (AT_ENTRY, AT_PHDR, AT_PHENT, ...)
+11. Returns to userspace at entry point
+						</pre>
+						<p>
+							The auxiliary vector is an array of key-value pairs pushed onto the stack before
+							<code>argv</code>
+							and
+							<code>envp</code>
+							. It communicates system parameters to the dynamic linker and the process:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Key</th>
+									<th align="center">Value</th>
+									<th align="center">Meaning</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">AT_PHDR</td>
+									<td align="center">address</td>
+									<td align="center">Program headers location</td>
+								</tr>
+								<tr>
+									<td align="center">AT_PHENT</td>
+									<td align="center">size</td>
+									<td align="center">Program header entry size</td>
+								</tr>
+								<tr>
+									<td align="center">AT_PHNUM</td>
+									<td align="center">count</td>
+									<td align="center">Number of program headers</td>
+								</tr>
+								<tr>
+									<td align="center">AT_PAGESZ</td>
+									<td align="center">size</td>
+									<td align="center">System page size</td>
+								</tr>
+								<tr>
+									<td align="center">AT_BASE</td>
+									<td align="center">address</td>
+									<td align="center">Interpreter base address</td>
+								</tr>
+								<tr>
+									<td align="center">AT_ENTRY</td>
+									<td align="center">address</td>
+									<td align="center">Program entry point</td>
+								</tr>
+								<tr>
+									<td align="center">AT_UID</td>
+									<td align="center">uid</td>
+									<td align="center">Real UID</td>
+								</tr>
+								<tr>
+									<td align="center">AT_EUID</td>
+									<td align="center">euid</td>
+									<td align="center">Effective UID</td>
+								</tr>
+								<tr>
+									<td align="center">AT_GID</td>
+									<td align="center">gid</td>
+									<td align="center">Real GID</td>
+								</tr>
+								<tr>
+									<td align="center">AT_EXECFN</td>
+									<td align="center">string</td>
+									<td align="center">Executable filename</td>
+								</tr>
+								<tr>
+									<td align="center">AT_RANDOM</td>
+									<td align="center">address</td>
+									<td align="center">16 random bytes</td>
+								</tr>
+								<tr>
+									<td align="center">AT_SECURE</td>
+									<td align="center">bool</td>
+									<td align="center">Setuid/setgid programs</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>The stack layout after execve, from high addresses to low:</p>
+						<pre class="plaintext">
+  [null-terminated envp strings]
+  [null-terminated argv strings]
+  [environment pointers]     &lt;- envp[n] = NULL
+  [argument pointers]        &lt;- argv[0], argv[1], ..., NULL
+  [argument count argc]
+  [auxiliary vector]         &lt;- {AT_NULL, AT_NULL}
+  [... stack frames ...]     &lt;- RSP on entry
+						</pre>
+					</section>
+					<section>
+						<h3 id="symbol-tables-symtab-and-dynsym">Symbol Tables - .symtab and .dynsym</h3>
+						<p>
+							The symbol table maps names to addresses.
+							<code>.symtab</code>
+							contains all symbols (functions, global
+							variables, file-level statics) and is used by the static linker.
+							<code>.dynsym</code>
+							contains only symbols
+							needed at runtime (imports, exports) and cannot be stripped without breaking dynamic linking.
+						</p>
+						<pre class="bash">
+$ readelf -s /bin/ls | head -20
+
+Symbol table &#39;.dynsym&#39; contains 204 entries:
+   Num:    Value          Size Type    Bind   Vis      Ndx Name
+     0: 0000000000000000     0 NOTYPE  LOCAL  DEFAULT  UND
+     1: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND __ctype_toupper_loc@GLIBC_2.3 (2)
+     2: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND getenv@GLIBC_2.2.5 (3)
+     3: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND cap_to_text@Base (4)
+     4: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND sigprocmask@GLIBC_2.2.5 (3)
+     5: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND raise@GLIBC_2.2.5 (3)
+     6: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND localtime@GLIBC_2.2.5 (3)
+     ...
+						</pre>
+						<p>Symbol bindings:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Binding</th>
+									<th align="center">Meaning</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">LOCAL</td>
+									<td align="center">Not visible outside this object file</td>
+								</tr>
+								<tr>
+									<td align="center">GLOBAL</td>
+									<td align="center">Visible to all object files being linked</td>
+								</tr>
+								<tr>
+									<td align="center">WEAK</td>
+									<td align="center">Like GLOBAL but can be overridden</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>Symbol visibility:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Visibility</th>
+									<th align="center">Meaning</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">DEFAULT</td>
+									<td align="center">Normal visibility</td>
+								</tr>
+								<tr>
+									<td align="center">HIDDEN</td>
+									<td align="center">Not exported, even in shared library</td>
+								</tr>
+								<tr>
+									<td align="center">INTERNAL</td>
+									<td align="center">Like HIDDEN but cannot be called via function pointer</td>
+								</tr>
+								<tr>
+									<td align="center">PROTECTED</td>
+									<td align="center">Always resolves to definition in this shared library</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="relocations-fixing-address-references">Relocations - Fixing Address References</h3>
+						<p>
+							Relocations are entries that tell the linker or dynamic linker "the address at this offset needs
+							to be patched with the address of symbol X". Two formats:
+						</p>
+						<p>
+							<b>Elf64_Rel</b>
+							- explicit addend stored at the target location:
+						</p>
+						<pre class="c">
+typedef struct {
+    Elf64_Addr r_offset;   // Virtual address to patch
+    uint64_t   r_info;     // Symbol index + relocation type
+} Elf64_Rel;
+						</pre>
+						<p>
+							<b>Elf64_Rela</b>
+							- addend stored in the relocation entry itself:
+						</p>
+						<pre class="c">
+typedef struct {
+    Elf64_Addr r_offset;   // Virtual address to patch
+    uint64_t   r_info;     // Symbol index + relocation type
+    int64_t    r_addend;   // Addend to add to symbol value
+} Elf64_Rela;
+						</pre>
+						<p>x86-64 uses RELA. Common relocation types on x86-64:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Type</th>
+									<th align="center">Value</th>
+									<th align="center">Meaning</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">R_X86_64_NONE</td>
+									<td align="center">0</td>
+									<td align="center">No relocation</td>
+								</tr>
+								<tr>
+									<td align="center">R_X86_64_64</td>
+									<td align="center">1</td>
+									<td align="center">S + A (direct 64-bit)</td>
+								</tr>
+								<tr>
+									<td align="center">R_X86_64_PC32</td>
+									<td align="center">2</td>
+									<td align="center">S + A - P (32-bit PC-relative)</td>
+								</tr>
+								<tr>
+									<td align="center">R_X86_64_GLOB_DAT</td>
+									<td align="center">6</td>
+									<td align="center">Absolute address in GOT</td>
+								</tr>
+								<tr>
+									<td align="center">R_X86_64_JUMP_SLOT</td>
+									<td align="center">7</td>
+									<td align="center">PLT GOT entry</td>
+								</tr>
+								<tr>
+									<td align="center">R_X86_64_RELATIVE</td>
+									<td align="center">8</td>
+									<td align="center">B + A (relative to image base)</td>
+								</tr>
+								<tr>
+									<td align="center">R_X86_64_COPY</td>
+									<td align="center">5</td>
+									<td align="center">Copy data from shared object</td>
+								</tr>
+								<tr>
+									<td align="center">R_X86_64_IRELATIVE</td>
+									<td align="center">37</td>
+									<td align="center">Indirect function (ifunc)</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>View relocations:</p>
+						<pre class="bash">
+$ readelf -r /bin/ls | head -20
+
+Relocation section &#39;.rela.dyn&#39; at offset 0x18d0 contains 355 entries:
+  Offset          Info           Type           Sym. Value    Sym. Name + Addend
+00000001b188  000000000008 R_X86_64_RELATIVE                    8bf0
+00000001b190  000000000008 R_X86_64_RELATIVE                    8ba0
+00000001b198  000000040006 R_X86_64_GLOB_DAT 0000000000000000 __gmon_start__ + 0
+00000001b1a0  000000210006 R_X86_64_GLOB_DAT 0000000000000000 __ctype_toupper_loc@GLIBC_2.3 + 0
+00000001b1a8  000000630006 R_X86_64_GLOB_DAT 0000000000000000 __progname + 0
+...
+						</pre>
+					</section>
+					<section>
+						<h3 id="from-source-to-executable">From Source to Executable</h3>
+						<p>The full compilation pipeline:</p>
+						<pre class="plaintext">
+hello.c ─[gcc -E]─-&gt; hello.i ─[gcc -S]─-&gt; hello.s ─[gcc -c]─-&gt; hello.o ─[ld]─-&gt; hello
+ (source)          (preprocessed)      (assembly)      (relocatable)    (executable)
+						</pre>
+						<p>Examine each stage:</p>
+						<pre class="c">
+// hello.c
+#include &lt;stdio.h&gt;
+int main(int argc, char **argv) {
+    printf(&#34;Hello, ELF\n&#34;);
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+# Preprocess (expand macros, include headers)
+$ gcc -E hello.c -o hello.i
+$ wc -l hello.i
+847 hello.i
+
+# Compile to assembly
+$ gcc -S hello.i -o hello.s
+
+# Assemble to object file
+$ gcc -c hello.s -o hello.o
+$ file hello.o
+hello.o: ELF 64-bit LSB relocatable, x86-64, version 1 (SYSV), not stripped
+
+# Link to executable
+$ gcc hello.o -o hello
+$ file hello
+hello: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked,
+interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=..., for GNU/Linux 4.4.0, stripped
+						</pre>
+						<p>
+							The assembler creates
+							<code>.o</code>
+							files - ET_REL ELF files with sections but no program headers (no
+							segments, since they aren't loadable yet). The linker reads all
+							<code>.o</code>
+							files, resolves cross-references,
+							lays out sections into segments, and writes the final executable.
+						</p>
+					</section>
+					<section>
+						<h3 id="minimal-elf-parser-in-python">Minimal ELF Parser in Python</h3>
+						<p>A parser that reads the ELF header and prints the entry point and segment map:</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;Minimal ELF parser - reads ELF header, prints entry point and segment map.&#34;&#34;&#34;
+import struct
+import sys
+
+ELF_MAGIC = b&#39;\x7fELF&#39;
+
+ELFTYPE = {0: &#39;NONE&#39;, 1: &#39;REL&#39;, 2: &#39;EXEC&#39;, 3: &#39;DYN&#39;, 4: &#39;CORE&#39;}
+ELFMACHINE = {2: &#39;SPARC&#39;, 3: &#39;x86&#39;, 0x28: &#39;ARM&#39;, 0x3E: &#39;x86-64&#39;, 0xB7: &#39;AArch64&#39;, 0xF3: &#39;RISC-V&#39;}
+PT_TYPE = {0: &#39;NULL&#39;, 1: &#39;LOAD&#39;, 2: &#39;DYNAMIC&#39;, 3: &#39;INTERP&#39;, 4: &#39;NOTE&#39;,
+           0x6474E550: &#39;GNU_EH_FRAME&#39;, 0x6474E551: &#39;GNU_STACK&#39;, 0x6474E552: &#39;GNU_RELRO&#39;}
+
+def parse_elf(path):
+    with open(path, &#39;rb&#39;) as f:
+        ident = f.read(16)
+        if ident[:4] != ELF_MAGIC:
+            print(f&#34;Not an ELF file: {path}&#34;)
+            return
+
+        is_64bit = ident[4] == 2
+        is_le = ident[5] == 1
+        endian = &#39;&lt;&#39; if is_le else &#39;&gt;&#39;
+
+        if is_64bit:
+            ehdr_fmt = f&#39;{endian}HHIQQQIHHHHHH&#39;
+            ehdr_size = 64
+            phdr_fmt = f&#39;{endian}IIQQQQQQ&#39;
+            phdr_size = 56
+        else:
+            ehdr_fmt = f&#39;{endian}HHIIIIIHHHHHH&#39;
+            ehdr_size = 52
+            phdr_fmt = f&#39;{endian}IIIIIIII&#39;
+            phdr_size = 32
+
+        e_type, e_machine, e_version, e_entry, e_phoff, e_shoff, \
+        e_flags, e_ehsize, e_phentsize, e_phnum, e_shentsize, e_shnum, e_shstrndx = \
+            struct.unpack(ehdr_fmt, f.read(ehdr_size - 16))
+
+        print(f&#34;ELF{&#39;64&#39; if is_64bit else &#39;32&#39;} {&#39;LE&#39; if is_le else &#39;BE&#39;}&#34;)
+        print(f&#34;Type:      {ELFTYPE.get(e_type, hex(e_type))} ({e_type})&#34;)
+        print(f&#34;Machine:   {ELFMACHINE.get(e_machine, hex(e_machine))} ({hex(e_machine)})&#34;)
+        print(f&#34;Entry:     {hex(e_entry)}&#34;)
+        print(f&#34;PH offset: {hex(e_phoff)}, {e_phnum} entries&#34;)
+        print(f&#34;SH offset: {hex(e_shoff)}, {e_shnum} entries&#34;)
+        print()
+
+        print(f&#34;{&#39;Type&#39;:&lt;16} {&#39;Offset&#39;:&lt;12} {&#39;VirtAddr&#39;:&lt;18} {&#39;FileSz&#39;:&lt;10} {&#39;MemSz&#39;:&lt;10} {&#39;Flgs&#39;}&#34;)
+        print(&#34;-&#34; * 80)
+
+        f.seek(e_phoff)
+        for i in range(e_phnum):
+            phdr = struct.unpack(phdr_fmt, f.read(phdr_size))
+            p_type, p_flags, p_offset, p_vaddr, p_paddr, p_filesz, p_memsz, p_align = phdr
+            type_name = PT_TYPE.get(p_type, f&#34;0x{p_type:08x}&#34;)
+            flags = &#39;&#39;
+            if p_flags &amp; 4: flags += &#39;R&#39;
+            if p_flags &amp; 2: flags += &#39;W&#39;
+            if p_flags &amp; 1: flags += &#39;E&#39;
+            print(f&#34;{type_name:&lt;16} {hex(p_offset):&lt;12} {hex(p_vaddr):&lt;18} &#34;
+                  f&#34;{hex(p_filesz):&lt;10} {hex(p_memsz):&lt;10} {flags}&#34;)
+
+if __name__ == &#39;__main__&#39;:
+    if len(sys.argv) &lt; 2:
+        print(f&#34;Usage: {sys.argv[0]} &lt;elf-file&gt;&#34;)
+        sys.exit(1)
+    parse_elf(sys.argv[1])
+						</pre>
+						<p>Run it:</p>
+						<pre class="bash">
+$ python3 elfparse.py /bin/ls
+ELF64 LE
+Type:      DYN (3)
+Machine:   x86-64 (0x3e)
+Entry:     0x6b10
+PH offset: 0x40, 13 entries
+SH offset: 0x1c668, 31 entries
+
+Type             Offset       VirtAddr           FileSz     MemSz      Flgs
+----------------------------------------------------------------------
+PHDR             0x40         0x40               0x2d8       0x2d8       R
+INTERP           0x318        0x318              0x1c        0x1c        R
+LOAD             0x0          0x0                0x2f50      0x2f50      R
+LOAD             0x3000       0x3000             0xc521      0xc521      RE
+LOAD             0x10000      0x10000            0x91bd      0x91bd      R
+LOAD             0x1a188      0x1b188            0x1330      0x26c0      RW
+DYNAMIC          0x1b000      0x1c000            0x200       0x200       RW
+NOTE             0x338        0x338              0x68        0x68        R
+NOTE             0x15368      0x15368            0x60        0x60        R
+GNU_EH_FRAME     0x1510c      0x1510c            0x2bc       0x2bc       R
+GNU_STACK        0x0          0x0                0x0         0x0         RW
+GNU_RELRO        0x1a188      0x1b188            0xe78       0xe78       R
+						</pre>
+					</section>
+					<section>
+						<h3 id="stripping-debug-information">Stripping Debug Information</h3>
+						<p>
+							<code>strip</code>
+							removes
+							<code>.symtab</code>
+							,
+							<code>.strtab</code>
+							, and debug sections. It preserves
+							<code>.dynsym</code>
+							and
+							<code>.dynstr</code>
+							because those are needed for dynamic linking:
+						</p>
+						<pre class="bash">
+$ strip ./hello
+$ file ./hello
+hello: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked,
+interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=..., for GNU/Linux 4.4.0, stripped
+						</pre>
+						<p>
+							After stripping,
+							<code>readelf -s</code>
+							shows only dynamic symbols:
+						</p>
+						<pre class="bash">
+$ readelf -s ./hello
+
+Symbol table &#39;.dynsym&#39; contains 9 entries:
+   Num:    Value          Size Type    Bind   Vis      Ndx Name
+     0: 0000000000000000     0 NOTYPE  LOCAL  DEFAULT  UND
+     1: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND printf@GLIBC_2.2.5
+     2: 0000000000000000     0 NOTYPE  WEAK   DEFAULT  UND __gmon_start__
+     ...
+						</pre>
+						<p>
+							The
+							<code>.symtab</code>
+							section (containing local function names, file-level statics, and non-exported
+							symbols) is gone. The
+							<code>.dynsym</code>
+							section (imports like
+							<code>printf</code>
+							) remains.
+						</p>
+					</section>
+					<section>
+						<h3 id="tools-reference">Tools Reference</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Tool</th>
+									<th align="center">Purpose</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>readelf -h</code></td>
+									<td align="center">ELF header</td>
+								</tr>
+								<tr>
+									<td align="center"><code>readelf -l</code></td>
+									<td align="center">Program headers (segments)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>readelf -S</code></td>
+									<td align="center">Section headers</td>
+								</tr>
+								<tr>
+									<td align="center"><code>readelf -s</code></td>
+									<td align="center">Symbol tables</td>
+								</tr>
+								<tr>
+									<td align="center"><code>readelf -d</code></td>
+									<td align="center">Dynamic section</td>
+								</tr>
+								<tr>
+									<td align="center"><code>readelf -r</code></td>
+									<td align="center">Relocations</td>
+								</tr>
+								<tr>
+									<td align="center"><code>objdump -d</code></td>
+									<td align="center">Disassembly</td>
+								</tr>
+								<tr>
+									<td align="center"><code>objdump -s</code></td>
+									<td align="center">Hex dump of section contents</td>
+								</tr>
+								<tr>
+									<td align="center"><code>objdump -x</code></td>
+									<td align="center">All headers</td>
+								</tr>
+								<tr>
+									<td align="center"><code>objdump -p</code></td>
+									<td align="center">Program headers (like readelf -l)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>nm</code></td>
+									<td align="center">List symbols</td>
+								</tr>
+								<tr>
+									<td align="center"><code>nm -D</code></td>
+									<td align="center">List dynamic symbols</td>
+								</tr>
+								<tr>
+									<td align="center"><code>ldd</code></td>
+									<td align="center">Print shared library dependencies</td>
+								</tr>
+								<tr>
+									<td align="center"><code>strip</code></td>
+									<td align="center">Remove symbols and debug info</td>
+								</tr>
+								<tr>
+									<td align="center"><code>size</code></td>
+									<td align="center">Section sizes</td>
+								</tr>
+								<tr>
+									<td align="center"><code>strings</code></td>
+									<td align="center">Extract printable strings</td>
+								</tr>
+								<tr>
+									<td align="center"><code>patchelf</code></td>
+									<td align="center">Modify ELF dynamic section</td>
+								</tr>
+								<tr>
+									<td align="center"><code>file</code></td>
+									<td align="center">Identify file type</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="check-elf-integrity">Check ELF Integrity</h3>
+						<p>A quick script to verify an ELF file is well-formed:</p>
+						<pre class="bash">
+#!/bin/bash
+# elfcheck - validate ELF structure
+ELF=&#34;$1&#34;
+[ -z &#34;$ELF&#34; ] &amp;&amp; { echo &#34;Usage: $0 &lt;elf&gt;&#34;; exit 1; }
+
+echo &#34;=== File Identity ===&#34;
+file &#34;$ELF&#34;
+
+echo
+echo &#34;=== Entry Point ===&#34;
+readelf -h &#34;$ELF&#34; | grep Entry
+
+echo
+echo &#34;=== Program Headers (LOAD segments) ===&#34;
+readelf -l &#34;$ELF&#34; | grep -A1 &#39;LOAD\|INTERP\|GNU_STACK\|GNU_RELRO&#39;
+
+echo
+echo &#34;=== Dynamic Dependencies ===&#34;
+ldd &#34;$ELF&#34; 2&gt;/dev/null || echo &#34;(static)&#34;
+
+echo
+echo &#34;=== Hardened? ===&#34;
+readelf -lW &#34;$ELF&#34; | grep -q &#39;STACK.*E &#39; &amp;&amp; echo &#34;WARN: Executable stack!&#34; || echo &#34;OK: Non-exec stack&#34;
+readelf -d &#34;$ELF&#34; 2&gt;/dev/null | grep -q &#39;(BIND_NOW)&#39; &amp;&amp; echo &#34;OK: Full RELRO (BIND_NOW)&#34; || echo &#34;NOTE: Partial RELRO&#34;
+readelf -d &#34;$ELF&#34; 2&gt;/dev/null | grep -q &#39;(FLAGS_1).*PIE&#39; &amp;&amp; echo &#34;OK: PIE&#34; || echo &#34;NOTE: Not PIE&#34;
+						</pre>
+						<p>Output on a typical ArchLinux binary:</p>
+						<pre class="bash">
+$ ./elfcheck.sh /usr/bin/cat
+=== File Identity ===
+/usr/bin/cat: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV),
+dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2,
+BuildID[sha1]=..., for GNU/Linux 4.4.0, stripped
+
+=== Entry Point ===
+  Entry point address:               0x2b20
+
+=== Program Headers (LOAD segments) ===
+  LOAD           0x000000 0x0000000000000000 0x0000000000000000 0x0032f8 0x0032f8 R E 0x1000
+  LOAD           0x004000 0x0000000000004000 0x0000000000004000 0x008d90 0x008d90 R   0x1000
+  LOAD           0x00d000 0x000000000000e000 0x000000000000e000 0x001a40 0x001a40 RW  0x1000
+  GNU_RELRO      0x00d000 0x000000000000e000 0x000000000000e000 0x001000 0x001000 R   0x1
+  GNU_STACK      0x000000 0x0000000000000000 0x0000000000000000 0x000000 0x000000 RW  0x10
+
+=== Dynamic Dependencies ===
+        linux-vdso.so.1 (0x00007ec10610c000)
+        libc.so.6 =&gt; /usr/lib/libc.so.6 (0x00007ec105e00000)
+        /lib64/ld-linux-x86-64.so.2 (0x00007ec10610e000)
+
+=== Hardened? ===
+OK: Non-exec stack
+NOTE: Partial RELRO
+OK: PIE
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							The Python parser above is convenient, but Go ships an ELF parser in the standard library. Write
+							a Go tool that reads the first 64 header bytes with
+							<code>encoding/binary</code>
+							, prints the class, OS/ABI,
+							type, machine, and entry point, then opens the same file with
+							<code>debug/elf</code>
+							and dumps every program
+							header. Add a hardening summary: PIE (
+							<code>ET_DYN</code>
+							), non-executable stack (
+							<code>PT_GNU_STACK</code>
+							without
+							<code>PF_X</code>
+							), and Full RELRO (
+							<code>PT_GNU_RELRO</code>
+							plus
+							<code>DF_BIND_NOW</code>
+							).
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;debug/elf&#34;
+	&#34;encoding/binary&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+)
+
+func main() {
+	data, err := os.ReadFile(os.Args[1])
+	if err != nil {
+		panic(err)
+	}
+	if string(data[:4]) != &#34;\x7fELF&#34; {
+		panic(&#34;not an ELF file&#34;)
+	}
+	fmt.Printf(&#34;magic=%x class=%d osabi=%d e_type=%d machine=%d entry=%#x\n&#34;,
+		data[:4], data[4], data[7],
+		binary.LittleEndian.Uint16(data[16:18]),
+		binary.LittleEndian.Uint16(data[18:20]),
+		binary.LittleEndian.Uint64(data[24:32]))
+
+	f, err := elf.Open(os.Args[1])
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	for _, p := range f.Progs {
+		fmt.Printf(&#34;%-12v off=%#08x vaddr=%#08x filesz=%#06x memsz=%#06x flags=%v\n&#34;,
+			p.Type, p.Off, p.Vaddr, p.Filesz, p.Memsz, p.Flags)
+	}
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-download" href="https://refspecs.linuxfoundation.org/elf/elf.pdf" target="_blank">System V Application Binary Interface - ELF</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/elf.5" target="_blank">elf(5) - format of Executable and Linking Format files</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/readelf.1" target="_blank">readelf(1) - display information about ELF files</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/objdump.1" target="_blank">objdump(1) - display information from object files</a></li>
+							<li><a class="icon-website" href="https://en.wikipedia.org/wiki/Executable_and_Linkable_Format" target="_blank">Executable and Linkable Format - Wikipedia</a></li>
+							<li><a class="icon-website" href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/binfmt_elf.c" target="_blank">Linux kernel - fs/binfmt_elf.c</a></li>
+							<li><a class="icon-website" href="https://wiki.osdev.org/ELF" target="_blank">ELF - OSDev Wiki</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

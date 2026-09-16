@@ -1,0 +1,1290 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Kernel Observability | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Kernel Observability">
+		<meta name="keywords" content="bcc, bpf, bpftrace, ftrace, kernel, observability, perf, profiling, ring-buffers, sysinternals, telemetry, tracepoints">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Kernel Observability">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Complete kernel observability stack - tracepoints, ftrace, perf events, BPF probes, /proc and /sys, printk, ring buffers, sampling strategies, overhead analysis, and designing an observability pipeline.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/sysinternals/kernel-observability.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Kernel Observability">
+		<meta name="twitter:description" itemprop="description" content="Complete kernel observability stack - tracepoints, ftrace, perf events, BPF probes, /proc and /sys, printk, ring buffers, sampling strategies, overhead analysis, and designing an observability pipeline.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-four-pillars-of-observability">The Four Pillars of Observability</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kernel-telemetry-sources-taxonomy">Kernel Telemetry Sources - Taxonomy</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tracepoints-the-stable-kernel-abi">Tracepoints: The Stable Kernel ABI</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ftrace-the-kernels-built-in-tracer">Ftrace: The Kernel's Built-in Tracer</a></b>
+					<ul>
+						<li><a href="#ftrace-tracers">Ftrace tracers</a></li>
+						<li><a href="#trace-cmd-and-kernelshark">trace-cmd and KernelShark</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#perf-events-and-counters">Perf Events and Counters</a></b>
+					<ul>
+						<li><a href="#hardware-events">Hardware events</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#bpf-the-universal-observability-layer">BPF: The Universal Observability Layer</a></b>
+					<ul>
+						<li><a href="#bpftrace-kernel-awk-for-quick-probing">bpftrace: kernel awk for quick probing</a></li>
+						<li><a href="#bcc-python-bpf-toolchain">BCC: Python BPF Toolchain</a></li>
+						<li><a href="#bpf-co-re-compile-once-run-everywhere">BPF CO-RE (Compile Once, Run Everywhere)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#proc-and-sys-interfaces">/proc and /sys Interfaces</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#printk-and-the-kernel-log-buffer">printk and the Kernel Log Buffer</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#observability-pipeline-design">Observability Pipeline Design</a></b>
+					<ul>
+						<li><a href="#collection-tool-selection-by-use-case">Collection tool selection by use case</a></li>
+						<li><a href="#overhead-by-mechanism">Overhead by Mechanism</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#sampling-strategies">Sampling Strategies</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification">Verification</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/sysinternals/index.html">Sysinternals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/sysinternals/kernel-observability.html">Kernel Observability</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="kernel-observability">Kernel Observability</h2>
+					<p>
+						Complete kernel observability stack - tracepoints, ftrace, perf events, BPF probes, /proc and
+						/sys, printk, ring buffers, sampling strategies, overhead analysis, and designing an observability
+						pipeline.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							You cannot debug or defend a kernel you cannot see. This article maps the telemetry sources
+							a Linux kernel exposes - tracepoints, kprobes, perf hardware counters, ftrace, BPF,
+							<code>/proc</code>
+							,
+							<code>/sys</code>
+							, and
+							<code>printk</code>
+							- and explains their stability, overhead, and intended use so you can
+							pick the right tool for a question.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/sysinternals/kernel-architecture.html">Kernel Architecture</a> - kernel layout, compilation units, kernel threads, system events</li>
+							<li><a href="/wiki/articles/sysinternals/interrupts.html">Interrupts</a> - <abbr title="Incident Response">IR</abbr> Q handling, softirqs, N <abbr title="Application Programming Interface">API</abbr> , scheduling latency, preemption</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-four-pillars-of-observability">The Four Pillars of Observability</h3>
+						<p>
+							Observability is not the same as monitoring. Monitoring tells you whether something is wrong
+							(
+							<abbr title="Central Processing Unit">CPU</abbr>
+							> 90%). Observability tells you why (a specific function in
+							a specific driver is spinning on a lock while holding an interrupt disabled). The four pillars
+							<ul>
+								<li>logs, metrics, traces, and profiles - answer different questions:</li>
+							</ul>
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Pillar</th>
+									<th align="center">Question</th>
+									<th align="center">Kernel data source</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Logs</td>
+									<td align="center">What happened?</td>
+									<td align="center">printk, devkmsg, trace_printk(), ftrace events, ebpf events</td>
+								</tr>
+								<tr>
+									<td align="center">Metrics</td>
+									<td align="center">How much? How fast?</td>
+									<td align="center">/proc/stat, /proc/meminfo, /sys/class/net/*/statistics, perf stat, BPF counters</td>
+								</tr>
+								<tr>
+									<td align="center">Traces</td>
+									<td align="center">How did it happen?</td>
+									<td align="center">tracepoints, kprobes, ftrace function graph, perf trace, BPF</td>
+								</tr>
+								<tr>
+									<td align="center">Profiles</td>
+									<td align="center">Where is time spent?</td>
+									<td align="center">perf record (hardware PMU), ftrace function_graph, BPF stack trace, timer interrupt sampling</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="kernel-telemetry-sources-taxonomy">Kernel Telemetry Sources - Taxonomy</h3>
+						<p>
+							The Linux kernel exposes telemetry through at least eight distinct mechanisms. Each has different
+							overhead, stability guarantees, and data richness:
+						</p>
+						<pre class="plaintext">
+Telemetry Source Taxonomy:
+═══════════════════════════
+
+1. Static Tracepoints (TRACE_EVENT)
+   ├── Location: inserted by kernel developers in source code
+   ├── Stability: stable ABI — maintained across kernel versions
+   ├── Overhead: near-zero when disabled (static key), ~100ns when enabled
+   ├── Granularity: hundreds of predefined hook points
+   ├── Access: /sys/kernel/debug/tracing/events/*/
+   └── API: perf_event_open(), BPF(raw_tracepoint), ftrace
+
+2. Kprobes / Kretprobes
+   ├── Location: any kernel instruction (dynamically placed)
+   ├── Stability: none — function signatures change between versions
+   ├── Overhead: ~200ns per probe hit (int3 trap + single-step)
+   ├── Granularity: function entry/exit, arbitrary addresses
+   ├── Access: /sys/kernel/debug/tracing/kprobe_events
+   └── API: perf_event_open(), BPF(kprobe), ftrace
+
+3. Hardware PMU (Performance Monitoring Unit)
+   ├── Location: CPU microarchitecture counters
+   ├── Stability: architecture-dependent (Intel, AMD, ARM PMUs)
+   ├── Overhead: ~50-100ns when counting, ~1μs when sampling
+   ├── Granularity: cycles, instructions, cache misses, branches
+   ├── Access: perf_event_open(type=PERF_TYPE_HARDWARE)
+   └── API: perf stat, perf record, BPF(perf_event)
+
+4. Ftrace function tracer
+   ├── Location: mcount call inserted at every function prologue
+   ├── Stability: none — every kernel build changes function list
+   ├── Overhead: ~1-5μs per traced function (nop → call + trace)
+   ├── Granularity: every kernel function (~60,000+)
+   ├── Access: /sys/kernel/debug/tracing/trace
+   └── API: trace-cmd, KernelShark, perf ftrace
+
+5. eBPF Programs
+   ├── Location: attached to kprobes, tracepoints, perf events,
+   │            uprobes, raw tracepoints, LSM hooks, socket filters
+   ├── Stability: depends on attachment type (tracepoints = stable)
+   ├── Overhead: ~1-10μs per event (JIT-compiled BPF code)
+   ├── Granularity: programmable — filter, aggregate, count in-kernel
+   ├── Access: bpftool prog list, bpftool map dump
+   └── API: bpf() syscall, libbpf, BCC, bpftrace
+
+6. /proc filesystem (procfs)
+   ├── Location: generated on read from kernel data structures
+   ├── Stability: mostly stable (documented in man 5 proc)
+   ├── Overhead: ~1-50μs per read (depends on complexity)
+   ├── Granularity: process-level, memory, I/O, scheduling stats
+   └── Examples: /proc/stat, /proc/meminfo, /proc/PID/status
+
+7. /sys filesystem (sysfs)
+   ├── Location: kobject-based, one value per file
+   ├── Stability: reasonably stable (ABI by convention)
+   ├── Overhead: ~1-10μs per read
+   ├── Granularity: device-level, per-CPU, per-driver
+   └── Examples: /sys/class/net, /sys/devices/system/cpu
+
+8. debugfs
+   ├── Location: /sys/kernel/debug/
+   ├── Stability: explicitly UNSTABLE — no ABI guarantees
+   ├── Overhead: variable, often negligible
+   ├── Granularity: subsystem-level debugging data
+   └── Examples: tracing/, dri/, usb/, kprobes/
+						</pre>
+						<pre class="bash">
+# Survey available telemetry sources
+echo &#34;Tracepoints:&#34;; ls /sys/kernel/debug/tracing/events/*/ | grep &#39;_&#39; | head -10
+echo &#34;Kprobes:&#34;; cat /sys/kernel/debug/tracing/kprobe_events 2&gt;/dev/null || echo &#34;(none)&#34;
+echo &#34;Perf events:&#34;; perf list | head -10
+echo &#34;Ftrace:&#34;; cat /sys/kernel/debug/tracing/available_filter_functions | wc -l
+						</pre>
+					</section>
+					<section>
+						<h3 id="tracepoints-the-stable-kernel-abi">Tracepoints: The Stable Kernel ABI</h3>
+						<p>
+							Tracepoints are the primary stable observability interface. They are defined with
+							<code>TRACE_EVENT()</code>
+							macros that generate the hook point, the tracepoint data structure, the fast-path check, the
+							format string, and the trace output function - all from a single definition.
+						</p>
+						<pre class="c">
+// include/trace/events/sched.h — the sched_switch tracepoint
+TRACE_EVENT(sched_switch,
+
+    // 1. Args to the tracepoint hook (what the caller passes)
+    TP_PROTO(bool preempt, struct task_struct *prev,
+             struct task_struct *next, unsigned int prev_state),
+
+    // 2. Data fields stored in ring buffer (what gets recorded)
+    TP_STRUCT__entry(
+        __array( char, prev_comm, TASK_COMM_LEN )
+        __field( pid_t, prev_pid )
+        __field( int,  prev_prio )
+        __field( long, prev_state )
+        __array( char, next_comm, TASK_COMM_LEN )
+        __field( pid_t, next_pid )
+        __field( int,  next_prio )
+    ),
+
+    // 3. How to fill the fields from the args
+    TP_fast_assign(
+        memcpy(__entry-&gt;next_comm, next-&gt;comm, TASK_COMM_LEN);
+        __entry-&gt;prev_pid    = prev-&gt;pid;
+        __entry-&gt;prev_prio   = prev-&gt;prio;
+        __entry-&gt;prev_state  = __trace_sched_switch_state(preempt, prev, prev_state);
+        memcpy(__entry-&gt;prev_comm, prev-&gt;comm, TASK_COMM_LEN);
+        __entry-&gt;next_pid    = next-&gt;pid;
+        __entry-&gt;next_prio   = next-&gt;prio;
+    ),
+
+    // 4. Format string for human-readable trace output
+    TP_printk(&#34;prev_comm=%s prev_pid=%d prev_prio=%d prev_state=%s%s ==&gt; &#34;
+              &#34;next_comm=%s next_pid=%d next_prio=%d&#34;,
+        __entry-&gt;prev_comm, __entry-&gt;prev_pid, __entry-&gt;prev_prio,
+        __entry-&gt;prev_state &amp; (TASK_REPORT_MAX-1) ?
+          __print_flags(__entry-&gt;prev_state &amp; (TASK_REPORT_MAX-1), &#34;|&#34;,
+                { ... }) : &#34;R&#34;,
+        __entry-&gt;prev_state &amp; TASK_REPORT_MAX ? &#34;+&#34; : &#34;&#34;,
+        __entry-&gt;next_comm, __entry-&gt;next_pid, __entry-&gt;next_prio)
+);
+						</pre>
+						<pre class="bash">
+# List all available tracepoints
+sudo ls /sys/kernel/debug/tracing/events/ | head -20
+
+# Count tracepoints per subsystem
+for d in /sys/kernel/debug/tracing/events/*/; do
+    printf &#34;%-20s %s\n&#34; &#34;$(basename $d)&#34; &#34;$(ls $d | wc -l)&#34;
+done | sort -t: -k2 -rn | head -20
+
+# Format string for a tracepoint (what perf/bpftrace records)
+cat /sys/kernel/debug/tracing/events/sched/sched_switch/format | head -40
+
+# Enable/disable tracepoints via echo
+sudo bash -c &#39;echo 1 &gt; /sys/kernel/debug/tracing/events/sched/sched_switch/enable&#39;
+sudo cat /sys/kernel/debug/tracing/trace | tail -20
+sudo bash -c &#39;echo 0 &gt; /sys/kernel/debug/tracing/events/sched/sched_switch/enable&#39;
+
+# Tracepoint format for BPF — field offsets and types
+cat /sys/kernel/debug/tracing/events/syscalls/sys_enter_openat/format
+						</pre>
+					</section>
+					<section>
+						<h3 id="ftrace-the-kernels-built-in-tracer">Ftrace: The Kernel's Built-in Tracer</h3>
+						<p>
+							Ftrace is the Swiss Army knife of kernel tracing. It lives entirely in the kernel and exposes
+							its interface through debugfs (
+							<code>/sys/kernel/debug/tracing/</code>
+							).
+						</p>
+						<pre class="plaintext">
+Ftrace Architecture:
+═══════════════════
+
+    User Space                  Kernel Space
+    ──────────                  ────────────
+
+    echo function_graph &gt;       ftrace uses mcount calls:
+    current_tracer              ┌──────────────────┐
+    ───────────────────►        │ func() {          │
+                                │   _mcount();      │ ← compiler inserts call
+                                │   // body         │    at every function
+                                │   _mcount();      │    entry (can be NOP&#39;d)
+                                │ }                 │
+                                └──────────────────┘
+
+                                During tracing:
+    echo func1 &gt;                mcount → ftrace_call
+    set_ftrace_filter               │
+    ───────────────────►            ├── filter check (func in list?)
+                                    ├── save return address
+                                    ├── call trace function
+                                    ├── write entry to ring buffer
+                                    ├── restore return address
+                                    └── return to func body
+
+    cat trace                   Ring Buffer (per-CPU, lockless)
+    ◄───────────────────        ┌─────────────────────────┐
+                                │ CPU 0: [entry1][entry2] │
+                                │ CPU 1: [entry3][entry4] │
+                                │ CPU 2: [entry5]         │
+                                │ CPU 3: [entry6][entry7] │
+                                └─────────────────────────┘
+						</pre>
+						<h4 id="ftrace-tracers">Ftrace tracers</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Tracer</th>
+									<th align="center">Description</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">function</td>
+									<td align="center">Trace every kernel function execution</td>
+								</tr>
+								<tr>
+									<td align="center">function_graph</td>
+									<td align="center">Nested call graph with duration</td>
+								</tr>
+								<tr>
+									<td align="center">blk</td>
+									<td align="center">Block I/O tracer (deprecated: use tracepoints)</td>
+								</tr>
+								<tr>
+									<td align="center">mmiotrace</td>
+									<td align="center">Trace MMIO register reads/writes</td>
+								</tr>
+								<tr>
+									<td align="center">wakeup</td>
+									<td align="center">Max latency from wakeup -> schedule</td>
+								</tr>
+								<tr>
+									<td align="center">wakeup_rt</td>
+									<td align="center">Max latency for RT tasks (PREEMPT_RT)</td>
+								</tr>
+								<tr>
+									<td align="center">irqsoff</td>
+									<td align="center">Max time with interrupts disabled</td>
+								</tr>
+								<tr>
+									<td align="center">preemptoff</td>
+									<td align="center">Max time with preemption disabled</td>
+								</tr>
+								<tr>
+									<td align="center">preemptirqsoff</td>
+									<td align="center">Maximum of irqsoff + preemptoff</td>
+								</tr>
+								<tr>
+									<td align="center">hwlat</td>
+									<td align="center">Detect firmware/SMM caused hardware latency</td>
+								</tr>
+								<tr>
+									<td align="center">nop</td>
+									<td align="center">Tracepoints only (no function tracing)</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Available tracers
+cat /sys/kernel/debug/tracing/available_tracers
+
+# Function graph tracer — see call chain and durations
+sudo bash -c &#39;
+echo function_graph &gt; /sys/kernel/debug/tracing/current_tracer
+echo vfs_read &gt; /sys/kernel/debug/tracing/set_graph_function
+echo 1 &gt; /sys/kernel/debug/tracing/tracing_on
+&#39;
+cat /tmp/test.txt
+sudo bash -c &#39;
+echo 0 &gt; /sys/kernel/debug/tracing/tracing_on
+cat /sys/kernel/debug/tracing/trace | head -50
+&#39;
+
+# Trace specific functions
+sudo bash -c &#39;
+echo nop &gt; /sys/kernel/debug/tracing/current_tracer
+echo do_syscall_64 &gt; /sys/kernel/debug/tracing/set_ftrace_filter
+echo function &gt; /sys/kernel/debug/tracing/current_tracer
+echo 1 &gt; /sys/kernel/debug/tracing/tracing_on
+&#39;
+# Run something that makes syscalls
+sleep 0.5
+sudo bash -c &#39;
+echo 0 &gt; /sys/kernel/debug/tracing/tracing_on
+head -30 /sys/kernel/debug/tracing/trace
+&#39;
+
+# Enable all events in a subsystem
+sudo bash -c &#39;echo 1 &gt; /sys/kernel/debug/tracing/events/sched/enable&#39;
+sleep 0.5
+sudo bash -c &#39;cat /sys/kernel/debug/tracing/trace | head -30&#39;
+sudo bash -c &#39;echo 0 &gt; /sys/kernel/debug/tracing/events/sched/enable&#39;
+						</pre>
+						<h4 id="trace-cmd-and-kernelshark">trace-cmd and KernelShark</h4>
+						<pre class="bash">
+# Record a trace session
+sudo trace-cmd record -p function_graph -g vfs_read -g vfs_write \
+    -e syscalls:sys_enter_read -e syscalls:sys_enter_write
+
+# Run workload, stop recording
+sudo trace-cmd report | head -50
+
+# KernelShark: GUI visualization of trace.dat
+kernelshark trace.dat  # GUI-based
+
+# Recording specific events with filters
+sudo trace-cmd record -e sched:sched_switch \
+    -f &#39;next_comm == &#34;firefox&#34; || prev_comm == &#34;firefox&#34;&#39;
+
+# List available events with trace-cmd
+trace-cmd list -e | head -20
+						</pre>
+					</section>
+					<section>
+						<h3 id="perf-events-and-counters">Perf Events and Counters</h3>
+						<p>
+							<code>perf</code>
+							bridges the gap between counting (how many?) and sampling (why?). It uses
+							<code>perf_event_open()</code>
+							to program PMU counters, tracepoints, or software events, with results delivered via mmap'd
+							ring buffers.
+						</p>
+						<pre class="plaintext">
+perf Architecture:
+══════════════════
+
+                          perf user tool
+                               │
+                               │ perf_event_open() syscall
+                               ▼
+    ┌────────────────── Kernel ──────────────────────┐
+    │                                                │
+    │  perf_event_open() → struct perf_event         │
+    │       │                                        │
+    │       ├── type=HARDWARE → PMU counter          │
+    │       │   └── config: event select + umask      │
+    │       │                                        │
+    │       ├── type=TRACEPOINT → tracepoint         │
+    │       │   └── config: tp_event-&gt;id              │
+    │       │                                        │
+    │       ├── type=SOFTWARE → software events       │
+    │       │   └── config: PERF_COUNT_SW_PAGE_FAULTS│
+    │       │                                        │
+    │       └── type=BPF → BPF program               │
+    │           └── BPF runs on each sample           │
+    │                                                │
+    │  Ring Buffer (per-CPU, mmap&#39;d to user)          │
+    │  ┌──────────────────────────────────────┐       │
+    │  │ Sample {ip, pid, tid, timestamp,      │       │
+    │  │          callchain, raw data}          │       │
+    │  │ Sample {ip, pid, tid, ...}             │       │
+    │  └──────────────────────────────────────┘       │
+    └────────────────────────────────────────────────┘
+                               │
+                               │ mmap read
+                               ▼
+                          perf record / perf stat
+						</pre>
+						<h4 id="hardware-events">Hardware events</h4>
+						<p>x86-64 PMU event encoding (Intel Core):</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Event</th>
+									<th align="center">Event Num</th>
+									<th align="center">Umask</th>
+									<th align="center">Description</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">instructions</td>
+									<td align="center">0xC0</td>
+									<td align="center">0x00</td>
+									<td align="center">Instructions retired</td>
+								</tr>
+								<tr>
+									<td align="center">cycles</td>
+									<td align="center">0x3C</td>
+									<td align="center">0x00</td>
+									<td align="center">Unhalted core cycles</td>
+								</tr>
+								<tr>
+									<td align="center">cache-misses</td>
+									<td align="center">0x2E</td>
+									<td align="center">0x41</td>
+									<td align="center">Last-level cache misses</td>
+								</tr>
+								<tr>
+									<td align="center">cache-refs</td>
+									<td align="center">0x2E</td>
+									<td align="center">0x4F</td>
+									<td align="center">Last-level cache references</td>
+								</tr>
+								<tr>
+									<td align="center">branches</td>
+									<td align="center">0xC4</td>
+									<td align="center">0x00</td>
+									<td align="center">Branch instructions retired</td>
+								</tr>
+								<tr>
+									<td align="center">branch-misses</td>
+									<td align="center">0xC5</td>
+									<td align="center">0x00</td>
+									<td align="center">Mispredicted branches</td>
+								</tr>
+								<tr>
+									<td align="center">L1-dcache-loads</td>
+									<td align="center">0x51</td>
+									<td align="center">0x01</td>
+									<td align="center">L1 data cache loads</td>
+								</tr>
+								<tr>
+									<td align="center">L1-dcache-load-misses</td>
+									<td align="center">0x51</td>
+									<td align="center">0x02</td>
+									<td align="center">L1 data cache load misses</td>
+								</tr>
+								<tr>
+									<td align="center">dTLB-load-misses</td>
+									<td align="center">0x08</td>
+									<td align="center">0x02</td>
+									<td align="center">Data TLB load misses</td>
+								</tr>
+								<tr>
+									<td align="center">iTLB-load-misses</td>
+									<td align="center">0x85</td>
+									<td align="center">0x02</td>
+									<td align="center">Instruction TLB load misses</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Count events (aggregated, no sampling)
+perf stat -e cycles,instructions,cache-misses,branch-misses ls -R /usr/share
+
+# Sample at 99 Hz with callgraphs (dwarf unwinding)
+sudo perf record -F 99 -g -a -- sleep 10
+sudo perf report --stdio | head -50
+
+# Trace syscalls with perf trace (like strace but kernel-side)
+sudo perf trace ls 2&gt;&amp;1 | head -30
+sudo perf trace -e &#39;!syscall&#39; ls 2&gt;&amp;1 | head -30  # exclude syscalls from trace
+
+# Stat: per-CPU and per-thread
+perf stat -e cycles,instructions --per-thread -a sleep 1
+
+# List all events
+perf list
+
+# Monitor tracepoints
+sudo perf stat -e &#39;sched:sched_switch&#39; -a sleep 5
+sudo perf record -e &#39;sched:sched_stat*&#39; -a sleep 5
+sudo perf script | head -20
+
+# Profiling with hardware events specific to a process
+sudo perf record -e cycles:k -p $(pidof nginx | cut -d&#39; &#39; -f1) -- sleep 10
+sudo perf report
+						</pre>
+					</section>
+					<section>
+						<h3 id="bpf-the-universal-observability-layer">BPF: The Universal Observability Layer</h3>
+						<p>
+							<abbr title="Extended Berkeley Packet Filter">eBPF</abbr>
+							allows running sandboxed programs inside the kernel
+							at kprobe, tracepoint, uprobe, or perf_event attachment points. BPF programs can filter events,
+							aggregate data into maps, and export results to user space - all with bounded overhead and guaranteed
+							termination.
+						</p>
+						<pre class="plaintext">
+BPF Observability Architecture:
+════════════════════════════════
+
+    User Space                          Kernel Space
+    ──────────                          ────────────
+
+    bpftool / bpftrace / BCC            tracepoint / kprobe
+         │                                    │
+         │  bpf(BPF_PROG_LOAD)                │
+         │───────────────────────────────────►│
+         │                                    │  Verifier
+         │  bpf(BPF_MAP_CREATE)               │  ────────
+         │───────────────────────────────────►│  - loops? (back-edge)
+         │                                    │  - bounds? (ctx access)
+         │  bpf(BPF_PROG_ATTACH)              │  - memory? (map access)
+         │───────────────────────────────────►│  - instructions &lt; 1M
+         │                                    │
+         │                                    │  JIT → native code
+         │◄────────── event ──────────────────│
+         │                                    │
+         │  bpf(BPF_MAP_LOOKUP)               │
+         │───────────────────────────────────►│  Read aggregated data
+         │◄────────── value ──────────────────│
+						</pre>
+						<h4 id="bpftrace-kernel-awk-for-quick-probing">bpftrace: kernel awk for quick probing</h4>
+						<pre class="bash">
+# List all available probes
+sudo bpftrace -l &#39;tracepoint:syscalls:*&#39; | head -20
+sudo bpftrace -l &#39;kprobe:do_sys_open*&#39;
+
+# Count syscalls by type
+sudo bpftrace -e &#39;tracepoint:syscalls:sys_enter_* { @[probe] = count(); }&#39; \
+    -c &#39;sleep 5&#39;
+# Output:
+# @[tracepoint:syscalls:sys_enter_nanosleep]: 2
+# @[tracepoint:syscalls:sys_enter_read]: 15
+# @[tracepoint:syscalls:sys_enter_write]: 8
+
+# Count open files per process
+sudo bpftrace -e &#39;
+tracepoint:syscalls:sys_enter_openat {
+    @opens[comm] = count();
+}
+interval:s:5 { exit(); }
+&#39;
+
+# Histogram of read() sizes
+sudo bpftrace -e &#39;
+tracepoint:syscalls:sys_exit_read {
+    @read_bytes = hist(args-&gt;ret);
+}
+interval:s:5 { exit(); }
+&#39;
+
+# Trace function entry with arguments (kprobe)
+sudo bpftrace -e &#39;
+kprobe:vfs_read {
+    printf(&#34;vfs_read: comm=%s pid=%d count=%d\n&#34;, comm, pid, arg2);
+}
+&#39; -c &#39;cat /etc/hostname&#39;
+
+# Block I/O latency histogram
+sudo bpftrace -e &#39;
+kprobe:blk_account_io_start {
+    @start[arg0] = nsecs;
+}
+kretprobe:blk_account_io_done /@start[retval]/ {
+    @io_lat_us = hist((nsecs - @start[retval]) / 1000);
+    delete(@start[retval]);
+}
+interval:s:5 { exit(); }
+&#39;
+						</pre>
+						<h4 id="bcc-python-bpf-toolchain">BCC: Python BPF Toolchain</h4>
+						<pre class="bash">
+# Install BCC tools (Arch)
+sudo pacman -S bcc bcc-tools
+# Tools are in /usr/share/bcc/tools/
+
+# Available BCC tools
+ls /usr/share/bcc/tools/ | head -20
+
+# execsnoop: trace new process execution
+sudo execsnoop-bpfcc -t
+
+# opensnoop: trace file opens
+sudo opensnoop-bpfcc -p $(pgrep -f firefox | head -1)
+
+# biolatency: block I/O latency distribution
+sudo biolatency-bpfcc -m  # milliseconds
+
+# tcplife: TCP session lifespans
+sudo tcplife-bpfcc
+
+# cachestat: page cache hit/miss ratio
+sudo cachestat-bpfcc 1 5
+
+# runqlat: scheduler run-queue latency
+sudo runqlat-bpfcc
+						</pre>
+						<h4 id="bpf-co-re-compile-once-run-everywhere">BPF CO-RE (Compile Once, Run Everywhere)</h4>
+						<pre class="plaintext">
+Traditional BPF:                      CO-RE BPF:
+────────────────                      ────────
+Compile against specific kernel       Compile once against vmlinux.h
+headers on target machine             Run on any kernel ≥ 5.5
+Requires llvm/clang on target         BPF_READ() macros handle field
+Known struct layouts at compile time  BTF provides field offsets at
+                                      load time — relocations fix up
+
+libbpf + BTF enables write-once,
+deploy-anywhere observability tools.
+						</pre>
+						<pre class="bash">
+# Verify BTF support (required for CO-RE)
+cat /sys/kernel/btf/vmlinux
+ls /sys/kernel/btf/
+
+# bpftool: inspect BPF programs and maps
+sudo bpftool prog list
+sudo bpftool prog show id 123
+sudo bpftool map list
+sudo bpftool map dump id 45
+
+# Print a program&#39;s BPF instructions
+sudo bpftool prog dump xlated id 123 | head -20
+
+# Print JIT-compiled instructions
+sudo bpftool prog dump jited id 123 | head -20
+						</pre>
+					</section>
+					<section>
+						<h3 id="proc-and-sys-interfaces">/proc and /sys Interfaces</h3>
+						<p>
+							Procfs and sysfs provide instantaneous snapshots of kernel state. They are the simplest observability
+							interface - no tools required beyond
+							<code>cat</code>
+							.
+						</p>
+						<pre class="plaintext">
+Key /proc observability files:
+══════════════════════════════
+
+/proc/stat            ── CPU time (user, nice, system, idle, iowait, irq, softirq, steal)
+/proc/meminfo         ── Memory breakdown (MemTotal, MemFree, Cached, Buffers, SwapTotal, ...)
+/proc/vmstat          ── Virtual memory statistics (pgfault, pgmajfault, pgsteal, pgscan, ...)
+/proc/diskstats       ── Per-disk I/O: reads, writes, sectors, time in-flight
+/proc/net/dev         ── Per-interface: bytes, packets, errors, drops
+/proc/net/tcp         ── All TCP sockets (slab table dump)
+/proc/loadavg         ── 1/5/15 min load averages + running/blocked tasks
+/proc/softirqs        ── Per-CPU softirq counts (HI, TIMER, NET_TX, NET_RX, BLOCK, ...)
+/proc/interrupts      ── Per-CPU IRQ counts
+/proc/buddyinfo       ── Per-zone buddy allocator free page counts (order 0-10)
+/proc/slabinfo        ── Slab cache statistics (root only, often disabled)
+/proc/PID/status      ── Process: memory, signals, capabilities, cgroups
+/proc/PID/io          ── Process: read_bytes, write_bytes, cancelled_write_bytes
+/proc/PID/sched       ── Process: scheduling statistics
+/proc/PID/schedstat   ── Process: runtime, wait time, timeslices
+/proc/PID/smaps       ── Process: detailed memory maps with RSS/PSS/swap per VMA
+/proc/PID/stack       ── Kernel stack trace of a blocked task
+						</pre>
+						<pre class="bash">
+# Common observability one-liners
+# CPU saturation
+grep -w cpu /proc/stat
+# Memory pressure (0-1000: low→high)
+cat /proc/pressure/memory
+# IO pressure
+cat /proc/pressure/io
+# Top slab consumers
+sudo cat /proc/slabinfo 2&gt;/dev/null | sort -k3 -rn | head -10
+# Disk latency
+cat /proc/diskstats | awk &#39;{print $3, $8, $12}&#39;  # device, ms_reading, ms_writing
+# Soft IRQ distribution
+cat /proc/softirqs
+						</pre>
+					</section>
+					<section>
+						<h3 id="printk-and-the-kernel-log-buffer">printk and the Kernel Log Buffer</h3>
+						<p>
+							<code>printk()</code>
+							is the oldest observability mechanism - logging strings to a ring buffer. Despite
+							its simplicity, it remains critical for boots, panics, and driver debugging.
+						</p>
+						<pre class="c">
+// include/linux/printk.h
+// Ring buffer: CONFIG_LOG_BUF_SHIFT determines size (default 17 = 128KB)
+
+// Log levels (include/linux/kern_levels.h):
+#define KERN_EMERG    &#34;&lt;0&gt;&#34;  // System is unusable
+#define KERN_ALERT    &#34;&lt;1&gt;&#34;  // Action must be taken immediately
+#define KERN_CRIT     &#34;&lt;2&gt;&#34;  // Critical conditions
+#define KERN_ERR      &#34;&lt;3&gt;&#34;  // Error conditions
+#define KERN_WARNING  &#34;&lt;4&gt;&#34;  // Warning conditions
+#define KERN_NOTICE   &#34;&lt;5&gt;&#34;  // Normal but significant
+#define KERN_INFO     &#34;&lt;6&gt;&#34;  // Informational
+#define KERN_DEBUG    &#34;&lt;7&gt;&#34;  // Debug-level messages
+
+// Usage:
+pr_emerg(&#34;System crash imminent\n&#34;);
+pr_err(&#34;Failed to allocate %zu bytes\n&#34;, size);
+pr_warn(&#34;Deprecated API still in use by %s\n&#34;, current-&gt;comm);
+pr_info(&#34;Driver %s loaded\n&#34;, drv-&gt;name);
+pr_debug(&#34;Received %zu bytes on fd %d\n&#34;, count, fd);
+
+// Conditional debug (enabled via dynamic debug):
+pr_debug(&#34;Debug message: %p\n&#34;, ptr);
+// Only printed if dynamic debug is enabled for this callsite
+
+// Fast but unstructed:
+trace_printk(&#34;vfs_read(%s, %zu) = %zd\n&#34;,
+             file-&gt;f_path.dentry-&gt;d_name.name, count, ret);
+						</pre>
+						<pre class="bash">
+# Kernel log levels
+cat /proc/sys/kernel/printk
+# 1 4 1 7 — console loglevel, default loglevel, minimum loglevel, default console loglevel
+
+# Dynamic debug: enable debug prints for specific files
+sudo bash -c &#39;echo &#34;file drivers/char/mem.c +p&#34; &gt; /sys/kernel/debug/dynamic_debug/control&#39;
+
+# List all dynamic debug statements
+sudo cat /sys/kernel/debug/dynamic_debug/control | head -20
+
+# Follow kernel messages in real time
+journalctl -k -f
+
+# Access printk ring buffer directly
+cat /dev/kmsg | head -5  # Follows — prints new messages as they arrive
+						</pre>
+					</section>
+					<section>
+						<h3 id="observability-pipeline-design">Observability Pipeline Design</h3>
+						<p>
+							Collecting data is only the first step. A complete observability pipeline requires collection,
+							processing, storage, query, and alerting:
+						</p>
+						<pre class="plaintext">
+Observability Pipeline Reference Architecture:
+═════════════════════════════════════════════
+
+┌────────┐   ┌────────┐   ┌──────────┐   ┌────────┐
+│ Collect│──►│Process │──►│  Store   │──►│ Query  │
+└────────┘   └────────┘   └──────────┘   └────────┘
+     │                           │             │
+     ▼                           ▼             ▼
+  bpftrace                    Victoria       Grafana
+  perf record                 Metrics        (dashboards)
+  trace-cmd                   /var/log       PromQL
+  node_exporter               Loki           LogQL
+  ebpf_exporter               Tempo          TraceQL
+  cadvisor                    Parquet        Python/Pandas
+                                 │
+                                 ▼
+                           ┌────────┐
+                           │ Alert  │
+                           └────────┘
+                                │
+                                ▼
+                           Alertmanager
+                           → PagerDuty
+                           → Slack
+                           → Webhook
+						</pre>
+						<h4 id="collection-tool-selection-by-use-case">Collection tool selection by use case</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Use Case</th>
+									<th align="center">Tool</th>
+									<th align="center">Overhead</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Production metrics</td>
+									<td align="center">node_exporter + ebpf_exporter</td>
+									<td align="center">~0.1% CPU</td>
+								</tr>
+								<tr>
+									<td align="center">Ad-hoc debugging</td>
+									<td align="center">bpftrace</td>
+									<td align="center">NA (inspection-only)</td>
+								</tr>
+								<tr>
+									<td align="center">Latency analysis</td>
+									<td align="center">trace-cmd + KernelShark</td>
+									<td align="center">~1-2% CPU for targeted functions</td>
+								</tr>
+								<tr>
+									<td align="center">CPU profiling</td>
+									<td align="center">perf record (99 Hz)</td>
+									<td align="center">~1-2% CPU</td>
+								</tr>
+								<tr>
+									<td align="center">Continuous profiling</td>
+									<td align="center">temple / parca-agent (eBPF-based)</td>
+									<td align="center">~1-5% CPU</td>
+								</tr>
+								<tr>
+									<td align="center">Memory profiling</td>
+									<td align="center">memleak-bpfcc / memcheck</td>
+									<td align="center">~1-3% CPU</td>
+								</tr>
+								<tr>
+									<td align="center">Network analysis</td>
+									<td align="center">tcpdump + BPF filter</td>
+									<td align="center">Variable (hardware offload)</td>
+								</tr>
+								<tr>
+									<td align="center">Full system trace</td>
+									<td align="center">LTTng</td>
+									<td align="center">~2-5% CPU (high-volume)</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="overhead-by-mechanism">Overhead by Mechanism</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Mechanism</th>
+									<th align="center">Enabled</th>
+									<th align="center">Per Event</th>
+									<th align="center">Scaling</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Static tracepoint (disabled)</td>
+									<td align="center">~0 ns</td>
+									<td align="center">~100 ns</td>
+									<td align="center">Per-call</td>
+								</tr>
+								<tr>
+									<td align="center">Static tracepoint (enabled, consumer)</td>
+									<td align="center">~100 ns</td>
+									<td align="center">~400 ns</td>
+									<td align="center">Per-call</td>
+								</tr>
+								<tr>
+									<td align="center">Ftrace function (noped)</td>
+									<td align="center">~0 ns</td>
+									<td align="center">~1-5 us</td>
+									<td align="center">Per-call</td>
+								</tr>
+								<tr>
+									<td align="center">Ftrace function (enabled)</td>
+									<td align="center">~1-5 us</td>
+									<td align="center">N/A</td>
+									<td align="center">Per-call</td>
+								</tr>
+								<tr>
+									<td align="center">Kprobe (unarmed)</td>
+									<td align="center">~0 ns</td>
+									<td align="center">~200 ns</td>
+									<td align="center">Per-hit</td>
+								</tr>
+								<tr>
+									<td align="center">Kprobe (armed)</td>
+									<td align="center">~200 ns</td>
+									<td align="center">~2-5 us</td>
+									<td align="center">Per-hit</td>
+								</tr>
+								<tr>
+									<td align="center">BPF program (unattached)</td>
+									<td align="center">~0 ns</td>
+									<td align="center">~1-10 us</td>
+									<td align="center">Per-attachment + per-event</td>
+								</tr>
+								<tr>
+									<td align="center">BPF program (attached)</td>
+									<td align="center">~1-10 us</td>
+									<td align="center">N/A</td>
+									<td align="center">Per-event</td>
+								</tr>
+								<tr>
+									<td align="center">PMU counter (counting)</td>
+									<td align="center">~50-100 ns</td>
+									<td align="center">N/A</td>
+									<td align="center">Per-CPU</td>
+								</tr>
+								<tr>
+									<td align="center">PMU counter (sampling)</td>
+									<td align="center">~1-5 us</td>
+									<td align="center">N/A</td>
+									<td align="center">Per-N samples</td>
+								</tr>
+								<tr>
+									<td align="center">procfs read</td>
+									<td align="center">~0 ns</td>
+									<td align="center">~1-50 us</td>
+									<td align="center">Per-read</td>
+								</tr>
+								<tr>
+									<td align="center">sysfs read</td>
+									<td align="center">~0 ns</td>
+									<td align="center">~1-10 us</td>
+									<td align="center">Per-read</td>
+								</tr>
+								<tr>
+									<td align="center">printk (partial)</td>
+									<td align="center">~1-5 us</td>
+									<td align="center">N/A</td>
+									<td align="center">Per-write</td>
+								</tr>
+								<tr>
+									<td align="center">printk (full, to console)</td>
+									<td align="center">~100 us-10ms</td>
+									<td align="center">N/A</td>
+									<td align="center">Per-write</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Measure ftrace overhead
+sudo bash -c &#39;
+echo 0 &gt; /sys/kernel/debug/tracing/tracing_on
+echo function &gt; /sys/kernel/debug/tracing/current_tracer
+# Baseline
+perf stat -e cycles:u -r 3 dd if=/dev/zero of=/dev/null bs=1M count=100 2&gt;&amp;1 | grep cycles
+&#39;
+sudo bash -c &#39;
+echo schedule &gt; /sys/kernel/debug/tracing/set_ftrace_filter
+echo 1 &gt; /sys/kernel/debug/tracing/tracing_on
+# With ftrace
+perf stat -e cycles:u -r 3 dd if=/dev/zero of=/dev/null bs=1M count=100 2&gt;&amp;1 | grep cycles
+echo 0 &gt; /sys/kernel/debug/tracing/tracing_on
+&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="sampling-strategies">Sampling Strategies</h3>
+						<p>
+							For profiling, sampling is far cheaper than tracing every event. The key question: at what rate
+							and what to sample?
+						</p>
+						<pre class="plaintext">
+Sampling Rate Selection:
+════════════════════════
+
+    1 Hz     — lightweight, Long-term profiling (days)
+    49 Hz    — Standard production profiling (avoids aligning with
+               power/thermal management ticks at 50 Hz)
+    99 Hz    — Standard for perf (avoids 100 Hz lock-step with timers)
+    997 Hz   — Highest resolution before PMU overflows become frequent
+    4000 Hz  — Maximum recommended (significant overhead)
+
+    Why avoid round numbers?
+    Sampling at 100 Hz on a 100 Hz timer tick locks you to
+    one phase of the timer interrupt. 99 Hz gives uniform coverage.
+
+PMU Sample Types:
+═════════════════
+
+    PERF_SAMPLE_IP           — Instruction pointer (always recorded)
+    PERF_SAMPLE_TID          — PID, TID
+    PERF_SAMPLE_TIME         — Timestamp
+    PERF_SAMPLE_CALLCHAIN    — Stack trace (requires frame pointer or dwarf)
+    PERF_SAMPLE_RAW          — Raw tracepoint data
+    PERF_SAMPLE_CPU          — CPU number
+    PERF_SAMPLE_PERIOD       — Sampling period at time of sample
+    PERF_SAMPLE_BRANCH_STACK — Last N branches (LBR)
+						</pre>
+						<pre class="bash">
+# Different sample rates
+sudo perf record -F 99 -a -g -- sleep 10     # 99 Hz (standard)
+sudo perf record -c 100000 -a -- sleep 10    # Every 100k cycles
+sudo perf record -e cache-misses -c 1000 -a -- sleep 10  # Every 1000 cache misses
+
+# FlameGraph generation
+sudo perf record -F 99 -a -g -- sleep 10
+sudo perf script &gt; out.perf
+git clone https://github.com/brendangregg/FlameGraph.git /tmp/FlameGraph
+/tmp/FlameGraph/stackcollapse-perf.pl out.perf &gt; out.folded
+/tmp/FlameGraph/flamegraph.pl out.folded &gt; flamegraph.svg
+
+# Profile with dwarf stack unwinding (no frame pointer needed)
+sudo perf record -F 99 --call-graph dwarf -a -g -- sleep 10
+sudo perf report
+
+# LBR (Last Branch Record) — hardware-assisted callgraph
+sudo perf record -F 99 --call-graph lbr -a -- sleep 10
+# Works on Intel Haswell+ — limited to 16-32 entries deep
+						</pre>
+					</section>
+					<section>
+						<h3 id="verification">Verification</h3>
+						<pre class="bash">
+# 1. Verify debugfs is mounted
+mount | grep debugfs
+ls /sys/kernel/debug/tracing/ | head -15
+
+# 2. List and count tracepoints
+echo &#34;Total tracepoints: $(ls /sys/kernel/debug/tracing/events/*/*/id 2&gt;/dev/null | wc -l)&#34;
+
+# 3. ftrace: trace syscall activities
+sudo bash -c &#39;
+echo function_graph &gt; /sys/kernel/debug/tracing/current_tracer
+echo do_syscall_64 &gt; /sys/kernel/debug/tracing/set_graph_function
+echo 1 &gt; /sys/kernel/debug/tracing/tracing_on
+&#39;
+sleep 0.2
+sudo bash -c &#39;echo 0 &gt; /sys/kernel/debug/tracing/tracing_on&#39;
+sudo cat /sys/kernel/debug/tracing/trace | head -40
+
+# 4. perf: hardware event counting
+perf stat -e cycles,instructions,cache-misses ls / 2&gt;&amp;1 | tail -5
+
+# 5. perf: profiling with callgraphs
+sudo perf record -F 99 -a -g -- sleep 5 2&gt;/dev/null
+sudo perf report --stdio 2&gt;/dev/null | head -40
+rm -f perf.data
+
+# 6. bpftrace: count syscalls
+sudo bpftrace -e &#39;tracepoint:syscalls:sys_enter_* { @[probe] = count(); }&#39; \
+    -c &#39;sleep 1&#39; 2&gt;/dev/null | sort -t: -k3 -rn | head -10
+
+# 7. bpftrace: block I/O latency
+sudo bpftrace -e &#39;
+kprobe:blk_account_io_start { @start[arg0] = nsecs; }
+kretprobe:blk_account_io_done /@start[retval]/ {
+    @io_lat_us = hist((nsecs - @start[retval]) / 1000);
+    delete(@start[retval]);
+}
+interval:s:3 { exit(); }
+&#39; 2&gt;/dev/null
+
+# 8. /proc observability snapshots
+cat /proc/stat | head -2
+cat /proc/meminfo | head -5
+cat /proc/diskstats | head -3
+cat /proc/net/dev | head -3
+
+# 9. CPU and memory pressure
+cat /proc/pressure/cpu
+cat /proc/pressure/memory
+cat /proc/pressure/io
+
+# 10. Softirq stats (network/block I/O processing)
+cat /proc/softirqs | head -5
+
+# 11. Perf: list all observable events
+perf list | head -20
+perf list tracepoint | head -20
+
+# 12. BPF BTF verification
+ls /sys/kernel/btf/vmlinux &amp;&amp; echo &#34;BTF available (CO-RE supported)&#34;
+sudo bpftool prog list 2&gt;/dev/null | head -20
+
+# 13. Test the container lab at kernel-observability.Containerfile
+# for a pre-configured observability toolbox container
+
+# 14. Generate a quick flame graph
+sudo perf record -F 99 -a -g -- sleep 5 2&gt;/dev/null &amp;&amp; \
+    sudo perf script | /tmp/FlameGraph/stackcollapse-perf.pl 2&gt;/dev/null | \
+    /tmp/FlameGraph/flamegraph.pl 2&gt;/dev/null &gt; /tmp/flame.svg &amp;&amp; \
+    echo &#34;Flame graph: file:///tmp/flame.svg&#34; || \
+    echo &#34;Install FlameGraph: git clone https://github.com/brendangregg/FlameGraph.git /tmp/FlameGraph&#34;
+
+# 15. Check which dynamic debug callsites are available
+sudo cat /sys/kernel/debug/dynamic_debug/control 2&gt;/dev/null | wc -l
+sudo cat /sys/kernel/debug/dynamic_debug/control 2&gt;/dev/null | head -5
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Build and run the observability toolbox container. It ships perf, ftrace, trace-cmd, bpftrace,
+							BCC, and a synthetic workload script.
+						</p>
+						<p><a href="/wiki/articles/sysinternals/kernel-observability.Containerfile">kernel-observability.Containerfile</a></p>
+						<pre class="bash">
+podman build -t kernel-observability-lab -f kernel-observability.Containerfile .
+podman run -it --rm --privileged kernel-observability-lab
+						</pre>
+						<p>Inside the container, compare the tools against the same workload:</p>
+						<pre class="bash">
+perf stat -e cycles,instructions,cache-misses,branch-misses -- /observability/workload.sh cpu 5
+bpftrace -e &#39;tracepoint:syscalls:sys_enter_openat { @[comm] = count(); }&#39; -c &#39;sleep 2&#39;
+trace-cmd record -e sched_switch -e syscalls -- /observability/workload.sh cpu 5
+trace-cmd report | head -20
+						</pre>
+						<p>
+							Then measure the overhead of each mechanism with
+							<code>/observability/benchmark.sh</code>
+							and explain why
+							<code>strace</code>
+							is orders of magnitude more expensive than an enabled tracepoint for the same syscall.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://docs.kernel.org/trace/index.html" target="_blank">Kernel Tracing Documentation</a></li>
+							<li><a class="icon-website" href="https://perf.wiki.kernel.org/" target="_blank">perf Documentation</a></li>
+							<li><a class="icon-github" href="https://github.com/bpftrace/bpftrace/blob/master/docs/reference_guide.md" target="_blank">bpftrace Reference Guide</a></li>
+							<li><a class="icon-github" href="https://github.com/iovisor/bcc/blob/master/docs/reference_guide.md" target="_blank">BCC Reference Guide</a></li>
+							<li><a class="icon-website" href="https://www.oreilly.com/library/view/linux-observability-with/9781492050193/" target="_blank">Linux Observability with BPF - David Calavera, Lorenzo Fontana</a></li>
+							<li><a class="icon-website" href="https://www.brendangregg.com/bpf-performance-tools-book.html" target="_blank">BPF Performance Tools - Brendan Gregg</a></li>
+							<li><a class="icon-website" href="https://trace-cmd.org/" target="_blank">trace-cmd and KernelShark</a></li>
+							<li><a class="icon-website" href="https://www.brendangregg.com/perf.html" target="_blank">Linux perf examples - Brendan Gregg</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/include/trace/events" target="_blank">include/trace/events/</a> - all kernel tracepoint definitions</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

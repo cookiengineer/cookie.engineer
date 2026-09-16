@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Process Manager | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Process Manager">
+		<meta name="keywords" content="cgroups, clone, cred, exec, fork, namespaces, pid, process-manager, sysinternals, task-struct">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Process Manager">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Linux process identity, creation, execution, termination, credentials, namespaces, cgroups, and the /proc filesystem from kernel internals outward.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/sysinternals/process-manager.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Process Manager">
+		<meta name="twitter:description" itemprop="description" content="Linux process identity, creation, execution, termination, credentials, namespaces, cgroups, and the /proc filesystem from kernel internals outward.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#task-struct-descriptor">task_struct Descriptor</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#process-identity-pid-tgid-pgid-sid">Process Identity: PID, TGID, PGID, SID</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#process-states">Process States</a></b>
+					<ul>
+						<li><a href="#state-transition-diagram">State Transition Diagram</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#process-creation">Process Creation</a></b>
+					<ul>
+						<li><a href="#clone-flags">Clone Flags</a></li>
+						<li><a href="#thread-creation-with-clone">Thread Creation with clone()</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#image-loading-with-execve">Image Loading with execve()</a></b>
+					<ul>
+						<li><a href="#elf-loading-details">ELF loading details</a></li>
+						<li><a href="#auxiliary-vector">Auxiliary Vector</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#process-termination">Process Termination</a></b>
+					<ul>
+						<li><a href="#zombie-reaping">Zombie Reaping</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#sessions-and-process-groups">Sessions and Process Groups</a></b>
+					<ul>
+						<li><a href="#daemonizing-with-setsid">Daemonizing with setsid()</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#cgroups-integration">Cgroups Integration</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#process-credentials">Process Credentials</a></b>
+					<ul>
+						<li><a href="#credential-commit-pattern">Credential commit pattern</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#procpid-internals">/proc/PID/ Internals</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#pid-namespaces-and-translation">PID Namespaces and Translation</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/sysinternals/index.html">Sysinternals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/sysinternals/process-manager.html">Process Manager</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="process-manager">Process Manager</h2>
+					<p>
+						Linux process identity, creation, execution, termination, credentials, namespaces, cgroups,
+						and the /proc filesystem from kernel internals outward.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Every schedulable entity in Linux is a
+							<code>struct task_struct</code>
+							. This article follows the lifetime
+							of that structure from
+							<code>fork()</code>
+							through
+							<code>execve()</code>
+							to
+							<code>do_exit()</code>
+							, covering credentials, namespaces,
+							cgroups, and the
+							<code>/proc/PID/</code>
+							files that expose each field. After reading it you can map kernel
+							structures to the files you inspect during an incident.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - process fundamentals, /proc, fork/exec</li>
+							<li><a href="/wiki/articles/sysinternals/scheduler.html">Scheduler</a> - CFS scheduling classes, runtime vs deadline</li>
+							<li><a href="/wiki/articles/sysinternals/context-switching.html">Context Switching</a> - context switch mechanics, preemption</li>
+							<li><a href="/wiki/articles/fundamentals/containers.html">Containers</a> - namespace isolation, cgroup resource limits</li>
+							<li><a href="/wiki/articles/fundamentals/capabilities.html">Capabilities</a> - Linux capabilities model</li>
+							<li><a href="/wiki/articles/fundamentals/elf.html">ELF</a> - ELF binary format</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="task-struct-descriptor">task_struct Descriptor</h3>
+						<p>
+							Every schedulable entity in Linux is represented by a
+							<code>struct task_struct</code>
+							defined in
+							<code>include/linux/sched.h</code>
+							. This structure is the single largest and most important data structure in the kernel and can
+							exceed 6 KB on a modern kernel with all features enabled. It is the anchor for process identity,
+							credentials, memory, namespaces, and cgroup membership.
+						</p>
+						<p>struct task_struct (partial):</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Category</th>
+									<th align="center">Key Fields</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Scheduling</td>
+									<td align="center">se, rt, dl, prio, static_prio, policy</td>
+								</tr>
+								<tr>
+									<td align="center">Process Identity</td>
+									<td align="center">pid, tgid, real_parent, parent</td>
+								</tr>
+								<tr>
+									<td align="center">Process Group / Session</td>
+									<td align="center">group_leader, signal, pdeath_signal</td>
+								</tr>
+								<tr>
+									<td align="center">Credentials</td>
+									<td align="center">cred (const), real_cred</td>
+								</tr>
+								<tr>
+									<td align="center">Memory Management</td>
+									<td align="center">mm, active_mm, vmacache</td>
+								</tr>
+								<tr>
+									<td align="center">Filesystem</td>
+									<td align="center">fs, files</td>
+								</tr>
+								<tr>
+									<td align="center">Signal Handling</td>
+									<td align="center">sighand, sig, blocked, pending</td>
+								</tr>
+								<tr>
+									<td align="center">Thread State</td>
+									<td align="center">thread (arch-specific: sp, fpu, etc.)</td>
+								</tr>
+								<tr>
+									<td align="center">Namespaces</td>
+									<td align="center">nsproxy</td>
+								</tr>
+								<tr>
+									<td align="center">Cgroups</td>
+									<td align="center">cgroups (css_set)</td>
+								</tr>
+								<tr>
+									<td align="center">Tracing</td>
+									<td align="center">ptrace, ptrace_message</td>
+								</tr>
+								<tr>
+									<td align="center">Accounting</td>
+									<td align="center">utime, stime, start_time, start_boottime</td>
+								</tr>
+								<tr>
+									<td align="center">I/O</td>
+									<td align="center">io_context, io_uring</td>
+								</tr>
+								<tr>
+									<td align="center">RCU</td>
+									<td align="center">rcu, rcu_users</td>
+								</tr>
+								<tr>
+									<td align="center">Security</td>
+									<td align="center">security (LSM blob)</td>
+								</tr>
+								<tr>
+									<td align="center">Stack</td>
+									<td align="center">stack (kernel stack pointer)</td>
+								</tr>
+								<tr>
+									<td align="center">Runqueue Links</td>
+									<td align="center">__state, on_cpu, wake_cpu, run_list</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Inspect task_struct size on this kernel
+echo &#34;struct task_struct&#34; | sudo tee /sys/kernel/debug/tracing/events/task/task_newtask/filter &gt; /dev/null 2&gt;&amp;1
+# No direct query, but we can inspect via BPF:
+sudo bpftrace -e &#39;BEGIN { printf(&#34;task_struct size: %d\n&#34;, sizeof(struct task_struct)); exit(); }&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="process-identity-pid-tgid-pgid-sid">Process Identity: PID, TGID, PGID, SID</h3>
+						<p>Linux's process model distinguishes multiple levels of grouping:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Field</th>
+									<th align="center">Meaning</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">pid</td>
+									<td align="center">Thread ID (TID) - unique per thread in a PID namespace</td>
+								</tr>
+								<tr>
+									<td align="center">tgid</td>
+									<td align="center">Thread Group ID - what userspace calls "PID"</td>
+								</tr>
+								<tr>
+									<td align="center">pgid</td>
+									<td align="center">Process Group ID - for job control (bash pipelines)</td>
+								</tr>
+								<tr>
+									<td align="center">sid</td>
+									<td align="center">Session ID - controlling terminal association</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="plaintext">
+pid_namespace:  PID in a specific namespace (default: init_pid_ns)
+  Each PID namespace has its own PID numbering, starting from 1
+  A process has one &#39;pid&#39; per namespace level it belongs to
+
+  Example (outer ns PID 5000, inner ns PID 1):
+    ┌── outer_pid_ns:
+    │     PID 5000 → task_struct of container init
+    │         ▲         ▲
+    │         │         │
+    │   ┌─────+─────────+─────┐
+    │   │ inner_pid_ns:       │
+    │   │   PID 1             │
+    │   └─────────────────────┘
+						</pre>
+						<pre class="bash">
+# Process hierarchy inspection
+ps -eo pid,tid,pgid,sid,comm --forest | head -30
+
+# PID namespace info
+ls -la /proc/self/ns/pid
+readlink /proc/self/ns/pid
+# pid:[4026531836]
+
+# View PID 1&#39;s namespace
+sudo ls -la /proc/1/ns/pid
+
+# All processes in a specific namespace
+sudo find /proc -name ns -exec sh -c &#39;readlink $1/pid 2&gt;/dev/null&#39; _ {} \; | sort | uniq -c
+						</pre>
+					</section>
+					<section>
+						<h3 id="process-states">Process States</h3>
+						<p>
+							The kernel tracks process state in
+							<code>task_struct-&gt;__state</code>
+							(formerly
+							<code>state</code>
+							). The exact state
+							values are defined in
+							<code>include/linux/sched.h</code>
+							:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">State</th>
+									<th align="center">Value</th>
+									<th align="center">Meaning</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">TASK_RUNNING</td>
+									<td align="center">0x000</td>
+									<td align="center">On CPU or on runqueue ready to run</td>
+								</tr>
+								<tr>
+									<td align="center">TASK_INTERRUPTIBLE</td>
+									<td align="center">0x001</td>
+									<td align="center">Sleeping, can be woken by signal</td>
+								</tr>
+								<tr>
+									<td align="center">TASK_UNINTERRUPTIBLE</td>
+									<td align="center">0x002</td>
+									<td align="center">Sleeping, ignores signals (D state)</td>
+								</tr>
+								<tr>
+									<td align="center">TASK_STOPPED</td>
+									<td align="center">0x004</td>
+									<td align="center">Stopped by SIGSTOP/ptrace</td>
+								</tr>
+								<tr>
+									<td align="center">TASK_TRACED</td>
+									<td align="center">0x008</td>
+									<td align="center">Being traced by ptrace</td>
+								</tr>
+								<tr>
+									<td align="center">EXIT_DEAD</td>
+									<td align="center">0x010</td>
+									<td align="center">Exit almost complete, about to reap</td>
+								</tr>
+								<tr>
+									<td align="center">EXIT_ZOMBIE</td>
+									<td align="center">0x020</td>
+									<td align="center">Terminated, waiting for parent wait()</td>
+								</tr>
+								<tr>
+									<td align="center">TASK_DEAD</td>
+									<td align="center">0x040</td>
+									<td align="center">Task_struct about to be freed</td>
+								</tr>
+								<tr>
+									<td align="center">TASK_WAKEKILL</td>
+									<td align="center">0x080</td>
+									<td align="center">Like TASK_UNINTERRUPTIBLE + fatal sig</td>
+								</tr>
+								<tr>
+									<td align="center">TASK_WAKING</td>
+									<td align="center">0x100</td>
+									<td align="center">Being woken up (transient)</td>
+								</tr>
+								<tr>
+									<td align="center">TASK_NOLOAD</td>
+									<td align="center">0x200</td>
+									<td align="center">Don't count toward load average</td>
+								</tr>
+								<tr>
+									<td align="center">TASK_NEW</td>
+									<td align="center">0x400</td>
+									<td align="center">Freshly forked, not yet running</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="state-transition-diagram">State Transition Diagram</h4>
+						<pre class="plaintext">
+                         ┌──────────┐
+          fork() ───────►│ TASK_NEW │
+                         └────+─────┘
+                              │ wake_up_new_task()
+                              ▼
+          ┌───────────────────────────────────────┐
+          │            TASK_RUNNING                │
+          │    (on CPU or on runqueue)             │
+          └──+──────────────+──────────────────────┘
+             │              │
+   schedule()│              │ schedule() (preempted or yielded)
+             ▼              ▼
+     ┌──────────────┐  ┌──────────────┐
+     │ TASK_RUNNING │  │ TASK_RUNNING │
+     │   (on rq)    │  │   (on CPU)   │
+     └──────────────┘  └──────────────┘
+             │
+   sleep/wait │                  signal or event
+             ▼                      │
+     ┌────────────────┐            │
+     │ INTERRUPTIBLE   │◄───────────┘
+     │ UNINTERRUPTIBLE │
+     └───────+────────┘
+             │ do_exit()
+             ▼
+     ┌────────────────┐     parent calls wait()
+     │ EXIT_ZOMBIE    │────────────────────►  EXIT_DEAD → TASK_DEAD
+     └────────────────┘                       (task_struct freed)
+
+                         ┌────────────────┐
+     SIGSTOP ──────────►│ TASK_STOPPED    │◄──────── SIGCONT
+                         └────────────────┘
+     PTRACE_ATTACH ────►│ TASK_TRACED     │◄──────── PTRACE_DETACH
+                         └────────────────┘
+						</pre>
+						<pre class="bash">
+# Live process state distribution
+ps -eo state,pid,comm | sort | awk &#39;{print $1}&#39; | sort | uniq -c | sort -rn
+# R = running, S = sleeping (interruptible), D = disk sleep (uninterruptible)
+# T = stopped, Z = zombie, X = dead
+						</pre>
+					</section>
+					<section>
+						<h3 id="process-creation">Process Creation</h3>
+						<p>
+							<code>fork()</code>
+							(and
+							<code>vfork()</code>
+							,
+							<code>clone()</code>
+							) all converge on
+							<code>kernel_clone()</code>
+							which calls
+							<code>copy_process()</code>
+							. This function copies (or shares) every subsystem of the parent process:
+						</p>
+						<pre class="c">
+// kernel/fork.c — simplified copy_process() flow
+struct task_struct *copy_process(
+    struct pid *pid,
+    int trace,
+    int node,
+    struct kernel_clone_args *args)
+{
+    struct task_struct *p;
+
+    // 1. Allocate and zero task_struct
+    p = dup_task_struct(current, node);
+    if (!p)
+        return ERR_PTR(-ENOMEM);
+
+    // 2. Resource accounting (RLIMIT_NPROC, cgroup checks)
+    retval = copy_creds(p, args);               // Copy or share credentials
+    retval = copy_semundo(args, p);             // SysV semaphore undo
+    retval = copy_files(args, p);               // Copy or share file descriptor table
+    retval = copy_fs(args, p);                  // Copy or share fs_struct (root, pwd)
+    retval = copy_sighand(args, p);             // Copy or share signal handlers
+    retval = copy_signal(args, p);              // Copy or share signal_struct
+    retval = copy_mm(args, p);                  // Copy or share mm_struct (virtual memory)
+    retval = copy_namespaces(args, p);          // Copy or share namespace proxy
+    retval = copy_io(args, p);                  // Copy or share I/O context
+    retval = copy_thread(p, args);              // Arch-specific: set up thread, stack
+
+    // 3. Assign PID
+    pid = alloc_pid(p-&gt;nsproxy-&gt;pid_ns_for_children);
+    p-&gt;pid = pid_nr(pid);                       // TID in init namespace
+
+    // 4. Integrate into data structures
+    hlist_add_head_rcu(&amp;p-&gt;pid_links[PIDTYPE_PID], ...);
+    list_add_tail_rcu(&amp;p-&gt;thread_group, ...);
+
+    // 5. Set state
+    p-&gt;__state = TASK_NEW;
+    return p;
+}
+						</pre>
+						<h4 id="clone-flags">Clone Flags</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Clone Flag</th>
+									<th align="center">What It Shares/Copies</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">CLONE_VM</td>
+									<td align="center">mm_struct (virtual memory) - SHARED = thread</td>
+								</tr>
+								<tr>
+									<td align="center">CLONE_FS</td>
+									<td align="center">fs_struct (root dir, cwd) - SHARED</td>
+								</tr>
+								<tr>
+									<td align="center">CLONE_FILES</td>
+									<td align="center">files_struct (fd table) - SHARED</td>
+								</tr>
+								<tr>
+									<td align="center">CLONE_SIGHAND</td>
+									<td align="center">sighand_struct - SHARED</td>
+								</tr>
+								<tr>
+									<td align="center">CLONE_THREAD</td>
+									<td align="center">Thread group (same TGID)</td>
+								</tr>
+								<tr>
+									<td align="center">CLONE_VFORK</td>
+									<td align="center">Parent blocks until child exec/exits</td>
+								</tr>
+								<tr>
+									<td align="center">CLONE_NEWNS</td>
+									<td align="center">New mount namespace (container root)</td>
+								</tr>
+								<tr>
+									<td align="center">CLONE_NEWPID</td>
+									<td align="center">New PID namespace (PID 1 in new ns)</td>
+								</tr>
+								<tr>
+									<td align="center">CLONE_NEWNET</td>
+									<td align="center">New network namespace (isolated stack)</td>
+								</tr>
+								<tr>
+									<td align="center">CLONE_NEWUTS</td>
+									<td align="center">New UTS namespace (hostname)</td>
+								</tr>
+								<tr>
+									<td align="center">CLONE_NEWIPC</td>
+									<td align="center">New IPC namespace (SysV IPC, POSIX mq)</td>
+								</tr>
+								<tr>
+									<td align="center">CLONE_NEWUSER</td>
+									<td align="center">New user namespace (UID 0 in new ns)</td>
+								</tr>
+								<tr>
+									<td align="center">CLONE_NEWCGROUP</td>
+									<td align="center">New cgroup namespace</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="thread-creation-with-clone">Thread Creation with clone()</h4>
+						<pre class="c">
+// pthread_create() ultimately calls:
+clone(CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND |
+      CLONE_THREAD | CLONE_SYSVSEM | CLONE_SETTLS |
+      CLONE_PARENT_SETTID | CLONE_CHILD_CLEARTID,
+      child_stack, parent_tidptr, tls, child_tidptr);
+
+// A heavy-weight fork() (full process) calls:
+clone(SIGCHLD, 0);
+
+// vfork() (parent blocks; for immediate execve):
+clone(CLONE_VFORK | CLONE_VM | SIGCHLD, 0);
+						</pre>
+						<pre class="bash">
+# Watch fork/clone calls in real time
+sudo bpftrace -e &#39;tracepoint:sched:sched_process_fork { printf(&#34;fork: parent=%d child=%d\n&#34;, args-&gt;parent_pid, args-&gt;child_pid); }&#39;
+
+# Count clone flags used by different processes
+sudo strace -e clone -f -c bash -c &#39;ls&#39; 2&gt;&amp;1 | grep clone
+						</pre>
+					</section>
+					<section>
+						<h3 id="image-loading-with-execve">Image Loading with execve()</h3>
+						<p>
+							When a process calls
+							<code>execve()</code>
+							, the kernel replaces the entire virtual address space with
+							a new program image. The old address space is discarded; only the task identity (PID, credentials,
+							namespaces) persists.
+						</p>
+						<pre class="c">
+// fs/exec.c → arch/x86/kernel/process_64.c flow:
+SYSCALL_DEFINE3(execve, const char __user *, filename,
+                const char __user *const __user *, argv,
+                const char __user *const __user *, envp)
+{
+    return do_execve(getname(filename), argv, envp);
+}
+
+do_execve() → do_execveat_common()
+  │
+  ├─ unshare_files()           // Break fd table sharing (COW no longer possible)
+  ├─ exec_binprm(bprm)
+  │    │
+  │    └─ search_binary_handler()
+  │         │  Iterates formats:
+  │         │    binfmt_elf   → load_elf_binary()
+  │         │    binfmt_script→ #! interpreter
+  │         │    binfmt_misc  → user-registered handlers
+  │         │
+  │         └─ load_elf_binary()    // fs/binfmt_elf.c
+  │              │
+  │              ├─ flush_old_exec()      // Discard old mm, reset signal disposition
+  │              ├─ setup_new_exec()      // Set comm, clear personality
+  │              ├─ elf_map()             // Map ELF LOAD segments into new mm
+  │              ├─ set_brk()             // Set up BSS / heap area
+  │              ├─ load_elf_interp()     // If dynamically linked, load ld-linux.so
+  │              ├─ create_elf_tables()   // Build AT_* aux vector, argv, envp on stack
+  │              └─ start_thread()        // Set entry point (RIP = ELF entry)
+  │                   │
+  │                   └─ arch/x86/kernel/process_64.c:
+  │                      regs-&gt;ip = elf_entry;
+  │                      regs-&gt;sp = sp;
+						</pre>
+						<h4 id="elf-loading-details">ELF loading details</h4>
+						<pre class="bash">
+# Inspect ELF program headers (LOAD segments)
+readelf -l /usr/bin/bash
+# Type  Offset             VirtAddr           PhysAddr
+#       FileSiz            MemSiz              Flags  Align
+# LOAD  0x000000 0x00000000 0x00000000 0x0020000 0x0020000 R E 0x1000
+# LOAD  0x027000 0x00028000 0x00028000 0x0004000 0x0004000 RW  0x1000
+
+# The kernel mmaps each LOAD segment with appropriate prot flags
+# R E → PROT_READ | PROT_EXEC
+# RW  → PROT_READ | PROT_WRITE
+						</pre>
+						<h4 id="auxiliary-vector">Auxiliary Vector</h4>
+						<pre class="bash">
+# Check what the kernel passes to a new process
+LD_SHOW_AUXV=1 /bin/true
+# AT_SYSINFO_EHDR: vDSO address
+# AT_PHDR:  program headers address
+# AT_PHENT: program header entry size
+# AT_PHNUM: program header count
+# AT_PAGESZ: 4096
+# AT_BASE:   interpreter base address (ld-linux)
+# AT_FLAGS:  flags
+# AT_ENTRY:  entry point
+# AT_UID:    real UID
+# AT_EUID:   effective UID
+# AT_GID:    real GID
+# AT_EGID:   effective GID
+# AT_SECURE: 0 (non-setuid) or 1 (setuid — sanitize environment)
+# AT_RANDOM: 16 random bytes for stack canary / ASLR
+# AT_EXECFN: executable filename
+# AT_PLATFORM: x86_64
+						</pre>
+					</section>
+					<section>
+						<h3 id="process-termination">Process Termination</h3>
+						<pre class="c">
+// kernel/exit.c — simplified
+void __noreturn do_exit(long code)
+{
+    struct task_struct *tsk = current;
+
+    profile_task_exit(tsk);
+
+    // 1. Set the exit code
+    tsk-&gt;exit_code = (code &amp; 0xff) &lt;&lt; 8;
+
+    // 2. Release resources
+    exit_signals(tsk);          // Set all pending signals to ignored
+    exit_mm(tsk);               // Release mm_struct (mmput)
+    exit_sem(tsk);              // Undo SysV semaphores
+    exit_shm(tsk);              // Detach SysV shared memory
+    exit_files(tsk);            // Close file descriptors, put files_struct
+    exit_fs(tsk);               // Release fs_struct
+    exit_task_namespaces(tsk);  // Put namespace references
+    exit_io_context(tsk);       // Release I/O context
+    exit_thread(tsk);           // Arch-specific thread cleanup
+
+    // 3. Notify parent
+    exit_notify(tsk, group_dead);
+    //    │
+    //    ├─ If group_dead (last thread in process):
+    //    │    signal parent with SIGCHLD (or set parent-death signal)
+    //    │    reparent orphaned children to init (PID 1) or subreaper
+    //    │
+    //    └─ Set state to EXIT_ZOMBIE
+
+    // 4. Final schedule — never returns
+    tsk-&gt;__state = EXIT_ZOMBIE;
+    do_task_dead();
+}
+						</pre>
+						<h4 id="zombie-reaping">Zombie Reaping</h4>
+						<ul>
+							<li>The parent must call <code>wait()</code> ( <code>wait4</code> , <code>waitpid</code> , <code>waitid</code> ) to read the exit status.</li>
+							<li>Until the parent waits, the zombie holds a <code>task_struct</code> and PID entry.</li>
+							<li>If the parent exits before reaping, <code>init</code> (PID 1) inherits the orphan zombies and <code>wait()</code> s automatically.</li>
+							<li>A process can use <code>prctl(PR_SET_CHILD_SUBREAPER, 1)</code> to become a subreaper.</li>
+						</ul>
+						<pre class="bash">
+# Find zombie processes
+ps aux | grep &#39;Z&#39;
+
+# Zombie&#39;s exit code
+cat /proc/&lt;zombie_pid&gt;/status | grep -E &#39;State|SigCgt|SigPnd&#39;
+
+# Check init&#39;s children
+sudo ps -o pid,ppid,state,comm --ppid 1
+
+# Subreaper identification
+sudo grep subreaper /proc/*/status 2&gt;/dev/null
+						</pre>
+					</section>
+					<section>
+						<h3 id="sessions-and-process-groups">Sessions and Process Groups</h3>
+						<pre class="plaintext">
+┌────────────────────────────────────────────────────────────────────┐
+│  Session (SID = 1234)                                              │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │ Session Leader: bash (PID 1234, PGID 1234, SID 1234)        │  │
+│  │ Controlling Terminal: /dev/pts/0                             │  │
+│  │                                                              │  │
+│  │  ┌───────────────────────────────────────────────────────┐  │  │
+│  │  │ Foreground Process Group (PGID 5678)                  │  │  │
+│  │  │  cat /var/log/messages | grep ERROR | wc -l           │  │  │
+│  │  │  PID 5678              PID 5679         PID 5680      │  │  │
+│  │  │  (all share PGID 5678)                                │  │  │
+│  │  └───────────────────────────────────────────────────────┘  │  │
+│  │                                                              │  │
+│  │  ┌───────────────────────────────────────────────────────┐  │  │
+│  │  │ Background Process Group (PGID 9000)                  │  │  │
+│  │  │  long_running_task &amp;                                  │  │  │
+│  │  └───────────────────────────────────────────────────────┘  │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+│                                                                     │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │ Daemon / Detached Process (no controlling terminal)          │  │
+│  │  sshd (PID 500, SID 500, PGID 500)                          │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────────────────┘
+						</pre>
+						<h4 id="daemonizing-with-setsid">Daemonizing with setsid()</h4>
+						<pre class="c">
+// Classic daemonization sequence
+void daemonize(void)
+{
+    pid_t pid = fork();
+    if (pid &gt; 0) exit(0);  // Parent exits
+
+    setsid();              // Create new session, detach from terminal
+    // Now: SID = PID, no controlling terminal
+
+    pid = fork();
+    if (pid &gt; 0) exit(0);  // Session leader exits (can&#39;t reacquire CTTY)
+
+    chdir(&#34;/&#34;);            // Don&#39;t keep mount points busy
+    umask(0);               // Inherited umask can break file creation
+    close(0); close(1); close(2);  // Or redirect to /dev/null
+}
+						</pre>
+						<pre class="bash">
+# Process group and session inspection
+ps -eo pid,pgid,sid,tpgid,stat,comm | head -20
+
+# Which processes share a terminal?
+ps -eo pid,tty,comm | grep -v &#39;?&#39; | head -20
+
+# Send signal to an entire process group
+kill -STOP -5678   # Negative PID = process group ID
+						</pre>
+					</section>
+					<section>
+						<h3 id="cgroups-integration">Cgroups Integration</h3>
+						<p>
+							The process manager integrates with cgroups at resource allocation points: fork (check limits),
+							exec (apply limits), and accounting (track usage).
+						</p>
+						<pre class="plaintext">
+┌────────────────────────────────────────────────────────────┐
+│  Cgroup v2 Hierarchy (unified)                             │
+│                                                            │
+│  /sys/fs/cgroup/                                           │
+│  ├── cgroup.procs          (process membership)            │
+│  ├── cgroup.controllers    (available controllers)         │
+│  ├── memory.max            (hard memory limit)             │
+│  ├── memory.current        (current memory usage)          │
+│  ├── cpu.max               (CPU bandwidth: quota period)   │
+│  ├── cpu.weight            (CPU weight, replaces shares)   │
+│  ├── io.max                (I/O throttling)                │
+│  ├── pids.max              (PID limit)                     │
+│  └── user.slice/                                           │
+│      └── user-1000.slice/                                  │
+│          └── session-3.scope/  (logind session)            │
+│              ├── 1234 (bash)                               │
+│              └── 5678 (firefox)                            │
+└────────────────────────────────────────────────────────────┘
+						</pre>
+						<pre class="bash">
+# Cgroup membership of a process
+cat /proc/self/cgroup
+# 0::/user.slice/user-1000.slice/session-3.scope
+
+# Create a custom cgroup
+sudo mkdir /sys/fs/cgroup/my-test
+echo &#34;+cpu +memory +pids&#34; | sudo tee /sys/fs/cgroup/my-test/cgroup.subtree_control
+
+# Move a shell into it
+echo $$ | sudo tee /sys/fs/cgroup/my-test/cgroup.procs
+cat /proc/self/cgroup
+
+# Set limits
+echo &#34;256M&#34; | sudo tee /sys/fs/cgroup/my-test/memory.max
+echo &#34;100&#34;  | sudo tee /sys/fs/cgroup/my-test/pids.max
+
+# Spawn a process directly into a cgroup (podman does this)
+# Write PID to cgroup.procs BEFORE exec or AFTER using clone into cgroup
+						</pre>
+					</section>
+					<section>
+						<h3 id="process-credentials">Process Credentials</h3>
+						<p>
+							The
+							<code>struct cred</code>
+							encapsulates a task's security context. It is reference-counted and shared
+							among threads that don't need distinct credentials.
+						</p>
+						<pre class="c">
+// include/linux/cred.h
+struct cred {
+    atomic_long_t   usage;
+    kuid_t          uid;            // Real UID
+    kgid_t          gid;            // Real GID
+    kuid_t          suid;           // Saved UID
+    kgid_t          sgid;           // Saved GID
+    kuid_t          euid;           // Effective UID
+    kgid_t          egid;           // Effective GID
+    kuid_t          fsuid;          // FS UID (for file access checks)
+    kgid_t          fsgid;          // FS GID
+    unsigned        securebits;
+    kernel_cap_t    cap_inheritable;// Inheritable capabilities
+    kernel_cap_t    cap_permitted;  // Permitted capabilities
+    kernel_cap_t    cap_effective;  // Effective capabilities
+    kernel_cap_t    cap_bset;       // Bounding set
+    kernel_cap_t    cap_ambient;    // Ambient set
+    ...
+    struct user_struct *user;       // Per-user accounting
+    struct user_namespace *user_ns; // User namespace
+    ...
+};
+
+// Task holds two cred pointers:
+//  task-&gt;cred     = subjective (used for access checks)
+//  task-&gt;real_cred= objective  (stores the actual identity)
+						</pre>
+						<h4 id="credential-commit-pattern">Credential commit pattern</h4>
+						<pre class="c">
+// Changing credentials requires creating a new cred and committing:
+struct cred *new = prepare_creds();
+if (!new)
+    return -ENOMEM;
+new-&gt;uid = make_kuid(current_user_ns(), 1000);
+new-&gt;euid = make_kuid(current_user_ns(), 0);  // setuid-root
+new-&gt;cap_effective = ...;
+commit_creds(new);  // Atomic swap: rcu_assign_pointer(current-&gt;cred, new)
+						</pre>
+						<pre class="bash">
+# Inspect process credentials
+cat /proc/self/status | grep -E &#39;Uid|Gid|Cap&#39;
+
+# Uid:  1000 1000 1000 1000
+#       Real Eff  Saved FS
+# The four UID fields
+
+# Capabilities in hex and decoded
+cat /proc/self/status | grep Cap
+# CapInh: 0000000000000000
+# CapPrm: 0000000000000000
+# CapEff: 0000000000000000
+# CapBnd: 000001ffffffffff
+# CapAmb: 0000000000000000
+
+# Decode: capsh --decode=000001ffffffffff
+capsh --decode=000001ffffffffff 2&gt;/dev/null || \
+  python3 -c &#34;
+caps = int(&#39;000001ffffffffff&#39;, 16)
+for bit in range(64):
+    if caps &amp; (1 &lt;&lt; bit):
+        print(f&#39;CAP_{bit}&#39;)
+&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="procpid-internals">/proc/PID/ Internals</h3>
+						<p>
+							Every file under
+							<code>/proc/PID/</code>
+							exposes a kernel data structure. Understanding which field maps
+							to which file is essential for debugging:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">/proc/PID/ file</th>
+									<th align="center">Kernel Source / Data Structure</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">status</td>
+									<td align="center">task_struct fields (pid, uid, state, etc.)</td>
+								</tr>
+								<tr>
+									<td align="center">stat</td>
+									<td align="center">Compact machine-parseable status line</td>
+								</tr>
+								<tr>
+									<td align="center">cmdline</td>
+									<td align="center">argv (from user stack, null-separated)</td>
+								</tr>
+								<tr>
+									<td align="center">environ</td>
+									<td align="center">envp (from user stack, null-separated)</td>
+								</tr>
+								<tr>
+									<td align="center">maps</td>
+									<td align="center">mm_struct->mmap (VMA list)</td>
+								</tr>
+								<tr>
+									<td align="center">smaps / smaps_rollup</td>
+									<td align="center">Per-VMA memory accounting (PSS, RSS, etc.)</td>
+								</tr>
+								<tr>
+									<td align="center">mem</td>
+									<td align="center">Raw memory access (ptrace-based)</td>
+								</tr>
+								<tr>
+									<td align="center">fd/</td>
+									<td align="center">files_struct->fdtable (fd -> struct file)</td>
+								</tr>
+								<tr>
+									<td align="center">fdinfo/</td>
+									<td align="center">Per-fd metadata (pos, flags, mnt_id)</td>
+								</tr>
+								<tr>
+									<td align="center">cgroup</td>
+									<td align="center">css_set cgroup membership</td>
+								</tr>
+								<tr>
+									<td align="center">mountinfo</td>
+									<td align="center">mnt_namespace mount entries</td>
+								</tr>
+								<tr>
+									<td align="center">io</td>
+									<td align="center">task_io_accounting (rchar, wchar, syscr...)</td>
+								</tr>
+								<tr>
+									<td align="center">limits</td>
+									<td align="center">signal_struct->rlim (RLIMIT_* values)</td>
+								</tr>
+								<tr>
+									<td align="center">stack</td>
+									<td align="center">Kernel stack backtrace (save_stack_trace)</td>
+								</tr>
+								<tr>
+									<td align="center">syscall</td>
+									<td align="center">Current syscall number and args (ptrace)</td>
+								</tr>
+								<tr>
+									<td align="center">wchan</td>
+									<td align="center">Symbol name where process is sleeping</td>
+								</tr>
+								<tr>
+									<td align="center">oom_score</td>
+									<td align="center">OOM killer score (badness)</td>
+								</tr>
+								<tr>
+									<td align="center">oom_score_adj</td>
+									<td align="center">OOM score adjustment knob</td>
+								</tr>
+								<tr>
+									<td align="center">numa_maps</td>
+									<td align="center">Per-NUMA-node memory mapping info</td>
+								</tr>
+								<tr>
+									<td align="center">sched</td>
+									<td align="center">Scheduler parameters (policy, prio, affinity)</td>
+								</tr>
+								<tr>
+									<td align="center">schedstat</td>
+									<td align="center">Scheduler statistics (wait/run/sleep time)</td>
+								</tr>
+								<tr>
+									<td align="center">net/</td>
+									<td align="center">Network namespace socket info</td>
+								</tr>
+								<tr>
+									<td align="center">ns/</td>
+									<td align="center">Namespace fd references</td>
+								</tr>
+								<tr>
+									<td align="center">root</td>
+									<td align="center">Symlink to process's root (chroot-aware)</td>
+								</tr>
+								<tr>
+									<td align="center">cwd</td>
+									<td align="center">Symlink to process's current working dir</td>
+								</tr>
+								<tr>
+									<td align="center">exe</td>
+									<td align="center">Symlink to executable binary</td>
+								</tr>
+								<tr>
+									<td align="center">auxv</td>
+									<td align="center">ELF auxiliary vector</td>
+								</tr>
+								<tr>
+									<td align="center">personality</td>
+									<td align="center">Process personality flags</td>
+								</tr>
+								<tr>
+									<td align="center">comm</td>
+									<td align="center">Task name (prctl(PR_SET_NAME))</td>
+								</tr>
+								<tr>
+									<td align="center">task/</td>
+									<td align="center">Per-thread subdirectories (TID)</td>
+								</tr>
+								<tr>
+									<td align="center">attr/</td>
+									<td align="center">LSM-specific security attributes</td>
+								</tr>
+								<tr>
+									<td align="center">pagemap</td>
+									<td align="center">Physical page frame numbers (CAP_SYS_ADMIN)</td>
+								</tr>
+								<tr>
+									<td align="center">clear_refs</td>
+									<td align="center">Reset PG_Referenced page flags</td>
+								</tr>
+								<tr>
+									<td align="center">smaps_rollup</td>
+									<td align="center">Aggregated memory stats across all VMAs</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Dump key /proc info for a process
+cat /proc/$$/status
+cat /proc/$$/stack
+sudo cat /proc/$$/syscall
+ls -la /proc/$$/fd/
+cat /proc/$$/maps | head -10
+cat /proc/$$/cgroup
+						</pre>
+					</section>
+					<section>
+						<h3 id="pid-namespaces-and-translation">PID Namespaces and Translation</h3>
+						<p>
+							A process has different PIDs in different namespaces. The kernel maintains a
+							<code>struct pid</code>
+							with
+							multiple
+							<code>struct upid</code>
+							entries:
+						</p>
+						<pre class="c">
+// include/linux/pid.h
+struct pid {
+    refcount_t          count;
+    unsigned int        level;          // Depth in namespace hierarchy
+    spinlock_t          lock;
+    struct hlist_head   tasks[PIDTYPE_MAX];  // Hash: type → task
+    struct upid         numbers[];           // Flexible array: one per ns layer
+};
+
+struct upid {
+    int                 nr;             // PID number in this namespace
+    struct pid_namespace *ns;           // Which namespace
+};
+						</pre>
+						<pre class="bash">
+# A process&#39;s PID in different contexts:
+echo &#34;PID in init namespace: $$&#34;
+sudo cat /proc/$$/status | grep &#39;^Pid&#39;
+
+# Inside a user namespace (unshare):
+unshare --fork --pid --mount-proc bash -c &#39;
+    echo &#34;PID in this namespace: $$&#34;
+    ps -eo pid,comm
+&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that builds the process tree from
+							<code>/proc</code>
+							. For each numeric directory, read
+							<code>/proc/&lt;pid&gt;/stat</code>
+							for the PID, PPID, process group, session, and state, and
+							<code>/proc/&lt;pid&gt;/status</code>
+							for
+							<code>Tgid</code>
+							and
+							<code>NSpid</code>
+							. Print each process indented under its parent and mark entries whose
+							<code>Tgid</code>
+							differs from
+							<code>Pid</code>
+							as threads.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;bufio&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;sort&#34;
+	&#34;strconv&#34;
+	&#34;strings&#34;
+)
+
+type proc struct {
+	pid, ppid, pgid, sid int
+	tgid, nspid          int
+	state, comm          string
+}
+
+func parseProc(pid int) proc {
+	p := proc{pid: pid}
+	raw, err := os.ReadFile(fmt.Sprintf(&#34;/proc/%d/stat&#34;, pid))
+	if err != nil {
+		return proc{}
+	}
+	s := string(raw)
+	open := strings.Index(s, &#34;(&#34;)
+	end := strings.LastIndex(s, &#34;)&#34;)
+	if open &lt; 0 || end &lt; 0 {
+		return proc{}
+	}
+	p.comm = s[open+1 : end]
+	fields := strings.Fields(s[end+1:])
+	p.state = fields[0]
+	p.ppid, _ = strconv.Atoi(fields[1])
+	p.pgid, _ = strconv.Atoi(fields[2])
+	p.sid, _ = strconv.Atoi(fields[3])
+
+	f, err := os.Open(fmt.Sprintf(&#34;/proc/%d/status&#34;, pid))
+	if err != nil {
+		return p
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := sc.Text()
+		switch {
+		case strings.HasPrefix(line, &#34;Tgid:&#34;):
+			p.tgid, _ = strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(line, &#34;Tgid:&#34;)))
+		case strings.HasPrefix(line, &#34;NSpid:&#34;):
+			ns := strings.Fields(strings.TrimPrefix(line, &#34;NSpid:&#34;))
+			p.nspid, _ = strconv.Atoi(ns[len(ns)-1])
+		}
+	}
+	return p
+}
+
+func procList() []proc {
+	entries, _ := os.ReadDir(&#34;/proc&#34;)
+	out := make([]proc, 0)
+	for _, e := range entries {
+		pid, err := strconv.Atoi(e.Name())
+		if err != nil {
+			continue
+		}
+		if p := parseProc(pid); p.pid != 0 {
+			out = append(out, p)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].pid &lt; out[j].pid })
+	return out
+}
+
+func main() {
+	byParent := make(map[int][]proc)
+	for _, p := range procList() {
+		byParent[p.ppid] = append(byParent[p.ppid], p)
+	}
+
+	var walk func(pid, depth int)
+	walk = func(pid, depth int) {
+		for _, p := range byParent[pid] {
+			kind := &#34;process&#34;
+			if p.tgid != p.pid {
+				kind = &#34;thread&#34;
+			}
+			fmt.Printf(&#34;%s%-6d %-7s ppid=%-6d pgid=%-6d sid=%-6d ns=%-6d %s (%s)\n&#34;,
+				strings.Repeat(&#34;  &#34;, depth), p.pid, p.state, p.ppid,
+				p.pgid, p.sid, p.nspid, p.comm, kind)
+			walk(p.pid, depth+1)
+		}
+	}
+	walk(1, 0)
+}
+						</pre>
+						<p>
+							Build and run it, then compare with
+							<code>ps</code>
+							:
+						</p>
+						<pre class="bash">
+go build -o proctree proctree.go
+./proctree | head -30
+ps -eo pid,ppid,pgid,sid,state,comm --forest | head -30
+						</pre>
+						<p>
+							Start a process that spawns threads, then confirm that its extra entries share one
+							<code>Tgid</code>
+							:
+						</p>
+						<pre class="bash">
+stress-ng --cpu 2 --timeout 5s &amp;
+sleep 1
+./proctree | grep -A 4 stress-ng
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/include/linux/sched.h" target="_blank">Linux kernel: include/linux/sched.h - struct task_struct</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/kernel/fork.c" target="_blank">Linux kernel: kernel/fork.c - copy_process, kernel_clone</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/fs/exec.c" target="_blank">Linux kernel: fs/exec.c - do_execve, exec_binprm</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/fs/binfmt_elf.c" target="_blank">Linux kernel: fs/binfmt_elf.c - load_elf_binary</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/kernel/exit.c" target="_blank">Linux kernel: kernel/exit.c - do_exit, exit_notify</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/include/linux/cred.h" target="_blank">Linux kernel: include/linux/cred.h - struct cred</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/include/linux/pid.h" target="_blank">Linux kernel: include/linux/pid.h - struct pid, PID namespaces</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/Documentation/filesystems/proc.rst" target="_blank">Linux kernel: Documentation/filesystems/proc.rst</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/" target="_blank">man pages: fork(2), clone(2), execve(2), wait(2), setsid(2), prctl(2)</a></li>
+							<li><a class="icon-website" href="https://lwn.net/Articles/414618/" target="_blank">LWN.net: A deep dive into clone()</a></li>
+							<li><a class="icon-website" href="https://lwn.net/Articles/794117/" target="_blank">LWN.net: Toward race-free process creation</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

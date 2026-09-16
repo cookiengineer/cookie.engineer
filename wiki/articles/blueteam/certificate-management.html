@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Certificate Management | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Certificate Management">
+		<meta name="keywords" content="blueteam, certificate-management, ct-logs, lets-encrypt, pki, tls, x509">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Certificate Management">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="PKI lifecycle management, from issuance through renewal to revocation, with operational security practices.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/blueteam/certificate-management.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Certificate Management">
+		<meta name="twitter:description" itemprop="description" content="PKI lifecycle management, from issuance through renewal to revocation, with operational security practices.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#concept">Concept</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#pki-fundamentals">PKI Fundamentals</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#x509-structure">X.509 Structure</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#certificate-types">Certificate Types</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#openssl-inspection-toolkit">OpenSSL Inspection Toolkit</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#lets-encrypt-acme">Let's Encrypt / ACME</a></b>
+					<ul>
+						<li><a href="#how-acme-works">How ACME Works</a></li>
+						<li><a href="#dns-01-challenge">DNS-01 Challenge</a></li>
+						<li><a href="#http-01-challenge">HTTP-01 Challenge</a></li>
+						<li><a href="#alternative-acme-clients">Alternative ACME Clients</a></li>
+						<li><a href="#automated-renewal">Automated Renewal</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#cert-manager-on-kubernetes">cert-manager on Kubernetes</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#certificate-transparency">Certificate Transparency</a></b>
+					<ul>
+						<li><a href="#ct-monitoring-alert">CT Monitoring Alert</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#certificate-pinning">Certificate Pinning</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#key-protection">Key Protection</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#cipher-suite-policies">Cipher Suite Policies</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tls-hygiene-with-testsslsh">TLS Hygiene with testssl.sh</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#certificate-inventory">Certificate Inventory</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#emergency-procedures">Emergency Procedures</a></b>
+					<ul>
+						<li><a href="#expiring-certificate">Expiring Certificate</a></li>
+						<li><a href="#compromised-private-key">Compromised Private Key</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/blueteam/index.html">Blueteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/blueteam/certificate-management.html">Certificate Management</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="certificate-management">Certificate Management</h2>
+					<p>
+						<abbr title="Public Key Infrastructure">PKI</abbr>
+						lifecycle management, from issuance through renewal to revocation,
+						with operational security practices.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Certificates expire, keys leak, and revocation is hard. This article walks the X.509 lifecycle:
+							key generation,
+							<abbr title="Certificate Signing Request">CSR</abbr>
+							submission, issuance, deployment, renewal,
+							and revocation. After reading it you can inspect a certificate chain, automate renewal with
+							ACME, and react when a private key is compromised. The goal is that no certificate outage is
+							ever a surprise.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/tls.html">TLS Protocol</a> - handshake, cipher suites, certificate validation</li>
+							<li><a href="/wiki/articles/fundamentals/cryptography.html">Cryptography</a> - hash functions, digital signatures, <abbr title="Rivest-Shamir-Adleman">RSA</abbr> /ECDSA</li>
+							<li><a href="/wiki/articles/fundamentals/public-key-cryptography.html">Public Key Cryptography</a> - key pairs, signing, verification</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="concept">Concept</h3>
+						<p>
+							Certificate management is the operational discipline of the X.509
+							<abbr title="Public Key Infrastructure">PKI</abbr>
+							lifecycle: key generation, CSR submission, issuance, deployment, renewal, and revocation. Every
+							expired certificate is a self-inflicted outage. Every leaked private key is a compromise of
+							all sessions protected by that certificate.
+						</p>
+						<p>
+							The challenge scales with the number of certificates. A small shop with 3 domains might manage
+							them manually. An enterprise with 10,000+ certificates across internal services, external endpoints,
+							client auth, code signing, and email S/MIME needs full automation.
+						</p>
+					</section>
+					<section>
+						<h3 id="pki-fundamentals">PKI Fundamentals</h3>
+						<pre class="plaintext">
+                 +--------------+
+                 |  Root CA     |  &lt;- Offline, air-gapped, HSM-protected
+                 |  (self-signed|     Valid 10-20 years
+                 |   cert)      |     Only used to sign Intermediate CAs
+                 +------+-------+
+                        | signs
+                 +------v-------+
+                 | Intermediate |  &lt;- Online, but restricted access
+                 |  CA          |     Valid 5-10 years
+                 |              |     Signs end-entity certs
+                 +------+-------+
+                        | signs
+            +-----------+-----------+
+    +-------v------+ +--v------+ +--v----------+
+    |  End-Entity  | | End-Ent | | End-Entity   |
+    |  (webserver) | | (client)| | (S/MIME)     |
+    |  Valid 90d   | | 1 year  | | 1 year       |
+    +--------------+ +---------+ +--------------+
+						</pre>
+						<p>Trust chain validation steps:</p>
+						<ol>
+							<li>The end-entity cert signature is verified against its issuer (the intermediate certificate authority).</li>
+							<li>The intermediate cert signature is verified against its issuer (the root certificate authority).</li>
+							<li>The root cert is in the trust store, so the chain is trusted.</li>
+							<li>Each cert is checked: not expired, not revoked, key usage matches, and the subject alternative name matches the hostname.</li>
+						</ol>
+					</section>
+					<section>
+						<h3 id="x509-structure">X.509 Structure</h3>
+						<pre class="bash">
+# Inspect a certificate in detail
+openssl x509 -in cert.pem -text -noout
+						</pre>
+						<p>Key fields to understand:</p>
+						<pre class="plaintext">
+Certificate:
+    Signature Algorithm: sha256WithRSAEncryption
+    Issuer: C=US, O=Let&#39;s Encrypt, CN=R11
+    Validity
+        Not Before: Jun 20 00:00:00 2026 GMT
+        Not After : Sep 18 00:00:00 2026 GMT     &lt;- 90 days (Let&#39;s Encrypt default)
+    Subject: CN=example.com
+    Subject Public Key Info:
+        Public Key Algorithm: id-ecPublicKey     &lt;- ECDSA or RSA
+        Public-Key: (256 bit)
+    X509v3 extensions:
+        X509v3 Key Usage: critical
+            Digital Signature, Key Encipherment
+        X509v3 Extended Key Usage:
+            TLS Web Server Authentication
+        X509v3 Subject Alternative Name: critical
+            DNS:example.com, DNS:*.example.com   &lt;- browsers check SAN, not CN
+        X509v3 Basic Constraints: critical
+            CA:FALSE                              &lt;- not a CA, can&#39;t sign other certs
+        X509v3 CRL Distribution Points:
+            http://r11.c.lencr.org/               &lt;- where to check revocation
+        CT Precertificate SCTs:                    &lt;- Certificate Transparency proof
+            Signed Certificate Timestamp...
+						</pre>
+					</section>
+					<section>
+						<h3 id="certificate-types">Certificate Types</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Type</th>
+									<th align="center">Validation</th>
+									<th align="center">Issuance</th>
+									<th align="center">Use Case</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">DV (Domain Validated)</td>
+									<td align="center">Prove domain control (HTTP/DNS challenge)</td>
+									<td align="center">Minutes</td>
+									<td align="center">Websites, APIs</td>
+								</tr>
+								<tr>
+									<td align="center">OV (Organization Validated)</td>
+									<td align="center">DV + verify org registration</td>
+									<td align="center">Days</td>
+									<td align="center">Business websites</td>
+								</tr>
+								<tr>
+									<td align="center">EV (Extended Validation)</td>
+									<td align="center">DV + OV + physical/legal verification</td>
+									<td align="center">Days-weeks</td>
+									<td align="center">Banks, high-trust sites</td>
+								</tr>
+								<tr>
+									<td align="center">Wildcard</td>
+									<td align="center">DV/OV for*.domain.com</td>
+									<td align="center">As above</td>
+									<td align="center">Multiple subdomains</td>
+								</tr>
+								<tr>
+									<td align="center">Multi-Domain (SAN)</td>
+									<td align="center">DV/OV for multiple names</td>
+									<td align="center">As above</td>
+									<td align="center">Unified comms, Exchange</td>
+								</tr>
+								<tr>
+									<td align="center">Code Signing</td>
+									<td align="center">Org validation + hardware token</td>
+									<td align="center">Days</td>
+									<td align="center">Signed executables</td>
+								</tr>
+								<tr>
+									<td align="center">Client Auth</td>
+									<td align="center">DV/OV for identifying users/machines</td>
+									<td align="center">Varies</td>
+									<td align="center">mTLS, VPN auth</td>
+								</tr>
+								<tr>
+									<td align="center">S/MIME</td>
+									<td align="center">Email address validation</td>
+									<td align="center">Varies</td>
+									<td align="center">Email encryption/signing</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							A single wildcard cert
+							<code>*.example.com</code>
+							means every subdomain is compromised when that key leaks.
+							Prefer individual certs, or split wildcards across trust boundaries (production vs. development).
+						</p>
+					</section>
+					<section>
+						<h3 id="openssl-inspection-toolkit">OpenSSL Inspection Toolkit</h3>
+						<pre class="bash">
+# Check a remote server&#39;s certificate
+openssl s_client -connect example.com:443 -servername example.com \
+  &lt;/dev/null 2&gt;/dev/null | openssl x509 -text -noout
+
+# Check certificate expiry date
+echo | openssl s_client -connect example.com:443 -servername example.com 2&gt;/dev/null \
+  | openssl x509 -noout -enddate
+
+# Check certificate chain
+openssl s_client -connect example.com:443 -showcerts &lt;/dev/null 2&gt;/dev/null
+
+# Verify a certificate against a CA bundle
+openssl verify -CAfile /etc/ssl/certs/ca-certificates.crt cert.pem
+
+# Extract the public key from a certificate
+openssl x509 -in cert.pem -pubkey -noout
+
+# Compare a public key with its certificate (works for any key type)
+openssl x509 -in cert.pem -pubkey -noout | openssl pkey -pubin -outform DER | openssl sha256
+openssl pkey -in key.pem -pubout -outform DER | openssl sha256
+# Both SHA-256 hashes must match
+
+# For RSA keys only, compare moduli (does not work for ECDSA)
+openssl x509 -in cert.pem -noout -modulus | openssl sha256
+openssl rsa -in key.pem -noout -modulus | openssl sha256
+
+# Convert certificate formats
+openssl x509 -in cert.pem -outform DER -out cert.der     # PEM -&gt; DER
+openssl x509 -in cert.der -inform DER -out cert.pem       # DER -&gt; PEM
+openssl pkcs12 -export -in cert.pem -inkey key.pem -out cert.pfx  # PEM -&gt; PKCS#12
+
+# Generate a self-signed cert (testing/internal only)
+openssl req -x509 -newkey rsa:4096 -sha256 -days 365 -nodes \
+  -keyout key.pem -out cert.pem \
+  -subj &#34;/CN=test.internal&#34; \
+  -addext &#34;subjectAltName=DNS:test.internal,DNS:*.test.internal&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="lets-encrypt-acme">Let's Encrypt / ACME</h3>
+						<p>
+							ACME (Automatic Certificate Management Environment) automates domain validation, issuance, and
+							renewal.
+						</p>
+						<h4 id="how-acme-works">How ACME Works</h4>
+						<pre class="plaintext">
+Client -&gt; ACME Server (Let&#39;s Encrypt):
+1. Account creation (generate key, register)
+2. Order a certificate (specify domains)
+3. Receive challenges (HTTP-01, DNS-01, TLS-ALPN-01)
+4. Complete challenge (prove domain control)
+5. Submit CSR
+6. Receive signed certificate
+						</pre>
+						<h4 id="dns-01-challenge">DNS-01 Challenge</h4>
+						<p>
+							Preferred for wildcards and hosts without a public port. The client creates a TXT record named
+							<code>_acme-challenge.example.com</code>
+							with a server-provided token, and the
+							<abbr title="Certificate Authority">CA</abbr>
+							resolves it.
+						</p>
+						<pre class="bash">
+# Challenge: Create TXT record _acme-challenge.example.com with server-provided token
+# Let&#39;s Encrypt verifies: dig TXT _acme-challenge.example.com
+						</pre>
+						<h4 id="http-01-challenge">HTTP-01 Challenge</h4>
+						<p>
+							For simple webservers. The client serves a file under
+							<code>/.well-known/acme-challenge/</code>
+							.
+						</p>
+						<pre class="bash">
+# Challenge: Serve file at http://example.com/.well-known/acme-challenge/&lt;token&gt;
+# Let&#39;s Encrypt verifies: curl http://example.com/.well-known/acme-challenge/&lt;token&gt;
+						</pre>
+						<pre class="bash">
+# certbot - the reference ACME client
+sudo pacman -S certbot
+
+# Obtain a certificate (standalone mode starts a temporary webserver)
+sudo certbot certonly --standalone -d example.com -d www.example.com
+
+# Obtain with DNS challenge (supports wildcards)
+sudo certbot certonly --manual --preferred-challenges dns \
+  -d example.com -d &#39;*.example.com&#39;
+# Follow prompts to create TXT records, then press Enter
+
+# Renewal (certbot renew runs from a systemd timer)
+sudo certbot renew --dry-run  # test renewal
+sudo certbot renew             # renew all near-expiry certs
+						</pre>
+						<h4 id="alternative-acme-clients">Alternative ACME Clients</h4>
+						<pre class="bash">
+# acme.sh - pure shell, zero dependencies, excellent for scripts
+curl https://get.acme.sh | sh
+acme.sh --issue -d example.com -w /var/www/html
+acme.sh --install-cert -d example.com \
+  --key-file /etc/nginx/ssl/key.pem \
+  --fullchain-file /etc/nginx/ssl/fullchain.pem \
+  --reloadcmd &#34;systemctl reload nginx&#34;
+
+# lego - Go ACME client, good for CI/CD
+sudo pacman -S lego
+lego --email admin@example.com --dns cloudflare --domains example.com run
+						</pre>
+						<h4 id="automated-renewal">Automated Renewal</h4>
+						<pre class="ini">
+# /etc/systemd/system/cert-renewal.service
+[Unit]
+Description=Renew TLS certificates
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/certbot renew --quiet --deploy-hook &#34;systemctl reload nginx&#34;
+						</pre>
+						<pre class="ini">
+# /etc/systemd/system/cert-renewal.timer
+[Unit]
+Description=Daily certificate renewal check
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=3600
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+						</pre>
+					</section>
+					<section>
+						<h3 id="cert-manager-on-kubernetes">cert-manager on Kubernetes</h3>
+						<pre class="yaml">
+# cert-manager automates TLS in Kubernetes using ACME
+# Install:
+# kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
+
+# Issuer: represents a CA (Let&#39;s Encrypt staging/prod, internal CA)
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@example.com
+    privateKeySecretRef:
+      name: letsencrypt-prod-account-key
+    solvers:
+      - http01:
+          ingress:
+            class: nginx
+
+---
+# Certificate request: cert-manager handles the entire lifecycle
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: example-com-tls
+spec:
+  secretName: example-com-tls
+  issuerRef:
+    name: letsencrypt-prod
+  dnsNames:
+    - example.com
+    - www.example.com
+  # cert-manager auto-renews about 30 days before expiry
+						</pre>
+					</section>
+					<section>
+						<h3 id="certificate-transparency">Certificate Transparency</h3>
+						<p>
+							CT is a system of append-only logs that record every publicly-trusted certificate. Browsers
+							require CT proof (SCTs) before they trust a certificate.
+						</p>
+						<p>CT matters for defenders because:</p>
+						<ul>
+							<li>Monitoring the logs for your domains catches misissued certificates early.</li>
+							<li>Monitoring the logs for typo-squatted domains detects phishing infrastructure.</li>
+							<li>Every publicly issued certificate is public record (internal <abbr title="Certificate Authority">CA</abbr> certs</li>
+						</ul>
+						<p>are not).</p>
+						<pre class="bash">
+# crt.sh - query CT logs via web or CLI
+# Find all certificates for a domain
+curl -s &#39;https://crt.sh/?q=%.example.com&amp;output=json&#39; | jq -r \
+  &#39;.[] | &#34;\(.common_name) | Issued: \(.entry_timestamp) | Issuer: \(.issuer_name) | SHA256: \(.cert_sha256)&#34;&#39;
+
+# Find recently issued certs for your org (monitor for misissuance)
+curl -s &#39;https://crt.sh/?q=%.example.com&amp;output=json&#39; | jq &#39;.[] | select(.entry_timestamp &gt; &#34;2026-06-01&#34;)&#39;
+
+# CertSpotter - alternative CT monitor
+curl -s &#39;https://api.certspotter.com/v1/issuances?domain=example.com&amp;include_subdomains=true&amp;expand=dns_names&#39; | jq .
+
+# CT monitoring with certgraph (Go)
+go install github.com/lanrat/certgraph@latest
+certgraph google.com --depth 1
+						</pre>
+						<h4 id="ct-monitoring-alert">CT Monitoring Alert</h4>
+						<pre class="bash">
+#!/bin/bash
+# ct-monitor.sh - alert on new certificates for monitored domains
+# Run via cron every hour
+
+DOMAINS=&#34;example.com api.example.com internal.example.com&#34;
+KNOWN_CERTS_FILE=&#34;/var/lib/ct-monitor/known-certs.txt&#34;
+mkdir -p &#34;$(dirname &#34;$KNOWN_CERTS_FILE&#34;)&#34;
+
+for domain in $DOMAINS; do
+  curl -s &#34;https://crt.sh/?q=%.${domain}&amp;output=json&#34; | jq -r &#39;.[].cert_sha256&#39; | sort &gt; /tmp/ct-current-$$.txt
+
+  if [ -f &#34;$KNOWN_CERTS_FILE&#34; ]; then
+    NEW=$(comm -13 &#34;$KNOWN_CERTS_FILE&#34; /tmp/ct-current-$$.txt)
+    if [ -n &#34;$NEW&#34; ]; then
+      echo &#34;ALERT: New certificate detected for $domain&#34; | systemd-cat -t ct-monitor -p warning
+    fi
+  fi
+
+  mv /tmp/ct-current-$$.txt &#34;$KNOWN_CERTS_FILE&#34;
+done
+						</pre>
+					</section>
+					<section>
+						<h3 id="certificate-pinning">Certificate Pinning</h3>
+						<p>
+							Pinning restricts which certificates or public keys are accepted for a domain. It protects against
+							<abbr title="Certificate Authority">CA</abbr>
+							compromise but is operationally dangerous: replacing a pinned cert
+							in an emergency requires an application update.
+						</p>
+						<pre class="bash">
+# HTTP Public Key Pinning (HPKP) is deprecated and removed from browsers
+# Prefer: Certificate Transparency monitoring plus the DANE protocol (DNSSEC-based)
+
+# For mobile/desktop apps: pin the public key, not the certificate
+# This allows cert renewal without app updates
+openssl x509 -in cert.pem -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl base64
+# Output is the SPKI fingerprint - pin this, not the cert hash
+						</pre>
+					</section>
+					<section>
+						<h3 id="key-protection">Key Protection</h3>
+						<p>Private keys must never exist unencrypted on disk. The protection hierarchy:</p>
+						<pre class="plaintext">
+HSM (Hardware Security Module) -&gt; Best
+  FIPS 140-2 or 140-3 Level 3
+  Keys generated inside, never leave
+  PCI DSS requirement for payment keys
+
+TPM (Trusted Platform Module) -&gt; Good
+  On-chip key generation and storage
+  Sealed to PCRs (system state)
+  Linux: tpm2-tools for key operations
+
+PKCS#11 Token (smart card, YubiKey) -&gt; Good
+  Portable hardware token
+  Keys generated on-device, require PIN to use
+
+Encrypted file on disk -&gt; Minimum acceptable
+  openssl enc -aes-256-gcm for at-rest
+  Unlocked with a password at service start
+						</pre>
+						<pre class="bash">
+# TPM2: generate a key sealed to specific PCR values
+# The key is only accessible if the system boots into the expected state
+sudo pacman -S tpm2-tools
+
+# Create a primary key in the TPM
+tpm2_createprimary -C o -g sha256 -G rsa -c primary.ctx
+
+# Authorize a policy that requires PCRs 0-7 (firmware + bootloader)
+tpm2_startauthsession -S session.ctx
+tpm2_policypcr -S session.ctx -l sha256:0,1,2,3,4,5,6,7 -L pcr.policy
+tpm2_flushcontext session.ctx
+
+# Create a key bound to that policy
+tpm2_create -C primary.ctx -g sha256 -G rsa -u key.pub -r key.priv \
+  -a &#39;fixedtpm|fixedparent|sensitivedataorigin|userwithauth|noDA&#39; \
+  -L pcr.policy
+
+# Load and use the key
+tpm2_load -C primary.ctx -u key.pub -r key.priv -c key.ctx
+						</pre>
+					</section>
+					<section>
+						<h3 id="cipher-suite-policies">Cipher Suite Policies</h3>
+						<p>
+							Cipher suite configuration determines which algorithms are offered during the
+							<abbr title="Transport Layer Security">TLS</abbr>
+							handshake. Weak ciphers enable downgrade attacks.
+						</p>
+						<pre class="nginx">
+# nginx.conf - modern cipher suite (TLS 1.2+, strong ciphers)
+ssl_protocols TLSv1.2 TLSv1.3;
+ssl_prefer_server_ciphers on;
+
+# TLS 1.3 ciphers (only 5 exist - all are strong)
+ssl_conf_command Ciphersuites TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256:TLS_CHACHA20_POLY1305_SHA256;
+
+# TLS 1.2 ciphers - only AEAD ciphers with ECDHE key exchange
+ssl_ciphers ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305;
+						</pre>
+					</section>
+					<section>
+						<h3 id="tls-hygiene-with-testsslsh">TLS Hygiene with testssl.sh</h3>
+						<pre class="bash">
+# testssl.sh - comprehensive TLS/SSL testing
+# Tests: protocols, ciphers, certificate validity, vulnerabilities
+git clone --depth 1 https://github.com/drwetter/testssl.sh.git
+
+# Full scan of a server
+./testssl.sh/testssl.sh https://example.com
+
+# Quick cipher/server preference check
+./testssl.sh/testssl.sh --server-preference https://example.com
+
+# Check for specific vulnerabilities
+./testssl.sh/testssl.sh --heartbleed --poodle --freak https://example.com
+
+# JSON output for automation
+./testssl.sh/testssl.sh --jsonfile results.json https://example.com
+						</pre>
+					</section>
+					<section>
+						<h3 id="certificate-inventory">Certificate Inventory</h3>
+						<p>
+							Maintain an inventory of every certificate your organization uses, including internal
+							<abbr title="Certificate Authority">CA</abbr>
+							certs, code signing certs, and client auth certs, not just public-facing web certs.
+						</p>
+						<pre class="bash">
+#!/bin/bash
+# cert-inventory.sh - scan all known hosts and collect certificate info
+# Input: hosts.txt (one hostname:port per line)
+
+while IFS=: read -r host port; do
+  port=${port:-443}
+  echo | openssl s_client -connect &#34;${host}:${port}&#34; -servername &#34;$host&#34; \
+    &lt;/dev/null 2&gt;/dev/null | openssl x509 -noout \
+    -subject -issuer -dates -fingerprint -sha256 2&gt;/dev/null \
+    | paste -sd &#39;|&#39; - \
+    | awk -v host=&#34;$host&#34; -v port=&#34;$port&#34; &#39;{print host, port, $0}&#39;
+done &lt; hosts.txt &gt; cert-inventory-$(date +%Y%m%d).txt
+						</pre>
+					</section>
+					<section>
+						<h3 id="emergency-procedures">Emergency Procedures</h3>
+						<h4 id="expiring-certificate">Expiring Certificate</h4>
+						<pre class="bash">
+# 1. Manually renew
+sudo certbot renew --force-renewal
+
+# 2. If certbot failed, get a new cert
+sudo certbot certonly --standalone -d example.com
+
+# 3. If Let&#39;s Encrypt is down (rare), use ZeroSSL (also ACME)
+lego --server https://acme.zerossl.com/v2/DV90 \
+  --email admin@example.com --dns cloudflare --domains example.com run
+
+# 4. Last resort: temporary self-signed cert
+openssl req -x509 -newkey rsa:4096 -sha256 -days 7 -nodes \
+  -keyout emergency-key.pem -out emergency-cert.pem \
+  -subj &#34;/CN=example.com&#34; \
+  -addext &#34;subjectAltName=DNS:example.com&#34;
+# Note: browsers will show a warning - only for emergency use
+						</pre>
+						<h4 id="compromised-private-key">Compromised Private Key</h4>
+						<pre class="bash">
+# 1. Revoke immediately
+certbot revoke --cert-path /etc/letsencrypt/live/example.com/cert.pem \
+  --reason keyCompromise
+
+# 2. Reissue a new certificate with a NEW private key (certbot does this automatically)
+certbot certonly --standalone -d example.com --force-renewal
+
+# 3. Audit: what sessions were protected by the old key?
+# Assume all traffic between last-known-good and revocation time is compromised
+# Force password resets, session invalidation, and token rotation
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that reads one or more PEM files, prints a one-line summary per certificate,
+							and flags anything that is already expired or expires within a configurable number of days.
+							It must also report whether each certificate is self-signed.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;crypto/x509&#34;
+	&#34;encoding/pem&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;strconv&#34;
+	&#34;time&#34;
+)
+
+func main() {
+	if len(os.Args) &lt; 2 {
+		fmt.Fprintf(os.Stderr, &#34;usage: %s warn-days cert.pem [chain.pem ...]\n&#34;, os.Args[0])
+		os.Exit(2)
+	}
+
+	warnDays, err := strconv.Atoi(os.Args[1])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, &#34;warn-days must be an integer&#34;)
+		os.Exit(2)
+	}
+
+	now := time.Now()
+
+	for _, path := range os.Args[2:] {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			continue
+		}
+
+		for len(raw) &gt; 0 {
+			var block *pem.Block
+			block, raw = pem.Decode(raw)
+			if block == nil {
+				break
+			}
+			if block.Type != &#34;CERTIFICATE&#34; {
+				continue
+			}
+
+			cert, err := x509.ParseCertificate(block.Bytes)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				continue
+			}
+
+			remaining := int(cert.NotAfter.Sub(now).Hours() / 24)
+			selfSigned := cert.Subject.String() == cert.Issuer.String()
+
+			status := &#34;OK&#34;
+			if remaining &lt; 0 {
+				status = &#34;EXPIRED&#34;
+			} else if remaining &lt;= warnDays {
+				status = &#34;WARNING&#34;
+			}
+
+			fmt.Printf(&#34;%-8s days=%-5d selfsigned=%-5v subject=%q\n&#34;,
+				status, remaining, selfSigned, cert.Subject.String())
+
+			for _, name := range cert.DNSNames {
+				fmt.Printf(&#34;         SAN=%s\n&#34;, name)
+			}
+		}
+	}
+}
+						</pre>
+						<p>Generate a short-lived test certificate and check the output:</p>
+						<pre class="bash">
+openssl req -x509 -newkey rsa:2048 -sha256 -days 5 -nodes \
+  -keyout test.key -out test.pem -subj &#34;/CN=test.internal&#34; \
+  -addext &#34;subjectAltName=DNS:test.internal&#34;
+
+go run certexpiry.go 30 test.pem
+						</pre>
+						<p>
+							Then run it against a real chain (for example,
+							<code>openssl s_client -showcerts</code>
+							output saved to
+							a file) and extend it to verify that each issuer matches the next certificate's subject.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc8555" target="_blank">RFC 8555 - Automatic Certificate Management Environment (ACME)</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc6962" target="_blank">RFC 6962 - Certificate Transparency</a></li>
+							<li><a class="icon-website" href="https://datatracker.ietf.org/doc/html/rfc5280" target="_blank">RFC 5280 - Internet X.509 Public Key Infrastructure Certificate</a></li>
+							<li><a class="icon-website" href="https://crt.sh/" target="_blank">crt.sh - Certificate Transparency Search</a></li>
+							<li><a class="icon-website" href="https://testssl.sh/" target="_blank">testssl.sh</a></li>
+							<li><a class="icon-website" href="https://cert-manager.io/docs/" target="_blank">cert-manager Documentation</a></li>
+							<li><a class="icon-website" href="https://ssl-config.mozilla.org/" target="_blank">Mozilla SSL Configuration Generator</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

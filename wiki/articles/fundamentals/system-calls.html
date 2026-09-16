@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>System Calls | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="System Calls">
+		<meta name="keywords" content="assembly, kernel, linux, strace, syscalls, techniques, vdso">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="System Calls">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="The gateway between user space and kernel space - syscall mechanism, Linux syscall table, strace deep dive, raw syscall invocation, vDSO.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/fundamentals/system-calls.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="System Calls">
+		<meta name="twitter:description" itemprop="description" content="The gateway between user space and kernel space - syscall mechanism, Linux syscall table, strace deep dive, raw syscall invocation, vDSO.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-userkernel-boundary">The User/Kernel Boundary</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#what-happens-during-a-system-call">What Happens During a System Call</a></b>
+					<ul>
+						<li><a href="#step-by-step-on-x86-64">Step-by-step on x86-64</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#linux-syscall-table">Linux Syscall Table</a></b>
+					<ul>
+						<li><a href="#common-x86-64-system-calls">Common x86-64 system calls</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#argument-passing-convention-x86-64">Argument Passing Convention (x86-64)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#writing-raw-syscalls-in-c">Writing Raw Syscalls in C</a></b>
+					<ul>
+						<li><a href="#why-libc-wrappers-exist">Why libc wrappers exist</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#strace-deep-dive">strace Deep Dive</a></b>
+					<ul>
+						<li><a href="#interpreting-strace-output">Interpreting strace output</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#common-strace-patterns">Common strace Patterns</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#system-call-tables-in-the-kernel">System Call Tables in the Kernel</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#vdso-virtual-dynamic-shared-object">vDSO - Virtual Dynamic Shared Object</a></b>
+					<ul>
+						<li><a href="#how-vdso-clock-gettime-works">How vDSO clock_gettime works</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#signal-handling-and-syscalls">Signal Handling and Syscalls</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#syscall-vs-int-0x80-historical-note">syscall vs int 0x80 - Historical Note</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification-checklist">Verification Checklist</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/fundamentals/index.html">Fundamentals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/fundamentals/system-calls.html">System Calls</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="system-calls">System Calls</h2>
+					<p>
+						The gateway between user space and kernel space - syscall mechanism, Linux syscall table, strace
+						deep dive, raw syscall invocation, vDSO.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							User programs cannot touch hardware, page tables, or kernel memory directly. To open a file,
+							map memory, or send a packet they must cross the user/kernel boundary with a system call. This
+							article explains the x86-64
+							<code>syscall</code>
+							instruction, the kernel dispatch through the syscall table,
+							the register argument convention, and the tools used to observe all of it. It also covers the
+							vDSO, which serves some calls entirely in user space. By the end you can invoke a syscall directly
+							and read a raw
+							<code>strace</code>
+							trace.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - process fundamentals, /proc, fork/exec</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-userkernel-boundary">The User/Kernel Boundary</h3>
+						<p>
+							Modern
+							<abbr title="Central Processing Unit">CPU</abbr>
+							s enforce a strict separation between user space and kernel
+							space through protection rings. x86-64 uses ring 0 (kernel) and ring 3 (user). User programs
+							cannot directly access hardware, modify page tables, or read kernel memory. To request kernel
+							services - opening a file, allocating memory, sending a network packet - a program must cross
+							the boundary via a system call.
+						</p>
+						<pre class="plaintext">
+User Space                         Kernel Space
+══════════                         ══════════════
+
+Application
+  │
+  ▼
+libc wrapper (write())              
+  │
+  │  mov $1, %rax    &lt;- syscall number (write)
+  │  mov $1, %rdi    &lt;- fd = stdout
+  │  mov ptr, %rsi   &lt;- buffer address
+  │  mov $len, %rdx  &lt;- buffer length
+  │  syscall          &lt;- CPU instruction
+  │
+  └────────────────────────────────►  syscall entry handler
+                                      │
+                                      ▼
+                                      Syscall table lookup
+                                      │
+                                      ▼
+                                      __x64_sys_write()
+                                      │
+                                      ▼
+                                      VFS -&gt; ext4 -&gt; block layer
+                                      │
+                                      ▼
+                                      Return value in %rax
+  ◄────────────────────────────────
+  │
+  ▼
+libc: check %rax, set errno if &lt; 0
+  │
+  ▼
+Application receives return value
+						</pre>
+					</section>
+					<section>
+						<h3 id="what-happens-during-a-system-call">What Happens During a System Call</h3>
+						<p>
+							Each
+							<abbr title="Central Processing Unit">CPU</abbr>
+							architecture has one instruction that triggers the privilege
+							transition:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Architecture</th>
+									<th align="center">Instruction</th>
+									<th align="center">Syscall Number Reg</th>
+									<th align="center">Return Reg</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">x86-64</td>
+									<td align="center"><code>syscall</code></td>
+									<td align="center">rax</td>
+									<td align="center">rax</td>
+								</tr>
+								<tr>
+									<td align="center">x86-32</td>
+									<td align="center"><code>int 0x80</code>(legacy) /<code>sysenter</code></td>
+									<td align="center">eax</td>
+									<td align="center">eax</td>
+								</tr>
+								<tr>
+									<td align="center">ARM64</td>
+									<td align="center"><code>svc #0</code></td>
+									<td align="center">x8</td>
+									<td align="center">x0</td>
+								</tr>
+								<tr>
+									<td align="center">ARM32</td>
+									<td align="center"><code>svc #0</code>/<code>swi #0</code></td>
+									<td align="center">r7</td>
+									<td align="center">r0</td>
+								</tr>
+								<tr>
+									<td align="center">RISC-V</td>
+									<td align="center"><code>ecall</code></td>
+									<td align="center">a7</td>
+									<td align="center">a0</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="step-by-step-on-x86-64">Step-by-step on x86-64</h4>
+						<ol>
+							<li><b>User program</b> calls libc wrapper (e.g., <code>write()</code> ).</li>
+							<li><b>libc wrapper</b> places the syscall number in <code>rax</code> , arguments in <code>rdi, rsi, rdx, r10, r8, r9</code> , and executes <code>syscall</code> .</li>
+							<li><b>'syscall' instruction</b> : <abbr title="Central Processing Unit">CPU</abbr> switches to ring 0, sets <code>rcx</code> = return address (saved <code>rip</code> ), <code>r11</code> = saved <code>rflags</code> , loads <code>rip</code> from <code>MSR_LSTAR</code> (the kernel's syscall entry point address), loads <code>cs</code> / <code>ss</code> from <code>MSR_STAR</code> .</li>
+							<li><b>Kernel entry</b> ( <code>entry_SYSCALL_64</code> ) saves registers, switches to kernel stack, calls the actual syscall handler via the <code>sys_call_table</code> .</li>
+							<li><b>Syscall handler</b> does the work: validates arguments, copies data between user/kernel memory ( <code>copy_from_user</code> / <code>copy_to_user</code> ), performs the operation.</li>
+							<li><b>Return path</b> restores registers, executes <code>sysretq</code> (or <code>iretq</code> in some cases) to return to ring 3.</li>
+						</ol>
+					</section>
+					<section>
+						<h3 id="linux-syscall-table">Linux Syscall Table</h3>
+						<p>
+							The kernel dispatches to the correct handler through the syscall table. Each architecture has
+							its own table.
+						</p>
+						<pre class="bash">
+# x86-64 syscall numbers (architecture-specific)
+cat /usr/include/asm/unistd_64.h | head -40
+						</pre>
+						<h4 id="common-x86-64-system-calls">Common x86-64 system calls</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Number</th>
+									<th align="center">Name</th>
+									<th align="center">Signature</th>
+									<th align="center">Purpose</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">0</td>
+									<td align="center"><code>read</code></td>
+									<td align="center"><code>ssize_t read(int fd, void *buf, size_t count)</code></td>
+									<td align="center">Read from file descriptor</td>
+								</tr>
+								<tr>
+									<td align="center">1</td>
+									<td align="center"><code>write</code></td>
+									<td align="center"><code>ssize_t write(int fd, const void *buf, size_t count)</code></td>
+									<td align="center">Write to file descriptor</td>
+								</tr>
+								<tr>
+									<td align="center">2</td>
+									<td align="center"><code>open</code></td>
+									<td align="center"><code>int open(const char *path, int flags, mode_t mode)</code></td>
+									<td align="center">Open/create a file</td>
+								</tr>
+								<tr>
+									<td align="center">3</td>
+									<td align="center"><code>close</code></td>
+									<td align="center"><code>int close(int fd)</code></td>
+									<td align="center">Close a file descriptor</td>
+								</tr>
+								<tr>
+									<td align="center">9</td>
+									<td align="center"><code>mmap</code></td>
+									<td align="center"><code>void *mmap(void *addr, size_t len, int prot, int flags, int fd, off_t off)</code></td>
+									<td align="center">Map files or anonymous memory</td>
+								</tr>
+								<tr>
+									<td align="center">10</td>
+									<td align="center"><code>mprotect</code></td>
+									<td align="center"><code>int mprotect(void *addr, size_t len, int prot)</code></td>
+									<td align="center">Set memory access protections</td>
+								</tr>
+								<tr>
+									<td align="center">11</td>
+									<td align="center"><code>munmap</code></td>
+									<td align="center"><code>int munmap(void *addr, size_t len)</code></td>
+									<td align="center">Unmap memory</td>
+								</tr>
+								<tr>
+									<td align="center">12</td>
+									<td align="center"><code>brk</code></td>
+									<td align="center"><code>int brk(void *addr)</code></td>
+									<td align="center">Change data segment size</td>
+								</tr>
+								<tr>
+									<td align="center">21</td>
+									<td align="center"><code>access</code></td>
+									<td align="center"><code>int access(const char *path, int mode)</code></td>
+									<td align="center">Check file permissions</td>
+								</tr>
+								<tr>
+									<td align="center">39</td>
+									<td align="center"><code>getpid</code></td>
+									<td align="center"><code>pid_t getpid(void)</code></td>
+									<td align="center">Get process ID</td>
+								</tr>
+								<tr>
+									<td align="center">56</td>
+									<td align="center"><code>clone</code></td>
+									<td align="center"><code>int clone(...)</code></td>
+									<td align="center">Create child process/thread</td>
+								</tr>
+								<tr>
+									<td align="center">57</td>
+									<td align="center"><code>fork</code></td>
+									<td align="center"><code>pid_t fork(void)</code></td>
+									<td align="center">Create child process</td>
+								</tr>
+								<tr>
+									<td align="center">59</td>
+									<td align="center"><code>execve</code></td>
+									<td align="center"><code>int execve(const char *path, char *const argv[], char *const envp[])</code></td>
+									<td align="center">Execute program</td>
+								</tr>
+								<tr>
+									<td align="center">60</td>
+									<td align="center"><code>exit</code></td>
+									<td align="center"><code>void exit(int status)</code></td>
+									<td align="center">Terminate process</td>
+								</tr>
+								<tr>
+									<td align="center">61</td>
+									<td align="center"><code>wait4</code></td>
+									<td align="center"><code>pid_t wait4(pid_t pid, int *wstatus, int options, struct rusage *rusage)</code></td>
+									<td align="center">Wait for child</td>
+								</tr>
+								<tr>
+									<td align="center">62</td>
+									<td align="center"><code>kill</code></td>
+									<td align="center"><code>int kill(pid_t pid, int sig)</code></td>
+									<td align="center">Send signal</td>
+								</tr>
+								<tr>
+									<td align="center">72</td>
+									<td align="center"><code>fcntl</code></td>
+									<td align="center"><code>int fcntl(int fd, int cmd, ...)</code></td>
+									<td align="center">Manipulate file descriptor</td>
+								</tr>
+								<tr>
+									<td align="center">78</td>
+									<td align="center"><code>getdents</code></td>
+									<td align="center"><code>int getdents(unsigned int fd, struct linux_dirent *dirp, unsigned int count)</code></td>
+									<td align="center">Get directory entries</td>
+								</tr>
+								<tr>
+									<td align="center">101</td>
+									<td align="center"><code>ptrace</code></td>
+									<td align="center"><code>long ptrace(enum __ptrace_request req, pid_t pid, void *addr, void *data)</code></td>
+									<td align="center">Process trace</td>
+								</tr>
+								<tr>
+									<td align="center">186</td>
+									<td align="center"><code>gettid</code></td>
+									<td align="center"><code>pid_t gettid(void)</code></td>
+									<td align="center">Get thread ID</td>
+								</tr>
+								<tr>
+									<td align="center">231</td>
+									<td align="center"><code>exit_group</code></td>
+									<td align="center"><code>void exit_group(int status)</code></td>
+									<td align="center">Exit all threads</td>
+								</tr>
+								<tr>
+									<td align="center">257</td>
+									<td align="center"><code>openat</code></td>
+									<td align="center"><code>int openat(int dirfd, const char *path, int flags, mode_t mode)</code></td>
+									<td align="center">Open relative to directory fd</td>
+								</tr>
+								<tr>
+									<td align="center">318</td>
+									<td align="center"><code>getrandom</code></td>
+									<td align="center"><code>ssize_t getrandom(void *buf, size_t buflen, unsigned int flags)</code></td>
+									<td align="center">Get random bytes</td>
+								</tr>
+								<tr>
+									<td align="center">332</td>
+									<td align="center"><code>statx</code></td>
+									<td align="center"><code>int statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *buf)</code></td>
+									<td align="center">Extended file status</td>
+								</tr>
+								<tr>
+									<td align="center">334</td>
+									<td align="center"><code>rseq</code></td>
+									<td align="center"><code>int rseq(struct rseq *rseq, uint32_t rseq_len, int flags, uint32_t sig)</code></td>
+									<td align="center">Restartable sequences</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="argument-passing-convention-x86-64">Argument Passing Convention (x86-64)</h3>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Reg</th>
+									<th align="center">Purpose</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">rax</td>
+									<td align="center">Syscall number</td>
+								</tr>
+								<tr>
+									<td align="center">rdi</td>
+									<td align="center">Argument 1</td>
+								</tr>
+								<tr>
+									<td align="center">rsi</td>
+									<td align="center">Argument 2</td>
+								</tr>
+								<tr>
+									<td align="center">rdx</td>
+									<td align="center">Argument 3</td>
+								</tr>
+								<tr>
+									<td align="center">r10</td>
+									<td align="center">Argument 4 (rcx is clobbered by syscall)</td>
+								</tr>
+								<tr>
+									<td align="center">r8</td>
+									<td align="center">Argument 5</td>
+								</tr>
+								<tr>
+									<td align="center">r9</td>
+									<td align="center">Argument 6</td>
+								</tr>
+								<tr>
+									<td align="center">rax</td>
+									<td align="center">Return value (or -errno on error)</td>
+								</tr>
+								<tr>
+									<td align="center">rcx</td>
+									<td align="center">Clobbered (saved RIP)</td>
+								</tr>
+								<tr>
+									<td align="center">r11</td>
+									<td align="center">Clobbered (saved RFLAGS)</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							Note:
+							<code>rcx</code>
+							and
+							<code>r11</code>
+							are destroyed by the
+							<code>syscall</code>
+							instruction. Unlike the usual calling convention,
+							<code>r10</code>
+							replaces
+							<code>rcx</code>
+							for the 4th argument. A maximum of 6 arguments can be passed in registers
+							<ul>
+								<li>no syscall takes more.</li>
+							</ul>
+						</p>
+					</section>
+					<section>
+						<h3 id="writing-raw-syscalls-in-c">Writing Raw Syscalls in C</h3>
+						<p>
+							The
+							<code>syscall()</code>
+							function from glibc allows calling any syscall by number without a dedicated
+							wrapper:
+						</p>
+						<pre class="c">
+#include &lt;unistd.h&gt;
+#include &lt;sys/syscall.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+int main() {
+    const char* msg = &#34;Hello from raw syscall!\n&#34;;
+
+    // Invoke write(1, msg, strlen(msg)) directly
+    // syscall number 1 = SYS_write
+    long ret = syscall(SYS_write, 1, msg, strlen(msg));
+
+    if (ret &lt; 0) {
+        perror(&#34;syscall write&#34;);
+        return 1;
+    }
+
+    printf(&#34;Bytes written: %ld\n&#34;, ret);
+
+    // gettid() - no libc wrapper until glibc 2.30
+    pid_t tid = syscall(SYS_gettid);
+    printf(&#34;Thread ID: %d\n&#34;, tid);
+
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+gcc -o raw-syscall raw-syscall.c &amp;&amp; ./raw-syscall
+						</pre>
+						<h4 id="why-libc-wrappers-exist">Why libc wrappers exist</h4>
+						<ol>
+							<li><b>errno handling</b> : The kernel returns a negative error code (e.g., -ENOENT). libc stores the positive value in <code>errno</code> and returns -1.</li>
+							<li><b>Cancellation points</b> : Functions like <code>read()</code> and <code>write()</code> are P <abbr title="Open Systems Interconnection">OSI</abbr> X cancellation points. libc adds <code>pthread_testcancel()</code> around them.</li>
+							<li><b>Architecture abstraction</b> : libc hides architecture differences - <code>SYS_fork</code> might not exist on all architectures (only <code>clone</code> ).</li>
+							<li><b>Thread safety</b> : libc manages per-thread <code>errno</code> correctly.</li>
+						</ol>
+					</section>
+					<section>
+						<h3 id="strace-deep-dive">strace Deep Dive</h3>
+						<p>
+							<code>strace</code>
+							is the single most important tool for understanding what a process actually does. It
+							intercepts every syscall and prints the arguments and return value.
+						</p>
+						<pre class="bash">
+# Basic usage
+strace ls /tmp
+
+# Follow child processes (fork + exec)
+strace -f gcc -o hello hello.c
+
+# Filter by syscall category
+strace -e trace=file cat /etc/hostname
+# Shows: open, openat, stat, read, write, close, etc.
+
+strace -e trace=network curl https://example.com
+# Shows: socket, connect, sendto, recvfrom, bind, listen, accept
+
+strace -e trace=process bash -c &#39;ls | grep test&#39;
+# Shows: fork, execve, clone, wait4, exit
+
+strace -e trace=memory ls
+# Shows: brk, mmap, munmap, mprotect
+
+strace -e trace=signal kill -HUP $$
+# Shows: kill, rt_sigaction, rt_sigprocmask
+
+# Summary: count and time each syscall
+strace -c find /usr/share -name &#39;*.so&#39; 2&gt;/dev/null
+# Output:
+# % time     seconds  usecs/call     calls    errors syscall
+# ------ ----------- ----------- --------- --------- ----------------
+#  34.21    0.008123           3      2342           getdents64
+#  28.91    0.006865           2      2342      2342 newfstatat
+#  15.33    0.003640           1      2342           close
+#   ...
+
+# Attach to a running process
+strace -p $(pidof nginx | cut -d&#39; &#39; -f1)
+
+# Timestamps
+strace -t ls              # Wall clock time
+strace -tt ls             # Microsecond precision
+strace -T ls              # Syscall duration after return
+
+# Write output to file
+strace -o /tmp/trace.log -f python3 server.py
+
+# Filter by syscall name (comma-separated)
+strace -e open,openat,read,write,close vim /tmp/test.txt
+
+# Show string arguments fully
+strace -v -s 4096 cat /etc/hostname
+# -s 4096: show up to 4096 bytes of string args (default: 32)
+						</pre>
+						<h4 id="interpreting-strace-output">Interpreting strace output</h4>
+						<pre class="plaintext">
+openat(AT_FDCWD, &#34;/etc/hostname&#34;, O_RDONLY) = 3
+│      │         │               │            └─ Return: fd 3
+│      │         │               └─ Flags
+│      │         └─ Pathname
+│      └─ Directory file descriptor (AT_FDCWD = current directory)
+└─ Syscall name
+
+read(3, &#34;cookiengineer\n&#34;, 4096) = 14
+│    │  │               │      └─ Return: 14 bytes read
+│    │  │               └─ Buffer size
+│    │  └─ Data read (shown as string)
+│    └─ File descriptor 3
+└─ Syscall name
+
+close(3)                                = 0
+│     └─ Return: 0 = success, -errno on error
+└─ Syscall name
+						</pre>
+					</section>
+					<section>
+						<h3 id="common-strace-patterns">Common strace Patterns</h3>
+						<pre class="bash">
+# What files does this command open?
+strace -e trace=file -e signal=none ls 2&gt;&amp;1 | grep -E &#39;^open(at)?\(&#39;
+
+# What network connections does this process make?
+strace -e trace=network curl example.com 2&gt;&amp;1
+
+# Child process tree - -ff: one file per child, -o prefix
+strace -ff -o /tmp/strace/ bash -c &#39;ls; sleep 1&#39;
+ls /tmp/strace/  # One file per PID
+
+# Show only failed syscalls (useful for debugging)
+strace -e trace=file -Z ls /nope 2&gt;&amp;1
+# -Z: suppress successful returns; only show errors
+
+# Inject a fault (seccomp-filter style)
+strace -e inject=openat:error=ENOENT cat /etc/hostname
+# Makes every openat() return ENOENT - useful for testing error paths
+
+# Trace only the first process, not children
+strace -b execve ls  # Detach on exec
+
+# Count signals received
+strace -e trace=signal sleep 5 &amp;
+strace -p $! -e trace=signal
+kill -HUP $!
+						</pre>
+					</section>
+					<section>
+						<h3 id="system-call-tables-in-the-kernel">System Call Tables in the Kernel</h3>
+						<p>
+							The kernel maintains the
+							<code>sys_call_table</code>
+							array, indexed by syscall number. You can examine
+							it:
+						</p>
+						<pre class="bash">
+# Find sys_call_table address
+sudo cat /proc/kallsyms | grep sys_call_table
+# ffffffff82000280 R sys_call_table
+
+# List all available syscalls on this kernel
+ausyscall --dump 2&gt;/dev/null || cat /proc/kallsyms | grep -i &#39;sys_&#39; | head -30
+						</pre>
+						<pre class="c">
+// Kernel-side: syscall table entry (from arch/x86/entry/syscalls/)
+// Table entry 0 (SYS_read):
+asmlinkage long sys_read(unsigned int fd, char __user *buf, size_t count);
+
+// Kernel-side handler (simplified from fs/read_write.c):
+SYSCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)
+{
+    struct fd f = fdget_pos(fd);
+    if (!f.file)
+        return -EBADF;
+    ssize_t ret = vfs_read(f.file, buf, count, &amp;f.file-&gt;f_pos);
+    fdput_pos(f);
+    return ret;
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="vdso-virtual-dynamic-shared-object">vDSO - Virtual Dynamic Shared Object</h3>
+						<p>
+							Some syscalls (like
+							<code>gettimeofday</code>
+							,
+							<code>clock_gettime</code>
+							,
+							<code>time</code>
+							) are so frequent that the overhead
+							of
+							<code>syscall</code>
+							-> ring 0 -> ring 3 is unacceptable. The kernel solves this with the vDSO: a small
+							shared library mapped into every process's address space that implements these functions entirely
+							in user space, reading from a shared memory page updated by the kernel.
+						</p>
+						<pre class="bash">
+# See the vDSO mapping
+cat /proc/self/maps | grep vdso
+# 7ffff7fcb000-7ffff7fcd000 r-xp ... [vdso]
+# 7ffff7fcb000-7ffff7fcd000 r--p ... [vdso]  &lt;- readable page with kernel-updated clock data
+
+# Inspect the vDSO ELF
+dd if=/proc/self/mem bs=1 skip=$((0x7ffff7fcb000)) count=$((0x2000)) 2&gt;/dev/null | \
+    xxd | head -20
+
+# Get vDSO base address
+python3 -c &#34;
+import ctypes, os
+# Parse /proc/self/maps for [vdso] entry
+with open(&#39;/proc/self/maps&#39;) as f:
+    for line in f:
+        if &#39;vdso&#39; in line:
+            print(line.strip())
+&#34;
+						</pre>
+						<h4 id="how-vdso-clock-gettime-works">How vDSO clock_gettime works</h4>
+						<pre class="plaintext">
+Normal path:          vDSO path:
+────────────          ──────────
+Application           Application
+  │                     │
+  ▼                     ▼
+libc wrapper           libc wrapper
+  │                     │
+  ▼                     ▼
+syscall instruction    vDSO function (user space!)
+  │                     │
+  ▼                     ▼  Reads kernel-updated
+Ring 0 kernel        struct vdso_data from
+  │                   shared read-only page
+  ▼                     │
+clock_gettime()         ▼
+  │                   Return result
+  ▼
+Return result
+
+No ring transition!  ~20-50x faster.
+						</pre>
+						<pre class="bash">
+# Verify vDSO is being used
+strace -e clock_gettime date 2&gt;&amp;1
+# On modern glibc + kernel: no clock_gettime syscall appears
+# (it&#39;s handled by vDSO)
+
+# The vDSO is mapped automatically, so force the kernel path with syscall(2).
+# 228 is SYS_clock_gettime on x86-64.
+strace -e clock_gettime python3 -c &#34;import ctypes; libc=ctypes.CDLL(&#39;libc.so.6&#39;); ts=ctypes.c_long(); libc.syscall(228, 0, ctypes.byref(ts))&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="signal-handling-and-syscalls">Signal Handling and Syscalls</h3>
+						<p>
+							When a signal arrives while a process is blocked in a slow syscall (like
+							<code>read()</code>
+							on a socket
+							with no data), the kernel can interrupt the syscall. The behavior depends on whether
+							<code>SA_RESTART</code>
+							is set in the signal handler:
+						</p>
+						<pre class="c">
+#include &lt;errno.h&gt;
+#include &lt;signal.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+
+void handler(int sig) {
+    printf(&#34;Signal received\n&#34;);
+}
+
+int main() {
+    // Without SA_RESTART: read() returns EINTR
+    signal(SIGALRM, handler);
+    alarm(2);  // Send SIGALRM in 2 seconds
+
+    char buf[1024];
+    ssize_t n = read(STDIN_FILENO, buf, sizeof(buf));
+    printf(&#34;read returned: %zd, errno: %s\n&#34;, n,
+           n == -1 ? strerror(errno) : &#34;none&#34;);
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+gcc -o sig-syscall sig-syscall.c &amp;&amp; ./sig-syscall
+# Wait 2 seconds - read() returns -1 with EINTR
+						</pre>
+					</section>
+					<section>
+						<h3 id="syscall-vs-int-0x80-historical-note">syscall vs int 0x80 - Historical Note</h3>
+						<p>
+							On x86-32, the original syscall mechanism was
+							<code>int $0x80</code>
+							(software interrupt 128). This is
+							slow because the
+							<abbr title="Central Processing Unit">CPU</abbr>
+							must go through the full interrupt dispatch
+							path. AMD introduced
+							<code>sysenter</code>
+							/
+							<code>sysexit</code>
+							(Intel later adopted) which are much faster. On
+							x86-64,
+							<code>syscall</code>
+							/
+							<code>sysretq</code>
+							replaced both.
+						</p>
+						<pre class="plaintext">
+x86-32 (legacy):   int $0x80        &lt;- slow: interrupt dispatch
+x86-32 (fast):     sysenter/sysexit &lt;- fast: direct entry
+x86-64:            syscall/sysretq  &lt;- fast: direct entry, official method
+						</pre>
+						<p>
+							The kernel still supports
+							<code>int $0x80</code>
+							on x86-64 for backward compatibility with 32-bit binaries,
+							but it should never be used in new 64-bit code.
+						</p>
+					</section>
+					<section>
+						<h3 id="verification-checklist">Verification Checklist</h3>
+						<pre class="bash">
+# 1. Find your architecture&#39;s syscall table
+ls /usr/include/asm/unistd*.h
+
+# 2. Trace the syscalls of a simple command
+strace -c ls / 2&gt;&amp;1 | tail -20
+
+# 3. Count syscall invocations per type for a program
+strace -c find /usr/share -maxdepth 2 -type d 2&gt;/dev/null
+
+# 4. Observe the syscall instruction in a disassembled binary
+objdump -d /usr/bin/ls | grep -A5 &#39;syscall&#39; | head -20
+
+# 5. Count syscalls system-wide for one second (requires bpftrace)
+sudo bpftrace -e &#39;tracepoint:raw_syscalls:sys_enter { @[comm] = count(); } interval:s:1 { exit(); }&#39;
+
+# 6. Verify vDSO presence
+cat /proc/self/maps | grep vdso
+
+# 7. List syscall numbers available via syscall()
+echo &#39;#include &lt;sys/syscall.h&gt;&#39; | gcc -E -dM - | grep &#39;SYS_&#39; | head -20
+
+# 8. Find which syscalls a binary uses (static analysis)
+objdump -d /usr/bin/ls | grep -E &#39;call.*&lt;.*@plt&gt;&#39; | grep -v &#39;DYNAMIC&#39; | head -20
+# Dynamic-linked: look at PLT entries
+# Static: look for &#39;syscall&#39; instructions directly
+
+# 9. Count the syscalls a simple command makes
+strace -e trace=all echo &#34;test&#34; 2&gt;&amp;1 | wc -l
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Call the kernel without a libc wrapper. Write a Go program that invokes
+							<code>write</code>
+							and
+							<code>getpid</code>
+							through
+							<code>syscall.Syscall</code>
+							, then trace it with
+							<code>strace -e write,getpid</code>
+							and confirm the calls
+							reach the kernel directly. Compare the trace with the same program calling
+							<code>fmt.Println</code>
+							, which
+							also ends in
+							<code>write</code>
+							but only after the runtime sets up its buffers.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;fmt&#34;
+	&#34;syscall&#34;
+	&#34;unsafe&#34;
+)
+
+func main() {
+	msg := []byte(&#34;hello from a raw syscall\n&#34;)
+
+	ret, _, errno := syscall.Syscall(
+		syscall.SYS_WRITE,
+		uintptr(1),
+		uintptr(unsafe.Pointer(&amp;msg[0])),
+		uintptr(len(msg)),
+	)
+	if errno != 0 {
+		fmt.Println(&#34;write failed:&#34;, errno)
+		return
+	}
+	fmt.Printf(&#34;write returned %d\n&#34;, ret)
+
+	pid, _, _ := syscall.Syscall(syscall.SYS_GETPID, 0, 0, 0)
+	fmt.Printf(&#34;getpid returned %d\n&#34;, pid)
+}
+						</pre>
+						<pre class="bash">
+go build -o rawsyscall rawsyscall.go
+strace -e write,getpid ./rawsyscall
+						</pre>
+						<p>
+							Extend the program with
+							<code>SYS_CLOCK_GETTIME</code>
+							and confirm that the trace now contains a
+							<code>clock_gettime</code>
+							call that the vDSO normally hides.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/calling-conventions.html">Calling Conventions</a> - the ABI that governs how args are passed</li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/arch/x86/entry/syscalls/syscall_64.tbl" target="_blank">Linux Syscall Table (x86-64)</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/syscall.2" target="_blank">syscall(2) - indirect system call</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/strace.1" target="_blank">strace(1) - trace system calls and signals</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/vdso.7" target="_blank">vdso(7) - virtual dynamic shared object</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/syscalls.2" target="_blank">syscalls(2) - Linux system calls</a></li>
+							<li><a class="icon-website" href="https://lwn.net/Articles/604287/" target="_blank">LWN.net - Anatomy of a system call</a></li>
+							<li><a class="icon-website" href="https://gcc.gnu.org/onlinedocs/gcc/Other-Builtins.html" target="_blank">GCC online documentation - syscall function</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

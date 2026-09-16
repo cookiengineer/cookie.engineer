@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Network Segmentation | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Network Segmentation">
+		<meta name="keywords" content="blueteam, dmz, iptables, network, nftables, segmentation, vlan, vrf, zero-trust">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Network Segmentation">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Architectural boundaries, VLANs, VRFs, and firewall zones that contain attacker lateral movement.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/blueteam/network-segmentation.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Network Segmentation">
+		<meta name="twitter:description" itemprop="description" content="Architectural boundaries, VLANs, VRFs, and firewall zones that contain attacker lateral movement.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#core-principles">Core Principles</a></b>
+					<ul>
+						<li><a href="#defense-in-depth">Defense in Depth</a></li>
+						<li><a href="#least-privilege-for-networks">Least Privilege for Networks</a></li>
+						<li><a href="#bidirectional-firewalling">Bidirectional Firewalling</a></li>
+						<li><a href="#jump-hosts-bastions">Jump Hosts / Bastions</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#zone-models">Zone Models</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#vlans-8021q">VLANs (802.1Q)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#vrfs-virtual-routing-and-forwarding">VRFs (Virtual Routing and Forwarding)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#zero-trust-networking">Zero Trust Networking</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#host-level-segmentation">Host-Level Segmentation</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#network-namespace-isolation">Network Namespace Isolation</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#nac-network-access-control">NAC (Network Access Control)</a></b>
+					<ul>
+						<li><a href="#8021x-port-authentication">802.1X Port Authentication</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#segmentation-for-otiot">Segmentation for OT/IoT</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#testing-segmentation">Testing Segmentation</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#practical-deployment-order">Practical Deployment Order</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#detection">Detection</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/blueteam/index.html">Blueteam</a></li>
+						<li aria-current="page"><a href="/wiki/articles/blueteam/network-segmentation.html">Network Segmentation</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="network-segmentation">Network Segmentation</h2>
+					<p>
+						Architectural boundaries,
+						<abbr title="Virtual Local Area Network">VLAN</abbr>
+						s, VRFs, and firewall zones that
+						contain attacker lateral movement.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Network segmentation is the practice of dividing a network into isolated zones with controlled
+							communication paths between them. The goal is containment: if an attacker compromises a host
+							in Zone A, they should not have unrestricted access to Zone B.
+						</p>
+						<p>
+							The historical approach - a flat network with a single perimeter firewall - is insufficient
+							because once the perimeter is breached (phishing,
+							<abbr title="Virtual Private Network">VPN</abbr>
+							compromise,
+							infected
+							<abbr title="Universal Serial Bus">USB</abbr>
+							), the attacker has unrestricted east-west movement across
+							the entire internal network.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/tcp-handshake.html">TCP Handshake</a> - <abbr title="Transmission Control Protocol">TCP</abbr> flags, states, connection lifecycle</li>
+							<li><a href="/wiki/articles/fundamentals/arp.html">ARP</a> - address resolution, <abbr title="Address Resolution Protocol">ARP</abbr> spoofing, broadcast domains</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="core-principles">Core Principles</h3>
+						<h4 id="defense-in-depth">Defense in Depth</h4>
+						<p>
+							Multiple independent barriers. No single firewall or
+							<abbr title="Virtual Local Area Network">VLAN</abbr>
+							should
+							be the sole security control.
+						</p>
+						<h4 id="least-privilege-for-networks">Least Privilege for Networks</h4>
+						<p>
+							A host in zone X can talk to zone Y only if there is a documented operational requirement. The
+							default is "no communication."
+						</p>
+						<h4 id="bidirectional-firewalling">Bidirectional Firewalling</h4>
+						<p>
+							Rules must consider both directions. Allowing A -> B:443 does not mean B can initiate connections
+							to A.
+						</p>
+						<h4 id="jump-hosts-bastions">Jump Hosts / Bastions</h4>
+						<p>
+							Administrative access to sensitive zones should flow through a hardened intermediate host, never
+							direct from user workstations.
+						</p>
+					</section>
+					<section>
+						<h3 id="zone-models">Zone Models</h3>
+						<pre class="plaintext">
+Internet
+   │
+[External Firewall]
+   │
+   ├── DMZ (public services)
+   │     ├── Web servers (public)
+   │     ├── Mail relays
+   │     └── Reverse proxies
+   │
+   ├── [Internal Firewall]
+   │     │
+   │     ├── Application Zone
+   │     │     ├── App servers
+   │     │     └── Message queues
+   │     │
+   │     ├── Data Zone
+   │     │     ├── Database servers
+   │     │     └── File servers
+   │     │
+   │     ├── Management Zone
+   │     │     ├── Jump hosts / bastions
+   │     │     ├── Monitoring (Nagios, Prometheus)
+   │     │     └── Log aggregation
+   │     │
+   │     └── User Zone
+   │           ├── Workstations
+   │           └── Printers
+   │
+   └── [OT / IoT Zone]
+         ├── SCADA / ICS
+         └── Building management
+						</pre>
+						<p>Communication rules:</p>
+						<ul>
+							<li>DMZ -> Internet: allowed (web servers serve public traffic)</li>
+							<li>Internet -> DMZ: only to specific ports on specific <abbr title="Internet Protocol">IP</abbr> addresses</li>
+							<li>DMZ -> App Zone: only on app-specific ports (for example 8080)</li>
+							<li>DMZ -> Data Zone: blocked (DMZ hosts should never touch databases directly)</li>
+							<li>App Zone -> Data Zone: only on database ports (for example 3306, 5432)</li>
+							<li>User Zone -> Management Zone: blocked (except via bastion)</li>
+							<li>Management Zone -> All: allowed for monitoring/management purposes</li>
+							<li>OT/ <abbr title="Internet of Things">IoT</abbr> -> All: blocked by default, specific exceptions only</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="vlans-8021q">VLANs (802.1Q)</h3>
+						<p>
+							<abbr title="Virtual Local Area Network">VLAN</abbr>
+							s provide Layer 2 isolation. A switch assigns each port to
+							a
+							<abbr title="Virtual Local Area Network">VLAN</abbr>
+							. Traffic between
+							<abbr title="Virtual Local Area Network">VLAN</abbr>
+							s
+							must go through a Layer 3 device (router/firewall).
+						</p>
+						<pre class="plaintext">
+Switch Configuration (conceptual — switch-vendor commands vary):
+
+VLAN 10: DMZ         (10.0.10.0/24)
+VLAN 20: Application (10.0.20.0/24)
+VLAN 30: Database     (10.0.30.0/24)
+VLAN 40: Management   (10.0.40.0/24)
+VLAN 50: Users        (10.0.50.0/24)
+VLAN 99: Native VLAN  (unused — should not carry data traffic)
+						</pre>
+						<p>
+							<abbr title="Virtual Local Area Network">VLAN</abbr>
+							security considerations:
+						</p>
+						<pre class="bash">
+# Always change the native VLAN to an unused VLAN
+# The native VLAN carries untagged traffic — attackers can access it by sending untagged frames
+
+# Disable Dynamic Trunking Protocol (DTP) on all access ports
+# DTP allows a port to automatically become a trunk — VLAN hopping vector
+
+# Use a dedicated &#34;dead&#34; VLAN for unused switch ports
+# Do not leave ports in the default VLAN 1
+
+# Enable BPDU guard on access ports to prevent rogue switch introduction
+						</pre>
+					</section>
+					<section>
+						<h3 id="vrfs-virtual-routing-and-forwarding">VRFs (Virtual Routing and Forwarding)</h3>
+						<p>
+							VRFs provide Layer 3 isolation by maintaining independent routing tables per VRF. Unlike
+							<abbr title="Virtual Local Area Network">VLAN</abbr>
+							s which separate at Layer 2, VRFs create completely separate routing domains - devices in different
+							VRFs cannot communicate even with correct
+							<abbr title="Internet Protocol">IP</abbr>
+							addressing unless explicitly
+							routed.
+						</p>
+						<pre class="bash">
+# Create VRFs on Linux
+sudo ip link add vrf-mgmt type vrf table 10
+sudo ip link set vrf-mgmt up
+sudo ip link set eth1 master vrf-mgmt
+
+# Routes in VRF 10 are completely isolated from the default table
+sudo ip route add 10.0.40.0/24 dev eth1 vrf vrf-mgmt
+
+# Processes can bind to a specific VRF
+ip vrf exec vrf-mgmt ssh admin@10.0.40.5
+
+# Check VRF membership
+ip link show vrf vrf-mgmt
+						</pre>
+					</section>
+					<section>
+						<h3 id="zero-trust-networking">Zero Trust Networking</h3>
+						<p>
+							Zero Trust inverts the segmentation model. Instead of "trust the internal network, distrust
+							the external," ZT assumes compromise can happen anywhere and authenticates every connection.
+						</p>
+						<p>Core principles:</p>
+						<ol>
+							<li>No implicit trust based on network location. An internal <abbr title="Internet Protocol">IP</abbr> address is</li>
+						</ol>
+						<p>
+							not an authorization. 1. Microsegmentation: a perimeter around every workload, not just the network edge.
+							<ol>
+								<li>Authentication and authorization per session: <abbr title="Transport Layer Security">TLS</abbr> , SPIFFE, and</li>
+							</ol>
+						</p>
+						<p>
+							<abbr title="JSON Web Token">JWT</abbr>
+							on every request. 1. Continuous monitoring and validation: trust scores and behavioral analysis.
+						</p>
+						<pre class="yaml">
+# Example: Service mesh policy (Istio/Kubernetes context)
+# Only payments-service can reach the ledger database
+# Even other pods on the same node/VLAN cannot
+
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: ledger-db-policy
+  namespace: production
+spec:
+  selector:
+    matchLabels:
+      app: ledger-database
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals: [&#34;cluster.local/ns/production/sa/payments-service&#34;]
+    to:
+    - operation:
+        ports: [&#34;5432&#34;]
+						</pre>
+					</section>
+					<section>
+						<h3 id="host-level-segmentation">Host-Level Segmentation</h3>
+						<p>Even on a single Linux host, use netfilter to enforce zone boundaries:</p>
+						<pre class="bash">
+# nftables.conf — Host-based segmentation rules
+
+table inet segmentation {
+
+    chain input {
+        type filter hook input priority 0; policy drop;
+
+        # Allow loopback (internal communication)
+        iif lo accept
+
+        # Allow established/related connections
+        ct state established,related accept
+
+        # Management interface (eth0 = management VLAN)
+        iif eth0 ip saddr 10.0.40.0/24 tcp dport 22 accept  # SSH from mgmt
+        iif eth0 ip saddr 10.0.40.0/24 tcp dport 9100 accept # Node exporter
+
+        # Application interface (eth1 = app VLAN)
+        iif eth1 ip saddr 10.0.20.0/24 tcp dport 8080 accept # App port
+
+        # Everything else: drop and log
+        log prefix &#34;INPUT_DROP: &#34; level warn
+        counter drop
+    }
+
+    chain output {
+        type filter hook output priority 0; policy drop;
+
+        # Loopback
+        oif lo accept
+
+        # Established reverse traffic
+        ct state established,related accept
+
+        # App server can reach database in data zone
+        oif eth2 ip daddr 10.0.30.0/24 tcp dport 5432 accept
+
+        # DNS
+        oif eth0 udp dport 53 accept
+
+        log prefix &#34;OUTPUT_DROP: &#34; level warn
+        counter drop
+    }
+
+    chain forward {
+        type filter hook forward priority 0; policy drop;
+        # This host is not a router — forward nothing
+        counter drop
+    }
+}
+						</pre>
+						<pre class="bash">
+# Apply nftables rules
+sudo nft -f /etc/nftables.conf
+
+# List current ruleset
+sudo nft list ruleset
+
+# Monitor drops in real time
+sudo nft monitor
+						</pre>
+					</section>
+					<section>
+						<h3 id="network-namespace-isolation">Network Namespace Isolation</h3>
+						<p>
+							Linux network namespaces provide complete network stack isolation within a single host. Each
+							namespace has its own interfaces, routing table, and firewall rules.
+						</p>
+						<pre class="bash">
+# Create isolated namespaces for sensitive services
+sudo ip netns add isolated-db
+sudo ip netns add isolated-app
+
+# Create virtual ethernet pairs connecting them
+sudo ip link add veth-db type veth peer name veth-db-ns
+sudo ip link add veth-app type veth peer name veth-app-ns
+
+# Move one end of each pair into its namespace
+sudo ip link set veth-db-ns netns isolated-db
+sudo ip link set veth-app-ns netns isolated-app
+
+# Configure interfaces
+sudo ip addr add 10.99.0.1/30 dev veth-db
+sudo ip netns exec isolated-db ip addr add 10.99.0.2/30 dev veth-db-ns
+
+sudo ip addr add 10.99.1.1/30 dev veth-app
+sudo ip netns exec isolated-app ip addr add 10.99.1.2/30 dev veth-app-ns
+
+# Bring interfaces up
+sudo ip link set veth-db up &amp;&amp; sudo ip netns exec isolated-db ip link set veth-db-ns up
+sudo ip link set veth-app up &amp;&amp; sudo ip netns exec isolated-app ip link set veth-app-ns up
+
+# Run a process in the isolated namespace
+sudo ip netns exec isolated-db su - postgres -c &#39;postgres -D /var/lib/postgres/data&#39;
+
+# Verify isolation
+sudo ip netns exec isolated-db ip addr show
+sudo ip netns exec isolated-db ss -tulnp
+						</pre>
+					</section>
+					<section>
+						<h3 id="nac-network-access-control">NAC (Network Access Control)</h3>
+						<p>NAC ensures only authorized and compliant devices connect to the network:</p>
+						<h4 id="8021x-port-authentication">802.1X Port Authentication</h4>
+						<p>A device must authenticate (RADIUS) before the switch opens the port.</p>
+						<pre class="bash">
+# FreeRADIUS / hostapd integration with 802.1X on a Linux router
+# /etc/hostapd/hostapd-wired.conf
+
+interface=eth1
+driver=wired
+ieee8021x=1
+auth_server_addr=127.0.0.1
+auth_server_port=1812
+auth_server_shared_secret=radius_secret
+						</pre>
+					</section>
+					<section>
+						<h3 id="segmentation-for-otiot">Segmentation for OT/IoT</h3>
+						<p>
+							Operational Technology and
+							<abbr title="Internet of Things">IoT</abbr>
+							devices require the most restrictive segmentation
+							because: - They rarely receive security patches - They run embedded, often outdated, operating
+							systems - They cannot run endpoint protection - Compromise can cause physical damage
+						</p>
+						<pre class="bash">
+# OT/IoT segmentation rules (nftables)
+# These devices should ONLY communicate with their controller,
+# never with the internet or other network segments
+
+table inet ot_iot {
+
+    chain forward {
+        type filter hook forward priority 0; policy drop;
+
+        # PLC can only talk to the SCADA controller on port 502 (Modbus)
+        iifname &#34;iot-vlan&#34; oifname &#34;scada-vlan&#34; \
+            ip saddr 10.0.100.0/24 ip daddr 10.0.90.10 \
+            tcp dport 502 accept
+
+        # SCADA controller can talk to PLCs
+        iifname &#34;scada-vlan&#34; oifname &#34;iot-vlan&#34; \
+            ip saddr 10.0.90.10 ip daddr 10.0.100.0/24 \
+            tcp sport 502 accept
+
+        # Building management can reach HVAC controller on BACnet (UDP 47808)
+        iifname &#34;mgmt-vlan&#34; oifname &#34;iot-vlan&#34; \
+            ip saddr 10.0.40.0/24 ip daddr 10.0.100.50 \
+            udp dport 47808 accept
+
+        ct state established,related accept
+
+        # Everything else — including IoT → Internet — DROP silently
+        counter drop
+    }
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="testing-segmentation">Testing Segmentation</h3>
+						<pre class="bash">
+# Test reachability between segments
+# From host A (10.0.20.5) to host B (10.0.30.10)
+
+# TCP connectivity
+nc -zv -w 2 10.0.30.10 5432
+
+# Full port scan from allowed zone
+nmap -sS -p 1-65535 10.0.30.10
+
+# Test that specific ports are blocked
+nc -zv -w 2 10.0.30.10 22
+# Expected: Connection refused (or timeout)
+
+# Check if ICMP is allowed between zones (it shouldn&#39;t be for most)
+ping -c 1 -W 2 10.0.30.10
+
+# Traceroute to verify path through firewall
+traceroute -n -T -p 5432 10.0.30.10
+						</pre>
+					</section>
+					<section>
+						<h3 id="practical-deployment-order">Practical Deployment Order</h3>
+						<pre class="plaintext">
+Step 1: Network diagram — document every zone and required communication
+Step 2: Assign VLANs/IP ranges to each zone
+Step 3: Configure switch VLANs and trunk ports
+Step 4: Deploy firewall rules between zones (start with logging only)
+Step 5: Audit logs for 1-2 weeks (identify undocumented traffic)
+Step 6: Add explicit rules for documented traffic
+Step 7: Switch default policy to DROP for inter-zone traffic
+Step 8: Never revert to the &#34;allow everything first&#34; approach
+						</pre>
+					</section>
+					<section>
+						<h3 id="detection">Detection</h3>
+						<pre class="bash">
+# Monitor zone-crossing violations
+# iptables logging
+iptables -A FORWARD -i vlan-users -o vlan-db -j LOG \
+  --log-prefix &#34;SEG_VIOLATION:user_to_db:&#34; --log-level 4
+iptables -A FORWARD -i vlan-users -o vlan-db -j DROP
+
+# Check logs for violations
+journalctl -k | grep SEG_VIOLATION
+
+# nftables set for tracking violator IPs
+nft add set inet segmentation violators { type ipv4_addr\; }
+nft add rule inet segmentation forward \
+  ip saddr @violators counter drop
+
+# Add violating IPs to the set
+nft add element inet segmentation violators { 10.0.50.42 }
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go tool that evaluates a flow against a default-deny zone policy. The tool maps source
+							and destination addresses to zones by
+							<abbr title="Classless Inter-Domain Routing">CIDR</abbr>
+							, looks the flow
+							up in the allow list, and flags every denied east-west flow as a segmentation violation. Run
+							it against a list of captured flows and confirm that the DMZ cannot reach the data zone.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;bufio&#34;
+	&#34;fmt&#34;
+	&#34;net&#34;
+	&#34;os&#34;
+	&#34;strconv&#34;
+	&#34;strings&#34;
+)
+
+type zone struct {
+	name  string
+	block *net.IPNet
+}
+
+type allow struct {
+	src  string
+	dst  string
+	port int
+}
+
+var zones = []zone{
+	{&#34;dmz&#34;, mustCIDR(&#34;10.0.10.0/24&#34;)},
+	{&#34;app&#34;, mustCIDR(&#34;10.0.20.0/24&#34;)},
+	{&#34;data&#34;, mustCIDR(&#34;10.0.30.0/24&#34;)},
+	{&#34;mgmt&#34;, mustCIDR(&#34;10.0.40.0/24&#34;)},
+	{&#34;users&#34;, mustCIDR(&#34;10.0.50.0/24&#34;)},
+}
+
+var policy = []allow{
+	{&#34;dmz&#34;, &#34;app&#34;, 8080},
+	{&#34;app&#34;, &#34;data&#34;, 5432},
+	{&#34;mgmt&#34;, &#34;app&#34;, 22},
+	{&#34;mgmt&#34;, &#34;data&#34;, 22},
+}
+
+func mustCIDR(s string) *net.IPNet {
+	_, n, err := net.ParseCIDR(s)
+	if err != nil {
+		panic(err)
+	}
+	return n
+}
+
+func zoneOf(ip net.IP) string {
+	for _, z := range zones {
+		if z.block.Contains(ip) {
+			return z.name
+		}
+	}
+	return &#34;external&#34;
+}
+
+func allowed(src, dst string, port int) bool {
+	for _, a := range policy {
+		if a.src == src &amp;&amp; a.dst == dst &amp;&amp; a.port == port {
+			return true
+		}
+	}
+	return false
+}
+
+func main() {
+	scanner := bufio.NewScanner(os.Stdin)
+	violations := 0
+
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) != 3 {
+			continue
+		}
+		src := net.ParseIP(fields[0])
+		dst := net.ParseIP(fields[1])
+		port, _ := strconv.Atoi(fields[2])
+		sz := zoneOf(src)
+		dz := zoneOf(dst)
+		if allowed(sz, dz, port) {
+			fmt.Printf(&#34;ALLOW %-8s -&gt; %-8s :%d\n&#34;, sz, dz, port)
+		} else {
+			violations++
+			fmt.Printf(&#34;DENY  %-8s -&gt; %-8s :%d  SEGMENTATION VIOLATION\n&#34;, sz, dz, port)
+		}
+	}
+
+	fmt.Printf(&#34;%d violations\n&#34;, violations)
+}
+						</pre>
+						<p>
+							Save the program as
+							<code>segcheck.go</code>
+							and feed it a list of flows:
+						</p>
+						<pre class="bash">
+cat &gt; flows.txt &lt;&lt;&#39;EOF&#39;
+10.0.10.5 10.0.20.7 8080
+10.0.50.9 10.0.30.10 5432
+10.0.40.2 10.0.30.10 22
+10.0.10.5 10.0.30.10 5432
+EOF
+
+go run segcheck.go &lt; flows.txt
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://wiki.nftables.org/wiki-nftables/index.php/Main_Page" target="_blank">nftables Wiki</a></li>
+							<li><a class="icon-website" href="https://csrc.nist.gov/publications/detail/sp/800-207/final" target="_blank">Zero Trust Architecture (NIST SP 800-207)</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/ip-netns.8" target="_blank">Linux Network Namespaces</a></li>
+							<li><a class="icon-website" href="https://en.wikipedia.org/wiki/IEEE_802.1X" target="_blank">802.1X Port-Based Authentication</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

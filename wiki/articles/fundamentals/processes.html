@@ -1,0 +1,1272 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Processes | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Processes">
+		<meta name="keywords" content="cgroups, exec, fork, fundamentals, linux, processes, procfs">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Processes">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="A process is a running instance of a program, with its own memory, credentials, and lifecycle managed by the kernel.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/fundamentals/processes.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Processes">
+		<meta name="twitter:description" itemprop="description" content="A process is a running instance of a program, with its own memory, credentials, and lifecycle managed by the kernel.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#what-a-process-is">What a Process Is</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#process-memory-layout">Process Memory Layout</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#procpid-filesystem-deep-dive">/proc/PID Filesystem Deep Dive</a></b>
+					<ul>
+						<li><a href="#procpidstatus-fields">/proc/PID/status Fields</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#process-states">Process States</a></b>
+					<ul>
+						<li><a href="#uninterruptible-sleep-in-d-state">Uninterruptible Sleep in D State</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#fork-creating-a-process">fork() - Creating a Process</a></b>
+					<ul>
+						<li><a href="#what-fork-copies">What fork() Copies</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#execve-replacing-the-image">execve() - Replacing the Image</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#wait-waitpid-reaping-zombies">wait() / waitpid() - Reaping Zombies</a></b>
+					<ul>
+						<li><a href="#waitpid-options">waitpid() Options</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#process-credentials">Process Credentials</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#nice-and-priority">nice() and Priority</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#process-groups-and-sessions">Process Groups and Sessions</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#daemon-processes">Daemon Processes</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#systemd-cgroups-for-management">systemd cgroups for Management</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#tools-for-process-inspection">Tools for Process Inspection</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification-checklist">Verification Checklist</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/fundamentals/index.html">Fundamentals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/fundamentals/processes.html">Processes</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="processes">Processes</h2>
+					<p>
+						A process is a running instance of a program, with its own memory, credentials, and lifecycle
+						managed by the kernel.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Every command you run becomes a process. The kernel schedules it, gives it a virtual address
+							space, tracks its open files and credentials, and exposes all of that through
+							<code>/proc</code>
+							. Understanding
+							the process model is the foundation for debugging, privilege escalation, and container isolation.
+							This article follows a process from the kernel's
+							<code>task_struct</code>
+							down to the
+							<code>/proc</code>
+							interface,
+							then shows how to inspect and control processes with the standard tools.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/virtual-memory.html">Virtual Memory</a> - address spaces, page tables, and memory mapping</li>
+							<li><a href="/wiki/articles/fundamentals/system-calls.html">System Calls</a> - how user code asks the kernel for work</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="what-a-process-is">What a Process Is</h3>
+						<p>
+							A process is a running instance of a program. The kernel represents every process with a
+							<code>task_struct</code>
+							(in
+							<code>/usr/src/linux/include/linux/sched.h</code>
+							), which contains everything the kernel needs to
+							schedule, pause, resume, and destroy the process.
+						</p>
+						<p>
+							A program is a dead file on disk. A process is that program brought to life - it has a memory
+							address space, open file descriptors, a current working directory, credentials, signal handlers,
+							and one or more threads. The kernel schedules processes (not programs) on the
+							<abbr title="Central Processing Unit">CPU</abbr>
+							.
+						</p>
+						<pre class="plaintext">
+Program (disk)          Process (memory)
+=============           =================
+ELF binary on disk  -&gt;  execve() loads into memory
+                        Kernel creates task_struct
+                        Memory regions mapped
+                        /proc/PID/ entries created
+                        Added to scheduler runqueue
+						</pre>
+					</section>
+					<section>
+						<h3 id="process-memory-layout">Process Memory Layout</h3>
+						<p>
+							Every process in Linux sees a flat, contiguous virtual address space. The layout in memory (from
+							low to high addresses) on x86-64:
+						</p>
+						<pre class="plaintext">
+0x0000000000000000  +----------------------+
+                    |  Text (code)         |  Read-only, executable
+                    |  .text section       |  Shared between processes
+                    |  Program instructions|
+                    +----------------------+
+                    |  Read-Only Data      |  .rodata section
+                    |  String literals     |
+                    |  Jump tables         |
+                    +----------------------+
+                    |  Data (initialized)  |  .data section
+                    |  Global/static vars  |  Read-write
+                    |  int x = 42;         |
+                    +----------------------+
+                    |  BSS (uninitialized) |  .bss section
+                    |  Global/static vars  |  Zeroed at startup
+                    |  int y;              |  No space in binary
+                    +----------------------+
+                    |  Heap                |  Grows upward (sbrk/mmap)
+                    |  malloc() region     |  Dynamically sized
+                    |  ...                 |
+                    |  ...                 |
+                    +----------------------+
+                    |  Memory-mapped       |  Shared libraries, mmap
+                    |  Regions             |  libc.so, ld.so
+                    +----------------------+
+                    |  ...                 |
+                    |  Stack               |  Grows downward
+                    |  Local variables     |  Function call frames
+                    |  Return addresses    |
+0x00007fffffffffff  +----------------------+  (approximate on x86-64)
+						</pre>
+						<p>Verify your own process layout:</p>
+						<pre class="bash">
+# Print the memory map of your current shell
+cat /proc/$$/maps
+
+# Typical output (abbreviated):
+# 555555554000-555555559000 r-xp ...  /usr/bin/bash     &lt;- Text
+# 555555759000-55555575a000 r--p ...  /usr/bin/bash     &lt;- Read-only data
+# 55555575a000-55555575b000 rw-p ...  /usr/bin/bash     &lt;- Data
+# 55555575b000-55555575e000 rw-p ...  [heap]            &lt;- Heap
+# 7ffff7c00000-7ffff7c28000 r--p ...  /usr/lib/libc.so  &lt;- Shared lib text
+# 7ffff7dd0000-7ffff7e00000 rw-p ...                     &lt;- Mapped region
+# 7ffffffde000-7ffffffff000 rw-p ...  [stack]           &lt;- Stack
+						</pre>
+					</section>
+					<section>
+						<h3 id="procpid-filesystem-deep-dive">/proc/PID Filesystem Deep Dive</h3>
+						<p>
+							<code>/proc</code>
+							is not a real filesystem - it's a virtual interface to kernel data structures. Every
+							directory named by a PID exposes the kernel's internal representation of that process.
+						</p>
+						<pre class="bash">
+# Start a dummy process to inspect
+sleep 3600 &amp;
+PID=$!
+echo &#34;Inspecting PID: $PID&#34;
+
+# -- cmdline: Complete command line (null-separated) --
+cat /proc/$PID/cmdline | tr &#39;\0&#39; &#39; &#39;
+# Output: sleep 3600
+
+# -- environ: Environment variables at process start --
+cat /proc/$PID/environ | tr &#39;\0&#39; &#39;\n&#39; | head -5
+
+# -- exe: Symlink to the executable binary --
+readlink /proc/$PID/exe
+# Output: /usr/bin/sleep
+
+# -- cwd: Symlink to current working directory --
+readlink /proc/$PID/cwd
+# Output: /home/user
+
+# -- root: Symlink to process root (chroot jail) --
+readlink /proc/$PID/root
+# Output: /  (normally)
+
+# -- status: Human-readable process status --
+cat /proc/$PID/status
+
+# -- fd/: Directory of open file descriptors --
+ls -la /proc/$PID/fd/
+# Output:
+# lrwx------ 1 user user 64 ... 0 -&gt; /dev/pts/0
+# lrwx------ 1 user user 64 ... 1 -&gt; /dev/pts/0
+# lrwx------ 1 user user 64 ... 2 -&gt; /dev/pts/0
+
+# -- maps: Virtual memory map --
+cat /proc/$PID/maps
+
+# -- smaps: Maps with detailed memory accounting --
+cat /proc/$PID/smaps | head -40
+
+kill $PID
+						</pre>
+						<h4 id="procpidstatus-fields">/proc/PID/status Fields</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Field</th>
+									<th align="center">Meaning</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Name</td>
+									<td align="center">Process executable name (truncated to 15 chars)</td>
+								</tr>
+								<tr>
+									<td align="center">Umask</td>
+									<td align="center">File creation mask</td>
+								</tr>
+								<tr>
+									<td align="center">State</td>
+									<td align="center">Single-letter state: R (running), S (sleeping), D (disk sleep), T (stopped), Z (zombie), X (dead)</td>
+								</tr>
+								<tr>
+									<td align="center">Tgid</td>
+									<td align="center">Thread Group ID (PID of main thread)</td>
+								</tr>
+								<tr>
+									<td align="center">Ngid</td>
+									<td align="center">NUMA Grouping ID</td>
+								</tr>
+								<tr>
+									<td align="center">Pid</td>
+									<td align="center">Process ID</td>
+								</tr>
+								<tr>
+									<td align="center">PPid</td>
+									<td align="center">Parent Process ID</td>
+								</tr>
+								<tr>
+									<td align="center">TracerPid</td>
+									<td align="center">PID of tracer (0 if not traced)</td>
+								</tr>
+								<tr>
+									<td align="center">Uid / Gid</td>
+									<td align="center">Real, Effective, Saved, Filesystem UID/GID</td>
+								</tr>
+								<tr>
+									<td align="center">FDSize</td>
+									<td align="center">Number of file descriptor slots allocated</td>
+								</tr>
+								<tr>
+									<td align="center">Groups</td>
+									<td align="center">Supplementary group IDs</td>
+								</tr>
+								<tr>
+									<td align="center">VmPeak</td>
+									<td align="center">Peak virtual memory size (kB)</td>
+								</tr>
+								<tr>
+									<td align="center">VmSize</td>
+									<td align="center">Current virtual memory size (kB)</td>
+								</tr>
+								<tr>
+									<td align="center">VmLck</td>
+									<td align="center">Locked memory size (cannot be swapped)</td>
+								</tr>
+								<tr>
+									<td align="center">VmPin</td>
+									<td align="center">Pinned memory size</td>
+								</tr>
+								<tr>
+									<td align="center">VmHWM</td>
+									<td align="center">Peak resident set size (RSS high watermark)</td>
+								</tr>
+								<tr>
+									<td align="center">VmRSS</td>
+									<td align="center">Current resident set size</td>
+								</tr>
+								<tr>
+									<td align="center">VmData</td>
+									<td align="center">Size of data segment</td>
+								</tr>
+								<tr>
+									<td align="center">VmStk</td>
+									<td align="center">Size of stack segment</td>
+								</tr>
+								<tr>
+									<td align="center">VmExe</td>
+									<td align="center">Size of text (code) segment</td>
+								</tr>
+								<tr>
+									<td align="center">VmLib</td>
+									<td align="center">Size of shared library code</td>
+								</tr>
+								<tr>
+									<td align="center">VmPTE</td>
+									<td align="center">Page table entries size</td>
+								</tr>
+								<tr>
+									<td align="center">Threads</td>
+									<td align="center">Number of threads</td>
+								</tr>
+								<tr>
+									<td align="center">voluntary_ctxt_switches</td>
+									<td align="center">Voluntary context switches</td>
+								</tr>
+								<tr>
+									<td align="center">nonvoluntary_ctxt_switches</td>
+									<td align="center">Preemptive context switches</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="process-states">Process States</h3>
+						<p>
+							The kernel tracks every process with a state field in the
+							<code>task_struct</code>
+							:
+						</p>
+						<pre class="plaintext">
+        fork()
+          |
+    +-----v------+
+    |            |   CPU assigned
+    |   READY    |------------------+
+    | (waiting   |                  |
+    |  for CPU)  |&lt;---------------+ |
+    |            |   timeslice     | |
+    +-----+------+   expired       | |
+          |                        | |
+          | scheduled +------------v-v--+
+          |  on CPU   |                 |
+          +----------&gt;|    RUNNING      |
+                      |  (on CPU)       |
+                      +-+-----+------+--+
+                        |     |      |
+        I/O wait,       |     |      |  Signal (SIGSTOP)
+        event wait      |     |      |  or ptrace attach
+                        |     |      |
+             +----------v-+    |   +--v-------+
+             |  SLEEPING  |    |   | STOPPED  |
+             | (S or D)   |    |   |   (T)    |
+             +------------+    |   +----------+
+                               |
+                               |  exit() / signal
+                          +----v------+
+                          |  ZOMBIE   |
+                          |   (Z)     |
+                          +-----------+
+						</pre>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">State</th>
+									<th align="center">Letter</th>
+									<th align="center">Description</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Running</td>
+									<td align="center">R</td>
+									<td align="center">Currently on CPU, or runnable in scheduler queue</td>
+								</tr>
+								<tr>
+									<td align="center">Sleeping (interruptible)</td>
+									<td align="center">S</td>
+									<td align="center">Waiting for an event; can be woken by signals</td>
+								</tr>
+								<tr>
+									<td align="center">Sleeping (uninterruptible)</td>
+									<td align="center">D</td>
+									<td align="center">Waiting for I/O; cannot be interrupted even by SIGKILL</td>
+								</tr>
+								<tr>
+									<td align="center">Stopped</td>
+									<td align="center">T</td>
+									<td align="center">Stopped by SIGSTOP, SIGTSTP, or ptrace</td>
+								</tr>
+								<tr>
+									<td align="center">Tracing stop</td>
+									<td align="center">t</td>
+									<td align="center">Stopped by ptrace (debugger)</td>
+								</tr>
+								<tr>
+									<td align="center">Zombie</td>
+									<td align="center">Z</td>
+									<td align="center">Exited but parent has not called wait()</td>
+								</tr>
+								<tr>
+									<td align="center">Dead</td>
+									<td align="center">X</td>
+									<td align="center">Process fully removed (transient, rarely visible)</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="uninterruptible-sleep-in-d-state">Uninterruptible Sleep in D State</h4>
+						<p>
+							Processes enter D state when waiting for completion of a blocking I/O operation inside the kernel.
+							While in D state, the process ignores all signals - including SIGKILL (9). This is why a
+							<code>kill -9</code>
+							against a process stuck on a dead NFS mount does nothing.
+						</p>
+						<pre class="bash">
+# Find processes in D state (stuck on I/O)
+ps aux | awk &#39;$8 ~ /D/&#39;
+
+# Or with /proc
+for pid in /proc/[0-9]*; do
+    state=$(awk &#39;/^State:/ {print $2}&#39; $pid/status 2&gt;/dev/null)
+    if [ &#34;$state&#34; = &#34;D&#34; ]; then
+        echo &#34;PID $(basename $pid) is in D state: $(cat $pid/comm 2&gt;/dev/null)&#34;
+    fi
+done
+						</pre>
+					</section>
+					<section>
+						<h3 id="fork-creating-a-process">fork() - Creating a Process</h3>
+						<p>
+							<code>fork()</code>
+							creates a new process on Linux. It is implemented on top of the
+							<code>clone()</code>
+							syscall and
+							returns twice: once in the parent with the child's PID, and once in the child with
+							<code>0</code>
+							. The
+							child is an exact copy of the calling process - same memory, file descriptors, and execution
+							state. Thanks to Copy-on-Write (
+							<abbr title="Copy-on-Write">CoW</abbr>
+							), the kernel does not actually duplicate
+							physical memory; it maps the child's page tables to the parent's pages as read-only. Only when
+							either process writes to a page does the kernel make a private copy.
+						</p>
+						<pre class="c">
+#include &lt;stdio.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/wait.h&gt;
+
+int main() {
+    pid_t pid = fork();
+
+    if (pid == -1) {
+        perror(&#34;fork&#34;);
+        return 1;
+    }
+
+    if (pid == 0) {
+        /* Child process - pid is 0 */
+        printf(&#34;[CHILD]  PID: %d, PPID: %d\n&#34;, getpid(), getppid());
+        printf(&#34;[CHILD]  fork() returned: %d\n&#34;, pid);
+        _exit(0);  // Use _exit(), not exit() - avoids flushing parent&#39;s buffers twice
+    } else {
+        /* Parent process - pid is the child&#39;s PID */
+        printf(&#34;[PARENT] PID: %d, Child PID: %d\n&#34;, getpid(), pid);
+        printf(&#34;[PARENT] fork() returned: %d\n&#34;, pid);
+        wait(NULL);  // Reap the child
+    }
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+gcc -o fork-demo fork-demo.c &amp;&amp; ./fork-demo
+						</pre>
+						<h4 id="what-fork-copies">What fork() Copies</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Resource</th>
+									<th align="center">Copied?</th>
+									<th align="center">Notes</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Address space</td>
+									<td align="center">Yes (CoW)</td>
+									<td align="center">Virtual memory copied; physical pages shared until modified</td>
+								</tr>
+								<tr>
+									<td align="center">File descriptors</td>
+									<td align="center">Yes</td>
+									<td align="center">Same fd numbers; share kernel open file description (offset!)</td>
+								</tr>
+								<tr>
+									<td align="center">Signal handlers</td>
+									<td align="center">Yes</td>
+									<td align="center">Same dispositions</td>
+								</tr>
+								<tr>
+									<td align="center">Signal mask</td>
+									<td align="center">Yes</td>
+									<td align="center">Same blocked signals</td>
+								</tr>
+								<tr>
+									<td align="center">Environment</td>
+									<td align="center">Yes</td>
+									<td align="center">Same environ</td>
+								</tr>
+								<tr>
+									<td align="center">Resource limits</td>
+									<td align="center">Yes</td>
+									<td align="center">Same rlimits</td>
+								</tr>
+								<tr>
+									<td align="center">Controlling terminal</td>
+									<td align="center">Yes</td>
+									<td align="center">Same session</td>
+								</tr>
+								<tr>
+									<td align="center">Threads</td>
+									<td align="center">Only caller</td>
+									<td align="center">Only the calling thread is duplicated</td>
+								</tr>
+								<tr>
+									<td align="center">File locks</td>
+									<td align="center">No</td>
+									<td align="center">POSIX record locks not inherited</td>
+								</tr>
+								<tr>
+									<td align="center">Pending signals</td>
+									<td align="center">No</td>
+									<td align="center">Cleared in child</td>
+								</tr>
+								<tr>
+									<td align="center">Alarm timers</td>
+									<td align="center">No</td>
+									<td align="center">Cleared in child</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="execve-replacing-the-image">execve() - Replacing the Image</h3>
+						<p>
+							<code>execve()</code>
+							replaces the entire process image with a new program. The PID stays the same. Open
+							file descriptors (unless marked
+							<code>O_CLOEXEC</code>
+							) survive the exec. Signal handlers are reset to
+							defaults. The new program starts at
+							<code>_start</code>
+							.
+						</p>
+						<pre class="c">
+#include &lt;stdio.h&gt;
+#include &lt;unistd.h&gt;
+
+int main() {
+    printf(&#34;[BEFORE] PID: %d\n&#34;, getpid());
+    printf(&#34;[BEFORE] This process is about to be replaced\n&#34;);
+
+    /* execve(path, argv, envp) */
+    char *args[] = { &#34;/usr/bin/id&#34;, NULL };
+    char *env[]  = { NULL };
+
+    execve(&#34;/usr/bin/id&#34;, args, env);
+
+    /* If execve returns, it failed */
+    perror(&#34;execve&#34;);
+    return 1;
+}
+						</pre>
+						<pre class="bash">
+gcc -o exec-demo exec-demo.c &amp;&amp; ./exec-demo
+# The PID printed before and the one running /usr/bin/id are the same
+						</pre>
+						<p>
+							The entire family of
+							<code>exec</code>
+							functions are wrappers around
+							<code>execve()</code>
+							:
+						</p>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Function</th>
+									<th align="center">Program</th>
+									<th align="center">Args</th>
+									<th align="center">Environment</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">execve()</td>
+									<td align="center">path</td>
+									<td align="center">array</td>
+									<td align="center">array (syscall)</td>
+								</tr>
+								<tr>
+									<td align="center">execle()</td>
+									<td align="center">path</td>
+									<td align="center">varargs + NULL</td>
+									<td align="center">array</td>
+								</tr>
+								<tr>
+									<td align="center">execl()</td>
+									<td align="center">path</td>
+									<td align="center">varargs + NULL</td>
+									<td align="center">inherit</td>
+								</tr>
+								<tr>
+									<td align="center">execvpe()</td>
+									<td align="center">filename</td>
+									<td align="center">array</td>
+									<td align="center">array (+ PATH search)</td>
+								</tr>
+								<tr>
+									<td align="center">execvp()</td>
+									<td align="center">filename</td>
+									<td align="center">array</td>
+									<td align="center">inherit (+ PATH search)</td>
+								</tr>
+								<tr>
+									<td align="center">execv()</td>
+									<td align="center">path</td>
+									<td align="center">array</td>
+									<td align="center">inherit</td>
+								</tr>
+							</tbody>
+						</table>
+					</section>
+					<section>
+						<h3 id="wait-waitpid-reaping-zombies">wait() / waitpid() - Reaping Zombies</h3>
+						<p>
+							When a child process exits, it becomes a zombie. The kernel cannot free the process's
+							<code>task_struct</code>
+							until the parent acknowledges the exit by calling
+							<code>wait()</code>
+							(or
+							<code>waitpid()</code>
+							). Zombies hold no
+							memory, no
+							<abbr title="Central Processing Unit">CPU</abbr>
+							, no file descriptors - only a slot in the process
+							table and the exit status.
+						</p>
+						<pre class="c">
+#include &lt;stdio.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/wait.h&gt;
+#include &lt;stdlib.h&gt;
+
+int main() {
+    pid_t pid = fork();
+
+    if (pid == 0) {
+        printf(&#34;[CHILD] Exiting immediately\n&#34;);
+        _exit(42);  // Exit status = 42
+    }
+
+    /* Parent */
+    printf(&#34;[PARENT] Child PID: %d\n&#34;, pid);
+    printf(&#34;[PARENT] Check with: ps aux | grep Z\n&#34;);
+    sleep(5);  // Child is a zombie during this sleep
+
+    int status;
+    pid_t waited = wait(&amp;status);
+
+    if (WIFEXITED(status))
+        printf(&#34;[PARENT] Child %d exited with status %d\n&#34;, waited, WEXITSTATUS(status));
+    if (WIFSIGNALED(status))
+        printf(&#34;[PARENT] Child %d killed by signal %d\n&#34;, waited, WTERMSIG(status));
+
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+gcc -o zombie-demo zombie-demo.c &amp;&amp; ./zombie-demo
+# In another terminal during the sleep:
+ps aux | grep &#39;Z&#39;
+						</pre>
+						<h4 id="waitpid-options">waitpid() Options</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Flag</th>
+									<th align="center">Effect</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">WNOHANG</td>
+									<td align="center">Return immediately if no child has exited (non-blocking)</td>
+								</tr>
+								<tr>
+									<td align="center">WUNTRACED</td>
+									<td align="center">Also return if child is stopped</td>
+								</tr>
+								<tr>
+									<td align="center">WCONTINUED</td>
+									<td align="center">Also return if stopped child continues via SIGCONT</td>
+								</tr>
+								<tr>
+									<td align="center">0</td>
+									<td align="center">Block until any child changes state</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							<b>Orphan processes:</b>
+							When a parent exits before its children, the kernel reparents the orphans
+							to PID 1 (init/systemd). Init periodically calls
+							<code>wait()</code>
+							to reap them, preventing permanent
+							zombies.
+						</p>
+					</section>
+					<section>
+						<h3 id="process-credentials">Process Credentials</h3>
+						<p>
+							Every process carries multiple user and group IDs. They control which files can be read/written/executed
+							and which syscalls are permitted.
+						</p>
+						<pre class="plaintext">
++--------------------------------------------------+
+|                  Process                          |
+|                                                   |
+|  Real UID (RUID):      1000  &lt;- original user     |
+|  Effective UID (EUID): 1000  &lt;- used for checks   |
+|  Saved UID (SUID):     1000  &lt;- setuid saves here |
+|  File system UID:      1000  &lt;- for file access   |
+|                                                   |
+|  Real GID (RGID):      1000                       |
+|  Effective GID (EGID): 1000                       |
+|  Saved GID (SGID):     1000                       |
+|  File system GID:      1000                       |
+|                                                   |
+|  Supplementary Groups: [10, 100, 1000]            |
+|  Capabilities:         0x0000000000000000         |
++--------------------------------------------------+
+						</pre>
+						<p>
+							When a setuid binary (permissions
+							<code>4755</code>
+							, owned by root) is executed:
+						</p>
+						<ul>
+							<li>RUID stays 1000 (the real user)</li>
+							<li>EUID becomes 0 (root, the file owner)</li>
+							<li>SUID becomes 0 (saved from previous EUID)</li>
+						</ul>
+						<p>
+							A process can drop privileges temporarily by swapping EUID with RUID, and later restore them
+							via the SUID.
+						</p>
+						<pre class="c">
+#include &lt;stdio.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/types.h&gt;
+
+int main() {
+    uid_t ruid, euid, suid;
+    getresuid(&amp;ruid, &amp;euid, &amp;suid);
+    printf(&#34;RUID=%d  EUID=%d  SUID=%d\n&#34;, ruid, euid, suid);
+
+    gid_t rgid, egid, sgid;
+    getresgid(&amp;rgid, &amp;egid, &amp;sgid);
+    printf(&#34;RGID=%d  EGID=%d  SGID=%d\n&#34;, rgid, egid, sgid);
+    return 0;
+}
+						</pre>
+						<p>Verify credentials for any process:</p>
+						<pre class="bash">
+cat /proc/$$/status | grep -E &#34;^Uid|^Gid|^Groups&#34;
+# Uid:    1000    1000    1000    1000
+# Gid:    1000    1000    1000    1000
+# Format: Real  Effective  Saved  Filesystem
+						</pre>
+					</section>
+					<section>
+						<h3 id="nice-and-priority">nice() and Priority</h3>
+						<p>Linux uses dynamic priority scheduling. Every process has:</p>
+						<ul>
+							<li><b>nice value</b> (-20 to +19): User-visible. Lower = higher priority. Default is 0.</li>
+							<li><b>static priority</b> (100-139): Kernel-internal = nice + 120.</li>
+							<li><b>dynamic priority</b> : Adjusted by the scheduler based on sleep vs. <abbr title="Central Processing Unit">CPU</abbr> time.</li>
+						</ul>
+						<pre class="bash">
+# Run a command with specific niceness
+nice -n 10 gzip largefile.dat
+
+# Change niceness of running process
+renice -n -5 -p 1234
+
+# View nice values in ps/top
+ps -eo pid,ni,comm | head -10
+top  # Press &#39;r&#39; to renice a process interactively
+						</pre>
+					</section>
+					<section>
+						<h3 id="process-groups-and-sessions">Process Groups and Sessions</h3>
+						<pre class="plaintext">
++--------------------------------------+
+|              Session (SID=500)        |
+|                                       |
+|  +--------------------------+         |
+|  |   Process Group (PGID=500)|        |
+|  |                           |         |
+|  |  PID 500 (bash)           |         |
+|  |  Session leader           |         |
+|  |  Controlling terminal     |         |
+|  +--------------------------+         |
+|                                       |
+|  +--------------------------+         |
+|  |   Process Group (PGID=600)|        |
+|  |                           |         |
+|  |  PID 600 (cat)            |         |
+|  |  PID 601 (sort)           |         |
+|  |  PID 602 (grep)           |         |
+|  |  Foreground PG            |         |
+|  +--------------------------+         |
++--------------------------------------+
+						</pre>
+						<p>
+							Job control (Ctrl+Z, fg, bg) works through process groups. A terminal's foreground process group
+							receives keyboard signals (SIGINT,
+							<code>SIGTSTP</code>
+							). Background groups can write to the terminal
+							but reading causes SIGTTIN.
+						</p>
+						<pre class="bash">
+# View process group and session info
+ps -eo pid,ppid,pgid,sid,comm | head -10
+
+# Column meanings:
+# PID   = Process ID
+# PPID  = Parent Process ID
+# PGID  = Process Group ID (often same as PID of group leader)
+# SID   = Session ID (often same as PID of session leader)
+
+# Get the session leader of any process
+cat /proc/1234/stat | awk &#39;{print $6}&#39;  # Field 6 is session ID
+
+# Create a new session (daemon-like)
+setsid bash              # New session, no controlling terminal
+ps -eo pid,ppid,pgid,sid,comm | grep bash
+						</pre>
+					</section>
+					<section>
+						<h3 id="daemon-processes">Daemon Processes</h3>
+						<p>A daemon is a background process with no controlling terminal. Traditional daemon initialization:</p>
+						<pre class="c">
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;sys/stat.h&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;syslog.h&gt;
+
+void daemonize() {
+    pid_t pid = fork();
+    if (pid &lt; 0)  exit(EXIT_FAILURE);
+    if (pid &gt; 0)  _exit(EXIT_SUCCESS);  // Parent exits
+
+    // Child becomes session leader, loses controlling terminal
+    if (setsid() &lt; 0) exit(EXIT_FAILURE);
+
+    // Fork again - child can never reacquire a controlling terminal
+    pid = fork();
+    if (pid &lt; 0)  exit(EXIT_FAILURE);
+    if (pid &gt; 0)  _exit(EXIT_SUCCESS);
+
+    // Set file creation mask
+    umask(0);
+
+    // Move to root directory
+    chdir(&#34;/&#34;);
+
+    // Close stdio and redirect to /dev/null
+    close(STDIN_FILENO);
+    close(STDOUT_FILENO);
+    close(STDERR_FILENO);
+    open(&#34;/dev/null&#34;, O_RDONLY);   // fd 0
+    open(&#34;/dev/null&#34;, O_WRONLY);   // fd 1
+    open(&#34;/dev/null&#34;, O_WRONLY);   // fd 2
+
+    // Optionally connect to syslog
+    openlog(&#34;mydaemon&#34;, LOG_PID, LOG_DAEMON);
+    syslog(LOG_NOTICE, &#34;Daemon started.&#34;);
+    closelog();
+}
+
+int main() {
+    daemonize();
+
+    while (1) {
+        // Actual daemon work
+        sleep(60);
+    }
+    return 0;
+}
+						</pre>
+						<p>
+							Modern Linux systems use systemd service units instead of forking daemons. systemd handles logging
+							(via stdout/stderr to journald), restarts, resource limits, and socket activation.
+						</p>
+					</section>
+					<section>
+						<h3 id="systemd-cgroups-for-management">systemd cgroups for Management</h3>
+						<p>
+							systemd organizes processes into control groups (cgroups v2). Every service gets its own cgroup
+							under
+							<code>/sys/fs/cgroup/system.slice/</code>
+							.
+						</p>
+						<pre class="bash">
+# Find the cgroup of a systemd service
+systemctl status sshd | grep CGroup
+# Output: CGroup: /system.slice/sshd.service
+
+# Inspect resource usage of a cgroup
+systemctl show sshd | grep -i cgroup
+
+# List processes in a cgroup
+ls /sys/fs/cgroup/system.slice/sshd.service/cgroup.procs
+
+# All processes in systemd units
+systemd-cgls
+
+# CPU/memory usage per cgroup
+systemd-cgtop
+						</pre>
+					</section>
+					<section>
+						<h3 id="tools-for-process-inspection">Tools for Process Inspection</h3>
+						<pre class="bash">
+# ps - snapshot of running processes
+ps aux                          # Every process, BSD style
+ps -ef                          # Every process, Unix style
+ps -eo pid,ppid,user,state,pri,ni,vsz,rss,comm  # Custom columns
+ps axfo pid,ppid,stat,comm      # Process tree with forest output
+
+# Column meanings in ps aux:
+# USER   = Owner
+# PID    = Process ID
+# %CPU   = CPU usage (percentage of one core)
+# %MEM   = RSS as percentage of total physical memory
+# VSZ    = Virtual memory size (kB)
+# RSS    = Resident Set Size - physical memory used (kB)
+# TTY    = Controlling terminal (? = none)
+# STAT   = Process state code (see table above) + extra flags:
+#          &lt; = high priority, N = low priority, L = pages locked
+#          s = session leader, l = multi-threaded, + = foreground
+# START  = Start time
+# TIME   = Total CPU time consumed
+# COMMAND = Command with arguments
+
+# top/htop - interactive process monitors
+# htop has better UI: tree view, scrollable, mouse support, kill with F9
+
+# pgrep/pkill - find/signal by name
+pgrep -l sshd                    # List SSH daemon PIDs
+pgrep -u root                    # All processes owned by root
+pgrep -f &#34;python server&#34;         # Match full command line
+pkill -HUP sshd                  # Send SIGHUP to sshd
+
+# strace - trace system calls
+strace -p 1234                   # Attach to running process
+strace -f gcc hello.c            # Follow forks
+strace -c ls                     # Summary counts of syscalls
+strace -e trace=file cat /etc/hosts  # Only file-related syscalls
+
+# lsof - list open files
+lsof -p 1234                     # All open files for PID
+lsof -i :80                      # Processes using port 80
+lsof /var/log/syslog             # Processes with this file open
+
+# fuser - identify processes using a file/socket
+fuser -v /usr/bin/bash           # Processes using bash
+fuser -n tcp 80                  # Processes on TCP port 80
+						</pre>
+					</section>
+					<section>
+						<h3 id="verification-checklist">Verification Checklist</h3>
+						<pre class="bash">
+# 1. Verify process memory layout
+cat /proc/self/maps | head -20
+
+# 2. Verify fork CoW - child sees same data, writes diverge
+cat /proc/$$/maps | wc -l       # Parent&#39;s map entries
+bash -c &#39;cat /proc/$$/maps | wc -l&#39;  # Child&#39;s (same count initially)
+
+# 3. Find all processes in D state (uninterruptible sleep)
+ps aux | awk &#39;$8 ~ /D/&#39;
+
+# 4. Find all zombie processes
+ps aux | awk &#39;$8 ~ /Z/&#39;
+
+# 5. Verify process credentials
+cat /proc/$$/status | grep -E &#34;^Uid:|^Gid:|^Groups:&#34;
+
+# 6. Check the cgroup hierarchy
+cat /proc/$$/cgroup
+
+# 7. List all process groups in current session
+ps -eo pid,ppid,pgid,sid,stat,comm --sid $$ | head -20
+
+# 8. Trace file I/O of a command
+strace -e trace=file cat /etc/passwd 2&gt;&amp;1 | head -20
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go program that reconstructs the process tree from
+							<code>/proc</code>
+							. For each PID, read
+							<code>/proc/&lt;pid&gt;/status</code>
+							and extract
+							<code>Name</code>
+							,
+							<code>State</code>
+							,
+							<code>PPid</code>
+							,
+							<code>Uid</code>
+							, and
+							<code>VmRSS</code>
+							. Build a parent-to-child map, then
+							print the tree rooted at PID 1 (or any process whose parent is unknown) with two spaces of indentation
+							per level. Compare your output with
+							<code>ps axfo pid,ppid,comm</code>
+							.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;bufio&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;path/filepath&#34;
+	&#34;sort&#34;
+	&#34;strconv&#34;
+	&#34;strings&#34;
+)
+
+type Process struct {
+	PID   int
+	PPID  int
+	Name  string
+	State string
+	UID   int
+	RSS   int
+}
+
+func readStatus(pid int) (Process, error) {
+	p := Process{PID: pid}
+
+	file, err := os.Open(fmt.Sprintf(&#34;/proc/%d/status&#34;, pid))
+	if err != nil {
+		return p, err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		key, value, found := strings.Cut(scanner.Text(), &#34;:&#34;)
+		if found == false {
+			continue
+		}
+		value = strings.TrimSpace(value)
+		switch key {
+		case &#34;Name&#34;:
+			p.Name = value
+		case &#34;State&#34;:
+			p.State = value[:1]
+		case &#34;PPid&#34;:
+			p.PPID, _ = strconv.Atoi(value)
+		case &#34;Uid&#34;:
+			if fields := strings.Fields(value); len(fields) &gt; 0 {
+				p.UID, _ = strconv.Atoi(fields[0])
+			}
+		case &#34;VmRSS&#34;:
+			if fields := strings.Fields(value); len(fields) &gt; 0 {
+				p.RSS, _ = strconv.Atoi(fields[0])
+			}
+		}
+	}
+
+	return p, scanner.Err()
+}
+
+func printTree(p Process, children map[int][]Process, depth int) {
+	fmt.Printf(&#34;%s%d %s [%s] ppid=%d uid=%d rss=%dkB\n&#34;,
+		strings.Repeat(&#34;  &#34;, depth), p.PID, p.Name, p.State, p.PPID, p.UID, p.RSS)
+
+	for _, child := range children[p.PID] {
+		printTree(child, children, depth+1)
+	}
+}
+
+func main() {
+	entries, _ := filepath.Glob(&#34;/proc/[0-9]*&#34;)
+	byPID := make(map[int]Process)
+	children := make(map[int][]Process)
+
+	for _, entry := range entries {
+		pid, err := strconv.Atoi(filepath.Base(entry))
+		if err != nil {
+			continue
+		}
+
+		p, err := readStatus(pid)
+		if err != nil {
+			continue
+		}
+
+		byPID[p.PID] = p
+		children[p.PPID] = append(children[p.PPID], p)
+	}
+
+	roots := make([]Process, 0)
+	for _, p := range byPID {
+		if _, ok := byPID[p.PPID]; ok == false {
+			roots = append(roots, p)
+		}
+	}
+	sort.Slice(roots, func(a, b int) bool { return roots[a].PID &lt; roots[b].PID })
+
+	for _, root := range roots {
+		printTree(root, children, 0)
+	}
+}
+						</pre>
+						<p>
+							Save it as
+							<code>proctree.go</code>
+							and run:
+						</p>
+						<pre class="bash">
+go run proctree.go | head -20;
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/proc.5" target="_blank">proc(5) - process information pseudo-filesystem</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/fork.2" target="_blank">fork(2) - create a child process</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/execve.2" target="_blank">execve(2) - execute program</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/wait.2" target="_blank">wait(2) - wait for process to change state</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/include/linux/sched.h" target="_blank">Linux Kernel - task_struct</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/systemd.exec.5" target="_blank">systemd.exec(5) - systemd execution environment configuration</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/ps.1" target="_blank">ps(1) - report a snapshot of the current processes</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

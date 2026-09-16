@@ -1,0 +1,1234 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Binary Identification | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Binary Identification">
+		<meta name="keywords" content="entropy, file-format, hashing, packer-detection, reverse-engineering">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Binary Identification">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Identify unknown binaries through magic bytes, hashing, entropy analysis, and packer detection.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/reverse-engineering/binary-identification.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Binary Identification">
+		<meta name="twitter:description" itemprop="description" content="Identify unknown binaries through magic bytes, hashing, entropy analysis, and packer detection.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-unknown-binary">The Unknown Binary</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#file-the-first-10-seconds">File: The First 10 Seconds</a></b>
+					<ul>
+						<li><a href="#magic-bytes-table">Magic Bytes Table</a></li>
+						<li><a href="#manual-magic-byte-check">Manual Magic Byte Check</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#hashing-fingerprints">Hashing Fingerprints</a></b>
+					<ul>
+						<li><a href="#sha-256-primary">SHA-256 (Primary)</a></li>
+						<li><a href="#md5-and-sha-1-legacy">MD5 and SHA-1 (Legacy)</a></li>
+						<li><a href="#ssdeep-fuzzy-hashing">SSDeep: Fuzzy Hashing</a></li>
+						<li><a href="#tlsh-locality-sensitive-hash">TLSH: Locality Sensitive Hash</a></li>
+						<li><a href="#imphash-pe-import-hash">Imphash: PE Import Hash</a></li>
+						<li><a href="#programmatic-hashing">Programmatic Hashing</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#entropy-measuring-randomness">Entropy: Measuring Randomness</a></b>
+					<ul>
+						<li><a href="#shannon-entropy-formula">Shannon Entropy Formula</a></li>
+						<li><a href="#computing-entropy-in-python">Computing Entropy in Python</a></li>
+						<li><a href="#visualizing-entropy-with-binwalk">Visualizing Entropy with binwalk</a></li>
+						<li><a href="#entropy-by-section">Entropy by Section</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#packer-detection">Packer Detection</a></b>
+					<ul>
+						<li><a href="#upx-detection">UPX Detection</a></li>
+						<li><a href="#other-packer-signatures">Other Packer Signatures</a></li>
+						<li><a href="#detecting-packed-binaries">Detecting Packed Binaries</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#exiftool-metadata-extraction">ExifTool: Metadata Extraction</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-triage-script">The Triage Script</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#next-steps">Next Steps</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/reverse-engineering/index.html">Reverse Engineering</a></li>
+						<li aria-current="page"><a href="/wiki/articles/reverse-engineering/binary-identification.html">Binary Identification</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="binary-identification">Binary Identification</h2>
+					<p>Identify unknown binaries through magic bytes, hashing, entropy analysis, and packer detection.</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Before you can reverse engineer a binary, you have to know what it is. This article shows how
+							to identify an unknown file statically, without executing it, using magic bytes, cryptographic
+							and fuzzy hashes, entropy measurement, and packer detection. After reading it you can triage
+							a sample and decide which analysis path to take next.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/elf.html">ELF</a> - ELF format structure, sections, segments, and dynamic linking</li>
+							<li><a href="/wiki/articles/fundamentals/filesystems.html">Filesystems</a> - how file metadata, types, and attributes work at the OS level</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-unknown-binary">The Unknown Binary</h3>
+						<p>
+							You have downloaded a file. It has no extension, no documentation, and no clear origin. Maybe
+							it arrived in a tarball from an untrusted source. Maybe you recovered it from a compromised
+							system during incident response. Maybe it was dropped by a process you caught behaving strangely.
+							Your first step is always the same: identify what kind of file this is without executing it.
+						</p>
+						<p>
+							Under no circumstances do you run an unknown binary. Everything in this article operates on
+							dead bytes - static analysis only. The moment you execute, you surrender control.
+						</p>
+					</section>
+					<section>
+						<h3 id="file-the-first-10-seconds">File: The First 10 Seconds</h3>
+						<pre class="plaintext">
+$ file unknown.bin
+unknown.bin: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 2.6.32, stripped
+						</pre>
+						<p>
+							<code>file</code>
+							is not looking at the extension. It reads magic bytes - fixed byte sequences at specific
+							offsets that identify formats. The magic database lives at
+							<code>/usr/share/file/magic/</code>
+							. Each format
+							specification declares an offset, a byte pattern, and a MIME type.
+						</p>
+						<pre class="plaintext">
+$ file -v unknown.bin
+						</pre>
+						<p>
+							<code>-v</code>
+							prints exactly which magic entries matched. This reveals the detection chain:
+						</p>
+						<pre class="plaintext">
+&gt;&gt;&gt; 0xb
+[    0] == 0x7F
+[    1] == 0x45
+[    2] == 0x4C
+[    3] == 0x46
+&gt;&gt;&gt; ELF, offset 0x10
+[    0] == 0x02
+&gt;&gt;&gt; ELF 64-bit
+						</pre>
+						<p>
+							The magic database parses recursively. For ELF, after matching
+							<code>\x7fELF</code>
+							, it reads byte 4 (
+							<code>EI_CLASS</code>
+							) for 32/64-bit, byte 5 (
+							<code>EI_DATA</code>
+							) for endianness, byte 16 (
+							<code>e_type</code>
+							) for executable/shared/relocatable.
+							For PE, it matches
+							<code>MZ</code>
+							at offset 0, then seeks to offset 0x3C to find the PE signature
+							<code>PE\0\0</code>
+							.
+						</p>
+						<h4 id="magic-bytes-table">Magic Bytes Table</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Format</th>
+									<th align="center">Magic Bytes</th>
+									<th align="center">Offset</th>
+									<th align="center">Notes</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">ELF</td>
+									<td align="center"><code>\x7f E L F</code></td>
+									<td align="center">0x00</td>
+									<td align="center">Byte 4: 1=32bit, 2=64bit</td>
+								</tr>
+								<tr>
+									<td align="center">PE (MZ)</td>
+									<td align="center"><code>M Z</code></td>
+									<td align="center">0x00</td>
+									<td align="center">PE signature at offset in 0x3C</td>
+								</tr>
+								<tr>
+									<td align="center">Mach-O 32</td>
+									<td align="center"><code>FE ED FA CE</code></td>
+									<td align="center">0x00</td>
+									<td align="center">Big-endian</td>
+								</tr>
+								<tr>
+									<td align="center">Mach-O 64</td>
+									<td align="center"><code>FE ED FA CF</code></td>
+									<td align="center">0x00</td>
+									<td align="center">Big-endian 64-bit</td>
+								</tr>
+								<tr>
+									<td align="center">Mach-O 32 LE</td>
+									<td align="center"><code>CE FA ED FE</code></td>
+									<td align="center">0x00</td>
+									<td align="center">Little-endian</td>
+								</tr>
+								<tr>
+									<td align="center">Mach-O 64 LE</td>
+									<td align="center"><code>CF FA ED FE</code></td>
+									<td align="center">0x00</td>
+									<td align="center">Little-endian 64-bit</td>
+								</tr>
+								<tr>
+									<td align="center">Shell script</td>
+									<td align="center"><code># !</code></td>
+									<td align="center">0x00</td>
+									<td align="center">Followed by interpreter path</td>
+								</tr>
+								<tr>
+									<td align="center">Python script</td>
+									<td align="center"><code># !</code>or<code>\x03\xF3\x0D\x0A</code></td>
+									<td align="center">0x00</td>
+									<td align="center">Shebang or pyc magic</td>
+								</tr>
+								<tr>
+									<td align="center">Perl script</td>
+									<td align="center"><code># ! /.*perl</code></td>
+									<td align="center">0x00</td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center">AWK script</td>
+									<td align="center"><code># ! /.*awk</code></td>
+									<td align="center">0x00</td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center">Zip</td>
+									<td align="center"><code>P K \x03\x04</code></td>
+									<td align="center">0x00</td>
+									<td align="center">Also JAR, APK, DOCX, XLSX</td>
+								</tr>
+								<tr>
+									<td align="center">Gzip</td>
+									<td align="center"><code>\x1f \x8b</code></td>
+									<td align="center">0x00</td>
+									<td align="center">tar.gz has this</td>
+								</tr>
+								<tr>
+									<td align="center">Bzip2</td>
+									<td align="center"><code>B Z h</code></td>
+									<td align="center">0x00</td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center">XZ</td>
+									<td align="center"><code>\xFD 7 z X Z</code></td>
+									<td align="center">0x00</td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center">Zstd</td>
+									<td align="center"><code>\x28 \xB5 \x2F \xFD</code></td>
+									<td align="center">0x00</td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center">7-Zip</td>
+									<td align="center"><code>7 z \xBC \xAF \x27 \x1C</code></td>
+									<td align="center">0x00</td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center">Java class</td>
+									<td align="center"><code>CA FE BA BE</code></td>
+									<td align="center">0x00</td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center">PDF</td>
+									<td align="center"><code>% P D F</code></td>
+									<td align="center">0x00</td>
+									<td align="center">Version follows: %PDF-1.7</td>
+								</tr>
+								<tr>
+									<td align="center">PNG</td>
+									<td align="center"><code>\x89 P N G \x0D \x0A \x1A \x0A</code></td>
+									<td align="center">0x00</td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center">JPEG</td>
+									<td align="center"><code>\xFF \xD8 \xFF</code></td>
+									<td align="center">0x00</td>
+									<td align="center">JFIF/EXIF variants follow</td>
+								</tr>
+								<tr>
+									<td align="center">GIF</td>
+									<td align="center"><code>G I F 8</code></td>
+									<td align="center">0x00</td>
+									<td align="center">87a or 89a</td>
+								</tr>
+								<tr>
+									<td align="center">BMP</td>
+									<td align="center"><code>B M</code></td>
+									<td align="center">0x00</td>
+									<td align="center">File size at 0x02</td>
+								</tr>
+								<tr>
+									<td align="center">WAV</td>
+									<td align="center"><code>R I F F</code></td>
+									<td align="center">0x00</td>
+									<td align="center">WAVE at 0x08</td>
+								</tr>
+								<tr>
+									<td align="center">MP3</td>
+									<td align="center"><code>\xFF \xFB</code>or<code>I D 3</code></td>
+									<td align="center">0x00</td>
+									<td align="center">Sync word or ID3 tag</td>
+								</tr>
+								<tr>
+									<td align="center">FLAC</td>
+									<td align="center"><code>f L a C</code></td>
+									<td align="center">0x00</td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center">OGG</td>
+									<td align="center"><code>O g g S</code></td>
+									<td align="center">0x00</td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center">ISO 9660</td>
+									<td align="center"><code>\x01 C D 0 0 1</code></td>
+									<td align="center">0x8001</td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center">Tar</td>
+									<td align="center"><code>u s t a r</code></td>
+									<td align="center">0x101</td>
+									<td align="center">Actually at end of header block</td>
+								</tr>
+								<tr>
+									<td align="center">LUKS</td>
+									<td align="center"><code>L U K S \xBA \xBE</code></td>
+									<td align="center">0x00</td>
+									<td align="center"></td>
+								</tr>
+								<tr>
+									<td align="center">SQLite3</td>
+									<td align="center"><code>S Q L i t e</code></td>
+									<td align="center">0x00</td>
+									<td align="center"></td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="manual-magic-byte-check">Manual Magic Byte Check</h4>
+						<p>
+							When
+							<code>file</code>
+							is unavailable (embedded systems, constrained containers), check manually with
+							<code>xxd</code>
+							or
+							<code>od</code>
+							:
+						</p>
+						<pre class="plaintext">
+$ xxd -l 32 unknown.bin
+00000000: 7f45 4c46 0201 0100 0000 0000 0000 0000  .ELF............
+00000010: 0200 3e00 0100 0000 0005 4000 0000 0000  ..&gt;.......@.....
+						</pre>
+						<p>
+							The first 4 bytes (
+							<code>7f 45 4c 46</code>
+							) are
+							<code>.ELF</code>
+							. Byte 4 (
+							<code>02</code>
+							) = 64-bit. Byte 5 (
+							<code>01</code>
+							) =
+							little-endian.
+							<code>\x02\x00</code>
+							at offset 0x10 =
+							<code>ET_EXEC</code>
+							(executable). Without
+							<code>file</code>
+							, cross-reference
+							the table above.
+						</p>
+						<pre class="plaintext">
+$ python3 -c &#34;
+import sys
+data = open(sys.argv[1], &#39;rb&#39;).read(4)
+print(data.hex(), &#39;-&gt;&#39;, repr(data))
+&#34; unknown.bin
+						</pre>
+					</section>
+					<section>
+						<h3 id="hashing-fingerprints">Hashing Fingerprints</h3>
+						<p>
+							A cryptographic hash uniquely identifies a byte sequence. In malware analysis, hashes serve
+							three purposes:
+						</p>
+						<ol>
+							<li><b>IoC creation</b> : Distribute the hash to blocklists, firewall rules, and AV signatures.</li>
+							<li><b>Detection</b> : Check unknown files against VirusTotal or internal malware databases.</li>
+							<li><b>Family clustering</b> : Variants of the same family produce different hashes - but fuzzy hashes group them.</li>
+						</ol>
+						<h4 id="sha-256-primary">SHA-256 (Primary)</h4>
+						<pre class="plaintext">
+$ sha256sum unknown.bin
+a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2  unknown.bin
+						</pre>
+						<p>
+							SHA-256 is the current standard for malware IoCs. It is collision-resistant enough that identical
+							hashes mean identical files. VirusTotal accepts SHA-256 lookups. The hash represents the
+							<em>exact bytes</em>
+							<ul>
+								<li>if the malware author changes one byte (recompile, different config, different <abbr title="Command and Control">C2</abbr></li>
+							</ul>
+						</p>
+						<p>), the SHA-256 changes completely.</p>
+						<h4 id="md5-and-sha-1-legacy">MD5 and SHA-1 (Legacy)</h4>
+						<pre class="plaintext">
+$ md5sum unknown.bin
+d41d8cd98f00b204e9800998ecf8427e  unknown.bin
+
+$ sha1sum unknown.bin
+da39a3ee5e6b4b0d3255bfef95601890afd80709  unknown.bin
+						</pre>
+						<p>
+							MD5 and SHA-1 are broken for cryptographic purposes (collisions can be generated) but remain
+							useful for
+							<em>fuzzy matching</em>
+							across older malware databases. Many legacy threat intel feeds still
+							index by MD5. Generate them for compatibility, but rely on SHA-256 for identification.
+						</p>
+						<h4 id="ssdeep-fuzzy-hashing">SSDeep: Fuzzy Hashing</h4>
+						<p>
+							Two variants of the same malware - different
+							<abbr title="Command and Control">C2</abbr>
+							domain, different compilation
+							flags - produce different SHA-256 hashes. SSDeep detects that they share a common ancestor.
+						</p>
+						<pre class="plaintext">
+$ pacman -S ssdeep
+$ ssdeep unknown_v1.bin unknown_v2.bin
+ssdeep,1.1--blocksize:hash:hash,filename
+384:S6fG8HjK9LmN2pQr3sTu4vWx5yZ6aB7c:S6fG8HjK9LmN2pQr3sTu4v,&#34;unknown_v1.bin&#34;
+384:S6fG8HjK9LmN2pQr3sTu4vWx5yZ6aB7c:S6fG8HjK9LmN2pQr3sTu4v,&#34;unknown_v2.bin&#34;
+						</pre>
+						<p>
+							SSDeep divides the file into blocks, hashes each block with a rolling hash (FV hash), and concatenates
+							the results. Blocksize adjusts based on file size. Two similar files produce similar ssdeep
+							hashes.
+						</p>
+						<pre class="plaintext">
+$ ssdeep -c unknown_v1.bin unknown_v2.bin
+unknown_v2.bin matches unknown_v1.bin (99)
+						</pre>
+						<p>
+							A score of 99 means 99% similarity - almost certainly variants. A score of 20 or below means
+							unrelated. The threshold for "same family" is typically 30-40.
+						</p>
+						<p>Generating multiple ssdeep comparisons:</p>
+						<pre class="plaintext">
+$ ssdeep -r -d malware_directory/ &gt; signatures.ssdeep
+$ ssdeep -m signatures.ssdeep new_sample.bin
+new_sample.bin matches malware_directory/trojan_abc.bin (88)
+						</pre>
+						<h4 id="tlsh-locality-sensitive-hash">TLSH: Locality Sensitive Hash</h4>
+						<p>
+							<code>TLSH</code>
+							(Trend Micro Locality Sensitive Hash) is designed for file similarity. It is more robust
+							than ssdeep against certain byte-level mutations.
+						</p>
+						<pre class="plaintext">
+$ pacman -S tlsh-tools
+$ tlsh -f unknown.bin
+T1ABCD1234EFGH5678IJKL9012MNOP3456QRST7890UVWX1234YZAB5678CDEF9012
+						</pre>
+						<p>
+							<code>TLSH</code>
+							produces a fixed-length hex string. The distance between two
+							<code>TLSH</code>
+							hashes indicates
+							similarity:
+						</p>
+						<pre class="plaintext">
+$ tlsh -c unknown_v1.bin unknown_v2.bin
+distance: 42
+						</pre>
+						<p>
+							Distances below 30 are very similar; distances above 100 are dissimilar.
+							<code>TLSH</code>
+							handles insertion
+							and deletion better than ssdeep.
+						</p>
+						<h4 id="imphash-pe-import-hash">Imphash: PE Import Hash</h4>
+						<p>
+							Imphash is specific to Windows PE files. It hashes the import table (
+							<abbr title="Dynamic Link Library">DLL</abbr>
+							<ul>
+								<li>function name, case-insensitive and sorted). The idea: different variants of the same malware</li>
+							</ul>
+						</p>
+						<p>
+							use the same
+							<abbr title="Application Programming Interface">API</abbr>
+							imports. Even if the payload is repacked
+							or the binary is recompiled, the imports stay the same.
+						</p>
+						<pre class="plaintext">
+$ python3 -c &#34;
+import pefile
+pe = pefile.PE(&#39;unknown.exe&#39;)
+print(pe.get_imphash())
+&#34;
+6f5d6f5d6f5d6f5d6f5d6f5d6f5d6f5d
+						</pre>
+						<p>
+							Two PEs with identical imphash import the same set of functions - strong indicator they share
+							source code or builder. Imphash is useless for packed binaries (UPX strips imports, the stub
+							resolves them dynamically) but excellent for unpacked samples.
+						</p>
+						<h4 id="programmatic-hashing">Programmatic Hashing</h4>
+						<p>
+							Every triage script must compute all hashes. Python's
+							<code>hashlib</code>
+							handles this directly, without
+							subprocess calls:
+						</p>
+						<pre class="python">
+#!/usr/bin/env python3
+import hashlib
+import sys
+
+def all_hashes(filepath: str) -&gt; dict:
+    with open(filepath, &#39;rb&#39;) as f:
+        data = f.read()
+
+    return {
+        &#39;md5&#39;:    hashlib.md5(data).hexdigest(),
+        &#39;sha1&#39;:   hashlib.sha1(data).hexdigest(),
+        &#39;sha256&#39;: hashlib.sha256(data).hexdigest(),
+        &#39;sha512&#39;: hashlib.sha512(data).hexdigest(),
+    }
+
+if __name__ == &#39;__main__&#39;:
+    for k, v in all_hashes(sys.argv[1]).items():
+        print(f&#34;{k}: {v}&#34;)
+						</pre>
+						<p>For large files (disk images, memory dumps), read in chunks:</p>
+						<pre class="python">
+def sha256_stream(filepath: str, chunk_size: int = 8192) -&gt; str:
+    h = hashlib.sha256()
+    with open(filepath, &#39;rb&#39;) as f:
+        while chunk := f.read(chunk_size):
+            h.update(chunk)
+    return h.hexdigest()
+						</pre>
+					</section>
+					<section>
+						<h3 id="entropy-measuring-randomness">Entropy: Measuring Randomness</h3>
+						<p>
+							Entropy measures how uniformly bytes are distributed. A file containing only ASCII text has
+							low entropy (
+							<del>4.5-5.5 bits per byte). Encrypted or compressed data approaches maximum entropy (</del>
+							8.0 bits per byte). High entropy in a binary section indicates packing, encryption, or compression.
+						</p>
+						<h4 id="shannon-entropy-formula">Shannon Entropy Formula</h4>
+						<p>For a byte stream with byte value probabilities p(b), the Shannon entropy H is:</p>
+						<pre class="plaintext">
+H = -sum(p(b) * log2(p(b)))  for b in 0..255
+						</pre>
+						<p>
+							If all 256 bytes appear with equal frequency (1/256 each), entropy = 8.0. If the file contains
+							only one byte value, entropy = 0.
+						</p>
+						<h4 id="computing-entropy-in-python">Computing Entropy in Python</h4>
+						<pre class="python">
+#!/usr/bin/env python3
+import math
+import sys
+from collections import Counter
+
+def shannon_entropy(data: bytes) -&gt; float:
+    if not data:
+        return 0.0
+    total = len(data)
+    counts = Counter(data)
+    return -sum(
+        (count / total) * math.log2(count / total)
+        for count in counts.values()
+    )
+
+def file_entropy(filepath: str) -&gt; float:
+    with open(filepath, &#39;rb&#39;) as f:
+        return shannon_entropy(f.read())
+
+if __name__ == &#39;__main__&#39;:
+    score = file_entropy(sys.argv[1])
+    print(f&#34;entropy: {score:.3f} bits/byte&#34;)
+    if score &gt; 7.5:
+        print(&#34;[!] HIGH ENTROPY -- likely packed or encrypted&#34;)
+    elif score &gt; 7.0:
+        print(&#34;[*] Medium-high entropy -- possibly compressed&#34;)
+    elif score &gt; 5.5:
+        print(&#34;[*] Moderate entropy -- normal binary&#34;)
+    else:
+        print(&#34;[*] Low entropy -- text, log, or repetitive data&#34;)
+						</pre>
+						<h4 id="visualizing-entropy-with-binwalk">Visualizing Entropy with binwalk</h4>
+						<p>
+							Binwalk is primarily a firmware analysis tool, but its entropy plot is invaluable for binary
+							triage:
+						</p>
+						<pre class="plaintext">
+$ pacman -S binwalk
+$ binwalk -E unknown.bin
+						</pre>
+						<p>This generates an entropy graph. Interpretation:</p>
+						<ul>
+							<li><b>Flat line near 8.0 across the entire file</b> : The whole binary is packed or encrypted (UPX, Themida, XOR-encoded). The entire data section is opaque.</li>
+							<li><b>Spiky graph with peaks at 5-7 and drops near 0</b> : Normal compiled binary. Low-entropy regions are strings/data tables. High-entropy regions are compressed code.</li>
+							<li><b>Sharp spike at a specific offset to 8.0, rest of file at 5-6</b> : Embedded encrypted payload (config blob, second stage, resource).</li>
+							<li><b>Entire file at 8.0 except header at 4-5</b> : Packed executable. The header is the unpacking stub.</li>
+						</ul>
+						<pre class="bash">
+# batch entropy scan on a directory
+for f in samples/*; do
+    score=$(python3 -c &#34;
+import math, sys
+from collections import Counter
+data = open(&#39;$f&#39;, &#39;rb&#39;).read()
+total = len(data)
+if total == 0:
+    print(0)
+    sys.exit(0)
+counts = Counter(data)
+H = -sum((c/total)*math.log2(c/total) for c in counts.values())
+print(f&#39;{H:.3f}&#39;)
+&#34;)
+    size=$(stat -c%s &#34;$f&#34;)
+    printf &#34;%-40s size=%-8s entropy=%s\n&#34; &#34;$(basename &#34;$f&#34;)&#34; &#34;$size&#34; &#34;$score&#34;
+done
+						</pre>
+						<h4 id="entropy-by-section">Entropy by Section</h4>
+						<p>
+							For ELF files, compute per-section entropy. The
+							<code>.text</code>
+							section should be~5.5-6.5. The
+							<code>.rodata</code>
+							section varies.
+							<code>.data</code>
+							/
+							<code>.bss</code>
+							have no file bytes. A
+							<code>.text</code>
+							section at 7.8+ means packed
+							code.
+						</p>
+						<pre class="python">
+#!/usr/bin/env python3
+# elfsection_entropy.py -- per-section entropy for ELF
+import math
+import sys
+from collections import Counter
+
+try:
+    from elftools.elf.elffile import ELFFile
+except ImportError:
+    print(&#34;pip install pyelftools&#34;)
+    sys.exit(1)
+
+def entropy(data):
+    if not data:
+        return 0.0
+    total = len(data)
+    counts = Counter(data)
+    return -sum((c/total)*math.log2(c/total) for c in counts.values())
+
+with open(sys.argv[1], &#39;rb&#39;) as f:
+    elf = ELFFile(f)
+
+    for section in elf.iter_sections():
+        data = section.data()
+        if len(data) == 0:
+            continue
+        e = entropy(data)
+        flag = &#39;&#39;
+        if e &gt; 7.5:
+            flag = &#39; [!] HIGH ENTROPY&#39;
+        elif e &gt; 7.0:
+            flag = &#39; [*] Medium-high&#39;
+        print(f&#34;  {section.name:&lt;24} size={len(data):&gt;8}  entropy={e:.3f}{flag}&#34;)
+						</pre>
+						<p>Sample output on a UPX-packed binary:</p>
+						<pre class="plaintext">
+  .interp                 size=      28  entropy=3.975
+  .note.ABI-tag           size=      32  entropy=3.750
+  UPX0                    size=       0  entropy=0.000
+  UPX1                    size=   67840  entropy=7.992 [!] HIGH ENTROPY
+  .shstrtab               size=      47  entropy=4.652
+						</pre>
+					</section>
+					<section>
+						<h3 id="packer-detection">Packer Detection</h3>
+						<p>
+							Packers compress the original binary and wrap it in an unpacking stub. When executed, the stub
+							decompresses the original code into memory and jumps to it. Statically, the binary is opaque
+							<ul>
+								<li>high entropy, few strings, small import table.</li>
+							</ul>
+						</p>
+						<h4 id="upx-detection">UPX Detection</h4>
+						<p>
+							UPX (Ultimate Packer for Executables) is the most common packer. It's legitimate (reduces binary
+							size) but also used by malware to evade signature detection.
+						</p>
+						<p>Signs of UPX:</p>
+						<ul>
+							<li>Section names: <code>UPX0</code> , <code>UPX1</code> . UPX0 is empty (zero file size, large virtual size - the decompressed code lands here). UPX1 contains the compressed payload.</li>
+							<li>A <code>UPX!</code> string near the end of the file, often followed by version info.</li>
+							<li>High entropy in the UPX1 section.</li>
+							<li><code>file</code> reports <code>ELF executable, packed with UPX</code> .</li>
+						</ul>
+						<pre class="plaintext">
+$ strings unknown_upx.bin | grep -i upx
+$Info: This file is packed with the UPX executable packer http://upx.sf.net $
+UPX!
+						</pre>
+						<p>
+							UPX-packed ELFs have a distinctive header. The
+							<code>p_filesz</code>
+							of the first LOAD segment is zero,
+							and the section
+							<code>UPX0</code>
+							has
+							<code>sh_size = 0</code>
+							in the file but a large
+							<code>sh_addr</code>
+							range:
+						</p>
+						<pre class="plaintext">
+$ readelf -l unknown_upx.bin
+
+Program Headers:
+  Type           Offset             VirtAddr           PhysAddr
+                 FileSiz            MemSiz              Flags  Align
+  LOAD           0x0000000000000000 0x0000000000400000 0x0000000000400000
+                 0x0000000000010910 0x0000000000010910  R E    0x1000
+  LOAD           0x0000000000010910 0x0000000000411910 0x0000000000411910
+                 0x0000000000000000 0x0000000000010000  RW     0x1000
+						</pre>
+						<p>
+							Notice the second LOAD:
+							<code>FileSiz=0</code>
+							,
+							<code>MemSiz=0x10000</code>
+							. This is the decompression target. The
+							stub writes the decompressed code there at runtime.
+						</p>
+						<h4 id="other-packer-signatures">Other Packer Signatures</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Packer</th>
+									<th align="center">Indicators</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">UPX</td>
+									<td align="center">Sections UPX0/UPX1,<code>UPX!</code>string</td>
+								</tr>
+								<tr>
+									<td align="center">ASPack</td>
+									<td align="center">Sections .aspack/.adata, entry point in .aspack</td>
+								</tr>
+								<tr>
+									<td align="center">Themida</td>
+									<td align="center">Sections .themida, virtualization, anti-debug</td>
+								</tr>
+								<tr>
+									<td align="center">VMProtect</td>
+									<td align="center">VM bytecode, mutated entry point, .vmp sections</td>
+								</tr>
+								<tr>
+									<td align="center">MPRESS</td>
+									<td align="center">Section names .MPRESS1/.MPRESS2</td>
+								</tr>
+								<tr>
+									<td align="center">PECompact</td>
+									<td align="center">Entry point in .pec section</td>
+								</tr>
+								<tr>
+									<td align="center">NSIS</td>
+									<td align="center">Nullsoft installer patterns,<code>nsis.sf</code>strings</td>
+								</tr>
+								<tr>
+									<td align="center">Inno Setup</td>
+									<td align="center">Inno Setup magic,<code>InnoSetup</code>strings</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="detecting-packed-binaries">Detecting Packed Binaries</h4>
+						<p>Key heuristics:</p>
+						<ol>
+							<li>High overall entropy (>7.5).</li>
+							<li>Few or no human-readable strings.</li>
+							<li>Small import table (dynamic <abbr title="Application Programming Interface">API</abbr> resolution to evade static import analysis).</li>
+							<li>Non-standard section names.</li>
+							<li>Large discrepancy between raw and virtual section sizes.</li>
+						</ol>
+						<pre class="python">
+def is_likely_packed(entropy_score, num_strings, num_imports, section_names):
+    suspicious = []
+    if entropy_score &gt; 7.5:
+        suspicious.append(f&#34;entropy={entropy_score:.3f}&#34;)
+    if num_strings &lt; 20:
+        suspicious.append(f&#34;few_strings={num_strings}&#34;)
+    if num_imports &lt; 5:
+        suspicious.append(f&#34;few_imports={num_imports}&#34;)
+    unusual_sections = [s for s in section_names
+                        if s not in {&#39;.text&#39;,&#39;.rodata&#39;,&#39;.data&#39;,&#39;.bss&#39;,&#39;.init&#39;,&#39;.fini&#39;,
+                                     &#39;.plt&#39;,&#39;.got&#39;,&#39;.dynamic&#39;,&#39;.interp&#39;,&#39;.comment&#39;,
+                                     &#39;.note&#39;,&#39;.eh_frame&#39;,&#39;.shstrtab&#39;,&#39;.symtab&#39;,&#39;.strtab&#39;}]
+    if unusual_sections:
+        suspicious.append(f&#34;unusual_sections={&#39;,&#39;.join(unusual_sections)}&#34;)
+    return suspicious
+						</pre>
+					</section>
+					<section>
+						<h3 id="exiftool-metadata-extraction">ExifTool: Metadata Extraction</h3>
+						<p>
+							ExifTool extracts metadata from dozens of file formats. For binaries, it surfaces compile timestamps,
+							embedded resources, and hidden data:
+						</p>
+						<pre class="plaintext">
+$ pacman -S perl-image-exiftool
+$ exiftool unknown.bin
+File Name                       : unknown.bin
+Directory                       : .
+File Size                       : 45 kB
+File Type                       : ELF executable
+File Type Extension             : 
+MIME Type                       : application/x-executable
+CPU Type                        : x86-64
+CPU Byte Order                  : Little endian
+Object File Type                : Executable file
+						</pre>
+						<p>
+							For PE files, ExifTool extracts the PE timestamp, subsystem, imported
+							<abbr title="Dynamic Link Library">DLL</abbr>
+							s, and version info:
+						</p>
+						<pre class="plaintext">
+$ exiftool unknown.exe
+MIME Type                       : application/x-dosexec
+Machine Type                    : Intel 386 or later, and compatibles
+Time Stamp                      : 2021:06:15 08:22:45+02:00
+Image File Characteristics       : Executable, 32-bit
+PE Type                         : PE32
+Linker Version                  : 14.28
+Subsystem                       : Windows GUI
+						</pre>
+					</section>
+					<section>
+						<h3 id="the-triage-script">The Triage Script</h3>
+						<p>
+							Combine everything into a single triage script. This is the first tool you run against an unknown
+							binary. It answers: what is this, how unique is it, is it packed, and does it look suspicious.
+						</p>
+						<pre class="python">
+#!/usr/bin/env python3
+&#34;&#34;&#34;
+binary_triage.py -- first-pass analysis of unknown binaries
+Usage: python3 binary_triage.py &lt;file&gt;
+&#34;&#34;&#34;
+import hashlib
+import math
+import os
+import re
+import sys
+import subprocess
+from collections import Counter
+
+
+def file_size(path: str) -&gt; int:
+    return os.path.getsize(path)
+
+
+def all_hashes(filepath: str) -&gt; dict:
+    with open(filepath, &#39;rb&#39;) as f:
+        data = f.read()
+    return {
+        &#39;md5&#39;:    hashlib.md5(data).hexdigest(),
+        &#39;sha1&#39;:   hashlib.sha1(data).hexdigest(),
+        &#39;sha256&#39;: hashlib.sha256(data).hexdigest(),
+    }
+
+
+def shannon_entropy(data: bytes) -&gt; float:
+    if not data:
+        return 0.0
+    total = len(data)
+    counts = Counter(data)
+    return -sum((c / total) * math.log2(c / total) for c in counts.values())
+
+
+def file_entropy(filepath: str) -&gt; float:
+    with open(filepath, &#39;rb&#39;) as f:
+        return shannon_entropy(f.read())
+
+
+def file_type(filepath: str) -&gt; str:
+    try:
+        result = subprocess.run(
+            [&#39;file&#39;, &#39;-b&#39;, filepath],
+            capture_output=True, text=True, timeout=5
+        )
+        return result.stdout.strip()
+    except Exception:
+        return &#34;unknown&#34;
+
+
+def strings_count(filepath: str, min_len: int = 6) -&gt; int:
+    try:
+        result = subprocess.run(
+            [&#39;strings&#39;, f&#39;-n{min_len}&#39;, filepath],
+            capture_output=True, text=True, timeout=10
+        )
+        return len(result.stdout.splitlines())
+    except Exception:
+        return 0
+
+
+def ssdeep_hash(filepath: str):
+    try:
+        result = subprocess.run(
+            [&#39;ssdeep&#39;, &#39;-b&#39;, filepath],
+            capture_output=True, text=True, timeout=10
+        )
+        line = result.stdout.strip()
+        if line:
+            return line.split(&#39;,&#39;)[0]
+    except Exception:
+        pass
+    return None
+
+
+def detect_packer(filepath: str, entropy: float, num_strings: int) -&gt; list:
+    indicators = []
+
+    if entropy &gt; 7.5:
+        indicators.append(f&#34;high_entropy({entropy:.3f})&#34;)
+
+    if num_strings &lt; 30:
+        indicators.append(f&#34;few_strings({num_strings})&#34;)
+
+    try:
+        with open(filepath, &#39;rb&#39;) as f:
+            data = f.read()
+        upx_magic = data.find(b&#39;UPX!&#39;)
+        if upx_magic &gt; 0:
+            indicators.append(f&#34;upx_signature_found_at_{hex(upx_magic)}&#34;)
+
+        if data[:2] == b&#39;MZ&#39;:
+            pe_offset = int.from_bytes(data[0x3C:0x3C+4], &#39;little&#39;)
+            pe_sig = data[pe_offset:pe_offset+4]
+            if pe_sig == b&#39;PE\x00\x00&#39;:
+                section_start = pe_offset + 4 + 20 + data[pe_offset+4+16]
+                section_names = []
+                for i in range(data[pe_offset+4+2] &amp; 0xFFFF):
+                    offset = section_start + i * 40
+                    name = data[offset:offset+8].rstrip(b&#39;\x00&#39;).decode(errors=&#39;ignore&#39;)
+                    section_names.append(name)
+                packed_sections = [n for n in section_names
+                                   if n in {&#39;UPX0&#39;, &#39;UPX1&#39;, &#39;.aspack&#39;, &#39;.adata&#39;, &#39;.themida&#39;}]
+                if packed_sections:
+                    indicators.append(f&#34;packed_sections({&#39;,&#39;.join(packed_sections)})&#34;)
+    except Exception:
+        pass
+
+    return indicators
+
+
+def main():
+    if len(sys.argv) &lt; 2:
+        print(f&#34;Usage: {sys.argv[0]} &lt;binary&gt;&#34;)
+        sys.exit(1)
+
+    path = sys.argv[1]
+    if not os.path.isfile(path):
+        print(f&#34;Error: {path} not found&#34;)
+        sys.exit(1)
+
+    # File identification
+    ftype = file_type(path)
+    size = file_size(path)
+    hashes = all_hashes(path)
+    entropy = file_entropy(path)
+    nstrings = strings_count(path)
+    ssdeep = ssdeep_hash(path)
+
+    # Packer detection
+    packer_flags = detect_packer(path, entropy, nstrings)
+
+    # Output
+    print(&#34;=&#34; * 64)
+    print(f&#34;  TARGET: {path}&#34;)
+    print(f&#34;  TYPE:   {ftype}&#34;)
+    print(f&#34;  SIZE:   {size:,} bytes ({size/1024:.1f} KB)&#34;)
+    print(&#34;-&#34; * 64)
+    print(f&#34;  MD5:    {hashes[&#39;md5&#39;]}&#34;)
+    print(f&#34;  SHA-1:  {hashes[&#39;sha1&#39;]}&#34;)
+    print(f&#34;  SHA-256:{hashes[&#39;sha256&#39;]}&#34;)
+    if ssdeep:
+        print(f&#34;  SSDEEP:  {ssdeep}&#34;)
+    print(&#34;-&#34; * 64)
+    print(f&#34;  ENTROPY:  {entropy:.3f} bits/byte&#34;)
+    print(f&#34;  STRINGS:  {nstrings} (min length 6)&#34;)
+    print(&#34;-&#34; * 64)
+    if packer_flags:
+        print(f&#34;  PACKER INDICATORS:&#34;)
+        for flag in packer_flags:
+            print(f&#34;    [!] {flag}&#34;)
+    else:
+        print(f&#34;  PACKER:    No obvious packer indicators&#34;)
+    print(&#34;=&#34; * 64)
+
+
+if __name__ == &#39;__main__&#39;:
+    main()
+						</pre>
+						<p>
+							Save this as
+							<code>/usr/local/bin/binary-triage</code>
+							and run it against any unknown file:
+						</p>
+						<pre class="plaintext">
+$ chmod +x binary_triage.py
+$ ./binary_triage.py unknown.bin
+================================================================
+  TARGET: unknown.bin
+  TYPE:   ELF 64-bit LSB executable, x86-64, version 1 (SYSV),
+          dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2,
+          for GNU/Linux 2.6.32, stripped
+  SIZE:   89,112 bytes (87.0 KB)
+----------------------------------------------------------------
+  MD5:    a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6
+  SHA-1:  e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6
+  SHA-256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+----------------------------------------------------------------
+  ENTROPY:  7.891 bits/byte
+  STRINGS:  12 (min length 6)
+----------------------------------------------------------------
+  PACKER INDICATORS:
+    [!] high_entropy(7.891)
+    [!] few_strings(12)
+================================================================
+						</pre>
+						<p>
+							High entropy + few strings = packed. The next step is unpacking or strings analysis on the unpacked
+							payload.
+						</p>
+					</section>
+					<section>
+						<h3 id="next-steps">Next Steps</h3>
+						<p>After identification, the analysis path branches:</p>
+						<ul>
+							<li><b>If packed:</b> Unpack before further analysis. Try UPX decompression first: <code>upx -d packed.bin</code> . If a custom packer is used, dynamic analysis (execution and memory dump) is required.</li>
+							<li><b>If ELF:</b> Proceed to <a href="/wiki/articles/reverse-engineering/elf-reversing.html">ELF Reversing</a> for deep structural analysis.</li>
+							<li><b>If PE:</b> Proceed to <a href="/wiki/articles/reverse-engineering/pe-analysis.html">PE Analysis</a> for Windows binary analysis from Linux.</li>
+							<li><b>If script:</b> Read the source. Check for obfuscation, eval chains, and encoded payloads.</li>
+							<li><b>In all cases:</b> Run <a href="/wiki/articles/reverse-engineering/strings-analysis.html">Strings Analysis</a> next.</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go triage tool that reads a file, prints its SHA-256, computes its Shannon entropy,
+							identifies the format from its magic bytes, and flags likely packing. Run it against a normal
+							binary and a UPX-packed one and compare the entropy values.
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;crypto/sha256&#34;
+	&#34;encoding/hex&#34;
+	&#34;fmt&#34;
+	&#34;math&#34;
+	&#34;os&#34;
+)
+
+func magic(data []byte) string {
+	switch {
+	case len(data) &gt;= 4 &amp;&amp; string(data[:4]) == &#34;\x7fELF&#34;:
+		return &#34;ELF&#34;
+	case len(data) &gt;= 2 &amp;&amp; string(data[:2]) == &#34;MZ&#34;:
+		return &#34;PE&#34;
+	case len(data) &gt;= 4 &amp;&amp; string(data[:4]) == &#34;PK\x03\x04&#34;:
+		return &#34;ZIP/JAR/APK&#34;
+	case len(data) &gt;= 5 &amp;&amp; string(data[:5]) == &#34;%PDF-&#34;:
+		return &#34;PDF&#34;
+	case len(data) &gt;= 8 &amp;&amp; string(data[:8]) == &#34;\x89PNG\r\n\x1a\n&#34;:
+		return &#34;PNG&#34;
+	case len(data) &gt;= 3 &amp;&amp; string(data[:3]) == &#34;\xff\xd8\xff&#34;:
+		return &#34;JPEG&#34;
+	default:
+		return &#34;unknown&#34;
+	}
+}
+
+func entropy(data []byte) float64 {
+	if len(data) == 0 {
+		return 0
+	}
+	var counts [256]int
+	for _, b := range data {
+		counts[b]++
+	}
+	var h float64
+	n := float64(len(data))
+	for _, c := range counts {
+		if c == 0 {
+			continue
+		}
+		p := float64(c) / n
+		h -= p * math.Log2(p)
+	}
+	return h
+}
+
+func main() {
+	if len(os.Args) != 2 {
+		fmt.Fprintln(os.Stderr, &#34;usage: triage &lt;file&gt;&#34;)
+		os.Exit(1)
+	}
+	data, err := os.ReadFile(os.Args[1])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	sum := sha256.Sum256(data)
+	h := entropy(data)
+	fmt.Printf(&#34;type:    %s\n&#34;, magic(data))
+	fmt.Printf(&#34;size:    %d bytes\n&#34;, len(data))
+	fmt.Printf(&#34;sha256:  %s\n&#34;, hex.EncodeToString(sum[:]))
+	fmt.Printf(&#34;entropy: %.3f bits/byte\n&#34;, h)
+	if h &gt; 7.5 {
+		fmt.Println(&#34;verdict: HIGH ENTROPY - likely packed or encrypted&#34;)
+	} else {
+		fmt.Println(&#34;verdict: normal entropy&#34;)
+	}
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man1/file.1.html" target="_blank">file(1) manual page</a> - magic byte based file type detection</li>
+							<li><a class="icon-website" href="https://man7.org/linux/man-pages/man5/magic.5.html" target="_blank">magic(5) manual page</a> - the magic database format</li>
+							<li><a class="icon-website" href="https://ssdeep-project.github.io/ssdeep/" target="_blank">ssdeep</a> - context triggered piecewise hashing for similarity</li>
+							<li><a class="icon-github" href="https://github.com/trendmicro/tlsh" target="_blank">TLSH</a> - Trend Micro locality sensitive hash</li>
+							<li><a class="icon-github" href="https://github.com/ReFirmLabs/binwalk" target="_blank">binwalk</a> - firmware analysis and entropy graphing</li>
+							<li><a class="icon-website" href="https://exiftool.org/" target="_blank">ExifTool</a> - metadata extraction for many file formats</li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

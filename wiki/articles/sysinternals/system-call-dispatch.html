@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>System Call Dispatch | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="System Call Dispatch">
+		<meta name="keywords" content="bpf, entry_syscall_64, kernel, kpti, ptrace, seccomp, syscall-table, syscall_define, syscalls, sysinternals, vdso">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="System Call Dispatch">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Deep dive into Linux syscall dispatch - entry_SYSCALL_64, syscall/sysret instruction pair, SYSCALL_DEFINEn macros, seccomp-BPF, Syscall User Dispatch, vDSO, ptrace mechanics, KPTI overhead, and the syscall table.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/sysinternals/system-call-dispatch.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="System Call Dispatch">
+		<meta name="twitter:description" itemprop="description" content="Deep dive into Linux syscall dispatch - entry_SYSCALL_64, syscall/sysret instruction pair, SYSCALL_DEFINEn macros, seccomp-BPF, Syscall User Dispatch, vDSO, ptrace mechanics, KPTI overhead, and the syscall table.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-ring-0-crossing">The Ring 0 Crossing</a></b>
+					<ul>
+						<li><a href="#key-msrs-for-syscall">Key MSRs for syscall</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-entry-point-entry-syscall-64">The Entry Point: entry_SYSCALL_64</a></b>
+					<ul>
+						<li><a href="#gpr-saverestore-layout">GPR Save/Restore Layout</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-sys-call-table">The sys_call_table</a></b>
+					<ul>
+						<li><a href="#syscall-number-to-handler">Syscall Number to Handler</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-syscall-definen-macros">The SYSCALL_DEFINEn Macros</a></b>
+					<ul>
+						<li><a href="#parameter-to-register-mapping">Parameter-to-register mapping</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#user-pointer-sanitization">User Pointer Sanitization</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#seccomp-bpf">seccomp-BPF</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#syscall-user-dispatch-sud">Syscall User Dispatch (SUD)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ptrace">ptrace</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#vdso-syscall-avoidance">vDSO: Syscall Avoidance</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#perf-event-open-and-pmu-integration">perf_event_open and PMU Integration</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#syscall-table-hooking">Syscall Table Hooking</a></b>
+					<ul>
+						<li><a href="#modern-alternatives">Modern Alternatives</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#kpti-kernel-page-table-isolation">KPTI (Kernel Page Table Isolation)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-return-path-sysretq">The Return Path: sysretq</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#error-handling-and-signals">Error Handling and Signals</a></b>
+					<ul>
+						<li><a href="#signals-from-syscall-context">Signals from syscall context</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/sysinternals/index.html">Sysinternals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/sysinternals/system-call-dispatch.html">System Call Dispatch</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="system-call-dispatch">System Call Dispatch</h2>
+					<p>
+						Deep dive into Linux syscall dispatch - entry_SYS
+						<abbr title="Certificate Authority">CA</abbr>
+						LL_64, syscall/sysret
+						instruction pair, SYS
+						<abbr title="Certificate Authority">CA</abbr>
+						LL_DEFINEn macros, seccomp-BPF, Syscall User
+						Dispatch, vDSO, ptrace mechanics, K
+						<abbr title="Penetration Test">PT</abbr>
+						I overhead, and the syscall table.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Every system call crosses from user mode to kernel mode and back, and that crossing is where
+							security controls, tracing, and performance all meet. This article follows the path from the
+							<code>syscall</code>
+							instruction through the entry stub, the dispatch table, and the return trampoline,
+							and shows where seccomp, ptrace, the vDSO, and K
+							<abbr title="Penetration Test">PT</abbr>
+							I intervene. After reading
+							it you can read the entry code and reason about the cost and the attack surface of a syscall.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/system-calls.html">System Calls</a> - user-space view of the syscall table, strace, vDSO, raw invocation</li>
+							<li><a href="/wiki/articles/sysinternals/kernel-architecture.html">Kernel Architecture</a> - kernel layout, entry points, ring transitions, kernel stack</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-ring-0-crossing">The Ring 0 Crossing</h3>
+						<p>
+							Every instruction that transitions from ring 3 (user) to ring 0 (kernel) is essentially an interrupt
+							<ul>
+								<li>NMI, exception, hardware <abbr title="Incident Response">IR</abbr> Q, or software interrupt. <code>syscall</code> is</li>
+							</ul>
+							the
+							fastest because it performs the absolute minimum state save required to enter the kernel, leaving
+							the rest to software.
+						</p>
+						<pre class="plaintext">
+The syscall instruction (x86-64) performs atomically:
+┌─────────────────────────────────────────────────────────────┐
+│ 1. Store RIP → RCX   (user return address)                  │
+│ 2. Store RFLAGS → R11 (user flags)                          │
+│ 3. Load new RIP ← MSR_LSTAR  (kernel syscall entry point)   │
+│ 4. Load new CS  ← MSR_STAR[47:32] (kernel code segment)     │
+│ 5. Load new SS  ← MSR_STAR[47:32] + 8 (kernel stack segment)│
+│ 6. Mask RFLAGS with MSR_FMASK (clear IF, AC, NT, TF, etc.)  │
+│ 7. Set CPL to 0 (ring 0)                                    │
+└─────────────────────────────────────────────────────────────┘
+
+Total cost: ~100-150 CPU cycles on modern Intel (Ice Lake+)
+vs int 0x80: ~700-1000 cycles (full interrupt dispatch)
+						</pre>
+						<h4 id="key-msrs-for-syscall">Key MSRs for syscall</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">MSR Name</th>
+									<th align="center">MSR Addr</th>
+									<th align="center">Purpose</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">LSTAR</td>
+									<td align="center">0xC0000082</td>
+									<td align="center">Long System Target Address Register -> kernel RIP after syscall</td>
+								</tr>
+								<tr>
+									<td align="center">STAR</td>
+									<td align="center">0xC0000081</td>
+									<td align="center">SYSCALL Target Address Register -> bits 47:32 = kernel CS; bits 63:48 = user CS (for sysret)</td>
+								</tr>
+								<tr>
+									<td align="center">FMASK</td>
+									<td align="center">0xC0000084</td>
+									<td align="center">RFLAGS mask applied on syscall entry -> clears IF (interrupts off inside kernel)</td>
+								</tr>
+								<tr>
+									<td align="center">EFER</td>
+									<td align="center">0xC0000080</td>
+									<td align="center">Bit 0 = SCE (SysCall Enable); Must be set for syscall/sysret to work</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="bash">
+# Read MSR values (requires msr-tools)
+sudo modprobe msr
+sudo rdmsr -a 0xC0000082  # LSTAR: all CPUs&#39; syscall entry points
+sudo rdmsr -a 0xC0000081  # STAR: SS/CS segment selectors
+sudo rdmsr -a 0xC0000084  # FMASK: RFLAGS mask
+
+# Verify SCE (SysCall Enable) bit
+sudo rdmsr 0xC0000080 | awk &#39;{print and(strtonum($1), 1) ? &#34;SCE=1 (enabled)&#34; : &#34;SCE=0&#34;}&#39;
+
+# Dump all syscall-related MSRs
+for msr in 0xC0000080 0xC0000081 0xC0000082 0xC0000084; do
+    printf &#34;MSR 0x%x: &#34; $msr
+    sudo rdmsr $msr 2&gt;/dev/null || echo &#34;unreadable&#34;
+done
+						</pre>
+					</section>
+					<section>
+						<h3 id="the-entry-point-entry-syscall-64">The Entry Point: entry_SYSCALL_64</h3>
+						<p>
+							The entry point in
+							<a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/arch/x86/entry/entry_64.S" target="_blank">'arch/x86/entry/entry_64.S'</a>
+							is a masterpiece of assembly engineering - it must save the user context, switch to the kernel
+							stack, enable kernel mitigations, call the right handler, then cleanly return.
+						</p>
+						<pre class="plaintext">
+entry_SYSCALL_64 execution flow:
+
+syscall            ← User executes &#39;syscall&#39;
+  │
+  ▼
+entry_SYSCALL_64   ← RIP loaded from MSR_LSTAR
+  │
+  │  1. swapgs_unsafe_stack    ← switch GS base to kernel GS
+  │                              (kernel per-CPU pointer → GS_BASE)
+  │
+  │  2. push %rax (pt_regs→orig_ax)
+  │
+  │  3. PUSH_AND_CLEAR_REGS    ← save all regs to kernel stack
+  │     push %rdi, %rsi, %rdx, %rcx, %rax, %r8, %r9, %r10, %r11
+  │     push %rbx, %rbp, %r12, %r13, %r14, %r15
+  │
+  │  4. IBRS / retpoline microcode (if Spectre v2 mitigation)
+  │
+  │  5. Save user stack pointer: mov %rsp, PER_CPU_VAR(cpu_tss_rw + TSS_sp2)
+  │     Stack switch: mov PER_CPU_VAR(pcpu_hot + X86_top_of_stack), %rsp
+  │
+  │  6. push 5*8(%rax)  ← push 5th stack frame slot
+  │
+  │  7. STACKLEAK_ERASE  ← erase unused kernel stack (if enabled)
+  │
+  │  8. do_syscall_64(regs, nr)
+  │     │
+  │     ├──► conti_emu: handle 32-bit compat syscalls on 64-bit kernel
+  │     │
+  │     ├──► Check nr &gt;= NR_syscalls → return -ENOSYS
+  │     │
+  │     └──► regs-&gt;ax = sys_call_table[nr](regs)
+  │          │
+  │          └──► [handle: ptrace_check, seccomp, audit]
+  │               └──► [handle: mitiations, KPTI trampoline]
+  │                    └──► sysretq
+						</pre>
+						<h4 id="gpr-saverestore-layout">GPR Save/Restore Layout</h4>
+						<pre class="c">
+// arch/x86/include/asm/ptrace.h
+struct pt_regs {
+    unsigned long r15;
+    unsigned long r14;
+    unsigned long r13;
+    unsigned long r12;
+    unsigned long bp;         // RBP
+    unsigned long bx;         // RBX
+    // --- arguments (syscall args) ---
+    unsigned long r11;
+    unsigned long r10;
+    unsigned long r9;
+    unsigned long r8;
+    unsigned long ax;         // RAX (retval on return)
+    unsigned long cx;         // RCX (saved RIP)
+    unsigned long dx;         // RDX (arg3)
+    unsigned long si;         // RSI (arg2)
+    unsigned long di;         // RDI (arg1)
+    unsigned long orig_ax;   // Original syscall number
+    unsigned long ip;         // RIP (saved)
+    unsigned long cs;         // CS
+    unsigned long flags;      // RFLAGS
+    unsigned long sp;         // RSP (user stack ptr)
+    unsigned long ss;         // SS
+    // --- end: top of stack ---
+};
+						</pre>
+					</section>
+					<section>
+						<h3 id="the-sys-call-table">The sys_call_table</h3>
+						<p>
+							The syscall table is the kernel's dispatch array - one array of function pointers, indexed by
+							syscall number. It is architecture-specific and lives in read-only memory after boot.
+						</p>
+						<pre class="c">
+// arch/x86/entry/syscall_64.c (simplified)
+#define __SYSCALL(nr, sym) [nr] = sym,
+asmlinkage const sys_call_ptr_t sys_call_table[] = {
+#include &lt;asm/syscalls_64.h&gt;   // Generated from syscall_64.tbl
+};
+// Example: [0] = __x64_sys_read, [1] = __x64_sys_write, ...
+
+// Type of each entry:
+typedef void (*sys_call_ptr_t)(void);
+
+// The actual cast happens in do_syscall_64():
+// sys_call_table[nr](regs)
+// Each handler receives (struct pt_regs *) and returns via regs-&gt;ax
+						</pre>
+						<h4 id="syscall-number-to-handler">Syscall Number to Handler</h4>
+						<pre class="bash">
+# Dump syscall table from running kernel
+sudo cat /proc/kallsyms | grep &#39; sys_call_table$&#39;
+# ffffffff820002e0 R sys_call_table
+
+# syscall table entries (architecture-specific)
+# x86-64: /usr/include/asm/unistd_64.h OR arch/x86/entry/syscalls/syscall_64.tbl
+cat /usr/include/asm/unistd_64.h 2&gt;/dev/null | head -40
+
+# Alternative: ausyscall
+ausyscall --dump 2&gt;/dev/null | head -40
+
+# Use bpftrace to list all syscall handlers
+sudo bpftrace -e &#39;t:syscalls:sys_enter_* { printf(&#34;ENTER: %s\n&#34;, probe); }&#39; -c &#39;sleep 0.1&#39; 2&gt;/dev/null
+
+# Count syscall table entries
+sudo cat /proc/kallsyms | grep &#39;^[0-9a-f]* T __x64_sys_&#39; | wc -l
+						</pre>
+					</section>
+					<section>
+						<h3 id="the-syscall-definen-macros">The SYSCALL_DEFINEn Macros</h3>
+						<p>
+							Every syscall in the kernel source is defined with the
+							<code>SYSCALL_DEFINEn()</code>
+							macro family. These
+							macros handle type annotations,
+							<code>__user</code>
+							pointer sanitization metadata, and architecture-specific
+							boilerplate.
+						</p>
+						<pre class="c">
+// include/linux/syscalls.h
+
+// The macro magic:
+// SYSCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)
+// expands to:
+//   1. struct for types: struct __TYPE_read { unsigned int fd; char *buf; size_t count; };
+//   2. asmlinkage long __x64_sys_read(const struct pt_regs *regs) { ... unpack regs ... }
+//   3. static inline long __do_sys_read(unsigned int fd, char __user *buf, size_t count)
+//   4. asmlinkage long __ia32_sys_read(const struct pt_regs *regs)  (if CONFIG_IA32_EMULATION)
+
+// Example expansion of SYSCALL_DEFINE3(write, ...):
+asmlinkage long __x64_sys_write(const struct pt_regs *regs)
+{
+    return __se_sys_write(
+        (unsigned int)regs-&gt;di,      // fd
+        (const char __user *)regs-&gt;si, // buf
+        (size_t)regs-&gt;dx              // count
+    );
+}
+
+static long __se_sys_write(unsigned int fd, const char __user *buf, size_t count)
+{
+    long ret = __do_sys_write(fd, buf, count);
+    // Instrumentation points (trace_sys_enter/trace_sys_exit) inserted here
+    return ret;
+}
+
+// The actual implementation:
+static long __do_sys_write(unsigned int fd, const char __user *buf, size_t count)
+{
+    // The driver code goes here
+    return ksys_write(fd, buf, count);
+}
+						</pre>
+						<h4 id="parameter-to-register-mapping">Parameter-to-register mapping</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="center">Index</th>
+									<th align="center">1</th>
+									<th align="center">2</th>
+									<th align="center">3</th>
+									<th align="center">4</th>
+									<th align="center">5</th>
+									<th align="center">6</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="center">Reg</td>
+									<td align="center">%rdi</td>
+									<td align="center">%rsi</td>
+									<td align="center">%rdx</td>
+									<td align="center">%r10</td>
+									<td align="center">%r8</td>
+									<td align="center">%r9</td>
+								</tr>
+								<tr>
+									<td align="center">Note</td>
+									<td align="center">-</td>
+									<td align="center">-</td>
+									<td align="center">-</td>
+									<td align="center">rcx not rcx!</td>
+									<td align="center">-</td>
+									<td align="center">-</td>
+								</tr>
+							</tbody>
+						</table>
+						<pre class="plaintext">
+Maximally
+rcx is clobbered by syscall instruction; r10 replaces it.
+
+Why r10, not rcx?
+syscall saves RIP -&gt; RCX. The original 4th arg must therefore NOT be in RCX.
+The x86-64 ABI uses R10 for the 4th syscall argument.
+						</pre>
+						<pre class="bash">
+# Find real-world SYSCALL_DEFINE examples
+grep -rn &#39;SYSCALL_DEFINE&#39; /usr/src/linux/fs/open.c 2&gt;/dev/null | head -10
+# Example kernel source: https://elixir.bootlin.com/linux/latest/source/fs/read_write.c#L620
+
+# See which syscalls are defined with how many arguments
+grep -ohP &#39;SYSCALL_DEFINE\d+&#39; /usr/src/linux/fs/read_write.c 2&gt;/dev/null | \
+    sort | uniq -c | head -10
+						</pre>
+					</section>
+					<section>
+						<h3 id="user-pointer-sanitization">User Pointer Sanitization</h3>
+						<p>
+							At the kernel entry, user-supplied pointers are just numbers. Before dereferencing them, the
+							kernel must validate:
+						</p>
+						<pre class="c">
+// arch/x86/include/asm/uaccess.h
+
+// access_ok() — fast range check: is the entire [ptr, ptr+size)
+// region within the user address space?
+#define access_ok(addr, size) \
+    (__chk_range_not_ok((unsigned long)(addr), (size), user_addr_max()) == 0)
+
+static inline bool __chk_range_not_ok(unsigned long addr, unsigned long size,
+                                       unsigned long limit)
+{
+    // O(1): just checks addr + size doesn&#39;t overflow and fits in user range
+    // On x86-64: limit = TASK_SIZE_MAX = 0x00007fffffffffff (47-bit VA)
+    unsigned long sum = addr + size;
+    return sum &lt; addr || sum &gt; limit;  // Overflow check + upper bound
+}
+
+// After access_ok, copy_from_user still might fault (race with munmap).
+// The safe approach: use exception table entries.
+// If the copy faults, the exception table points to a fixup that
+// copies -EFAULT to the return value and jumps forward.
+						</pre>
+						<pre class="plaintext">
+User Pointer Sanitization Flow:
+════════════════════════════════
+
+    User passes: ptr = 0x7fffffffe000, len = 0x1000
+
+    access_ok(ptr, len):
+        addr + len = 0x7ffffffff000
+        user_addr_max() = 0x00007fffffffffff
+        0x7ffffffff000 &lt; 0x00007fffffffffff  →  OK
+
+    copy_from_user(kbuf, ptr, len):
+        ┌── stac (SMAP: allow kernel to access user memory)
+        │   rep movsb  ← copy bytes
+        │   └── if page fault → exception table lookup → fixup
+        └── clac (SMAP: disallow again)
+
+    Exception table (__ex_table section):
+        Faulting addr → Fixup addr
+        0xfffff...    → 0xfffff...     (jump here, set rax = len - copied)
+
+    The put_user/get_user macros use uaccess_error patterns:
+        get_user(val, ptr) → if fails, return -EFAULT
+						</pre>
+						<pre class="bash">
+# Check if SMAP/SMEP are enabled
+cat /proc/cpuinfo | grep -oE &#39;smap|smep&#39; | sort -u
+
+# Verify KPTI status (impacts SMAP behavior)
+dmesg | grep -i &#39;Kernel/User page tables isolation&#39;
+dmesg | grep -i &#39;PTI&#39;
+
+# Examine exception table size
+sudo cat /proc/kallsyms | grep &#39;__start___ex_table&#39;
+sudo cat /proc/kallsyms | grep &#39;__stop___ex_table&#39;
+						</pre>
+					</section>
+					<section>
+						<h3 id="seccomp-bpf">seccomp-BPF</h3>
+						<p>
+							seccomp (secure computing) allows a process to restrict its own syscall access. At each syscall
+							entry, before the handler runs, the kernel evaluates a cBPF program that can kill the process,
+							return an error, or allow the syscall through.
+						</p>
+						<pre class="plaintext">
+seccomp evaluation point (in do_syscall_64):
+
+    entry_SYSCALL_64
+    │
+    ▼
+    do_syscall_64(regs, nr)
+    │
+    ├── if (secure_computing())  ← __secure_computing() evaluates BPF
+    │   │
+    │   ├── Iterate all seccomp filters on this task
+    │   │   │
+    │   │   ├── SECCOMP_RET_KILL_PROCESS → immediate SIGSYS
+    │   │   ├── SECCOMP_RET_KILL_THREAD  → immediate SIGSYS
+    │   │   ├── SECCOMP_RET_ERRNO        → regs-&gt;ax = -errno, return
+    │   │   ├── SECCOMP_RET_TRAP         → SIGSYS with si_code=TRAP
+    │   │   ├── SECCOMP_RET_LOG          → log + allow
+    │   │   ├── SECCOMP_RET_ALLOW        → continue to syscall handler
+    │   │   └── SECCOMP_RET_USER_NOTIF   → send to userspace listener
+    │   │
+    │   └── If KILL: send SIGSYS, never return to user
+    │
+    └── sys_call_table[nr](regs)
+						</pre>
+						<pre class="bash">
+# Show seccomp state for a process
+cat /proc/self/status | grep -i seccomp
+# 0 = disabled, 1 = strict, 2 = BPF
+
+# Trace seccomp events
+sudo cat /proc/kallsyms | grep seccomp_filter
+
+# strace with seccomp filter injection
+strace -e inject=openat:error=ENOENT cat /etc/hostname
+
+# Check process seccomp filter with bpftrace
+sudo bpftrace -e &#39;kprobe:__seccomp_filter { printf(&#34;PID %d filters syscall %d\n&#34;, pid, arg1); }&#39; -c &#39;sleep 1&#39;
+
+# Chrome/Firefox use seccomp extensively
+cat /proc/$(pgrep -f firefox | head -1)/status | grep Seccomp
+						</pre>
+					</section>
+					<section>
+						<h3 id="syscall-user-dispatch-sud">Syscall User Dispatch (SUD)</h3>
+						<p>
+							SUD reverses the typical model: instead of the kernel deciding dispatch, user space can intercept
+							specified syscalls and handle them in a user-space handler. This enables Wine/Proton to emulate
+							Windows syscalls and user-space threading libraries to implement custom behavior.
+						</p>
+						<pre class="plaintext">
+Normal Path:                 SUD Path:
+────────────                 ─────────
+Application                  Application
+    │ syscall                    │ syscall
+    ▼                            ▼
+Kernel handler              Kernel sees SUD selector matches
+    │                            │
+    │                            ├── SIGSYS → user-space signal handler
+    │                            │   │
+    │                            │   ▼
+    │                            │ User-space handler (Wine, etc.)
+    │                            │   │
+    │                            │   ├── Translate Windows APIs or
+    │                            │   │   implement custom threading
+    │                            │   │
+    │                            │   └── Return or re-syscall with
+    │                            │       different arguments
+    │                            │
+    │                            └── (If not handled): kernel handler
+    ▼                            ▼
+Return to user               Return to user
+						</pre>
+						<pre class="c">
+// prctl-based configuration (kernel 5.11+)
+prctl(PR_SET_SYSCALL_USER_DISPATCH,
+      PR_SYSCALL_DISPATCH_FILTER_ALLOW,   // Mode
+      offset_of_segment,                   // On: SIGSYS sent
+      length_of_segment,                   // Off: normal dispatch
+      &amp;selector);                          // 8-byte selector variable
+						</pre>
+					</section>
+					<section>
+						<h3 id="ptrace">ptrace</h3>
+						<p>
+							<code>strace</code>
+							works by using
+							<code>ptrace</code>
+							. For every syscall,
+							<code>ptrace</code>
+							generates two stops: one before
+							the call (
+							<abbr title="Penetration Test">PT</abbr>
+							RACE_SYS
+							<abbr title="Certificate Authority">CA</abbr>
+							LL) and one after.
+						</p>
+						<pre class="plaintext">
+strace&#39;s PTRACE workflow:
+
+    1. strace forks child
+    2. strace: ptrace(PTRACE_SEIZE, child_pid, 0, PTRACE_O_TRACESYSGOOD)
+    3. strace: ptrace(PTRACE_SYSCALL, child_pid, 0, 0)
+    4. strace: waitpid(child_pid) ← blocks until child hits syscall
+
+    Child in kernel: do_syscall_64()
+        │
+        ├──► ptrace_report_syscall(entry)  ← STOP before call
+        │    │ child SIGSTOP&#39;d
+        │    ▼
+        │  strace wakes from waitpid(2)
+        │  strace: ptrace(PTRACE_GETREGS) → get syscall number + args
+        │  strace: prints &#34;openat(AT_FDCWD, \&#34;/etc/hostname\&#34;, ...&#34;
+        │  strace: ptrace(PTRACE_SYSCALL) → resume
+        │
+        └──► sys_call_table[nr](regs)  ← actual syscall executes
+
+        ptrace_report_syscall(exit)  ← STOP after call
+            │ child SIGSTOP&#39;d
+            ▼
+          strace wakes
+          strace: ptrace(PTRACE_GETREGS) → get return value
+          strace: prints &#34; = 3&#34; (fd number)
+          strace: ptrace(PTRACE_SYSCALL) → resume
+						</pre>
+						<pre class="c">
+// kernel/ptrace.c — the check in do_syscall_64():
+static inline void syscall_trace_enter(struct pt_regs *regs)
+{
+    if (test_thread_flag(TIF_SYSCALL_TRACE))
+        ptrace_report_syscall(regs, PTRACE_EVENTMSG_SYSCALL_ENTRY);
+
+    if (test_thread_flag(TIF_SYSCALL_TRACEPOINT))
+        trace_sys_enter(regs, regs-&gt;orig_ax);
+
+    audit_syscall_entry(regs);
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="vdso-syscall-avoidance">vDSO: Syscall Avoidance</h3>
+						<p>
+							Some syscalls are so frequent that the ring transition cost dominates. The vDSO is a shared
+							library injected into every process by the kernel, providing in-process implementations of
+							<code>clock_gettime()</code>
+							,
+							<code>gettimeofday()</code>
+							,
+							<code>time()</code>
+							, and
+							<code>getcpu()</code>
+							- all without
+							<code>syscall</code>
+							.
+						</p>
+						<pre class="plaintext">
+vDSO Memory Layout:
+═══════════════════
+
+    /proc/PID/maps:
+    7ffff7fca000-7ffff7fcc000 r--p ... [vvar]          ← kernel-updated data page
+    7ffff7fcc000-7ffff7fce000 r-xp ... [vdso]          ← executable vDSO code
+    7ffff7fce000-7ffff7fd0000 r--p ... [vdso]          ← read-only data
+
+    vvar page contains (updated by kernel timer tick):
+        struct vdso_data {
+            u32 seq;              // Sequence counter (seqlock)
+            s32 clock_mode;
+            u64 cycle_last;       // Last cycle counter reading
+            u64 mask;
+            u32 mult;             // Multiplier (cycles → nanoseconds)
+            u32 shift;            // Shift (division by 2^shift)
+            struct vdso_timestamp basetime[VDSO_BASES];
+            // ... per-CPU data, timezone info
+        };
+
+    clock_gettime(CLOCK_MONOTONIC) in vDSO:
+        1. Read TSC (rdtsc): ~20 cycles
+        2. Read seq lock: if odd, retry (~99.9% no retry needed)
+        3. Compute: nanoseconds = (tsc - cycle_last) * mult &gt;&gt; shift
+        4. Add basetime
+        5. Check seq lock after: if changed, retry
+        Total: ~30-40 cycles vs ~200 cycles for a syscall
+						</pre>
+						<pre class="bash">
+# Inspect vDSO
+cat /proc/self/maps | grep -E &#39;vdso|vvar&#39;
+
+# Extract vDSO (it&#39;s a real ELF)
+objdump -d /proc/self/exe 2&gt;/dev/null; \
+    # Actually, the vDSO is mapped, not in the binary
+    # Copy it from process memory:
+    # First, find the vdso address
+VD=$(cat /proc/self/maps | grep &#39;\[vdso\]&#39; | head -1 | cut -d&#39;-&#39; -f1)
+echo &#34;vDSO at: 0x$VD&#34;
+
+# Disassemble vDSO functions
+gdb -batch -ex &#34;disassemble __vdso_clock_gettime&#34; /proc/self/mem 2&gt;/dev/null; \
+    # Or:
+objdump -d /usr/lib/modules/$(uname -r)/vdso/vdso64.so 2&gt;/dev/null | \
+    head -30
+
+# Count clock_gettime calls (they should NOT appear via strace)
+strace -e clock_gettime date 2&gt;&amp;1
+# If nothing → vDSO is working
+
+# Force syscall path (bypass vDSO)
+LD_BIND_NOW=1 strace -e clock_gettime date 2&gt;&amp;1
+						</pre>
+					</section>
+					<section>
+						<h3 id="perf-event-open-and-pmu-integration">perf_event_open and PMU Integration</h3>
+						<p>
+							The
+							<code>perf_event_open()</code>
+							syscall (number 298 on x86-64) is a meta-syscall - it configures hardware
+							performance counters (PMU) to count events and deliver samples to user space via mmap'd ring
+							buffers. It can also attach to tracepoints, kprobes, and software events.
+						</p>
+						<pre class="plaintext">
+perf_event_open configuration:
+
+    fd = syscall(SYS_perf_event_open, &amp;attr, pid, cpu, group_fd, flags);
+
+    struct perf_event_attr {
+        __u32 type;           // PERF_TYPE_HARDWARE, SOFTWARE, TRACEPOINT, ...
+        __u32 config;         // Event selector (depends on type)
+        __u64 sample_period;  // or sample_freq
+        // ... 80+ fields: precise_ip, exclude_kernel, exclude_user, ...
+    };
+
+    PMU Counter Event Encoding (x86 / PERF_TYPE_HARDWARE):
+        config = (event_select &lt;&lt; 0) | (umask &lt;&lt; 8) | (any_thread &lt;&lt; 21)
+               | (edge &lt;&lt; 18) | (inv &lt;&lt; 23) | (cmask &lt;&lt; 24);
+						</pre>
+						<pre class="bash">
+# List available PMU events
+perf list | head -30
+sudo perf list tracepoint | head -20
+
+# hardware event types
+cat /sys/devices/cpu/events/instructions
+cat /sys/devices/cpu/events/cache-misses
+
+# Read PMU counters manually
+perf stat -e instructions,cycles,cache-misses,branch-misses ls /
+
+# perf_event_open in action — trace with strace
+strace -e perf_event_open perf stat -e cycles true 2&gt;&amp;1
+
+# Check PMU version and capabilities
+cat /sys/devices/cpu/caps/pmu_name
+
+# CPU-specific: Intel PEBS (Precise Event Based Sampling) events
+cat /sys/devices/cpu/events/ 2&gt;/dev/null
+						</pre>
+					</section>
+					<section>
+						<h3 id="syscall-table-hooking">Syscall Table Hooking</h3>
+						<p>
+							Before KASLR was default, before kernel lockdown, and before
+							<code>sys_call_table</code>
+							became read-only,
+							rootkits simply overwrote table entries:
+						</p>
+						<pre class="c">
+// HISTORICAL (pre-4.x, pre-KASLR) — DO NOT RUN
+// This approach no longer works on modern kernels due to:
+// 1. sys_call_table is in read-only memory (.rodata section)
+// 2. KASLR randomizes its address
+// 3. Kernel lockdown prevents /dev/mem writes
+// 4. LKRG (Linux Kernel Runtime Guard) detects modifications
+
+// Old hooking code (for educational reference):
+unsigned long *sct = (unsigned long *)kallsyms_lookup_name(&#34;sys_call_table&#34;);
+unsigned long orig_open = sct[__NR_openat];
+sct[__NR_openat] = (unsigned long)hooked_openat;
+// ^ This panics or silently does nothing on modern kernels
+						</pre>
+						<h4 id="modern-alternatives">Modern Alternatives</h4>
+						<pre class="plaintext">
+1. ftrace-based hooking (kprobe with RETURN override):
+   register_kprobe() + override_handler — used by livepatch, but detectable
+
+2. Kprobes with instruction patching:
+   register_kprobe() replaces first byte with INT3 (0xCC)
+
+3. eBPF programs attached at tracepoint or kprobe level:
+   bpf_trace_printk() or bpf_perf_event_output()
+
+4. Static key patching via text_poke_bp():
+   Legitimate kernel mechanism used by livepatch; hardware breakpoint-based
+
+5. Page table manipulation:
+   Remap .rodata as writable, modify, remap as read-only
+   Constantly checked by kernel lockdown and LKRG
+						</pre>
+					</section>
+					<section>
+						<h3 id="kpti-kernel-page-table-isolation">KPTI (Kernel Page Table Isolation)</h3>
+						<p>
+							Meltdown (
+							<abbr title="Common Vulnerabilities and Exposures">CVE</abbr>
+							-2017-5754) exploited that user code
+							could speculatively read kernel memory because the kernel was mapped in every user page table
+							entry. K
+							<abbr title="Penetration Test">PT</abbr>
+							I (formerly KAISER) removes kernel mappings from user page tables
+							entirely.
+						</p>
+						<pre class="plaintext">
+Without KPTI:
+════════════
+
+    User page table:              Kernel page table:
+    0x0 – 0x7fffffffffff   user   0x0 – 0x7fffffffffff   user
+    0xffff800000000000+    kernel 0xffff800000000000+    kernel
+    ^─ mapped in both              ^─ full kernel mapping
+
+    Problem: CPU speculatively accesses kernel-only page
+    even in ring 3, revealing data through cache timing
+
+
+With KPTI:
+═════════
+
+    User page table:              Kernel page table:
+    0x0 – 0x7fffffffffff   user   0x0 – 0x7fffffffffff   user
+    (kernel absent except          0xffff800000000000+    kernel
+     minimal trampoline for
+     syscall entry/exit)           ^─ kernel only visible in kernel PGD
+
+    At syscall entry: CR3 switch to kernel page table
+    At syscall exit:  CR3 switch back to user page table
+
+    Cost: ~200-500 extra cycles per syscall (CR3 write + TLB flush)
+    Mitigated by PCID (Process Context Identifier) — tags TLB entries
+    so full flush is avoided
+						</pre>
+						<pre class="plaintext">
+KPTI Trampoline Stacks:
+════════════════════════
+
+    User space          Trampoline           Kernel space
+    ─────────          ───────────           ────────────
+    user RSP
+        │
+        ▼
+    push regs onto      TRAMPOLINE STACK:
+    user stack          [small stack for
+                         syscall entry]
+        │                    │
+        │   syscall          │
+        │────────►───────────┤
+        │                    │
+        │              push kernel GS base
+        │              SWITCH_CR3 to kernel PGD ← expensive!
+        │                    │
+        │              jump to kernel entry_64.S
+        │                    │
+        │              use KERNEL STACK
+        │                    │
+        │              ... do work ...
+        │                    │
+        │              return to trampoline
+        │                    │
+        │              SWITCH_CR3 to user PGD ← expensive!
+        │              pop kernel GS
+        │              sysretq
+        │◄─────────
+        │
+    return to user
+						</pre>
+						<pre class="bash">
+# Check if KPTI is active
+cat /proc/cpuinfo | grep -o &#39;pti&#39; | head -1
+dmesg | grep -i &#39;page table isol&#39;
+dmesg | grep -i &#39;KPTI&#39;
+
+# PTI bit in /proc/cpuinfo
+grep -c &#39;cpu_insecure&#39; /proc/cpuinfo
+
+# Measure syscall cost overhead due to KPTI
+perf stat -e page-faults,dTLB-load-misses,iTLB-load-misses \
+    taskset -c 0 perf bench syscall basic
+
+# Disable KPTI at boot (bootloader config): pti=off
+cat /proc/cmdline | grep -o &#39;pti=[^ ]*&#39; || echo &#34;pti not in cmdline&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="the-return-path-sysretq">The Return Path: sysretq</h3>
+						<p>
+							After the syscall handler finishes,
+							<code>do_syscall_64()</code>
+							sets
+							<code>regs-&gt;ax</code>
+							to the return value. The
+							kernel then returns through several layers:
+						</p>
+						<pre class="plaintext">
+    do_syscall_64() returns
+        │
+        ▼
+    syscall_exit_to_user_mode()
+        │
+        ├── syscall_exit_work()  ← processes signals, resched, TIF bits
+        │
+        ├── exit_to_user_mode_prepare()  ← schedule if NEED_RESCHED
+        │
+        └── exit_to_user_mode_loop()
+            │
+            ▼
+        arch_exit_to_user_mode_prepare()
+            │
+            ├── SWITCH_CR3 to user PGD (if KPTI)
+            ├── IBRS / STIBP restore
+            └── swapgs (restore user GS)
+                │
+                ▼
+            USERGS_SYSRET64   ← macro expands to swapgs + sysretq
+                │
+                ▼
+            sysretq: CPU loads RIP from RCX, RFLAGS from R11
+                     Switch to ring 3
+                     Continue user execution at saved RIP
+						</pre>
+						<pre class="bash">
+# Trace return path with ftrace
+sudo bash -c &#39;
+echo &#34;function_graph&#34; &gt; /sys/kernel/debug/tracing/current_tracer
+echo &#34;__x64_sys_write&#34; &gt; /sys/kernel/debug/tracing/set_graph_function
+echo 1 &gt; /sys/kernel/debug/tracing/tracing_on
+&#39;
+# In another terminal: echo &#34;trace me&#34; &gt; /dev/null
+sudo cat /sys/kernel/debug/tracing/trace | tail -40
+sudo bash -c &#39;echo 0 &gt; /sys/kernel/debug/tracing/tracing_on&#39;
+
+# Profile syscall return path overhead
+sudo perf record -e cycles:k -a -g -- sleep 1
+sudo perf report --stdio 2&gt;/dev/null | grep -A5 &#39;entry_SYSCALL_64&#39; | head -20
+						</pre>
+					</section>
+					<section>
+						<h3 id="error-handling-and-signals">Error Handling and Signals</h3>
+						<p>
+							Syscalls return
+							<code>-errno</code>
+							values, not raw negative numbers. The kernel's return path interprets
+							negative values and user space's libc formats them:
+						</p>
+						<pre class="c">
+// include/linux/err.h — kernel error conventions
+#define MAX_ERRNO   4095
+
+// If regs-&gt;ax is between -4095 and -1, it&#39;s an error code.
+// Otherwise, it&#39;s a success value.
+static inline long IS_ERR_VALUE(unsigned long x)
+{
+    return (unsigned long)(void *)(x) &gt;= (unsigned long)-MAX_ERRNO;
+}
+
+// In user-space libc (musl example):
+// syscall returns -errno; libc stores errno = -ret, returns -1
+// ret &lt; 0 &amp;&amp; ret &gt; -4096 → errno = -ret, return -1
+						</pre>
+						<h4 id="signals-from-syscall-context">Signals from syscall context</h4>
+						<pre class="c">
+// kernel/signal.c
+// If a fatal signal is pending when returning to user mode:
+// exit_to_user_mode_loop() calls do_signal() which:
+void do_signal(struct pt_regs *regs)
+{
+    struct ksignal ksig;
+    if (get_signal(&amp;ksig)) {
+        // SIGKILL or SIGSEGV: never returns — kills process
+        do_group_exit(ksig.sig);
+    }
+    // Handler: set up signal frame on user stack, modify regs-&gt;ip
+    handle_signal(&amp;ksig, regs);
+    // On resume: user code jumps to signal handler instead of
+    // returning to the instruction after syscall
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Build the syscall dispatch container, which traces syscall entry and exit with
+							<code>strace</code>
+							, counts
+							handlers, and measures syscall latency with
+							<code>perf</code>
+							and
+							<code>bpftrace</code>
+							. Then decode the entry stub
+							and MSRs on the host.
+						</p>
+						<p><a href="/wiki/articles/sysinternals/system-call-dispatch.Containerfile">system-call-dispatch.Containerfile</a></p>
+						<pre class="bash">
+podman build -t syscall-lab -f system-call-dispatch.Containerfile .
+podman run -it --rm --privileged \
+    -v /sys/kernel/debug:/sys/kernel/debug \
+    syscall-lab
+						</pre>
+						<pre class="bash">
+# 1. Verify MSR configuration
+sudo rdmsr 0xC0000082 2&gt;/dev/null &amp;&amp; echo &#34;LSTAR readable&#34; || \
+    echo &#34;Install msr-tools: sudo pacman -S msr-tools&#34;
+
+# 2. Count syscall table entries
+SYSCALL_COUNT=$(sudo cat /proc/kallsyms | grep &#39;^[0-9a-f]* T __x64_sys_&#39; | wc -l)
+echo &#34;Registered syscall handlers: $SYSCALL_COUNT&#34;
+
+# 3. Trace entry/exit of a specific syscall
+sudo bash -c &#39;
+echo function_graph &gt; /sys/kernel/debug/tracing/current_tracer
+echo &#34;__x64_sys_read&#34; &gt; /sys/kernel/debug/tracing/set_graph_function
+echo 1 &gt; /sys/kernel/debug/tracing/tracing_on
+&#39;
+dd if=/dev/zero of=/dev/null bs=1 count=1
+sleep 0.2
+sudo bash -c &#39;echo 0 &gt; /sys/kernel/debug/tracing/tracing_on&#39;
+sudo cat /sys/kernel/debug/tracing/trace | tail -40
+
+# 4. Measure syscall latency with perf
+perf stat -e &#39;syscalls:sys_enter_getpid,syscalls:sys_exit_getpid&#39; \
+    taskset -c 0 sh -c &#39;for i in $(seq 1000); do :; done&#39;
+
+# 5. Overview of syscalls used by a process
+strace -c firefox --headless 2&gt;/dev/null &amp;
+sleep 2; kill %1 2&gt;/dev/null; wait 2&gt;/dev/null
+
+# 6. Show seccomp filter for a process
+cat /proc/self/status | grep Seccomp
+
+# 7. Check KPTI state
+dmesg | grep -E &#39;PTI|KPTI|page.table&#39;
+cat /proc/cpuinfo | grep -o &#39;pti&#39; | head -1
+
+# 8. vDSO verification
+cat /proc/self/maps | grep -E &#39;vdso|vvar&#39;
+# Verify clock_gettime doesn&#39;t trigger a syscall
+strace -e clock_gettime date 2&gt;&amp;1 | head -5
+
+# 9. Examine the syscall entry stub disassembly
+gdb -batch \
+    -ex &#34;file /usr/lib/debug/boot/vmlinux-$(uname -r) 2&gt;/dev/null&#34; \
+    -ex &#34;x/40i entry_SYSCALL_64&#34; \
+    2&gt;/dev/null || echo &#34;Install debug symbols: sudo pacman -S linux-$(uname -r | sed &#39;s/-/./g&#39;)-debug&#34;
+
+# 10. Syscall dispatch time breakdown
+sudo perf record -e cycles:k -a -g -- sleep 0.5
+sudo perf report --stdio 2&gt;/dev/null | head -60
+
+# 11. List all syscall tracepoints available for BPF
+sudo bpftrace -l &#39;tracepoint:syscalls:sys_enter_*&#39; 2&gt;/dev/null | head -20
+
+# 12. See system-call-dispatch.Containerfile for the complete strace/bpftrace
+# tracing lab with containerized syscall measurement.
+						</pre>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a href="/wiki/articles/sysinternals/system-call-dispatch.Containerfile">system-call-dispatch.Containerfile</a> - syscall tracing lab with strace and bpftrace</li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/arch/x86/entry/entry_64.S" target="_blank">arch/x86/entry/entry_64.S - entry_SYSCALL_64</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/arch/x86/entry/syscall_64.c" target="_blank">arch/x86/entry/syscall_64.c - sys_call_table definition</a></li>
+							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/include/linux/syscalls.h" target="_blank">include/linux/syscalls.h - SYSCALL_DEFINE macros</a></li>
+							<li><a class="icon-website" href="https://www.intel.com/sdm" target="_blank">Intel SDM Vol 3A 6.5 - SYSCALL instruction</a></li>
+							<li><a class="icon-website" href="https://www.amd.com/sdm" target="_blank">AMD APM Vol 2 6.1 - Fast System Call</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/seccomp.2" target="_blank">seccomp(2) - secure computing</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/vdso.7" target="_blank">vdso(7) - virtual dynamic shared object</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/ptrace.2" target="_blank">ptrace(2) - process trace</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/perf_event_open.2" target="_blank">perf_event_open(2) - performance monitoring</a></li>
+							<li><a class="icon-website" href="https://lwn.net/Articles/604287/" target="_blank">LWN: Anatomy of a system call (part 1)</a></li>
+							<li><a class="icon-website" href="https://lwn.net/Articles/604515/" target="_blank">LWN: Anatomy of a system call (part 2)</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Unix Permissions | Cookie Engineer's Cyber Wiki</title>
+
+		<!-- Meta -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=2, user-scalable=yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-status-bar-style" content="black-translucent">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="creator" content="Cookie Engineer">
+		<meta name="description" content="Unix Permissions">
+		<meta name="keywords" content="access-control, acl, fundamentals, setuid, sticky-bit, techniques, umask, unix-permissions">
+		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
+		<meta name="robots" content="index, follow">
+
+		<!-- Social Media -->
+		<meta property="og:title" content="Unix Permissions">
+		<meta property="og:site_name" content="Cookie Engineer's Wiki">
+		<meta property="og:description" content="Traditional rwx permissions, the setuid, setgid, and sticky bits, umask, kernel access checks, extended attributes, and POSIX access control lists with getfacl and setfacl.">
+		<meta property="og:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+		<meta property="og:url" content="https://cookie.engineer/wiki/articles/fundamentals/unix-permissions.md">
+		<meta property="og:type" content="article">
+
+		<!-- Shitter -->
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:domain" content="cookie.engineer">
+		<meta name="twitter:title" itemprop="name" content="Unix Permissions">
+		<meta name="twitter:description" itemprop="description" content="Traditional rwx permissions, the setuid, setgid, and sticky bits, umask, kernel access checks, extended attributes, and POSIX access control lists with getfacl and setfacl.">
+		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/design/about/cookiengineer.jpg">
+
+		<!-- Website Design -->
+		<link rel="stylesheet" href="/design/index.css">
+		<link rel="stylesheet" href="/design/highlight.css">
+		<script type="module" src="/design/index.mjs" defer></script>
+	</head>
+	<body data-layout="article">
+		<header>
+			<div><button data-action="toggle-aside" title="Toggle Sidebar" class="visible"></button><button data-action="toggle-theme" title="Switch Dark/Light Theme"></button><button data-action="toggle-font" title="Switch Dyslexic/Normal Fonts"></button><button data-action="open-website" title="Navigate to Website Index"></button><button data-action="open-wiki" title="Navigate to Wiki Index"></button></div>
+			<div><img src="/design/about/cookiengineer.png" width="32" height="32" /><h1><a href="/wiki/index.html">Cookie Engineer's Cyber Wiki</a></h1></div>
+			<div></div>
+		</header>
+
+		<div>
+		<aside class="visible">
+			<ul class="toc">
+				<li>
+					<b><a href="#overview">Overview</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#required-reading">Required Reading</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-traditional-permission-model">The Traditional Permission Model</a></b>
+					<ul>
+						<li><a href="#regular-files">Regular Files</a></li>
+						<li><a href="#directories">Directories</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#the-special-permission-bits">The Special Permission Bits</a></b>
+					<ul>
+						<li><a href="#setuid-04000">setuid (04000)</a></li>
+						<li><a href="#setgid-02000">setgid (02000)</a></li>
+						<li><a href="#sticky-01000">sticky (01000)</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#octal-notation-reference">Octal Notation Reference</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#chmod-symbolic-and-octal">chmod - Symbolic and Octal</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#chown-and-chgrp">chown and chgrp</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#umask-default-permission-mask">umask - Default Permission Mask</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#how-the-kernel-checks-permissions">How the Kernel Checks Permissions</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#how-setuid-works-uid-transitions">How setuid Works - UID Transitions</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#extended-attributes-xattr">Extended Attributes (xattr)</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#posix-access-control-lists">POSIX Access Control Lists</a></b>
+					<ul>
+						<li><a href="#acl-mask-and-chmod">ACL Mask and chmod</a></li>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#practical-acl-examples">Practical ACL Examples</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#ls-l-interpretation-guide">ls -l Interpretation Guide</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#verification-checklist">Verification Checklist</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#challenge">Challenge</a></b>
+					<ul>
+					</ul>
+				</li>
+				<li>
+					<b><a href="#references">References</a></b>
+					<ul>
+					</ul>
+				</li>
+			</ul>
+		</aside>
+
+			<main>
+				<nav aria-label="breadcrumbs">
+					<ol>
+						<li><a href="/wiki/index.html">Wiki</a></li>
+						<li><a href="/wiki/articles/fundamentals/index.html">Fundamentals</a></li>
+						<li aria-current="page"><a href="/wiki/articles/fundamentals/unix-permissions.html">Unix Permissions</a></li>
+					</ol>
+				</nav>
+
+				<article>
+					<h2 id="unix-permissions">Unix Permissions</h2>
+					<p>
+						Traditional rwx permissions, the setuid, setgid, and sticky bits, umask, kernel access checks,
+						extended attributes, and
+						<code>POSIX</code>
+						access control lists with getfacl and setfacl.
+					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Unix permissions decide which users may read, write, or execute every file and directory on
+							the system. The model looks simple - three bits each for owner, group, and other - but the special
+							bits, the umask, the kernel's access check order, extended attributes, and
+							<code>POSIX</code>
+							access control
+							lists all change the outcome. Misreading this layer is a common source of privilege escalation
+							bugs. After this article you can decode a mode, predict access decisions, and audit a system
+							for dangerous permission bits.
+						</p>
+					</section>
+					<section>
+						<h3 id="required-reading">Required Reading</h3>
+						<ul>
+							<li><a href="/wiki/articles/fundamentals/filesystems.html">Filesystems</a> - inodes, stat(), directory structure</li>
+							<li><a href="/wiki/articles/fundamentals/processes.html">Processes</a> - RUID, EUID, SUID, and supplementary groups</li>
+							<li><a href="/wiki/articles/fundamentals/capabilities.html">Capabilities</a> - root privileges split into independent bits</li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="the-traditional-permission-model">The Traditional Permission Model</h3>
+						<p>
+							Every inode carries a mode field whose low 16 bits encode the file type and the access permissions.
+							The low 12 bits are the permission bits, the type occupies the next 4 bits:
+						</p>
+						<pre class="plaintext">
+st_mode (low 16 bits):
++-------+-----+-----+-----+-----+-----+-----+-----+
+| type  |suid |sgid |stky | rwx | rwx | rwx |     |
+| (4)   | (1) | (1) | (1) | (3) | (3) | (3) |     |
+|       |     |     |     |owner|group|other|     |
++-------+-----+-----+-----+-----+-----+-----+-----+
+
+File type bits (octal):
+  0100000 = regular file     (S_IFREG)
+  0040000 = directory        (S_IFDIR)
+  0120000 = symbolic link    (S_IFLNK)
+  0010000 = FIFO/pipe        (S_IFIFO)
+  0020000 = character device (S_IFCHR)
+  0060000 = block device     (S_IFBLK)
+  0140000 = socket           (S_IFSOCK)
+
+Special mode bits (octal):
+  004000 = setuid bit
+  002000 = setgid bit
+  001000 = sticky bit
+
+Permission bits (octal):
+  000400 = owner read
+  000200 = owner write
+  000100 = owner execute
+  000040 = group read
+  000020 = group write
+  000010 = group execute
+  000004 = other read
+  000002 = other write
+  000001 = other execute
+						</pre>
+						<h4 id="regular-files">Regular Files</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="left">Bit</th>
+									<th align="left">Symbol</th>
+									<th align="left">Meaning</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="left">r</td>
+									<td align="left">Read</td>
+									<td align="left">Can read the file contents</td>
+								</tr>
+								<tr>
+									<td align="left">w</td>
+									<td align="left">Write</td>
+									<td align="left">Can modify (write, truncate, append) the file</td>
+								</tr>
+								<tr>
+									<td align="left">x</td>
+									<td align="left">Execute</td>
+									<td align="left">Can execute the file as a program (or via its #! interpreter)</td>
+								</tr>
+							</tbody>
+						</table>
+						<h4 id="directories">Directories</h4>
+						<table>
+							<thead>
+								<tr>
+									<th align="left">Bit</th>
+									<th align="left">Symbol</th>
+									<th align="left">Meaning</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td align="left">r</td>
+									<td align="left">Read</td>
+									<td align="left">Can list directory entries (ls)</td>
+								</tr>
+								<tr>
+									<td align="left">w</td>
+									<td align="left">Write</td>
+									<td align="left">Can create, delete, and rename files within the directory</td>
+								</tr>
+								<tr>
+									<td align="left">x</td>
+									<td align="left">Execute (search)</td>
+									<td align="left">Can traverse the directory (cd, or use as a path component)</td>
+								</tr>
+							</tbody>
+						</table>
+						<p>
+							A common misconception:
+							<code>rw-</code>
+							on
+							<code>/foo</code>
+							without
+							<code>x</code>
+							prevents access to
+							<code>/foo/bar</code>
+							even if
+							<code>/foo/bar</code>
+							is
+							<code>rwx</code>
+							. The
+							<code>x</code>
+							bit on a directory controls traversal, not listing.
+						</p>
+						<pre class="bash">
+# Demonstrate directory traversal dependency on &#39;x&#39;
+mkdir -p /tmp/permdemo/secret
+chmod 644 /tmp/permdemo      # rw-r--r-- (no x)
+cat /tmp/permdemo/secret     # Permission denied - cannot traverse
+chmod 755 /tmp/permdemo      # rwxr-xr-x
+cat /tmp/permdemo/secret     # OK - can traverse
+rm -rf /tmp/permdemo
+						</pre>
+					</section>
+					<section>
+						<h3 id="the-special-permission-bits">The Special Permission Bits</h3>
+						<p>
+							Three bits extend the basic rwx model. They live above the permission bits in the mode word
+							and change how the kernel treats a file or directory.
+						</p>
+						<h4 id="setuid-04000">setuid (04000)</h4>
+						<p>
+							When set on an executable, the process runs with the effective UID of the file owner, not the
+							invoker:
+						</p>
+						<pre class="bash">
+# /usr/bin/passwd is the classic example
+ls -l /usr/bin/passwd
+# -rwsr-xr-x 1 root root ... /usr/bin/passwd
+#   ^
+#   s in the owner execute position = setuid + execute
+
+# The &#39;s&#39; vs &#39;S&#39; distinction:
+# s = setuid + executable by owner (lowercase)
+# S = setuid but NOT executable by owner (uppercase, uncommon)
+						</pre>
+						<h4 id="setgid-02000">setgid (02000)</h4>
+						<p>
+							On an executable, the process runs with the effective GID of the file's group. On a directory,
+							new files and subdirectories inherit the directory's group instead of the creator's primary
+							group. New subdirectories also inherit the setgid bit automatically:
+						</p>
+						<pre class="bash">
+mkdir /tmp/setgid-demo
+chgrp wheel /tmp/setgid-demo   # Or any group the user is in
+chmod 2775 /tmp/setgid-demo    # drwxrwsr-x
+touch /tmp/setgid-demo/test
+ls -l /tmp/setgid-demo/test
+# -rw-r--r-- 1 user wheel 0 ... test
+#                  ^^^^^ inherited group
+rm -rf /tmp/setgid-demo
+						</pre>
+						<h4 id="sticky-01000">sticky (01000)</h4>
+						<p>
+							The sticky bit is only meaningful on directories. When set, only the file's owner, the directory's
+							owner, or root can delete or rename files inside that directory. The classic use is
+							<code>/tmp</code>
+							:
+						</p>
+						<pre class="bash">
+ls -ld /tmp
+# drwxrwxrwt 21 root root 4096 ... /tmp
+#          ^
+#          t in the other execute position = sticky + other-execute
+
+# /tmp is world-writable but sticky prevents users from deleting
+# each other&#39;s files. Without the sticky bit, any user with write
+# permission on /tmp could delete any file there.
+						</pre>
+					</section>
+					<section>
+						<h3 id="octal-notation-reference">Octal Notation Reference</h3>
+						<pre class="plaintext">
++--------+--------+------------------------------------------+
+| Octal  | Symbol | Meaning                                  |
++--------+--------+------------------------------------------+
+|  04000 |  u+s   | setuid                                   |
+|  02000 |  g+s   | setgid                                   |
+|  01000 |  +t    | sticky                                   |
+|  00400 |  u+r   | User read                                |
+|  00200 |  u+w   | User write                               |
+|  00100 |  u+x   | User execute/traverse                    |
+|  00040 |  g+r   | Group read                               |
+|  00020 |  g+w   | Group write                              |
+|  00010 |  g+x   | Group execute/traverse                   |
+|  00004 |  o+r   | Other read                               |
+|  00002 |  o+w   | Other write                              |
+|  00001 |  o+x   | Other execute/traverse                   |
++--------+--------+------------------------------------------+
+|   0777 | rwxrwxrwx | Everyone can do everything            |
+|   0755 | rwxr-xr-x | Owner full, group/other read+exec     |
+|   0750 | rwxr-x--- | Owner full, group read+exec, other no |
+|   0700 | rwx------ | Owner only                            |
+|   0644 | rw-r--r-- | Owner read/write, others read         |
+|   0600 | rw------- | Owner read/write only                 |
+|   1777 | rwxrwxrwt | World-writable + sticky (/tmp)        |
+|   4775 | rwsrwxr-x | setuid + owner rwx                    |
+|   2775 | rwxrwsr-x | setgid + group rwx                    |
++--------+--------+------------------------------------------+
+						</pre>
+					</section>
+					<section>
+						<h3 id="chmod-symbolic-and-octal">chmod - Symbolic and Octal</h3>
+						<pre class="bash">
+# Octal - set entire permissions at once
+chmod 755 script.sh        # rwxr-xr-x
+chmod 600 id_rsa           # rw-------
+chmod 1777 /tmp/shared     # rwxrwxrwt (sticky)
+
+# Symbolic - modify specific parts
+chmod u+x script.sh        # Add execute for owner
+chmod go-w file.txt        # Remove write for group and other
+chmod a+r document.pdf     # Add read for all (user+group+other)
+chmod ug=rwx,o=rx dir/     # Set exact: owner/group rwx, other rx
+
+# Recursive
+chmod -R 755 /opt/myapp/   # Recursively set
+
+# Reference: copy permissions from one file to another
+chmod --reference=good_perms.txt new_file.txt
+						</pre>
+					</section>
+					<section>
+						<h3 id="chown-and-chgrp">chown and chgrp</h3>
+						<pre class="bash">
+# Change owner
+sudo chown alice file.txt
+
+# Change owner and group
+sudo chown alice:developers file.txt
+
+# Change only group
+chgrp developers file.txt
+
+# Recursively change group
+chgrp -R developers /opt/team-project/
+
+# Reference: copy ownership from another file
+sudo chown --reference=template.txt new_file.txt
+
+# Only root can change file ownership (CAP_CHOWN capability)
+# Users can change a file&#39;s group to any group they belong to
+						</pre>
+					</section>
+					<section>
+						<h3 id="umask-default-permission-mask">umask - Default Permission Mask</h3>
+						<p>
+							<code>umask</code>
+							defines which permission bits are masked out when a new file or directory is created.
+							It is a per-process setting, inherited from the parent at fork.
+						</p>
+						<pre class="bash">
+# View current umask
+umask
+# Output: 0022
+
+# 0022 means:
+#  - Full directory permissions start at 0777
+#  - umask 0022 removes ----w--w- (group write, other write)
+#  - New directory gets 0755 (rwxr-xr-x)
+#
+# For files (which start at 0666 - no execute by default):
+#  - 0666 minus 0022 = 0644 (rw-r--r--)
+
+# Set umask
+umask 0007  # Other gets NO permissions (files: 0660, dirs: 0770)
+umask 0077  # Only owner gets permissions (files: 0600, dirs: 0700)
+
+# Common umask values:
+# 0022 -&gt; files: 0644, dirs: 0755  (standard)
+# 0002 -&gt; files: 0664, dirs: 0775  (group-writable)
+# 0077 -&gt; files: 0600, dirs: 0700  (private)
+						</pre>
+						<pre class="c">
+#include &lt;stdio.h&gt;
+#include &lt;sys/stat.h&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;unistd.h&gt;
+
+int main() {
+    mode_t old = umask(0);          // Read current
+    printf(&#34;Current umask: %04o\n&#34;, old);
+
+    umask(0022);                    // Set new
+    printf(&#34;Set to: %04o\n&#34;, umask(0022));
+
+    // Create file - permissions = 0666 &amp; ~umask
+    int fd = creat(&#34;/tmp/umask-test-file&#34;, 0666);
+    close(fd);
+
+    struct stat sb;
+    stat(&#34;/tmp/umask-test-file&#34;, &amp;sb);
+    printf(&#34;Created file mode: %04o\n&#34;, sb.st_mode &amp; 0777);
+    // Output: 0644  (0666 &amp; ~0022)
+
+    unlink(&#34;/tmp/umask-test-file&#34;);
+    return 0;
+}
+						</pre>
+					</section>
+					<section>
+						<h3 id="how-the-kernel-checks-permissions">How the Kernel Checks Permissions</h3>
+						<p>When a process tries to access an inode, the kernel applies this decision procedure:</p>
+						<pre class="plaintext">
+process_requests_access(inode, requested_mask):
+    if process.EUID == 0:     &lt;- Root bypasses most checks
+        if requested is EXEC and NO x bits at all: deny
+        else: allow
+    elif process.EUID == inode.UID:
+        check owner bits (mode[8:6])
+    elif process.EGID in (inode.GID, supplementary_groups):
+        check group bits (mode[5:3])
+    else:
+        check other bits (mode[2:0])
+						</pre>
+						<pre class="bash">
+# Check process credentials
+id
+# uid=1000(user) gid=1000(user) groups=1000(user),10(wheel),998(docker)
+
+# The kernel checks EUID first, then EGID/supplementary groups,
+# then falls through to &#34;other.&#34; Only the first match is used:
+# if you own the file, group and other permissions are ignored.
+						</pre>
+						<p>
+							If
+							<abbr title="Access Control Lists">ACLs</abbr>
+							are present, the
+							<abbr title="Access Control List">ACL</abbr>
+							check replaces the
+							owner, group, and other steps. See the
+							<abbr title="Access Control List">ACL</abbr>
+							section below.
+						</p>
+					</section>
+					<section>
+						<h3 id="how-setuid-works-uid-transitions">How setuid Works - UID Transitions</h3>
+						<p>
+							Each process has three user IDs: the real UID (RUID, who started it), the effective UID (EUID,
+							used for access checks), and the saved set-user-ID (SUID, which remembers a privilege that can
+							be regained):
+						</p>
+						<pre class="c">
+#include &lt;stdio.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/types.h&gt;
+
+int main() {
+    uid_t ruid, euid, suid;
+    getresuid(&amp;ruid, &amp;euid, &amp;suid);
+    printf(&#34;RUID=%d  EUID=%d  SUID=%d\n&#34;, ruid, euid, suid);
+
+    // Drop privileges temporarily:
+    seteuid(ruid);  // EUID -&gt; RUID; SUID saves old EUID
+    getresuid(&amp;ruid, &amp;euid, &amp;suid);
+    printf(&#34;After seteuid(RUID): RUID=%d  EUID=%d  SUID=%d\n&#34;,
+           ruid, euid, suid);
+
+    // Restore privileges:
+    seteuid(suid);  // EUID &lt;- SUID
+    getresuid(&amp;ruid, &amp;euid, &amp;suid);
+    printf(&#34;After seteuid(SUID): RUID=%d  EUID=%d  SUID=%d\n&#34;,
+           ruid, euid, suid);
+    return 0;
+}
+						</pre>
+						<pre class="bash">
+gcc -o uid-demo uid-demo.c &amp;&amp; ./uid-demo
+
+# Make it setuid root to observe the privilege model:
+sudo chown root:root uid-demo
+sudo chmod 4755 uid-demo
+./uid-demo
+						</pre>
+						<p>A setuid program must be defensive:</p>
+						<ul>
+							<li><code>system()</code> and <code>exec*()</code> inherit the real UID, so a shell started by a setuid program runs</li>
+						</ul>
+						<p>
+							without the elevated privileges unless the program explicitly raises them. - Environment variables
+							such as
+							<code>LD_PRELOAD</code>
+							,
+							<code>PATH</code>
+							, and
+							<code>IFS</code>
+							must be sanitized. The dynamic
+						</p>
+						<p>
+							loader ignores
+							<code>LD_PRELOAD</code>
+							for setuid binaries, but other variables are not always safe. -
+							File descriptors inherited from a less-privileged parent can surprise the setuid process. -
+							The kernel ignores the setuid bit on
+							<code>#!</code>
+							scripts; it follows the interpreter binary's setuid
+						</p>
+						<p>
+							bit instead. Use
+							<code>sudo</code>
+							or capabilities when a script needs privilege.
+						</p>
+					</section>
+					<section>
+						<h3 id="extended-attributes-xattr">Extended Attributes (xattr)</h3>
+						<p>
+							Extended attributes are name-value pairs attached to inodes and stored separately from the file
+							data. SELinux,
+							<abbr title="Access Control Lists">ACLs</abbr>
+							, and applications use them:
+						</p>
+						<pre class="bash">
+# List all xattrs on a file
+getfattr -d somefile
+# Or: attr -l somefile
+
+# Set a user xattr
+setfattr -n user.comment -v &#34;Important document&#34; somefile
+# Or: attr -s comment -V &#34;Important document&#34; somefile
+
+# Get a specific xattr
+getfattr -n user.comment somefile
+
+# Namespaces:
+# user.*       - set by unprivileged users on regular files (requires attr mount option)
+# trusted.*    - set by CAP_SYS_ADMIN only
+# security.*   - set by security modules (SELinux: security.selinux)
+# system.*     - set by kernel (system.posix_acl_access, system.posix_acl_default)
+						</pre>
+						<pre class="bash">
+# Check if filesystem supports xattrs
+mount | grep &#39; / &#39;
+# Look for &#39;user_xattr&#39; or &#39;xattr&#39; in mount options (default on ext4)
+
+# Enable user xattrs if not present:
+sudo mount -o remount,user_xattr /
+						</pre>
+					</section>
+					<section>
+						<h3 id="posix-access-control-lists">POSIX Access Control Lists</h3>
+						<p>
+							Traditional Unix permissions give three categories (owner, group, other).
+							<code>POSIX</code>
+							access control
+							lists allow per-user and per-group permissions with fine granularity:
+						</p>
+						<pre class="plaintext">
+Traditional:       ACLs:
++------------+     +----------------------+
+| owner  rwx |     | owner:: rwx          |
+| group  r-x |     | user:bob: rwx        | &lt;- extra user
+| other  --- |     | user:carol: r--      | &lt;- extra user
++------------+     | group:: r-x          |
+                   | group:devs: rwx      | &lt;- extra group
+                   | mask:: rwx           | &lt;- max for named users/groups + group
+                   | other:: ---          |
+                   +----------------------+
+						</pre>
+						<p>
+							The
+							<abbr title="Access Control List">ACL</abbr>
+							mask limits the permissions granted to all named users, named
+							groups, and the owning group. It does not affect the file owner or the other entries. This provides
+							backward compatibility: tools that use
+							<code>chmod</code>
+							on the group bits actually modify the
+							<abbr title="Access Control List">ACL</abbr>
+							mask.
+						</p>
+						<pre class="bash">
+# View ACLs
+getfacl important_file.txt
+
+# Set ACLs
+setfacl -m u:alice:rwx important_file.txt     # Add user alice with rwx
+setfacl -m g:developers:rx important_file.txt  # Add group developers with rx
+setfacl -m u:carol:--- important_file.txt       # Explicitly deny carol
+setfacl -x u:alice important_file.txt          # Remove alice&#39;s entry
+setfacl -b important_file.txt                  # Remove all ACLs
+
+# Default ACLs on a directory (inherited by new objects inside)
+setfacl -m d:u:alice:rwx /shared/dir/
+setfacl -m d:g:developers:rwx /shared/dir/
+
+# New files in /shared/dir/ automatically inherit these ACLs
+						</pre>
+						<h4 id="acl-mask-and-chmod">ACL Mask and chmod</h4>
+						<pre class="bash">
+touch test
+setfacl -m u:alice:rwx test
+getfacl test
+# user:alice:rwx        &lt;- Alice has rwx
+# mask::rwx             &lt;- Mask allows full rwx
+
+chmod g-w test          # Remove group write - this modifies the MASK
+getfacl test
+# user:alice:rwx        # Still stored as rwx
+# mask::r-x             # But effective permissions are r-x
+# Effective: r-x        &lt;- Alice&#39;s effective permission is limited by mask
+						</pre>
+						<p>
+							The
+							<code>ls -l</code>
+							group permission field shows the mask when
+							<abbr title="Access Control Lists">ACLs</abbr>
+							are present.
+							An
+							<abbr title="Access Control List">ACL</abbr>
+							file shows
+							<code>+</code>
+							after the permission string:
+						</p>
+						<pre class="bash">
+ls -l test
+# -rwxr-x---+ 1 user user 0 ... test
+#          ^
+#          &#39;+&#39; indicates ACLs are present
+						</pre>
+					</section>
+					<section>
+						<h3 id="practical-acl-examples">Practical ACL Examples</h3>
+						<pre class="bash">
+# Scenario: Shared project directory
+mkdir /opt/project
+chown root:devteam /opt/project
+
+# Default: new directories get 2770, new files get 0660
+# Plus: alice and bob get full access regardless of group
+setfacl -m g:devteam:rwx /opt/project
+setfacl -m d:g:devteam:rwx /opt/project
+setfacl -m u:alice:rwx /opt/project
+setfacl -m d:u:alice:rwx /opt/project
+setfacl -m u:bob:rwx /opt/project
+setfacl -m d:u:bob:rwx /opt/project
+
+# Verify setup
+getfacl /opt/project
+
+# Create a test file
+su - alice -c &#39;touch /opt/project/alice-file&#39;
+ls -l /opt/project/alice-file
+getfacl /opt/project/alice-file
+
+# Scenario: Web server directory
+setfacl -m u:http:rx /srv/www/site
+setfacl -m u:http:rwx /srv/www/site/uploads
+setfacl -m d:u:http:rwx /srv/www/site/uploads
+setfacl -m d:g:webdevs:rwx /srv/www/site/uploads
+						</pre>
+					</section>
+					<section>
+						<h3 id="ls-l-interpretation-guide">ls -l Interpretation Guide</h3>
+						<pre class="plaintext">
+-rwxrw-r-- 1 alice devs 4096 Jun 26 12:00 script.sh
+|  |     |  |   |    |    |              |
+|  |     |  |   |    |    |              +-- File name
+|  |     |  |   |    |    +-- Modification time
+|  |     |  |   |    +-- Size in bytes
+|  |     |  |   +-- Group owner
+|  |     |  +-- User owner
+|  |     +-- Link count
+|  +-- Permissions string (detailed below)
++-- File type (-=file, d=dir, l=symlink, c=char, b=block, p=FIFO, s=socket)
+
+Permissions string breakdown (rwxrw-r--):
+Position 1  (owner): rwx - read, write, execute
+Position 4  (group): rw- - read, write, no execute
+Position 7  (other): r-- - read only
+
+Special cases:
+Position 3: s = setuid + execute, S = setuid, no execute
+Position 6: s = setgid + execute, S = setgid, no execute
+Position 9: t = sticky + execute, T = sticky, no execute
+Position *: + = ACLs present
+Position *: @ = extended attributes present (macOS)
+						</pre>
+					</section>
+					<section>
+						<h3 id="verification-checklist">Verification Checklist</h3>
+						<pre class="bash">
+# 1. Check current umask
+umask
+
+# 2. Find all setuid binaries on the system
+find /usr/bin /usr/sbin /bin /sbin -perm -4000 -ls 2&gt;/dev/null
+
+# 3. Find all setgid directories on the system
+find / -perm -2000 -type d -ls 2&gt;/dev/null | head -20
+
+# 4. Check for world-writable files (security audit)
+find /etc -perm -0002 -type f -ls 2&gt;/dev/null
+
+# 5. Check if a specific file has ACLs
+getfacl /etc/hostname 2&gt;/dev/null
+ls -l /etc/hostname | grep &#39;+&#39;
+
+# 6. Check filesystem ACL and xattr support
+mount | grep -E &#39;acl|user_xattr|xattr&#39;
+
+# 7. Inspect all permission bits on a file
+stat -c &#39;%a %A %n&#39; /etc/hostname
+
+# 8. Demonstrate sticky bit
+mkdir /tmp/sticky-test /tmp/nosticky-test
+chmod 1777 /tmp/sticky-test     # Sticky
+chmod 0777 /tmp/nosticky-test   # No sticky
+# As user1: touch /tmp/sticky-test/user1-file /tmp/nosticky-test/user1-file
+# As user2: rm /tmp/sticky-test/user1-file    -&gt; Operation not permitted
+# As user2: rm /tmp/nosticky-test/user1-file  -&gt; SUCCESS (deleted user1&#39;s file)
+rm -rf /tmp/sticky-test /tmp/nosticky-test
+
+# 9. See effective permissions with namei
+namei -l /var/log/syslog  # Shows ownership and perms at each path component
+
+# 10. Show process credentials that affect file access
+cat /proc/$$/status | grep -E &#34;^Uid:|^Gid:|^Groups:&#34;
+						</pre>
+					</section>
+					<section>
+						<h3 id="challenge">Challenge</h3>
+						<p>
+							Write a Go program that decodes a Unix mode into its
+							<code>ls -l</code>
+							symbolic form. The starter below
+							renders the nine rwx bits but ignores the special bits. Complete
+							<code>decode</code>
+							so it produces the
+							s and t characters, then check it against
+							<code>stat -c %A</code>
+							for the modes
+							<code>4755</code>
+							,
+							<code>2775</code>
+							,
+							<code>1777</code>
+							,
+							<code>0644</code>
+							, and
+							<code>0000</code>
+							:
+						</p>
+						<pre class="go">
+package main
+
+import (
+	&#34;fmt&#34;
+	&#34;os&#34;
+	&#34;strconv&#34;
+)
+
+// decode renders the low 12 bits of a mode the way ls -l does.
+// TODO: handle setuid (04000), setgid (02000), and sticky (01000),
+//       which use the s/S and t/T positions.
+func decode(mode uint32) string {
+	symbolic := []byte(&#34;---------&#34;)
+	for i := 0; i &lt; 9; i++ {
+		if mode&amp;(1&lt;&lt;(8-i)) != 0 {
+			symbolic[i] = &#34;rwx&#34;[i%3]
+		}
+	}
+	return string(symbolic)
+}
+
+func main() {
+	if len(os.Args) != 2 {
+		fmt.Fprintln(os.Stderr, &#34;usage: perms &lt;octal-mode&gt;&#34;)
+		os.Exit(1)
+	}
+
+	value, err := strconv.ParseUint(os.Args[1], 8, 32)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, &#34;invalid octal mode:&#34;, err)
+		os.Exit(1)
+	}
+
+	fmt.Printf(&#34;0%o -&gt; %s\n&#34;, value, decode(uint32(value)))
+}
+						</pre>
+						<p>
+							Run it with
+							<code>go run . 4755</code>
+							and compare the output with
+							<code>stat -c %A /usr/bin/passwd</code>
+							. Then
+							extend the program to take a path, read the mode with
+							<code>os.Stat</code>
+							, and print the user and group
+							owners from
+							<code>syscall.Stat_t</code>
+							.
+						</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/chmod.1" target="_blank">chmod(1) - change file mode bits</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/chown.1" target="_blank">chown(1) - change file owner and group</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/umask.2" target="_blank">umask(2) - set file mode creation mask</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/stat.2" target="_blank">stat(2) - get file status</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/path_resolution.7" target="_blank">path_resolution(7) - how a pathname is resolved</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/acl.5" target="_blank">acl(5) - Access Control Lists</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/getfacl.1" target="_blank">getfacl(1) - get file access control lists</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/setfacl.1" target="_blank">setfacl(1) - set file access control lists</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/xattr.7" target="_blank">xattr(7) - Extended attributes</a></li>
+							<li><a class="icon-website" href="https://man.archlinux.org/man/capabilities.7" target="_blank">capabilities(7) - Linux capabilities</a></li>
+						</ul>
+					</section>
+				</article>
+			</main>
+		</div>
+
+		<footer>
+			<div></div>
+			<div class="print-not">Made with 💔 in Germany. &copy; Cookie Engineer (https://cookie.engineer). All rights (and jokes) reserved under European Law.</div>
+			<div></div>
+		</footer>
+
+	</body>
+</html>

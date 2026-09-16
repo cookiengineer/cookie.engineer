@@ -11,7 +11,7 @@
 		<meta http-equiv="X-UA-Compatible" content="IE=edge">
 		<meta name="creator" content="Cookie Engineer">
 		<meta name="description" content="Implementer's Guide to SOCKS">
-		<meta name="keywords" content="network, nodejs, socks, dev">
+		<meta name="keywords" content="dev, network, nodejs, socks">
 		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
 		<meta name="robots" content="index, follow">
 
@@ -174,50 +174,52 @@
 				<article>
 					<h2 id="implementers-guide-to-socks">Implementer's Guide to SOCKS</h2>
 					<p>
-						Yesterday I was verifying that the
-						<abbr title="Security Operations Center">SOC</abbr>
-						KS test suite of
-						<a class="icon-github" href="https://github.com/tholian-network/stealth" target="_blank">Tholian Stealth</a>
-						is working and I realized that writing failsafe tests are not
-						as easy as someone might think. So here's my write-up about
-						the
-						<abbr title="Security Operations Center">SOC</abbr>
-						KS protocol.
+						Tutorial on how to implement a
+						<abbr title="Socket Secure">SOCKS</abbr>
+						version 4/5 client and server from scratch,
+						explaining related RFCs and potential quirks along the way.
 					</p>
-					<p>
-						The problem with
-						<abbr title="Security Operations Center">SOC</abbr>
-						KS in a nutshell is that it is not as well
-						documented as someone might think.
-					</p>
-					<p>
-						Most people are even unaware of the role that a
-						<abbr title="Security Operations Center">SOC</abbr>
-						KS proxy plays in
-						between network connections and therefore don't know what exactly a
-						
-						<abbr title="Security Operations Center">SOC</abbr>
-						KS proxy can or cannot do in regards to blocking ads and malicious
-						domains.
-					</p>
-					<p>
-						So I thought that a reference-class article for
-						<abbr title="Security Operations Center">SOC</abbr>
-						KS4 and
-						<abbr title="Security Operations Center">SOC</abbr>
-						KS5
-						would be nice, documenting its quirks and common pitfalls while
-						implementing those protocols.
-					</p>
-					<p>
-						For the implementation we're going to build in this article,
-						we only need plain node.js and its
-						<code>net</code>
-						core stack. The
-						implementation will be peer-to-peer, which means it can be used
-						for both the client-side and server-side whereas both sides are
-						implemented in node.js for the sake of simplicity.
-					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							Yesterday I was verifying that the
+							<a class="icon-github" href="https://github.com/tholian-network/stealth" target="_blank">SOCKS]{Socket Secure} test suite of [Tholian Stealth</a>
+							is working and I realized that writing failsafe tests are not as easy as someone might think.
+							So here's my write-up about the
+							<abbr title="Socket Secure">SOCKS</abbr>
+							protocol.
+						</p>
+						<p>
+							The problem with
+							<abbr title="Socket Secure">SOCKS</abbr>
+							in a nutshell is that it is not as well documented as
+							someone might think.
+						</p>
+						<p>
+							Most people are even unaware of the role that a
+							<abbr title="Socket Secure">SOCKS</abbr>
+							proxy plays in between
+							network connections and therefore don't know what exactly a
+							<abbr title="Socket Secure">SOCKS</abbr>
+							proxy can
+							or cannot do in regards to blocking ads and malicious domains.
+						</p>
+						<p>
+							So I thought that a reference-class article for
+							<abbr title="Socket Secure">SOCKS</abbr>
+							4 and
+							<abbr title="Socket Secure">SOCKS</abbr>
+							5 would be nice, documenting its quirks and common pitfalls while implementing those protocols.
+						</p>
+						<p>
+							For the implementation we're going to build in this article, we only need plain node.js and
+							its
+							<code>net</code>
+							core stack. The implementation will be peer-to-peer, which means it can be used for
+							both the client-side and server-side whereas both sides are implemented in node.js for the sake
+							of simplicity.
+						</p>
+					</section>
 					<section>
 						<h3 id="introduction">Introduction</h3>
 						<p>
@@ -229,19 +231,18 @@
 							<a class="icon-website" href="https://tools.ietf.org/html/rfc1929" target="_blank">RFC1929</a>
 							and didn't change since
 							<code>1996</code>
-							so it's somewhat safe to assume that this is the final version
-							of the network protocol.
+							so it's somewhat
+							safe to assume that this is the final version of the network protocol.
 						</p>
 						<p>
 							The
-							<abbr title="Security Operations Center">SOC</abbr>
-							KS protocol in general and its role is pretty much what telephone
-							operators did in the past. A client connects to the
-							<abbr title="Security Operations Center">SOC</abbr>
-							KS proxy and
-							requests to connect to a specific target. The proxy tries to connect
-							to the target, and if it succeeds reaches through the connection to the
-							client.
+							<abbr title="Socket Secure">SOCKS</abbr>
+							protocol in general and its role is pretty much what telephone operators
+							did in the past. A client connects to the
+							<abbr title="Socket Secure">SOCKS</abbr>
+							proxy and requests to connect
+							to a specific target. The proxy tries to connect to the target, and if it succeeds reaches through
+							the connection to the client.
 						</p>
 						<pre class="http">
 Client: Please let me connect to IP 1.2.3.4.
@@ -259,62 +260,49 @@ Proxy:  *hangs off the phone* Beep Beep Beep.
 							<code>SOCKS4</code>
 							and
 							<code>SOCKS4a</code>
-							were proprietary protocols, they didn't
-							have any RFC.
+							were proprietary protocols, they didn't have any RFC.
 							<code>SOCKS5</code>
 							is referring a lot the
 							<code>SOCKS4</code>
-							protocol and
-							its featureset, so reading the RFC is quite complicated if you don't
-							know what the older protocol versions actually did feature-wise.
+							protocol and its featureset, so reading the RFC is quite complicated
+							if you don't know what the older protocol versions actually did feature-wise.
 						</p>
 						<p>
 							Usually though, most clients and servers that claim to support
-							<abbr title="Security Operations Center">SOC</abbr>
-							KS5
-							actually only support the
+							<abbr title="Socket Secure">SOCKS</abbr>
+							5 actually
+							only support the
 							<code>user</code>
 							and
 							<code>password</code>
-							authentication, not
-							the
+							authentication, not the
 							<code>IPv6</code>
 							or
 							<code>DNS/UDP</code>
-							related features that come with it.
+							related features
+							that come with it.
 						</p>
 						<p>
 							This implementation will focus mostly on the
 							<code>IPv4</code>
 							and
 							<code>IPv6</code>
-							differences and will - for the sake of simplicity - only support
+							differences and will - for the
+							sake of simplicity - only support
 							<code>TCP</code>
 							based connections.
 						</p>
-						<p>
-							The
-							<code>SOCKS4</code>
-							featureset:
-						</p>
+						<h4 id="the-socks4-featureset">The <code>SOCKS4</code> Featureset</h4>
 						<ul>
 							<li>connects to <code>IPv4</code> ( <abbr title="Transmission Control Protocol">TCP</abbr> )</li>
 						</ul>
-						<p>
-							The
-							<code>SOCKS4a</code>
-							featureset:
-						</p>
+						<h4 id="the-socks4a-featureset">The <code>SOCKS4a</code> Featureset</h4>
 						<ul>
 							<li>connects to <code>IPv4</code> ( <abbr title="Transmission Control Protocol">TCP</abbr> )</li>
 							<li>connects to <code>domain</code> ( <abbr title="Transmission Control Protocol">TCP</abbr> )</li>
 							<li>authentication via <code>user</code> is broken in practice (no password)</li>
 						</ul>
-						<p>
-							The
-							<code>SOCKS5</code>
-							featureset:
-						</p>
+						<h4 id="the-socks5-featureset">The <code>SOCKS5</code> Featureset</h4>
 						<ul>
 							<li>connects to <code>IPv4</code> ( <abbr title="Transmission Control Protocol">TCP</abbr> and <abbr title="User Datagram Protocol">UDP</abbr> )</li>
 							<li>connects to <code>IPv6</code> ( <abbr title="Transmission Control Protocol">TCP</abbr> and <abbr title="User Datagram Protocol">UDP</abbr> )</li>
@@ -326,29 +314,28 @@ Proxy:  *hangs off the phone* Beep Beep Beep.
 						<h3 id="socks-protocol-and-network-states">SOCKS Protocol and Network States</h3>
 						<p>
 							Describing
-							<abbr title="Security Operations Center">SOC</abbr>
-							KS data frames can be kind of complicated, because the
-							interpretation of a
-							<abbr title="Security Operations Center">SOC</abbr>
-							KS frame is different depending on its network
-							state. So I'm trying to document the different network states first,
-							so that you know what kind of states on both sides are possible.
+							<abbr title="Socket Secure">SOCKS</abbr>
+							data frames can be kind of complicated, because the interpretation
+							of a
+							<abbr title="Socket Secure">SOCKS</abbr>
+							frame is different depending on its network state. So I'm trying
+							to document the different network states first, so that you know what kind of states on both
+							sides are possible.
 						</p>
 						<p>
 							We are also going to completely ignore the
 							<code>SOCKS authentication methods</code>
-							,
-							because they are broken across every single Browser; and implemented
-							in specification violating non-secure non-encrypted manners across
-							every piece of source code I've come across.
+							, because they are
+							broken across every single Browser; and implemented in specification violating non-secure non-encrypted
+							manners across every piece of source code I've come across.
 						</p>
 					</section>
 					<section>
 						<h3 id="socks-version-4">SOCKS Version 4</h3>
 						<p>
 							The
-							<abbr title="Security Operations Center">SOC</abbr>
-							KS
+							<abbr title="Socket Secure">SOCKS</abbr>
+							
 							<b>Version 4</b>
 							network flow looks like this:
 						</p>
@@ -357,10 +344,7 @@ Proxy:  *hangs off the phone* Beep Beep Beep.
 							<li>Server responds with a Status Frame</li>
 						</ul>
 						<p>... and that's pretty much it. Super simple.</p>
-						<p>
-							<b>SOCKS Version 4 Connection Request Frame</b>
-							:
-						</p>
+						<h4 id="socks-version-4-connection-request-frame">SOCKS Version 4 Connection Request Frame</h4>
 						<pre class="bash">
 +---------+---------+----+----+----+----+----+----+----+----+....+----+
 | VERSION | COMMAND | DSTPORT |      DSTIP        | USERID       |NULL|
@@ -374,18 +358,12 @@ Proxy:  *hangs off the phone* Beep Beep Beep.
 							<li><code>DSTIP</code> is an <code>IPv4</code> (4 bytes) represents the destination <abbr title="Internet Protocol">IP</abbr> , and encodes 4 digits as <code>0x00</code> to <code>0xFF</code> respectively.</li>
 							<li><code>USERID</code> (variable byte length, followed by a <code>NULL</code> terminator byte) represents an authentication mechanism for a user-login; but without a password.</li>
 						</ul>
-						<p>
-							<b>SOCKS Version 4 Commands</b>
-							:
-						</p>
+						<h4 id="socks-version-4-commands">SOCKS Version 4 Commands</h4>
 						<ul>
 							<li><code>0x01</code> represents <code>CONNECT</code> and is a <abbr title="Transmission Control Protocol">TCP</abbr> / <abbr title="Internet Protocol">IP</abbr> connection request which lets the Server established the connection.</li>
 							<li><code>0x02</code> represents <code>BIND</code> and is a <abbr title="Transmission Control Protocol">TCP</abbr> / <abbr title="Internet Protocol">IP</abbr> port binding to allow the Client to establish the connection themselves.</li>
 						</ul>
-						<p>
-							<b>SOCKS Version 4 Connection Status Frame</b>
-							:
-						</p>
+						<h4 id="socks-version-4-connection-status-frame">SOCKS Version 4 Connection Status Frame:</h4>
 						<pre class="bash">
 +---------+--------+----+----+----+----+----+----+
 | VERSION | STATUS | DSTPORT |      DSTIP        |
@@ -398,17 +376,15 @@ Proxy:  *hangs off the phone* Beep Beep Beep.
 							<li><code>DSTPORT</code> (2 bytes) represents the destination port from <code>1</code> to <code>65535</code> .</li>
 							<li><code>DSTIP</code> is an <code>IPv4</code> (4 bytes) represents the destination <abbr title="Internet Protocol">IP</abbr> , and encodes 4 digits as <code>0x00</code> to <code>0xFF</code> respectively.</li>
 						</ul>
-						<p>
-							<b>SOCKS Version 4 Status Codes</b>
-							:
-						</p>
+						<h4 id="socks-version-4-status-codes">SOCKS Version 4 Status Codes</h4>
 						<ul>
 							<li><code>0x5A</code> Request granted.</li>
 							<li><code>0x5B</code> Request rejected or failed.</li>
 						</ul>
 						<p>
-							<b>SOCKS Version 4 Status Codes for Authentication Mechanism</b>
-							:
+							
+							<abbr title="Socket Secure">SOCKS</abbr>
+							Version 4 Status Codes for Authentication Mechanism:
 						</p>
 						<p>(I would not recommend to implement them)</p>
 						<ul>
@@ -421,29 +397,28 @@ Proxy:  *hangs off the phone* Beep Beep Beep.
 						<p>
 							<b>Important</b>
 							: The
-							<abbr title="Security Operations Center">SOC</abbr>
-							KS Version 5 protocol is different in
-							its network flow and data frame structure; and it has a
-							reserved byte with a
+							<abbr title="Socket Secure">SOCKS</abbr>
+							Version 5 protocol is different in its network flow
+							and data frame structure; and it has a reserved byte with a
 							<code>0x00</code>
 							value where the
-							<abbr title="Security Operations Center">SOC</abbr>
-							KS Version 4
-							protocol would otherwise expect a non-NULL byte data.
+							<abbr title="Socket Secure">SOCKS</abbr>
+							Version 4 protocol would otherwise expect a non-NULL byte data.
 						</p>
 						<p>
 							Additionally, the order of
 							<code>Destination Port</code>
 							and
 							<code>Destination Address</code>
-							is different from the order specified in
-							<abbr title="Security Operations Center">SOC</abbr>
-							KS Version 4.
+							is different from the
+							order specified in
+							<abbr title="Socket Secure">SOCKS</abbr>
+							Version 4.
 						</p>
 						<p>
 							The
-							<abbr title="Security Operations Center">SOC</abbr>
-							KS
+							<abbr title="Socket Secure">SOCKS</abbr>
+							
 							<b>Version 5</b>
 							network flow looks like this:
 						</p>
@@ -453,20 +428,14 @@ Proxy:  *hangs off the phone* Beep Beep Beep.
 							<li>Client requests to connect or bind to an <abbr title="Internet Protocol Version 4">IPv4</abbr> , <abbr title="Internet Protocol Version 6">IPv6</abbr> or domain.</li>
 							<li>Server responds with connection status.</li>
 						</ol>
-						<p>
-							<b>SOCKS Version 5 Handshake Request Frame</b>
-							:
-						</p>
+						<h4 id="socks-version-5-handshake-request-frame">SOCKS Version 5 Handshake Request Frame</h4>
 						<pre class="bash">
 +---------+----+----+----+....+
 | VERSION | NMETHODS| METHODS |
 +---------+----+----+----+....+
      1         2      variable
 						</pre>
-						<p>
-							<b>SOCKS Version 5 Handshake Response Frame</b>
-							:
-						</p>
+						<h4 id="socks-version-5-handshake-response-frame">SOCKS Version 5 Handshake Response Frame</h4>
 						<pre class="bash">
 +---------+----+----+
 | VERSION | METHOD  |
@@ -476,12 +445,9 @@ Proxy:  *hangs off the phone* Beep Beep Beep.
 						<ul>
 							<li><code>VERSION</code> (1 byte) represents the <code>SOCKS version</code> , which is <code>0x05</code> .</li>
 							<li><code>NMETHODS</code> (1 byte) represents the byte length of the following encoded <code>METHOD</code> s.</li>
-							<li><code>METHODS</code> (variable byte length) represents the encoded <abbr title="Security Operations Center">SOC</abbr> KS methods.</li>
+							<li><code>METHODS</code> (variable byte length) represents the encoded <abbr title="Socket Secure">SOCKS</abbr> methods.</li>
 						</ul>
-						<p>
-							<b>SOCKS Version 5 Handshake Methods</b>
-							:
-						</p>
+						<h4 id="socks-version-5-handshake-methods">SOCKS Version 5 Handshake Methods:</h4>
 						<ul>
 							<li><code>0x00</code> represents No Authentication required.</li>
 							<li><code>0x01</code> represents <code>GSSAPI</code> which is a "secure" context as defined per <a class="icon-website" href="https://tools.ietf.org/html/rfc1961" target="_blank">RFC1961</a> .</li>
@@ -489,13 +455,10 @@ Proxy:  *hangs off the phone* Beep Beep Beep.
 							<li><code>0x80</code> to <code>0xFE</code> are reserved for private methods, but are never used in practice.</li>
 							<li><code>0xFF</code> represents No Acceptable methods (in a response).</li>
 						</ul>
+						<h4 id="socks-version-5-connection-request">SOCKS Version 5 Connection Request</h4>
 						<p>
-							<b>SOCKS Version 5 Connection Request</b>
-							:
-						</p>
-						<p>
-							After the Client and Server have negotiated an Authentication Method,
-							the Client sends a Connection Request Frame to the Server.
+							After the Client and Server have negotiated an Authentication Method, the Client sends a Connection
+							Request Frame to the Server.
 						</p>
 						<pre class="bash">
 +---------+---------+-----+------+----+----+----+----+
@@ -506,27 +469,21 @@ Proxy:  *hangs off the phone* Beep Beep Beep.
 						<ul>
 							<li><code>VERSION</code> (1 byte) represents the <code>SOCKS version</code> , which is <code>0x05</code> .</li>
 							<li><code>COMMAND</code> (1 byte) represents either of the Commands explained below.</li>
-							<li><code>RSV</code> (1 byte) represents the reserved byte which has to be <code>0x00</code> (to be able to differ it from a <abbr title="Security Operations Center">SOC</abbr> KS Version 4 Connection Request).</li>
+							<li><code>RSV</code> (1 byte) represents the reserved byte which has to be <code>0x00</code> (to be able to differ it from a <abbr title="Socket Secure">SOCKS</abbr> Version 4 Connection Request).</li>
 							<li><code>ATYP</code> (1 byte) represents the address type, which can be either of <code>0x01</code> ( <abbr title="Internet Protocol Version 4">IPv4</abbr> address), <code>0x03</code> (domain name), <code>0x04</code> ( <abbr title="Internet Protocol Version 6">IPv6</abbr> address).</li>
 							<li><code>DSTADDR</code> (variable) represents the destination address as an <abbr title="Internet Protocol Version 4">IPv4</abbr> (in 4 octets), the domain name (with a prefixed byte length), or an <abbr title="Internet Protocol Version 6">IPv6</abbr> (in 16 octets).</li>
 							<li><code>DSTPORT</code> (2 bytes) represents the destination port from <code>0x01</code> ( <code>1</code> ) to <code>0xFF</code> ( <code>65535</code> ).</li>
 						</ul>
-						<p>
-							<b>SOCKS Version 5 Commands</b>
-							:
-						</p>
+						<h4 id="socks-version-5-commands">SOCKS Version 5 Commands</h4>
 						<ul>
 							<li><code>0x01</code> represents <code>CONNECT</code> and is a <abbr title="Transmission Control Protocol">TCP</abbr> / <abbr title="Internet Protocol">IP</abbr> connection request which lets the Server established the connection and forward further packets.</li>
 							<li><code>0x02</code> represents <code>BIND</code> and is a <abbr title="Transmission Control Protocol">TCP</abbr> / <abbr title="Internet Protocol">IP</abbr> port binding to allow the Client to establish the connection themselves.</li>
 							<li><code>0x03</code> represents <code>UDP ASSOCIATE</code> and is a <abbr title="User Datagram Protocol">UDP</abbr> associate request which lets the Server establish the connection and forward further packets.</li>
 						</ul>
+						<h4 id="socks-version-5-connection-status-frame">SOCKS Version 5 Connection Status Frame</h4>
 						<p>
-							<b>SOCKS Version 5 Connection Status Frame</b>
-							:
-						</p>
-						<p>
-							After the Client has sent the Connection Request frame, the Server responds
-							with a Connection Status Frame.
+							After the Client has sent the Connection Request frame, the Server responds with a Connection
+							Status Frame.
 						</p>
 						<pre class="bash">
 +---------+-------+-----+------+----+----+----+----+
@@ -537,18 +494,15 @@ Proxy:  *hangs off the phone* Beep Beep Beep.
 						<ul>
 							<li><code>VERSION</code> (1 byte) represents the <code>SOCKS version</code> , which is <code>0x05</code> .</li>
 							<li><code>REPLY</code> (1 byte) represents the reply message to the requested command and is either of the Replies explained below.</li>
-							<li><code>RSV</code> (1 byte) represents the reserved byte which has to be <code>0x00</code> (to be able to differ it from a <abbr title="Security Operations Center">SOC</abbr> KS Version 4 Connection Request).</li>
+							<li><code>RSV</code> (1 byte) represents the reserved byte which has to be <code>0x00</code> (to be able to differ it from a <abbr title="Socket Secure">SOCKS</abbr> Version 4 Connection Request).</li>
 							<li><code>ATYP</code> (1 byte) represents the address type, which can be either of <code>0x01</code> ( <abbr title="Internet Protocol Version 4">IPv4</abbr> address), <code>0x03</code> (domain name), <code>0x04</code> ( <abbr title="Internet Protocol Version 6">IPv6</abbr> address).</li>
 							<li><code>BNDADDR</code> (variable) represents the server-bound destination address as an <abbr title="Internet Protocol Version 4">IPv4</abbr> (in 4 octets), the domain name (with a prefixed byte length), or an <abbr title="Internet Protocol Version 6">IPv6</abbr> (in 16 octets).</li>
 							<li><code>BNDPORT</code> (2 bytes) represents the server-bound destination port from <code>0x01</code> ( <code>1</code> ) to <code>0xFF</code> ( <code>65535</code> ).</li>
 						</ul>
-						<p>
-							<b>SOCKS Version 5 Replies</b>
-							:
-						</p>
+						<h4 id="socks-version-5-replies">SOCKS Version 5 Replies</h4>
 						<ul>
 							<li><code>0x00</code> Success</li>
-							<li><code>0x01</code> General <abbr title="Security Operations Center">SOC</abbr> KS Failure</li>
+							<li><code>0x01</code> General <abbr title="Socket Secure">SOCKS</abbr> Failure</li>
 							<li><code>0x02</code> Connection Not Allowed</li>
 							<li><code>0x03</code> Network Unreachable</li>
 							<li><code>0x04</code> Host Unreachable</li>
@@ -564,16 +518,16 @@ Proxy:  *hangs off the phone* Beep Beep Beep.
 						<p>
 							The client has to be implemented with the
 							<code>net.createConnection()</code>
-							interface, as the data that we need to access is
+							interface, as the data that
+							we need to access is
 							<code>raw TCP data</code>
 							and our library needs to support binary encodings.
 						</p>
 						<p>
 							As node.js runs
 							<code>libuv</code>
-							in the background, which is of asynchronous
-							nature, we also have to make sure that everything gets send as soon
-							as possible by calling
+							in the background, which is of asynchronous nature, we also have to
+							make sure that everything gets send as soon as possible by calling
 							<code>socket.setNoDelay(true)</code>
 							.
 						</p>
@@ -675,16 +629,15 @@ client.on(&#39;timeout&#39;, () =&gt; client.destroy());
 					<section>
 						<h3 id="handshake-request-and-response">Handshake Request and Response</h3>
 						<p>
-							The initial Handshake Request that is done from the Client in order to
-							find out what kinds of
+							The initial Handshake Request that is done from the Client in order to find out what kinds of
 							<code>auth</code>
 							methods the Server supports.
 						</p>
 						<p>
 							In the following example, we'll emulate a simple
-							<abbr title="Security Operations Center">SOC</abbr>
-							KS Version 5 Client
-							to explain the previous example of the Client in more detail:
+							<abbr title="Socket Secure">SOCKS</abbr>
+							Version 5 Client to
+							explain the previous example of the Client in more detail:
 						</p>
 						<pre class="javascript">
 // client-manual.mjs
@@ -724,8 +677,8 @@ net.connect({
 						<h3 id="connection-request-and-status">Connection Request and Status</h3>
 						<p>
 							A
-							<abbr title="Security Operations Center">SOC</abbr>
-							KS Server should be able to handle both
+							<abbr title="Socket Secure">SOCKS</abbr>
+							Server should be able to handle both
 							<code>connect</code>
 							and
 							<code>bind</code>
@@ -739,12 +692,12 @@ net.connect({
 							addresses.
 						</p>
 						<p>
-							The Connection Request is sent by the Client after the Authentication Method
-							was completed, which means that for _all_ Connection Requests there is an
-							Handshake Request and Response Frame that preceeds it; as there are no
-							reusable Sessions in
-							<abbr title="Security Operations Center">SOC</abbr>
-							KS and sockets cannot be reused.
+							The Connection Request is sent by the Client after the Authentication Method was completed,
+							which means that for _all_ Connection Requests there is an Handshake Request and Response Frame
+							that preceeds it; as there are no reusable Sessions in
+							<abbr title="Socket Secure">SOCKS</abbr>
+							and sockets cannot
+							be reused.
 						</p>
 						<pre class="javascript">
 // client-manual.mjs
@@ -806,8 +759,8 @@ let client = net.createConnection({
 						<h3 id="receiving-socks-frames">Receiving SOCKS Frames</h3>
 						<p>
 							The integration of a receiving method for our
-							<abbr title="Security Operations Center">SOC</abbr>
-							KS library is quite easy.
+							<abbr title="Socket Secure">SOCKS</abbr>
+							library is quite easy.
 						</p>
 						<pre class="javascript">
 // SOCKS.mjs
@@ -995,7 +948,8 @@ const decode_payload = function(buffer) {
 							<code>connect</code>
 							or
 							<code>bind</code>
-							to a specific
+							to a
+							specific
 							<abbr title="Internet Protocol">IP</abbr>
 							and a specific Port.
 						</p>
@@ -1046,8 +1000,8 @@ if (type === 0x01) {
 							<code>connect</code>
 							or
 							<code>bind</code>
-							to a specific domain (that the Server or Proxy
-							has to resolve first) and a specific Port.
+							to
+							a specific domain (that the Server or Proxy has to resolve first) and a specific Port.
 						</p>
 						<p>
 							In this case, the Server has to respond with a valid
@@ -1056,8 +1010,7 @@ if (type === 0x01) {
 							<abbr title="Internet Protocol">IP</abbr>
 							response is
 							<code>0.0.0.0</code>
-							, the Client must handle this as an unsuccessful
-							Connection Request.
+							, the Client must handle this as an unsuccessful Connection Request.
 						</p>
 						<p>The encoded format of a Domain Payload is:</p>
 						<ul>
@@ -1098,7 +1051,8 @@ if (type === 0x03) {
 							<code>connect</code>
 							or
 							<code>bind</code>
-							to a specific
+							to a
+							specific
 							<abbr title="Internet Protocol">IP</abbr>
 							and a specific Port.
 						</p>
@@ -1146,8 +1100,8 @@ if (type === 0x04) {
 						<h3 id="sending-socks-frames">Sending SOCKS Frames</h3>
 						<p>
 							The integration of a sending method for our
-							<abbr title="Security Operations Center">SOC</abbr>
-							KS library is quite easy.
+							<abbr title="Socket Secure">SOCKS</abbr>
+							library is quite easy.
 						</p>
 						<pre class="javascript">
 // SOCKS.mjs
@@ -1168,7 +1122,7 @@ SOCKS.send = (socket, data) =&gt; {
 						<h3 id="encoding-logic">Encoding Logic</h3>
 						<p>The Encoding Logic is a bit more complex, as it has to respect the following states:</p>
 						<ul>
-							<li>Server: If <code>headers[&#39;@version&#39;]</code> is set to <code>0x05</code> or <code>0x04</code> , set the <abbr title="Security Operations Center">SOC</abbr> KS protocol version.</li>
+							<li>Server: If <code>headers[&#39;@version&#39;]</code> is set to <code>0x05</code> or <code>0x04</code> , set the <abbr title="Socket Secure">SOCKS</abbr> protocol version.</li>
 							<li>Server: If <code>headers[&#39;auth&#39;]</code> is either <code>none</code> or <code>login</code> , transmit a Handshake Response Frame.</li>
 							<li>Server: If <code>headers[&#39;@status&#39;]</code> is set, transmit a Connection Status Frame.</li>
 							<li>Client: If <code>headers[&#39;auth&#39;]</code> is an <code>Array</code> , transmit a Handshake Request Frame.</li>
@@ -1286,11 +1240,10 @@ const encode = function(socket, data) {
 						</pre>
 					</section>
 					<section>
-						<h3 id="encoding-0x01-ipv4-payload-0x03-domain-payload-0x04-ipv6-payload">Encoding 0x01: IPv4 Payload, 0x03: Domain Payload, 0x04: IPv6 Payload</h3>
+						<h3 id="encoding-ipv4-domain-ipv6">Encoding IPv4, Domain, IPv6</h3>
 						<p>
-							The decoding logic has been explained already in the previous chapters,
-							so it should be quite easy for you to handle the encoding of the payloads
-							and possible to write the
+							The decoding logic has been explained already in the previous chapters, so it should be quite
+							easy for you to handle the encoding of the payloads and possible to write the
 							<code>encode_payload</code>
 							method yourself.
 						</p>
@@ -1302,6 +1255,7 @@ const encode = function(socket, data) {
 						<p>
 							In any Error Case, a Payload representing the
 							<abbr title="Internet Protocol Version 4">IPv4</abbr>
+							
 							<code>0.0.0.0</code>
 							and the Port
 							<code>0</code>
@@ -1312,10 +1266,9 @@ const encode = function(socket, data) {
 						<h3 id="socks-server">SOCKS Server</h3>
 						<p>
 							The
-							<abbr title="Security Operations Center">SOC</abbr>
-							KS Server is responsible for a lot of things, as it has
-							to handle the Handshake Requests and the Connection Requests
-							without a Session.
+							<abbr title="Socket Secure">SOCKS</abbr>
+							Server is responsible for a lot of things, as it has to handle the
+							Handshake Requests and the Connection Requests without a Session.
 						</p>
 						<p>This means that for the Server has support the following states:</p>
 						<ul>
@@ -1432,22 +1385,21 @@ server.listen(1080, null);
 						<h3 id="connection-status">Connection Status</h3>
 						<p>
 							The Connection Status Frame is sent by the
-							<abbr title="Security Operations Center">SOC</abbr>
-							KS Server to the Client after the Server
-							connected to (or tried to connect to) the requested Host or Domain.
+							<abbr title="Socket Secure">SOCKS</abbr>
+							Server to the Client after
+							the Server connected to (or tried to connect to) the requested Host or Domain.
 						</p>
 					</section>
 					<section>
 						<h3 id="handling-host-connections">Handling Host Connections</h3>
 						<p>
 							A Connection Request for a Host is quite easy to create, as it requires only a simple
-							
 							<abbr title="Transmission Control Protocol">TCP</abbr>
 							-based Network Tunnel. The Server creates a
 							<abbr title="Transmission Control Protocol">TCP</abbr>
-							Socket to the Target Host and
-							dispatches it through to the Client. Further Data sent by the Client will then just
-							be delegated to the Target Host.
+							Socket to the
+							Target Host and dispatches it through to the Client. Further Data sent by the Client will then
+							just be delegated to the Target Host.
 						</p>
 						<pre class="javascript">
 // server.mjs
@@ -1525,30 +1477,29 @@ if (
 							<code>dns.resolve4()</code>
 							or
 							<code>dns.resolve6()</code>
-							call
-							before, and on successfully resolved
+							call before,
+							and on successfully resolved
 							<code>A</code>
 							or
 							<code>AAAA</code>
-							domain entries a connection to those
-							addresses.
+							domain entries a connection to those addresses.
 						</p>
 						<p>
-							In theory, failed connections to the specific addresses should gracefully try out all
-							other entries if there are multiple available; but in practice no
-							<abbr title="Security Operations Center">SOC</abbr>
-							KS Proxy supports
-							that. I'll leave that up to the reader to implement it, as it requires a timeout loop
-							that gradually checks for network timeouts and failure scenarios of the
+							In theory, failed connections to the specific addresses should gracefully try out all other
+							entries if there are multiple available; but in practice no
+							<abbr title="Socket Secure">SOCKS</abbr>
+							Proxy supports
+							that. I'll leave that up to the reader to implement it, as it requires a timeout loop that gradually
+							checks for network timeouts and failure scenarios of the
 							<code>net.connect()</code>
 							
 							<abbr title="Application Programming Interface">API</abbr>
 							in node.js, which is rather unclean to implement for demo purposes.
 						</p>
 						<p>
-							Afterwards, the same Network Flow happens as in the Handling Host Connections example,
-							where the Tunnel is piped through to the Client and further Data received is delegated
-							to the Target Host.
+							Afterwards, the same Network Flow happens as in the Handling Host Connections example, where
+							the Tunnel is piped through to the Client and further Data received is delegated to the Target
+							Host.
 						</p>
 						<pre class="javascript">
 // server.mjs
@@ -1655,14 +1606,12 @@ if (
 					<section>
 						<h3 id="reference-implementation">Reference Implementation</h3>
 						<p>
-							That's it. Our implementation is now fully peer-to-peer
-							ready and supports the complete
+							That's it. Our implementation is now fully peer-to-peer ready and supports the complete
 							<code>SOCKS5</code>
 							protocol.
 						</p>
 						<p>
-							In case you missed something in between the lines or
-							made a mistake, there's a reference implementation
+							In case you missed something in between the lines or made a mistake, there's a reference implementation
 							available.
 						</p>
 						<ul>
@@ -1670,6 +1619,17 @@ if (
 							<li><a class="icon-download" href="/weblog/articles/implementers-guide-to-socks/client-manual.mjs">client-manual.mjs</a></li>
 							<li><a class="icon-download" href="/weblog/articles/implementers-guide-to-socks/server.mjs">server.mjs</a></li>
 							<li><a class="icon-download" href="/weblog/articles/implementers-guide-to-socks/SOCKS.mjs">SOCKS.mjs</a></li>
+						</ul>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-website" href="https://tools.ietf.org/html/rfc1928" target="_blank">RFC 1928 - SOCKS Protocol Version 5</a></li>
+							<li><a class="icon-website" href="https://tools.ietf.org/html/rfc1929" target="_blank">RFC 1929 - Username/Password Authentication for SOCKS V5</a></li>
+							<li><a class="icon-website" href="https://tools.ietf.org/html/rfc1961" target="_blank">RFC 1961 - GSS-API Authentication Method for SOCKS Version 5</a></li>
+							<li><a class="icon-github" href="https://github.com/tholian-network/stealth" target="_blank">Tholian Stealth</a></li>
+							<li><a class="icon-website" href="https://nodejs.org/api/net.html" target="_blank">Node.js net Module</a></li>
+							<li><a class="icon-website" href="https://nodejs.org/api/dns.html" target="_blank">Node.js dns Module</a></li>
 						</ul>
 					</section>
 				</article>

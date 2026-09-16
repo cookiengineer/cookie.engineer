@@ -11,14 +11,14 @@
 		<meta http-equiv="X-UA-Compatible" content="IE=edge">
 		<meta name="creator" content="Cookie Engineer">
 		<meta name="description" content="You don't need LPM Tries">
-		<meta name="keywords" content="golang, software, dev">
+		<meta name="keywords" content="dev, golang, software">
 		<meta name="generator" content="Cookie Engineer's bare hands with peppermint tea and nightly VIM coding sessions">
 		<meta name="robots" content="index, follow">
 
 		<!-- Social Media -->
 		<meta property="og:title" content="You don't need LPM Tries">
 		<meta property="og:site_name" content="Cookie Engineer's Weblog">
-		<meta property="og:description" content="There's no need for LPM Trie data structures for network lookups, because you can use LPM hash sets. This article explains the origin of the concept, its implementation and why it's better.">
+		<meta property="og:description" content="There is no need for LPM Trie data structures for network lookups when LPM hash sets are faster and simpler.">
 		<meta property="og:image" itemprop="image" content="https://cookie.engineer/weblog/articles/you-dont-need-lpm-tries/teaser.jpg">
 		<meta property="og:url" content="https://cookie.engineer/weblog/articles/you-dont-need-lpm-tries.md">
 		<meta property="og:type" content="article">
@@ -27,7 +27,7 @@
 		<meta name="twitter:card" content="summary">
 		<meta name="twitter:domain" content="cookie.engineer">
 		<meta name="twitter:title" itemprop="name" content="You don't need LPM Tries">
-		<meta name="twitter:description" itemprop="description" content="There's no need for LPM Trie data structures for network lookups, because you can use LPM hash sets. This article explains the origin of the concept, its implementation and why it's better.">
+		<meta name="twitter:description" itemprop="description" content="There is no need for LPM Trie data structures for network lookups when LPM hash sets are faster and simpler.">
 		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/weblog/articles/you-dont-need-lpm-tries/teaser.jpg">
 
 		<!-- Website Design -->
@@ -174,65 +174,70 @@
 				<article>
 					<h2 id="you-dont-need-lpm-tries">You don't need LPM Tries</h2>
 					<p>
-						This article is the result of a long development phase inside the
-						<a class="icon-website" href="https://tholian.network/en/index.html" target="_blank">Tholian Endpoint agent</a>
-						where I spent a couple of weeks of debugging my
-						<code>go</code>
-						and
-						<code>ebpf</code>
-						codebase until I realized
-						what actually was going on after writing a lot of tests. This is the story of the invention
-						of the
-						<code>LPM Hash Set Map</code>
-						(I'm glad I spoiled that).
+						There is no need for LPM Trie data structures for network lookups when LPM hash sets are faster
+						and simpler.
 					</p>
+					<section>
+						<h3 id="overview">Overview</h3>
+						<p>
+							This article is the result of a long development phase inside the
+							<a class="icon-website" href="https://tholian.network/en/index.html" target="_blank">Tholian Endpoint agent</a>
+							where I spent a couple of weeks of debugging my
+							<code>go</code>
+							and
+							<code>ebpf</code>
+							codebase until I realized what
+							actually was going on after writing a lot of tests. This is the story of the invention of the
+							<code>LPM Hash Set Map</code>
+							(I'm glad I spoiled that).
+						</p>
+					</section>
 					<section>
 						<h3 id="what-are-lpm-tries">What are LPM Tries?</h3>
 						<p>
 							LPM
 							<a class="icon-website" href="https://en.wikipedia.org/wiki/Trie" target="_blank">Tries</a>
-							(Longest Prefix Match Tries) are a nested
-							tree-like data structure that has the purpose of
+							(Longest Prefix Match Tries) are a nested tree-like
+							data structure that has the purpose of
 							<code>sorting</code>
 							entries by their
 							<code>length of prefixes</code>
-							.
-							This means that entries with a longer prefix are sorted closer to the end of the branch, while
-							shorter prefixes are closer to the root node.
+							. This
+							means that entries with a longer prefix are sorted closer to the end of the branch, while shorter
+							prefixes are closer to the root node.
 						</p>
 						<p>
 							It's heavily used in the networking field, because
 							<code>ASNs</code>
-							(Autonomous System Numbers)
-							are address spaces which often times cannot be represented by their prefixes only,
-							and have a set of prefixes for the same
+							(Autonomous System Numbers) are address
+							spaces which often times cannot be represented by their prefixes only, and have a set of prefixes
+							for the same
 							<code>ASN</code>
 							.
 						</p>
 						<p>
 							For example, a network prefix like
 							<code>192.168.0.123/27</code>
-							is hard to represent in any
-							data structure, and there will be trade offs that limit the design and efficient
-							code paths of the data structure itself.
+							is hard to represent in any data structure,
+							and there will be trade offs that limit the design and efficient code paths of the data structure
+							itself.
 						</p>
 						<p>
-							This is especially the case when using LPM Tries because a Trie heavily relies on
-							resorting the data structure when new nodes are inserted but cannot be inserted as
-							a
+							This is especially the case when using LPM Tries because a Trie heavily relies on resorting
+							the data structure when new nodes are inserted but cannot be inserted as a
 							<code>leaf</code>
-							and have to create a new
+							and have to
+							create a new
 							<code>branch</code>
-							, depending on the branching conditions
-							of the Trie itself.
+							, depending on the branching conditions of the Trie itself.
 						</p>
 					</section>
 					<section>
 						<h3 id="example-usage">Example Usage</h3>
 						<p>
-							In my case I'm literally analyzing all networks of all internet registries in a local,
-							peer-to-peer manner. So that's pretty much the worst case. But it's easier to start
-							understanding the problem with a reduced test case.
+							In my case I'm literally analyzing all networks of all internet registries in a local, peer-to-peer
+							manner. So that's pretty much the worst case. But it's easier to start understanding the problem
+							with a reduced test case.
 						</p>
 						<pre class="go">
 import &#34;github.com/cookiengineer/lpm&#34;
@@ -245,11 +250,11 @@ trie.Insert(&#34;192.169.0.0/24&#34;)
 trie.Insert(&#34;192.169.128.0/25&#34;)
 						</pre>
 						<p>
-							If we take a look at the above example, the tree structue will look like we expect it to,
-							sorting the
+							If we take a look at the above example, the tree structue will look like we expect it to, sorting
+							the
 							<code>/25</code>
-							prefix in at the correct position while keeping the lower prefixes at
-							the most-top level as possible.
+							prefix in at the correct position while keeping the lower prefixes at the most-top
+							level as possible.
 						</p>
 						<pre class="go">
 trie.Print()
@@ -265,8 +270,8 @@ trie.Print()
 						<p>
 							Why do we need sorting on
 							<code>Insert()</code>
-							? What happens if we sort in the same networks in the
-							wrong order?
+							? What happens if we sort in the same networks in the wrong
+							order?
 						</p>
 						<pre class="go">
 import &#34;github.com/cookiengineer/lpm&#34;
@@ -285,16 +290,16 @@ trie.Print()
 						</pre>
 						<p>
 							LPM Tries walk down each level of nodes in a loop from top to bottom, from left to right, while
-							checking whether or not that specific node matches the current prefix. If the prefix of the current
-							insertion node doesn't match, it will create a new trailing node at the current level of the tree
-							structure, meaning in our case the third top-level node.
+							checking whether or not that specific node matches the current prefix. If the prefix of the
+							current insertion node doesn't match, it will create a new trailing node at the current level
+							of the tree structure, meaning in our case the third top-level node.
 						</p>
 						<p>
 							The problem in this case is that a Trie therefore needs to be potentially resorted on every
 							<code>Insert()</code>
-							call, which takes a very long time if you do that for a million nodes. It doesn't matter whether
-							you do the search via breadth-first or depth-first loops, because both will end up being way too
-							slow for practical usage (read as: taking hours for insert on a low-end machine).
+							call, which takes a very long time if you do that for a million nodes. It doesn't
+							matter whether you do the search via breadth-first or depth-first loops, because both will end
+							up being way too slow for practical usage (read as: taking hours for insert on a low-end machine).
 						</p>
 					</section>
 					<section>
@@ -302,14 +307,15 @@ trie.Print()
 						<p>
 							After the mentioned weeks of trying to make
 							<code>LPM Tries</code>
-							work on my low-end hardware with the worst-case
-							datasets of the Internet Registries, I gave up for a couple days and started to read up on LPM Tries.
+							work on my low-end hardware with the
+							worst-case datasets of the Internet Registries, I gave up for a couple days and started to read
+							up on LPM Tries.
 						</p>
 						<p>
-							Reading up on the implementations of LPM Tries in the (Linux) kernel didn't help, reading other code examples
-							or following beginner tutorials on the topic also didn't help much. No matter where I looked, everyone
-							was recommending LPM Tries for sorting in networks with their prefixes, without offering an alternative
-							or more efficient data structure for it.
+							Reading up on the implementations of LPM Tries in the (Linux) kernel didn't help, reading other
+							code examples or following beginner tutorials on the topic also didn't help much. No matter
+							where I looked, everyone was recommending LPM Tries for sorting in networks with their prefixes,
+							without offering an alternative or more efficient data structure for it.
 						</p>
 						<p>At some point, I thought: What if everybody else is doing this wrong?</p>
 					</section>
@@ -325,16 +331,16 @@ trie.Print()
 						<p>
 							A
 							<a class="icon-website" href="https://en.wikipedia.org/wiki/Subnet" target="_blank">subnet mask</a>
-							is the old way of talking about it, as the
-							terminology has changed to network prefixes due to
+							is the old way of talking about it, as
+							the terminology has changed to network prefixes due to
 							<abbr title="Internet Protocol Version 6">IPv6</abbr>
-							, but they are somewhat interchangeable for
-							this high level perspective. In
+							,
+							but they are somewhat interchangeable for this high level perspective. In
 							<abbr title="Internet Protocol Version 6">IPv6</abbr>
 							, there's
 							<a class="icon-website" href="https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing" target="_blank">Classless Inter Domain Routing</a>
-							notations being used, and the difference is that there's no full classes like in the early
-							days of
+							notations being used, and the difference is that there's no full classes like in the early days
+							of
 							<abbr title="Internet Protocol Version 4">IPv4</abbr>
 							. Classes in
 							<abbr title="Internet Protocol Version 4">IPv4</abbr>
@@ -348,27 +354,29 @@ trie.Print()
 							<code>/32</code>
 							) whereas nowadays the
 							<code>CIDR</code>
-							notations allow uneven prefixes to be used, in both
+							notations allow uneven
+							prefixes to be used, in both
 							<abbr title="Internet Protocol Version 4">IPv4</abbr>
 							and
 							<abbr title="Internet Protocol Version 6">IPv6</abbr>
 							.
 						</p>
 						<p>
-							A subnet mask is the bitwise representation of a network or address, which makes it possible to use
-							an
+							A subnet mask is the bitwise representation of a network or address, which makes it possible
+							to use an
 							<code>XOR</code>
 							operation on it to determine whether or not the targeted
 							<abbr title="Internet Protocol">IP</abbr>
-							address is reachable. This is
-							essentially the
+							address is reachable. This is essentially the
 							<code>network is unreachable</code>
-							error you'll get when you have a misconfigured
+							error you'll get when
+							you have a misconfigured
 							<abbr title="Local Area Network">LAN</abbr>
-							connection
-							on your computer, as it's the same mechanism trying to determine where to send the
+							connection on your computer, as it's the
+							same mechanism trying to determine where to send the
 							<abbr title="Internet Protocol">IP</abbr>
-							network packets to.
+							network packets
+							to.
 						</p>
 						<pre class="go">
 import &#34;github.com/cookiengineer/lpm&#34;
@@ -396,12 +404,12 @@ fmt.Println(is_reachable) // true
 						<p>
 							As you might have guessed it already, a subnet mask ends with its
 							<code>prefix</code>
-							length, which means that it
-							has a trailing zeros behavior after the prefixes' bit position. This is important to understand, because
-							it allows us to implement a hash set map by using the subnet mask (encoded as a
+							length, which means
+							that it has a trailing zeros behavior after the prefixes' bit position. This is important to
+							understand, because it allows us to implement a hash set map by using the subnet mask (encoded
+							as a
 							<code>string</code>
-							) as the key for
-							each entry.
+							) as the key for each entry.
 						</p>
 						<pre class="go">
 func (node *Node) Hash() {
@@ -426,13 +434,13 @@ func (node *Node) Hash() {
 							<code>subnet mask</code>
 							as an encoded
 							<code>string</code>
-							. This allows to lookup
-							entries much more efficiently than traversing a tree structure.
+							. This allows
+							to lookup entries much more efficiently than traversing a tree structure.
 						</p>
 						<p>
-							An additional benefit is that a Hash Map doesn't need to rotate the tree structure on insert, and
-							also doesn't need to insert new nodes in between existing ones if the inserted node cannot fit into
-							the tree.
+							An additional benefit is that a Hash Map doesn't need to rotate the tree structure on insert,
+							and also doesn't need to insert new nodes in between existing ones if the inserted node cannot
+							fit into the tree.
 						</p>
 						<pre class="go">
 type Internet {
@@ -450,8 +458,8 @@ type Internet {
 							method and its
 							<code>Prefix</code>
 							property.
-							As we don't want to waste memory, we have to ensure that the map structure is available before we
-							insert our pointer reference.
+							As we don't want to waste memory, we have to ensure that the map structure is available before
+							we insert our pointer reference.
 						</p>
 						<pre class="go">
 func (internet *Internet) Insert(value Node) bool {
@@ -492,9 +500,9 @@ func (internet *Internet) Insert(value Node) bool {
 						<h3 id="searching-nodes">Searching Nodes</h3>
 						<p>Searching nodes is a little challenging.</p>
 						<p>
-							There needs to be a loop that gathers all known prefixes and that sorts them in a descending manner,
-							so that the longest prefix is first and the shortest prefix is last. Then we can iterate over those
-							prefixes and return the node in the
+							There needs to be a loop that gathers all known prefixes and that sorts them in a descending
+							manner, so that the longest prefix is first and the shortest prefix is last. Then we can iterate
+							over those prefixes and return the node in the
 							<code>map[string]*Node</code>
 							with the matching hash.
 						</p>
@@ -505,20 +513,18 @@ func (internet *Internet) Insert(value Node) bool {
 							<abbr title="Internet Protocol Version 4">IPv4</abbr>
 							. In the case of
 							<abbr title="Internet Protocol Version 6">IPv6</abbr>
-							,
-							the worst-case lookup is exactly
+							, the worst-case lookup is exactly
 							<code>128</code>
-							lookups. As internet registries never assign prefixes shorter
-							than
+							lookups. As internet registries never assign prefixes shorter than
 							<code>8</code>
 							or longer than
 							<code>28</code>
-							(looking at you,
-							<abbr title="Routing Information Protocol">RIP</abbr>
-							E), the real-world worst-case is actually
+							(looking
+							at you,
+							<code>RIPE</code>
+							), the real-world worst-case is actually
 							<code>20</code>
-							lookups
-							for
+							lookups for
 							<abbr title="Internet Protocol Version 4">IPv4</abbr>
 							.
 						</p>
@@ -574,6 +580,16 @@ func (internet *Internet) SearchNode(value Node) Node {
 						</p>
 						<p><a class="icon-github" href="https://github.com/cookiengineer/lpm" target="_blank">Go LPM Library on GitHub</a></p>
 						<p>That's it for now, folks. I hope you enjoyed this short writeup.</p>
+					</section>
+					<section>
+						<h3 id="references">References</h3>
+						<ul>
+							<li><a class="icon-github" href="https://github.com/cookiengineer/lpm" target="_blank">Go LPM Library on GitHub</a></li>
+							<li><a class="icon-website" href="https://en.wikipedia.org/wiki/Trie" target="_blank">Trie</a></li>
+							<li><a class="icon-website" href="https://en.wikipedia.org/wiki/Subnet" target="_blank">Subnet</a></li>
+							<li><a class="icon-website" href="https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing" target="_blank">Classless Inter-Domain Routing</a></li>
+							<li><a class="icon-website" href="https://tholian.network/en/index.html" target="_blank">Tholian Endpoint agent</a></li>
+						</ul>
 					</section>
 				</article>
 			</main>

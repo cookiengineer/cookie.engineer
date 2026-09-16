@@ -1,5 +1,6 @@
 
 import hljs                from "./highlight.mjs";
+import language_accesslog  from "./languages/accesslog.mjs";
 import language_awk        from "./languages/awk.mjs";
 import language_bash       from "./languages/bash.mjs";
 import language_c          from "./languages/c.mjs";
@@ -20,6 +21,8 @@ import language_makefile   from "./languages/makefile.mjs";
 import language_markdown   from "./languages/markdown.mjs";
 import language_nft        from "./languages/nft.mjs";
 import language_nginx      from "./languages/nginx.mjs";
+import language_osascript  from "./languages/osascript.mjs";
+import language_php        from "./languages/php.mjs";
 import language_plaintext  from "./languages/plaintext.mjs";
 import language_powershell from "./languages/powershell.mjs";
 import language_python     from "./languages/python.mjs";
@@ -35,6 +38,7 @@ import language_zeek       from "./languages/zeek.mjs";
 
 
 
+hljs.registerLanguage("accesslog",  language_accesslog);
 hljs.registerLanguage("asm",        language_nasm);
 hljs.registerLanguage("awk",        language_awk);
 hljs.registerLanguage("bash",       language_bash);
@@ -57,6 +61,8 @@ hljs.registerLanguage("makefile",   language_makefile);
 hljs.registerLanguage("markdown",   language_markdown);
 hljs.registerLanguage("nft",        language_nft);
 hljs.registerLanguage("nginx",      language_nginx);
+hljs.registerLanguage("osascript",  language_osascript);
+hljs.registerLanguage("php",        language_php);
 hljs.registerLanguage("plaintext",  language_plaintext);
 hljs.registerLanguage("powershell", language_powershell);
 hljs.registerLanguage("python",     language_python);
@@ -66,6 +72,7 @@ hljs.registerLanguage("sql",        language_sql);
 hljs.registerLanguage("text",       language_plaintext);
 hljs.registerLanguage("wasm",       language_wasm);
 hljs.registerLanguage("nasm",       language_nasm);
+hljs.registerLanguage("x86asm",     language_nasm);
 hljs.registerLanguage("xml",        language_xml);
 hljs.registerLanguage("yaml",       language_yaml);
 hljs.registerLanguage("yara",       language_yara);

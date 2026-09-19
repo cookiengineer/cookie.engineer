@@ -185,13 +185,14 @@
 							Most firewalls are asked politely to drop a packet after the kernel has already carried it up
 							the networking stack, matched it against a rule set, and handed it to a userspace process to
 							decide.
-							<code>Tholian Firewall</code>
-							refuses that negotiation. It compiles a small
+						</p>
+						<p>
+							The Tholian Firewall refuses that negotiation. It compiles a small
 							<abbr title="Extended Berkeley Packet Filter">eBPF</abbr>
 							program and attaches it to the
 							<abbr title="eXpress Data Path">XDP</abbr>
-							hook, so matching traffic is dropped
-							by the driver before the stack ever allocates a socket for it.
+							hook, so that the matching network
+							traffic is dropped by the driver before the stack ever allocates a socket for it.
 						</p>
 						<p>
 							It is built for people who defend networks for a living. A Go backend can embed the firewall
@@ -203,8 +204,10 @@
 							<code>actions.Check</code>
 							on addresses, subnets, ports,
 							<abbr title="Autonomous System Number">ASN</abbr>
-							networks, and domains from inside its own process. Operators
-							who prefer a shell get the same engine as a standalone
+							networks, and domains from inside their own processes.
+						</p>
+						<p>
+							Operators who prefer a shell get the same engine as a standalone
 							<abbr title="Command Line Interface">CLI</abbr>
 							. When
 							<abbr title="Extended Berkeley Packet Filter">eBPF</abbr>
@@ -218,20 +221,24 @@
 							of failing outright.
 						</p>
 						<p>
-							The result is a firewall you can carry inside the service that needs it, without a sidecar daemon,
-							a userspace rule interpreter, or a
+							The result is a programmable
+							<abbr title="Extended Berkeley Packet Filter">eBPF</abbr>
+							firewall you can carry
+							inside the services that need it, without a central daemon, or a
 							<abbr title="C Bridge for Golang">CGo</abbr>
-							dependency deciding the fate of
-							every packet.
+							dependency deciding the fate of every packet.
 						</p>
 					</section>
 					<section>
 						<h3 id="features">Features</h3>
 						<ul>
 							<li>Drops ingress traffic in-kernel via <abbr title="eXpress Data Path">XDP</abbr> before the networking stack runs.</li>
-							<li>Embeds as a Go library with no <abbr title="C Bridge for Golang">CGo</abbr> ; <code>forbid</code> , <code>permit</code> , and <code>check</code> are ordinary function calls.</li>
-							<li>Blocks addresses, <abbr title="Classless Inter-Domain Routing">CIDR</abbr> subnets, <abbr title="Transmission Control Protocol">TCP</abbr> / <abbr title="User Datagram Protocol">UDP</abbr> ports, <abbr title="Autonomous System Number">ASN</abbr> networks, and domains through one target syntax.</li>
-							<li>Drops <abbr title="Domain Name System">DNS</abbr> responses for banned domains in the kernel and installs the resolved addresses from user space.</li>
+							<li>Embeds as a Go library with no <abbr title="C Bridge for Golang">CGo</abbr> dependency</li>
+							<li>All actions are ordinary function calls, like <code>forbid</code> , <code>permit</code> , and <code>check</code> .</li>
+							<li>Blocks addresses, <abbr title="Classless Inter-Domain Routing">CIDR</abbr> subnets and <abbr title="Autonomous System Number">ASN</abbr> networks.</li>
+							<li>Blocks <abbr title="Transmission Control Protocol">TCP</abbr> and <abbr title="User Datagram Protocol">UDP</abbr> ports.</li>
+							<li>Blocks domains, resolution, and <abbr title="Domain Name System">DNS</abbr> exfil attempts.</li>
+							<li>Drops <abbr title="Domain Name System">DNS</abbr> responses for banned domains in the kernel.</li>
 							<li>Falls back to <code>iptables</code> / <code>ip6tables</code> and a delimited <code>/etc/hosts</code> block when <abbr title="Extended Berkeley Packet Filter">eBPF</abbr> is unavailable.</li>
 							<li>Cross-compiles for <code>linux/amd64</code> , <code>linux/arm64</code> , and OpenWrt, plus BSD fallback builds.</li>
 							<li>Reports honestly whether a ban was actually applied instead of pretending it worked.</li>
@@ -329,14 +336,6 @@ CLI args -&gt; main.go -&gt; actions.* -&gt; matchers / types / structs
 								</tr>
 							</tbody>
 						</table>
-						<p>The design decisions behind those maps are deliberate:</p>
-						<ul>
-							<li><b>Ban-only, delete-to-permit.</b> There is no allowlist and no default-deny, so <code>permit</code> simply deletes a key. The hot path never resolves rule precedence.</li>
-							<li><b>Ingress-only.</b>  <abbr title="eXpress Data Path">XDP</abbr> runs on receive. Locally originated egress is not inspected directly; outbound bans take effect when the remote reply is dropped and the handshake cannot finish.</li>
-							<li><b>Kernel drop, user-space resolution.</b> For a banned domain the kernel hashes the lowercased wire form with FNV-1a and drops matching responses. The resolved <code>A</code> and <code>AAAA</code> records are installed in user space, because parsing <abbr title="Domain Name System">DNS</abbr> answers inside the BPF program repeatedly failed the verifier.</li>
-							<li><b>Verifier-safe by design.</b> The kernel program is kept small and flat with bounded offsets. Complex protocol work lives in Go, where it is cheap and unit-testable.</li>
-							<li><b>Byte order is a contract.</b> The <abbr title="Longest Prefix Match">LPM</abbr> prefix length is host byte order, the address bytes are network byte order, and the C and Go domain hashers must produce identical keys.</li>
-						</ul>
 					</section>
 					<section>
 						<h3 id="building">Building</h3>
@@ -582,17 +581,6 @@ func main() {
 							them, the embedding process must stay alive for filtering to continue. A daemon mode with pinned
 							maps is planned.
 						</p>
-					</section>
-					<section>
-						<h3 id="limitations">Limitations</h3>
-						<ul>
-							<li><abbr title="eXpress Data Path">XDP</abbr> is ingress-only; outbound traffic is not filtered directly.</li>
-							<li>Maps and <abbr title="eXpress Data Path">XDP</abbr> links are not pinned, so the standalone <abbr title="Command Line Interface">CLI</abbr> does not persist bans between invocations.</li>
-							<li>Encrypted <abbr title="Domain Name System">DNS</abbr> over <abbr title="Transport Layer Security">TLS</abbr> and over <abbr title="Hypertext Transfer Protocol Secure">HTTPS</abbr> cannot be inspected; only <abbr title="User Datagram Protocol">UDP</abbr>  <abbr title="Domain Name System">DNS</abbr> on ports <code>53</code> and <code>5353</code> is filtered, and <abbr title="Domain Name System">DNS</abbr> over <abbr title="Transmission Control Protocol">TCP</abbr> passes through.</li>
-							<li>The embedded internet map is roughly <code>31 MB</code> gzip (about <code>825 MB</code> raw) and parsed in full at startup.</li>
-							<li>The <code>iptables</code> and <code>/etc/hosts</code> fallbacks are coarse and not equivalent to the <abbr title="Extended Berkeley Packet Filter">eBPF</abbr> path.</li>
-							<li><code>permit</code> deletes a ban; it cannot carve a hole inside a broader ban.</li>
-						</ul>
 					</section>
 					<section>
 						<h3 id="references">References</h3>

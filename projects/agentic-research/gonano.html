@@ -18,7 +18,7 @@
 		<!-- Social Media -->
 		<meta property="og:title" content="GoNano">
 		<meta property="og:site_name" content="Cookie Engineer's Website">
-		<meta property="og:description" content="A Pure-Go LLM Training and Inference Harness">
+		<meta property="og:description" content="A Pure-Go LLM Harness for CPU Long-Context Training and Inference">
 		<meta property="og:image" itemprop="image" content="https://cookie.engineer/projects/agentic-research/gonano/teaser.jpg">
 		<meta property="og:url" content="https://cookie.engineer/projects/agentic-research/gonano.md">
 		<meta property="og:type" content="article">
@@ -27,7 +27,7 @@
 		<meta name="twitter:card" content="summary">
 		<meta name="twitter:domain" content="cookie.engineer">
 		<meta name="twitter:title" itemprop="name" content="GoNano">
-		<meta name="twitter:description" itemprop="description" content="A Pure-Go LLM Training and Inference Harness">
+		<meta name="twitter:description" itemprop="description" content="A Pure-Go LLM Harness for CPU Long-Context Training and Inference">
 		<meta name="twitter:image" itemprop="image" content="https://cookie.engineer/projects/agentic-research/gonano/teaser.jpg">
 
 		<!-- Website Design -->
@@ -188,10 +188,10 @@
 							:
 							an end-to-end
 							<abbr title="Large Language Model">LLM</abbr>
-							training and inference harness that runs on the experimental
+							training and inference harness built on the experimental
 							Go 1.27
 							<a class="icon-website" href="https://pkg.go.dev/simd" target="_blank">simd</a>
-							standard library package.
+							standard-library package.
 						</p>
 						<p>
 							Most
@@ -202,24 +202,85 @@
 							flips that around: one language, one
 							binary, and
 							<abbr title="Advanced Vector Extensions 512">AVX-512</abbr>
-							kernels that keep training and inference
-							parallelized across the
+							kernels that stretch long-context, batched
+							inference across the
 							<abbr title="Central Processing Unit">CPU</abbr>
-							.
+							- no
+							<abbr title="Graphical Processing Unit">GPU</abbr>
+							required,
+							and none wanted.
+						</p>
+						<p>
+							The project is tuned for long context (100k tokens and beyond) rather than single-stream latency,
+							so a plain x86 box can run the same train, evaluate, and serve loop that usually needs a full
+							Python stack.
 						</p>
 					</section>
 					<section>
 						<h3 id="features">Features</h3>
 						<ul>
 							<li>End-to-end training and inference, from tokenizer to chat, in a single Go program.</li>
-							<li><abbr title="Single Instruction Multiple Data">SIMD</abbr> kernels for matmul, softmax, RMSNorm, and reductions.</li>
-							<li>The nanochat <abbr title="Generative Pre-trained Transformer">GPT</abbr> transformer with RoPE, QK-norm, <abbr title="Grouped Query Attention">GQA</abbr> , and sliding windows.</li>
+							<li><abbr title="Single Instruction Multiple Data">SIMD</abbr> kernels for matmul, softmax, RMSNorm, and reductions, with a portable scalar fallback used for parity testing.</li>
+							<li>The nanochat <abbr title="Generative Pre-trained Transformer">GPT</abbr> transformer with <abbr title="Rotary Position Embedding">RoPE</abbr> , QK-norm, <abbr title="Grouped Query Attention">GQA</abbr> , value embeddings, and sliding windows.</li>
+							<li>Measured long-context optimizations: goroutine-parallel kernels, split-K flash decoding, a vectorized <abbr title="Single Instruction Multiple Data">SIMD</abbr>  <code>exp</code> , and a rank-1 score-tile <abbr title="General Matrix Multiply">GEMM</abbr> .</li>
+							<li><abbr title="Heavily Compressed Attention">HCA</abbr> dense <abbr title="Key-Value">KV</abbr> compression with a learned per-channel softmax compressor.</li>
+							<li><abbr title="Compressed Sparse Attention">CSA</abbr> with a hierarchical lightning indexer that bounds the scored entries per query.</li>
+							<li>A local sliding-window attention branch merged into the compressed branch through one exact softmax.</li>
+							<li>Causal encoder-decoder prefill: the decoder global compressed <abbr title="Key-Value">KV</abbr> is projected from the encoder hidden state, and prefill is encoder-only plus a bounded decoder replay.</li>
+							<li>Cross-layer <abbr title="Key-Value">KV</abbr> and indexer reuse ( <code>F</code> / <code>R</code> / <code>U</code> patterns) that drops compressor and indexer parameters from reuse layers.</li>
+							<li>Partial <abbr title="Rotary Position Embedding">RoPE</abbr> and grouped-query or multi-query attention for cheaper <abbr title="Key-Value">KV</abbr> caches.</li>
 							<li>Byte-level <abbr title="Byte Pair Encoding">BPE</abbr> tokenizer training and inference.</li>
-							<li><abbr title="Adaptive Moment Estimation with Weight Decay">AdamW</abbr> , Muon, and MuonAdamW optimizers.</li>
+							<li><abbr title="Adaptive Moment Estimation with Weight Decay">AdamW</abbr> , Muon, and <code>MuonAdamW</code> optimizers.</li>
 							<li>An <abbr title="Open Artificial Intelligence">OpenAI</abbr> -compatible <abbr title="Hypertext Transfer Protocol">HTTP</abbr> server with chat completions, streaming, and tool calls.</li>
 							<li><abbr title="GPT-Generated Unified Format">GGUF</abbr> export for running models elsewhere.</li>
 							<li>A sandboxed Python executor for <abbr title="Human Evaluation">HumanEval</abbr> benchmarks.</li>
 						</ul>
+					</section>
+					<section>
+						<h3 id="architecture">Architecture</h3>
+						<p>
+							The numeric core lives behind a small
+							<code>kernels.Backend</code>
+							contract.
+							<code>kernels/simd</code>
+							is the production
+							implementation (
+							<abbr title="Advanced Vector Extensions 512">AVX-512</abbr>
+							/AVX2, goroutine-parallel), while
+							<code>kernels/scalar</code>
+							is a portable pure-Go reference that the parity tests compare against; backends
+							can be swapped at runtime with
+							<code>tensors.UseKernelBackend</code>
+							.
+						</p>
+						<p>
+							On top of that sit
+							<code>tensors</code>
+							(dense float32/int32 types),
+							<code>model</code>
+							(the nanochat transformer
+							plus the compressed, sparse, sliding-window, and encoder-decoder attention paths),
+							<code>optimizer</code>
+							,
+							<code>tokenizer</code>
+							,
+							<code>data</code>
+							(Parquet, Snappy, Hugging Face downloads, Markdown, dataloaders),
+							<code>trainer</code>
+							,
+							<code>inference</code>
+							(
+							<abbr title="Key-Value">KV</abbr>
+							-cache engine, sampler, benchmark),
+							<code>server</code>
+							,
+							<code>evaluator</code>
+							,
+							<code>executor</code>
+							, and the
+							<code>internal/parallel</code>
+							worker pool.
+						</p>
 					</section>
 					<section>
 						<h3 id="building">Building</h3>
@@ -235,7 +296,6 @@
 export GOEXPERIMENT=simd;
 
 go build ./...;
-go test ./...;
 						</pre>
 						<p>
 							Vector width is auto-selected from the
@@ -249,9 +309,35 @@ go test ./...;
 							is
 							<code>float32</code>
 							everywhere, and parallelism is goroutine-per-op through the
-							<code>parallel</code>
-							package.
+							<code>internal/parallel</code>
+							package. Low-bit weights and
+							<abbr title="Key-Value">KV</abbr>
+							were evaluated and rejected: the Go
+							<code>simd</code>
+							package
+							has no vectorized int8-to-float32 widening, and decode is compute-bound rather than bandwidth-bound,
+							so the backend stays
+							<code>float32</code>
+							-only.
 						</p>
+					</section>
+					<section>
+						<h3 id="testing">Testing</h3>
+						<p>
+							Every feature has a unit test: scalar-vs-
+							<abbr title="Single Instruction Multiple Data">SIMD</abbr>
+							parity tests
+							for the entire numeric backend (including flash attention), numerical gradient checks of the
+							backprop (including grouped-query, compressed, sparse, sliding-window, and encoder-decoder paths),
+							and an end-to-end train, save, load, generate test.
+						</p>
+						<pre class="bash">
+export GOEXPERIMENT=simd;
+
+go test -race ./...;
+go vet ./...;
+gofmt -l model inference cmd internal kernels tensors;
+						</pre>
 					</section>
 					<section>
 						<h3 id="usage">Usage</h3>
@@ -291,6 +377,28 @@ curl http://localhost:8080/v1/chat/completions \
 							with
 							<code>go run ./cmd/export</code>
 							.
+						</p>
+					</section>
+					<section>
+						<h3 id="usage-long-context">Usage: Long Context</h3>
+						<p>
+							The recommended long-context configuration enables the full compression, sparsity, sliding-window,
+							and causal encoder-decoder stack:
+						</p>
+						<pre class="bash">
+export GOEXPERIMENT=simd;
+
+go run ./cmd/base_train --depth 20 --data-dir ~/webdata-md --data-format markdown \
+  --compression-ratio 4 --sparse-topk 8 --swa-window 128 --ced --num-iterations 10000;
+						</pre>
+						<p>
+							At a sequence length of 16384 that stack measures roughly 3.3x prefill and 1.6-2.1x decode versus
+							an uncompressed model on a 16-core
+							<abbr title="Advanced Vector Extensions 512">AVX-512</abbr>
+							machine. Run
+							<code>./benchmark.sh</code>
+							to reproduce the numbers from a fresh temporary directory: it builds the binaries, trains a
+							tiny model on synthetic data, and sweeps the decode batch sizes.
 						</p>
 					</section>
 				</article>

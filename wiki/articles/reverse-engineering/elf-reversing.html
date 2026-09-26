@@ -128,19 +128,10 @@
 
 				<article>
 					<h2 id="elf-reversing">ELF Reversing</h2>
-					<p>
-						Structural analysis of ELF binaries for malware reverse-engineering to detect suspicious layouts,
-						packers, and anti-analysis tricks.
-					</p>
+					<p>Structural analysis of ELF binaries for malware reverse-engineering to detect suspicious layouts, packers, and anti-analysis tricks.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							ELF reversing dissects a Linux executable without running it, reading its headers, segments,
-							sections, and symbols to learn what it does. Hostile software leaves structural deviations from
-							normal builds, and those deviations point straight at its capabilities. After reading, you can
-							inspect an ELF with readelf, objdump, and nm, recognize packers and anti-analysis tricks, and
-							triage a suspicious sample.
-						</p>
+						<p>ELF reversing dissects a Linux executable without running it, reading its headers, segments, sections, and symbols to learn what it does. Hostile software leaves structural deviations from normal builds, and those deviations point straight at its capabilities. After reading, you can inspect an ELF with readelf, objdump, and nm, recognize packers and anti-analysis tricks, and triage a suspicious sample.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -151,40 +142,14 @@
 					</section>
 					<section>
 						<h3 id="malware-analysis-mindset">Malware Analysis Mindset</h3>
-						<p>
-							You are not debugging a crashing application. You are dissecting hostile software. Every byte
-							in the ELF was placed there by an attacker to achieve a goal: persistence, exfiltration,
-							<abbr title="Command and Control">C2</abbr>
-							, defense evasion. Your job is to understand what the binary does without executing it, by reading
-							its structure.
-						</p>
-						<p>
-							Normal binaries follow predictable patterns. Malware deviates - that deviation is the signal.
-							This article catalogues the deviations.
-						</p>
+						<p>You are not debugging a crashing application. You are dissecting hostile software. Every byte in the ELF was placed there by an attacker to achieve a goal: persistence, exfiltration, <abbr title="Command and Control">C2</abbr> , defense evasion. Your job is to understand what the binary does without executing it, by reading its structure.</p>
+						<p>Normal binaries follow predictable patterns. Malware deviates - that deviation is the signal. This article catalogues the deviations.</p>
 					</section>
 					<section>
 						<h3 id="suspicious-elf-characteristics">Suspicious ELF Characteristics</h3>
 						<h4 id="init-array-and-fini-array-hijacking">.init_array and .fini_array Hijacking</h4>
-						<p>
-							The
-							<code>.init_array</code>
-							section contains function pointers that run before
-							<code>main()</code>
-							. The dynamic
-							linker calls them in order during initialization. The
-							<code>.fini_array</code>
-							runs at exit, triggered
-							by
-							<code>__cxa_finalize</code>
-							.
-						</p>
-						<p>
-							Normal usage: C++ static constructors, runtime setup. Malware usage: anti-debug checks, decryption
-							routines, and payload execution that happens before any debugger can break on
-							<code>main()</code>
-							.
-						</p>
+						<p>The <code>.init_array</code> section contains function pointers that run before <code>main()</code> . The dynamic linker calls them in order during initialization. The <code>.fini_array</code> runs at exit, triggered by <code>__cxa_finalize</code> .</p>
+						<p>Normal usage: C++ static constructors, runtime setup. Malware usage: anti-debug checks, decryption routines, and payload execution that happens before any debugger can break on <code>main()</code> .</p>
 						<pre class="bash">
 $ readelf -S suspicious.bin | grep -E &#39;init|fini&#39;
   [16] .init_array       INIT_ARRAY      0000000000403e10  00003e10
@@ -192,16 +157,7 @@ $ readelf -S suspicious.bin | grep -E &#39;init|fini&#39;
   [17] .fini_array       FINI_ARRAY      0000000000403e28  00003e28
        0000000000000008  0000000000000008  WA       0     0     8
 						</pre>
-						<p>
-							A size of
-							<code>0x18</code>
-							for
-							<code>.init_array</code>
-							on x86-64 means three function pointers (3 x 8 bytes). A
-							simple C program has one (call to
-							<code>__libc_csu_init</code>
-							). More than two is suspicious.
-						</p>
+						<p>A size of <code>0x18</code> for <code>.init_array</code> on x86-64 means three function pointers (3 x 8 bytes). A simple C program has one (call to <code>__libc_csu_init</code> ). More than two is suspicious.</p>
 						<pre class="bash">
 $ objdump -d -j .init_array suspicious.bin
 
@@ -212,27 +168,7 @@ Disassembly of section .init_array:
   403e18:       60 11 40 00 00 00 00 00
   403e20:       90 22 40 00 00 00 00 00
 						</pre>
-						<p>
-							Three entries:
-							<code>0x401100</code>
-							,
-							<code>0x401160</code>
-							,
-							<code>0x402290</code>
-							. The first is the standard libc init. The
-							other two are suspicious. They run before
-							<code>main()</code>
-							. In a debugger,
-							<code>break main</code>
-							never fires
-							if the
-							<code>.init_array</code>
-							function calls
-							<code>exit(0)</code>
-							after detecting
-							<code>ptrace</code>
-							.
-						</p>
+						<p>Three entries: <code>0x401100</code> , <code>0x401160</code> , <code>0x402290</code> . The first is the standard libc init. The other two are suspicious. They run before <code>main()</code> . In a debugger, <code>break main</code> never fires if the <code>.init_array</code> function calls <code>exit(0)</code> after detecting <code>ptrace</code> .</p>
 						<p>To check what these functions do, disassemble them:</p>
 						<pre class="bash">
 $ objdump -d suspicious.bin --start-address=0x401160 --stop-address=0x401180
@@ -262,163 +198,64 @@ $ readelf -l malicious.bin
   LOAD   0x0000000000001000 0x0000000000401000 0x0000000000401000
          0x0000000000008000 0x0000000000008000  RWE    0x1000
 						</pre>
-						<p>
-							RWE =
-							<code>Flags 7</code>
-							(read=4 + write=2 + execute=1). This permits the code to modify itself at runtime
-							<ul>
-								<li>JIT compilation, self-decrypting shellcode, polymorphism. The ELF loader maps a <code>PT_LOAD</code></li>
-							</ul>
-						</p>
-						<p>
-							segment with the permissions declared in its program header, so an RWX segment is mapped RWX
-							even though
-							<code>CONFIG_X86_64_MPROTECT_NOWRITE_EXEC</code>
-							restricts later writable and executable
-							<code>mmap</code>
-							calls. The presence of an RWX LOAD segment is a strong packer/exploit indicator.
-						</p>
-						<p>
-							Empty
-							<code>.text</code>
-							section: the binary has code mapped at the segment level but the
-							<code>.text</code>
-							section
-							has zero size. This means the code region is populated at runtime - shellcode injection, unpacking
-							stubs, or staged loading:
-						</p>
+						<p>RWE = <code>Flags 7</code> (read=4 + write=2 + execute=1). This permits the code to modify itself at runtime<ul>
+	<li>JIT compilation, self-decrypting shellcode, polymorphism. The ELF loader maps a <code>PT_LOAD</code></li>
+</ul></p>
+						<p>segment with the permissions declared in its program header, so an RWX segment is mapped RWX even though <code>CONFIG_X86_64_MPROTECT_NOWRITE_EXEC</code> restricts later writable and executable <code>mmap</code> calls. The presence of an RWX LOAD segment is a strong packer/exploit indicator.</p>
+						<p>Empty <code>.text</code> section: the binary has code mapped at the segment level but the <code>.text</code> section has zero size. This means the code region is populated at runtime - shellcode injection, unpacking stubs, or staged loading:</p>
 						<pre class="bash">
 $ readelf -S suspicious.bin | grep &#39;.text&#39;
   [13] .text             PROGBITS        0000000000401040  00001040
        0000000000000000  0000000000000000  AX       0     0     16
 						</pre>
-						<p>
-							Size
-							<code>0x0</code>
-							. At runtime, code appears here from unpacking or network download.
-						</p>
+						<p>Size <code>0x0</code> . At runtime, code appears here from unpacking or network download.</p>
 						<h4 id="unusual-interp">Unusual INTERP</h4>
-						<p>
-							The
-							<code>.interp</code>
-							section specifies the dynamic linker path. Normally
-							<code>/lib64/ld-linux-x86-64.so.2</code>
-							:
-						</p>
+						<p>The <code>.interp</code> section specifies the dynamic linker path. Normally <code>/lib64/ld-linux-x86-64.so.2</code> :</p>
 						<pre class="bash">
 $ readelf -p .interp suspicious.bin
 
 String dump of section &#39;.interp&#39;:
   [     0]  /lib/ld-musl-x86_64.so.1
 						</pre>
-						<p>
-							A musl interpreter means the binary was compiled against musl libc, not glibc. This is unusual
-							for malware but common in embedded Linux. Statically compiled, it may have no DT_NEEDED entries
-							at all.
-						</p>
-						<p>
-							An empty or missing interpreter means the binary is statically linked or uses a custom loader
-							<ul>
-								<li>both worth investigating.</li>
-							</ul>
-						</p>
+						<p>A musl interpreter means the binary was compiled against musl libc, not glibc. This is unusual for malware but common in embedded Linux. Statically compiled, it may have no DT_NEEDED entries at all.</p>
+						<p>An empty or missing interpreter means the binary is statically linked or uses a custom loader<ul>
+	<li>both worth investigating.</li>
+</ul></p>
 						<pre class="bash">
 $ readelf -p .interp suspicious.bin
 readelf: Error: No .interp section
 						</pre>
 						<h4 id="dt-rpath-and-dt-runpath-abuse">DT_RPATH and DT_RUNPATH Abuse</h4>
-						<p>
-							R
-							<abbr title="Port Address Translation">PAT</abbr>
-							H and RUN
-							<abbr title="Port Address Translation">PAT</abbr>
-							H entries in
-							<code>.dynamic</code>
-							tell the dynamic linker where to search for shared libraries
-							<em>before</em>
-							the standard paths:
-						</p>
+						<p>R <abbr title="Port Address Translation">PAT</abbr> H and RUN <abbr title="Port Address Translation">PAT</abbr> H entries in <code>.dynamic</code> tell the dynamic linker where to search for shared libraries <em>before</em> the standard paths:</p>
 						<pre class="bash">
 $ readelf -d suspicious.bin | grep -E &#39;RPATH|RUNPATH&#39;
  0x000000000000000f (RPATH)              Library rpath: [$ORIGIN/../lib]
  0x000000000000001d (RUNPATH)            Library runpath: [$ORIGIN/../lib]
 						</pre>
-						<p>
-							<code>$ORIGIN</code>
-							resolves to the binary's directory at runtime. If the binary uses
-							<code>$ORIGIN</code>
-							with a
-							relative path like
-							<code>../lib</code>
-							, it loads libraries from a relative location. An attacker places
-							malicious
-							<code>.so</code>
-							files alongside the binary - LD_LIBRARY_
-							<abbr title="Port Address Translation">PAT</abbr>
-							H hijacking
-							without environment variables.
-						</p>
-						<p>
-							Writable R
-							<abbr title="Port Address Translation">PAT</abbr>
-							H:
-							<code>/tmp/.hidden/</code>
-							. The binary loads shared libraries
-							from a world-writable directory. Drop a malicious
-							<code>libc.so.6</code>
-							there and it gets loaded.
-						</p>
+						<p><code>$ORIGIN</code> resolves to the binary's directory at runtime. If the binary uses <code>$ORIGIN</code> with a relative path like <code>../lib</code> , it loads libraries from a relative location. An attacker places malicious <code>.so</code> files alongside the binary - LD_LIBRARY_ <abbr title="Port Address Translation">PAT</abbr> H hijacking without environment variables.</p>
+						<p>Writable R <abbr title="Port Address Translation">PAT</abbr> H: <code>/tmp/.hidden/</code> . The binary loads shared libraries from a world-writable directory. Drop a malicious <code>libc.so.6</code> there and it gets loaded.</p>
 						<pre class="plaintext">
  0x000000000000000f (RPATH)              Library rpath: [/tmp/.cache]
 						</pre>
-						<p>
-							Absolute writable paths in R
-							<abbr title="Port Address Translation">PAT</abbr>
-							H = library planting attack vector.
-						</p>
+						<p>Absolute writable paths in R <abbr title="Port Address Translation">PAT</abbr> H = library planting attack vector.</p>
 						<h4 id="dynamic-anomalies">.dynamic Anomalies</h4>
-						<p>
-							The
-							<code>.dynamic</code>
-							section is the runtime instruction manual for
-							<code>ld.so</code>
-							. Every entry directs the
-							loader. Entries pointing to writable segments are suspicious:
-						</p>
+						<p>The <code>.dynamic</code> section is the runtime instruction manual for <code>ld.so</code> . Every entry directs the loader. Entries pointing to writable segments are suspicious:</p>
 						<pre class="bash">
 $ readelf -d suspicious.bin | grep -E &#39;INIT|FINI|PLTGOT&#39;
  0x000000000000000c (INIT)               0x401120
  0x000000000000000d (FINI)               0x402340
  0x0000000000000003 (PLTGOT)            0x404000
 						</pre>
-						<p>
-							Compare these addresses against the LOAD segment ranges. If INIT or FINI addresses fall within
-							RW segments (not RE), the binary modifies its own init/fini functions.
-						</p>
+						<p>Compare these addresses against the LOAD segment ranges. If INIT or FINI addresses fall within RW segments (not RE), the binary modifies its own init/fini functions.</p>
 						<p>Cross-reference manually:</p>
 						<pre class="bash">
 $ readelf -l suspicious.bin | grep LOAD
   LOAD  0x0000000000400000 0x0000000000400000  ... R E  0x1000
   LOAD  0x0000000000404000 0x0000000000404000  ... RW   0x1000
 						</pre>
-						<p>
-							PLTGOT at
-							<code>0x404000</code>
-							is in the RW segment - normal (GOT is writable). But if INIT at
-							<code>0x401120</code>
-							is in RW territory, that is abnormal - init functions should be read-execute only.
-						</p>
+						<p>PLTGOT at <code>0x404000</code> is in the RW segment - normal (GOT is writable). But if INIT at <code>0x401120</code> is in RW territory, that is abnormal - init functions should be read-execute only.</p>
 						<h4 id="pt-note-to-pt-load-conversion">PT_NOTE to PT_LOAD Conversion</h4>
-						<p>
-							Intel CET (Control-flow Enforcement Technology) and other features use
-							<code>PT_NOTE</code>
-							segments for
-							metadata. Some malware converts
-							<code>PT_NOTE</code>
-							to
-							<code>PT_LOAD</code>
-							:
-						</p>
+						<p>Intel CET (Control-flow Enforcement Technology) and other features use <code>PT_NOTE</code> segments for metadata. Some malware converts <code>PT_NOTE</code> to <code>PT_LOAD</code> :</p>
 						<pre class="bash">
 $ readelf -l suspicious.bin
 
@@ -427,54 +264,10 @@ $ readelf -l suspicious.bin
   NOTE  0x0000000000000338 0x0000000000400338 0x0000000000400338
         0x0000000000000030 0x0000000000000030  R E    0x4
 						</pre>
-						<p>
-							A
-							<code>PT_NOTE</code>
-							segment with
-							<code>R E</code>
-							(executable) flags is unusual. Normal
-							<abbr title="Penetration Test">PT</abbr>
-							_NOTE segments are read-only and contain
-							<code>.note.ABI-tag</code>
-							,
-							<code>.note.gnu.build-id</code>
-							. If a
-							<abbr title="Penetration Test">PT</abbr>
-							_NOTE segment is executable, it may contain shellcode disguised as note data.
-						</p>
-						<p>
-							The conversion technique is a static file modification, not a runtime trick: the malware rewrites
-							a
-							<code>PT_NOTE</code>
-							entry's
-							<code>p_type</code>
-							to
-							<code>PT_LOAD</code>
-							, sets
-							<code>p_flags</code>
-							to
-							<code>R E</code>
-							, points
-							<code>p_offset</code>
-							and
-							<code>p_vaddr</code>
-							at shellcode appended to the file, and patches
-							<code>e_entry</code>
-							to that virtual address.
-							When the kernel later executes the file, the loader maps the forged segment and jumps straight
-							into the payload. This "
-							<abbr title="Penetration Test">PT</abbr>
-							_NOTE infection" is a well-known ELF backdoor
-							technique because the program header change is easy to script and survives a simple structural
-							review.
-						</p>
+						<p>A <code>PT_NOTE</code> segment with <code>R E</code> (executable) flags is unusual. Normal <abbr title="Penetration Test">PT</abbr> _NOTE segments are read-only and contain <code>.note.ABI-tag</code> , <code>.note.gnu.build-id</code> . If a <abbr title="Penetration Test">PT</abbr> _NOTE segment is executable, it may contain shellcode disguised as note data.</p>
+						<p>The conversion technique is a static file modification, not a runtime trick: the malware rewrites a <code>PT_NOTE</code> entry's <code>p_type</code> to <code>PT_LOAD</code> , sets <code>p_flags</code> to <code>R E</code> , points <code>p_offset</code> and <code>p_vaddr</code> at shellcode appended to the file, and patches <code>e_entry</code> to that virtual address. When the kernel later executes the file, the loader maps the forged segment and jumps straight into the payload. This " <abbr title="Penetration Test">PT</abbr> _NOTE infection" is a well-known ELF backdoor technique because the program header change is easy to script and survives a simple structural review.</p>
 						<h4 id="comment-section-analysis">.comment Section Analysis</h4>
-						<p>
-							The
-							<code>.comment</code>
-							section stores the compiler version string. It survives stripping. Every binary
-							built on the attacker's machine carries metadata:
-						</p>
+						<p>The <code>.comment</code> section stores the compiler version string. It survives stripping. Every binary built on the attacker's machine carries metadata:</p>
 						<pre class="bash">
 $ readelf -p .comment suspicious.bin
 
@@ -482,30 +275,12 @@ String dump of section &#39;.comment&#39;:
   [     0]  GCC: (GNU) 5.4.0
   [     f]  GCC: (Ubuntu 5.4.0-6ubuntu1~16.04.12) 5.4.0 20160609
 						</pre>
-						<p>
-							This tells you the attacker used Ubuntu 16.04 with GCC 5.4.0. If the binary targets ARM but
-							was compiled on Ubuntu 16.04 x86-64, the attacker used a cross-compiler - the binary is not
-							native to its build host.
-						</p>
-						<p>
-							Missing
-							<code>.comment</code>
-							section is also a signal. Some build systems intentionally strip it. Some
-							malware builds do too. Not conclusive, but part of the picture.
-						</p>
+						<p>This tells you the attacker used Ubuntu 16.04 with GCC 5.4.0. If the binary targets ARM but was compiled on Ubuntu 16.04 x86-64, the attacker used a cross-compiler - the binary is not native to its build host.</p>
+						<p>Missing <code>.comment</code> section is also a signal. Some build systems intentionally strip it. Some malware builds do too. Not conclusive, but part of the picture.</p>
 					</section>
 					<section>
 						<h3 id="stripped-vs-unstripped">Stripped vs Unstripped</h3>
-						<p>
-							Stripping removes
-							<code>.symtab</code>
-							and
-							<code>.strtab</code>
-							(static symbol table and string table). The dynamic
-							symbol table (
-							<code>.dynsym</code>
-							) remains for shared library imports. This leaves:
-						</p>
+						<p>Stripping removes <code>.symtab</code> and <code>.strtab</code> (static symbol table and string table). The dynamic symbol table ( <code>.dynsym</code> ) remains for shared library imports. This leaves:</p>
 						<ul>
 							<li>No function names in disassembly (functions are <code>sub_401000</code> in Ghidra/I <abbr title="Domain Admin">DA</abbr> ).</li>
 							<li>No local variable names or source file paths.</li>
@@ -519,11 +294,7 @@ $ readelf -S unstripped.bin | grep symtab
 $ readelf -S stripped.bin | grep symtab
 # No output -- .symtab removed entirely.
 						</pre>
-						<p>
-							Verify with
-							<code>file</code>
-							:
-						</p>
+						<p>Verify with <code>file</code> :</p>
 						<pre class="bash">
 $ file binary
 binary: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 2.6.32, not stripped
@@ -531,10 +302,7 @@ binary: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked,
 binary: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 2.6.32, stripped
 						</pre>
 						<h4 id="function-identification">Function Identification</h4>
-						<p>
-							Without symbol names, identify functions by their prologue pattern. x86-64 functions typically
-							begin with:
-						</p>
+						<p>Without symbol names, identify functions by their prologue pattern. x86-64 functions typically begin with:</p>
 						<pre class="x86asm">
 push   rbp
 mov    rbp, rsp
@@ -576,11 +344,7 @@ if __name__ == &#39;__main__&#39;:
 					</section>
 					<section>
 						<h3 id="readelf-for-reversing">readelf for Reversing</h3>
-						<p>
-							<code>readelf</code>
-							is your primary ELF inspection tool. It never executes the binary - pure static analysis.
-							The essential flags for reversing:
-						</p>
+						<p><code>readelf</code> is your primary ELF inspection tool. It never executes the binary - pure static analysis. The essential flags for reversing:</p>
 						<h4 id="readelf-h-elf-header"><code>readelf -h</code> : ELF Header</h4>
 						<pre class="bash">
 $ readelf -h suspicious.bin
@@ -738,7 +502,7 @@ Dynamic section at offset 0x2e20 contains 24 entries:
 									<td align="center">HTTP/HTTPS/FTP network operations</td>
 								</tr>
 								<tr>
-									<td align="center"><code>libssl.so</code>/<code>libcrypto.so</code></td>
+									<td align="center"><code>libssl.so</code> / <code>libcrypto.so</code></td>
 									<td align="center">TLS, cryptographic operations</td>
 								</tr>
 								<tr>
@@ -763,21 +527,11 @@ Dynamic section at offset 0x2e20 contains 24 entries:
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							No DT_NEEDED entries + large binary = statically linked. The binary contains all libraries internally.
-							Use
-							<code>nm</code>
-							to identify embedded library code:
-						</p>
+						<p>No DT_NEEDED entries + large binary = statically linked. The binary contains all libraries internally. Use <code>nm</code> to identify embedded library code:</p>
 						<pre class="bash">
 $ nm -n static_binary | grep &#39; T &#39;
 						</pre>
-						<p>
-							Sort by address. Clusters of symbols with similar prefixes indicate library boundaries (e.g.,
-							all
-							<code>__libc_*</code>
-							symbols grouped together).
-						</p>
+						<p>Sort by address. Clusters of symbols with similar prefixes indicate library boundaries (e.g., all <code>__libc_*</code> symbols grouped together).</p>
 						<h4 id="readelf-s-symbols"><code>readelf -s</code> : Symbols</h4>
 						<pre class="bash">
 $ readelf -s suspicious.bin
@@ -800,46 +554,13 @@ Symbol table &#39;.dynsym&#39; contains 15 entries:
     13: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND dlsym@GLIBC_2.2.5 (2)
     14: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND __libc_start_main@GLIBC_2.2.5 (2)
 						</pre>
-						<p>
-							This import table is a confession:
-							<code>socket</code>
-							+
-							<code>connect</code>
-							+
-							<code>send</code>
-							+
-							<code>recv</code>
-							= network
-							<abbr title="Command and Control">C2</abbr>
-							.
-							<code>system</code>
-							+
-							<code>execve</code>
-							= shell execution.
-							<code>ptrace</code>
-							= anti-debugging.
-							<code>dlopen</code>
-							+
-							<code>dlsym</code>
-							= runtime
-							dynamic loading (hiding what gets loaded from static import analysis).
-							<code>crypt</code>
-							= encryption/ransomware.
-						</p>
+						<p>This import table is a confession: <code>socket</code> + <code>connect</code> + <code>send</code> + <code>recv</code> = network <abbr title="Command and Control">C2</abbr> . <code>system</code> + <code>execve</code> = shell execution. <code>ptrace</code> = anti-debugging. <code>dlopen</code> + <code>dlsym</code> = runtime dynamic loading (hiding what gets loaded from static import analysis). <code>crypt</code> = encryption/ransomware.</p>
 						<pre class="bash">
 $ readelf -s --wide suspicious.bin | grep -E &#39;FILE|OBJECT|FUNC&#39; | grep -v &#39;UND&#39;
 						</pre>
-						<p>
-							Shows defined symbols (exports). For shared libraries, this reveals the
-							<abbr title="Application Programming Interface">API</abbr>
-							. For executables, mostly internal plumbing - but backdoor binaries sometimes export helper
-							functions by accident.
-						</p>
+						<p>Shows defined symbols (exports). For shared libraries, this reveals the <abbr title="Application Programming Interface">API</abbr> . For executables, mostly internal plumbing - but backdoor binaries sometimes export helper functions by accident.</p>
 						<h4 id="readelf-r-relocations"><code>readelf -r</code> : Relocations</h4>
-						<p>
-							Relocations show what addresses need patching at load time. Each relocation reveals a function
-							call or data access:
-						</p>
+						<p>Relocations show what addresses need patching at load time. Each relocation reveals a function call or data access:</p>
 						<pre class="bash">
 $ readelf -r suspicious.bin
 
@@ -857,53 +578,23 @@ Relocation section &#39;.rela.plt&#39; at offset 0x5a0 contains 6 entries:
 000000404038  000700000007 R_X86_64_JUMP_SLO 0000000000000000 execve@GLIBC_2.2.5 + 0
 000000404040  000800000007 R_X86_64_JUMP_SLO 0000000000000000 ptrace@GLIBC_2.2.5 + 0
 						</pre>
-						<p>
-							Each
-							<code>.rela.plt</code>
-							entry is a PLT stub - a lazily resolved function call. The presence of
-							<code>ptrace</code>
-							in the PLT means the binary calls
-							<code>ptrace()</code>
-							directly somewhere in its code. Cross-reference
-							the GOT address (
-							<code>0x404040</code>
-							for ptrace) with the disassembly.
-						</p>
+						<p>Each <code>.rela.plt</code> entry is a PLT stub - a lazily resolved function call. The presence of <code>ptrace</code> in the PLT means the binary calls <code>ptrace()</code> directly somewhere in its code. Cross-reference the GOT address ( <code>0x404040</code> for ptrace) with the disassembly.</p>
 					</section>
 					<section>
 						<h3 id="objdump-for-reversing">objdump for Reversing</h3>
-						<p>
-							<code>objdump -d</code>
-							disassembles the binary:
-						</p>
+						<p><code>objdump -d</code> disassembles the binary:</p>
 						<pre class="bash">
 $ objdump -d -M intel suspicious.bin
 						</pre>
-						<p>
-							Intel syntax is more readable for manual analysis. AT&T syntax (default) has reversed operand
-							order.
-						</p>
+						<p>Intel syntax is more readable for manual analysis. AT&T syntax (default) has reversed operand order.</p>
 						<pre class="bash">
 $ objdump -d -M intel --start-address=0x401040 --stop-address=0x401200 suspicious.bin
 						</pre>
-						<p>
-							Disassemble a specific range - useful after finding suspicious addresses with
-							<code>readelf</code>
-							.
-						</p>
+						<p>Disassemble a specific range - useful after finding suspicious addresses with <code>readelf</code> .</p>
 						<pre class="bash">
 $ objdump -t suspicious.bin | grep -E &#39; \.text| FUNC&#39;
 						</pre>
-						<p>
-							List all symbols in
-							<code>.text</code>
-							. For stripped binaries, this returns nothing from
-							<code>.symtab</code>
-							but
-							still works on
-							<code>.dynsym</code>
-							.
-						</p>
+						<p>List all symbols in <code>.text</code> . For stripped binaries, this returns nothing from <code>.symtab</code> but still works on <code>.dynsym</code> .</p>
 						<pre class="bash">
 $ objdump -R suspicious.bin
 						</pre>
@@ -911,12 +602,7 @@ $ objdump -R suspicious.bin
 					</section>
 					<section>
 						<h3 id="nm-for-symbol-listing">nm for Symbol Listing</h3>
-						<p>
-							<code>nm</code>
-							lists symbols from the symbol table. For stripped binaries, use
-							<code>-D</code>
-							(dynamic):
-						</p>
+						<p><code>nm</code> lists symbols from the symbol table. For stripped binaries, use <code>-D</code> (dynamic):</p>
 						<pre class="bash">
 $ nm -D suspicious.bin
                  U connect@GLIBC_2.2.5
@@ -931,19 +617,7 @@ $ nm -D suspicious.bin
 0000000000401040 T _start
 0000000000402000 T main
 						</pre>
-						<p>
-							<code>U</code>
-							= undefined (imported).
-							<code>T</code>
-							= defined in
-							<code>.text</code>
-							. The
-							<code>_start</code>
-							and
-							<code>main</code>
-							symbols survive
-							stripping if they are dynamic symbols - some binaries keep them for debugging.
-						</p>
+						<p><code>U</code> = undefined (imported). <code>T</code> = defined in <code>.text</code> . The <code>_start</code> and <code>main</code> symbols survive stripping if they are dynamic symbols - some binaries keep them for debugging.</p>
 					</section>
 					<section>
 						<h3 id="elf-suspicion-scanner">ELF Suspicion Scanner</h3>
@@ -1223,24 +897,11 @@ $ python3 elf_suspicion_scanner.py suspicious.bin
   Segments:      3
 ================================================================
 						</pre>
-						<p>
-							This output tells a story: UPX-packed binary with an RWX segment, writable R
-							<abbr title="Port Address Translation">PAT</abbr>
-							H, execution and network capabilities, plus anti-debug (ptrace). This is almost certainly malware.
-						</p>
+						<p>This output tells a story: UPX-packed binary with an RWX segment, writable R <abbr title="Port Address Translation">PAT</abbr> H, execution and network capabilities, plus anti-debug (ptrace). This is almost certainly malware.</p>
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Write a Go tool that triages an ELF by parsing its header and program headers directly. Report
-							the class, machine, entry point, and type, list every
-							<code>PT_LOAD</code>
-							segment with its flags, and
-							flag executable stacks, writable-and-executable segments, and zero-file-size-but-mapped segments.
-							Run it on a normal
-							<code>/bin/ls</code>
-							and on a packed sample.
-						</p>
+						<p>Write a Go tool that triages an ELF by parsing its header and program headers directly. Report the class, machine, entry point, and type, list every <code>PT_LOAD</code> segment with its flags, and flag executable stacks, writable-and-executable segments, and zero-file-size-but-mapped segments. Run it on a normal <code>/bin/ls</code> and on a packed sample.</p>
 						<pre class="go">
 package main
 
@@ -1321,12 +982,7 @@ func main() {
 	}
 }
 						</pre>
-						<p>
-							Extend it to flag a
-							<code>PT_GNU_STACK</code>
-							segment with the execute bit set, which indicates shellcode
-							running from the stack.
-						</p>
+						<p>Extend it to flag a <code>PT_GNU_STACK</code> segment with the execute bit set, which indicates shellcode running from the stack.</p>
 					</section>
 					<section>
 						<h3 id="references">References</h3>

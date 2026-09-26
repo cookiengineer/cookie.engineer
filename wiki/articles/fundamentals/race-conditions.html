@@ -149,21 +149,10 @@
 
 				<article>
 					<h2 id="race-conditions">Race Conditions</h2>
-					<p>
-						A race condition is uncontrolled concurrent access to shared data, causing lost updates, TOCTOU
-						bugs, and corrupted state.
-					</p>
+					<p>A race condition is uncontrolled concurrent access to shared data, causing lost updates, TOCTOU bugs, and corrupted state.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							Once two execution contexts share memory, the order in which their memory operations interleave
-							becomes part of the program's behaviour. A missing lock rarely fails on every run, which makes
-							these bugs expensive to debug and dangerous in production. This article starts from the lost-update
-							pattern and builds up through mutexes, spinlocks, semaphores, atomic operations, and memory
-							ordering, then applies the same reasoning to
-							<code>TOCTOU</code>
-							file operations and signal handlers.
-						</p>
+						<p>Once two execution contexts share memory, the order in which their memory operations interleave becomes part of the program's behaviour. A missing lock rarely fails on every run, which makes these bugs expensive to debug and dangerous in production. This article starts from the lost-update pattern and builds up through mutexes, spinlocks, semaphores, atomic operations, and memory ordering, then applies the same reasoning to <code>TOCTOU</code> file operations and signal handlers.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -174,19 +163,10 @@
 					</section>
 					<section>
 						<h3 id="definition">Definition</h3>
-						<p>
-							A race condition occurs when two or more execution contexts (threads, processes, interrupt handlers,
-							signal handlers) access shared data concurrently and at least one access is a write, but the
-							relative order of these accesses is not controlled. The program's output depends on interleaving
-							<ul>
-								<li>the specific sequence in which the hardware interleaves the memory operations of each context.</li>
-							</ul>
-						</p>
-						<p>
-							The defining property: non-determinism. Run the program 1000 times - get 100 correct results
-							and 1 corruption. The corruption is not random noise; it follows a specific schedule that the
-							developer did not anticipate.
-						</p>
+						<p>A race condition occurs when two or more execution contexts (threads, processes, interrupt handlers, signal handlers) access shared data concurrently and at least one access is a write, but the relative order of these accesses is not controlled. The program's output depends on interleaving<ul>
+	<li>the specific sequence in which the hardware interleaves the memory operations of each context.</li>
+</ul></p>
+						<p>The defining property: non-determinism. Run the program 1000 times - get 100 correct results and 1 corruption. The corruption is not random noise; it follows a specific schedule that the developer did not anticipate.</p>
 					</section>
 					<section>
 						<h3 id="the-read-modify-write-pattern">The Read-Modify-Write Pattern</h3>
@@ -237,21 +217,14 @@ for i in {1..10}; do ./race_counter; echo &#34;---&#34;; done
 # ---
 # (different every run)
 						</pre>
-						<p>
-							At the assembly level,
-							<code>counter++</code>
-							decompiles to:
-						</p>
+						<p>At the assembly level, <code>counter++</code> decompiles to:</p>
 						<pre class="x86asm">
 ; counter++ on x86-64 (non-atomic)
 mov    eax, DWORD PTR [rip+0x2ea2]   ; load counter into eax
 add    eax, 1                          ; increment register
 mov    DWORD PTR [rip+0x2e9a], eax    ; store back to counter
 						</pre>
-						<p>
-							The race window exists between load and store. If both threads load the same value before either
-							stores, one increment is lost:
-						</p>
+						<p>The race window exists between load and store. If both threads load the same value before either stores, one increment is lost:</p>
 						<pre class="plaintext">
 Time -&gt;
 Thread A: load counter (value = 42)
@@ -264,11 +237,7 @@ Thread B:   store 43           &lt;- counter should be 44, but is 43
 					</section>
 					<section>
 						<h3 id="critical-sections-and-mutual-exclusion">Critical Sections and Mutual Exclusion</h3>
-						<p>
-							A critical section is a code region that accesses shared data and must not be interleaved with
-							another thread's access to the same data. Mutual exclusion (mutex) serializes access: at most
-							one thread can be inside the critical section at any time.
-						</p>
+						<p>A critical section is a code region that accesses shared data and must not be interleaved with another thread's access to the same data. Mutual exclusion (mutex) serializes access: at most one thread can be inside the critical section at any time.</p>
 						<pre class="c">
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 int counter = 0;
@@ -290,33 +259,12 @@ gcc -g -pthread -o race_fixed race_counter_fixed.c
 # Actual:   200000
 # Lost:     0
 						</pre>
-						<p>
-							The cost: serialized counter increments. Each thread waits for the other at the mutex boundary.
-							The throughput drops - but correctness is preserved.
-						</p>
+						<p>The cost: serialized counter increments. Each thread waits for the other at the mutex boundary. The throughput drops - but correctness is preserved.</p>
 					</section>
 					<section>
 						<h3 id="mutex-internals">Mutex Internals</h3>
-						<p>
-							<code>pthread_mutex_t</code>
-							on Linux is backed by
-							<code>futex(2)</code>
-							- the fast userspace mutex syscall. The uncontended
-							path is purely userspace: an atomic compare-and-swap tries to acquire the lock. If the lock
-							is free, the
-							<abbr title="Compare-and-Swap">CAS</abbr>
-							succeeds and the thread enters the critical section without
-							a syscall.
-						</p>
-						<p>
-							If the lock is held, the thread calls
-							<code>futex(FUTEX_WAIT)</code>
-							which puts it to sleep. When the lock
-							is released, the owner calls
-							<code>futex(FUTEX_WAKE)</code>
-							to wake one waiter. The kernel manages the
-							wait queue.
-						</p>
+						<p><code>pthread_mutex_t</code> on Linux is backed by <code>futex(2)</code> - the fast userspace mutex syscall. The uncontended path is purely userspace: an atomic compare-and-swap tries to acquire the lock. If the lock is free, the <abbr title="Compare-and-Swap">CAS</abbr> succeeds and the thread enters the critical section without a syscall.</p>
+						<p>If the lock is held, the thread calls <code>futex(FUTEX_WAIT)</code> which puts it to sleep. When the lock is released, the owner calls <code>futex(FUTEX_WAKE)</code> to wake one waiter. The kernel manages the wait queue.</p>
 						<pre class="c">
 // Simplified userspace futex-based mutex (not the real glibc implementation)
 typedef struct {
@@ -343,10 +291,7 @@ void my_mutex_lock(my_mutex_t *m) {
 					</section>
 					<section>
 						<h3 id="spinlocks">Spinlocks</h3>
-						<p>
-							A spinlock busy-waits (spins in a loop) instead of sleeping. Useful when the critical section
-							is very short (a few instructions) and the overhead of a context switch outweighs the spin time.
-						</p>
+						<p>A spinlock busy-waits (spins in a loop) instead of sleeping. Useful when the critical section is very short (a few instructions) and the overhead of a context switch outweighs the spin time.</p>
 						<pre class="c">
 typedef volatile int spinlock_t;
 
@@ -359,40 +304,16 @@ static inline void spin_unlock(spinlock_t *lock) {
     __atomic_clear(lock, __ATOMIC_RELEASE);
 }
 						</pre>
-						<p>
-							On x86-64,
-							<code>__atomic_test_and_set</code>
-							compiles to a locked read-modify-write such as
-							<code>xchg</code>
-							or
-							<code>lock bts</code>
-							(Bit Test and Set with LOCK prefix). The
-							<code>PAUSE</code>
-							instruction is inserted in spin
-							loops to reduce power consumption and improve SMT (hyper-threading) throughput:
-						</p>
+						<p>On x86-64, <code>__atomic_test_and_set</code> compiles to a locked read-modify-write such as <code>xchg</code> or <code>lock bts</code> (Bit Test and Set with LOCK prefix). The <code>PAUSE</code> instruction is inserted in spin loops to reduce power consumption and improve SMT (hyper-threading) throughput:</p>
 						<pre class="c">
 while (__atomic_test_and_set(lock, __ATOMIC_ACQUIRE))
     __builtin_ia32_pause();
 						</pre>
-						<p>
-							Spinlocks in the Linux kernel use ticket locks or queued spinlocks to guarantee fairness - preventing
-							starvation where one
-							<abbr title="Central Processing Unit">CPU</abbr>
-							repeatedly acquires the lock while others
-							spin indefinitely.
-						</p>
+						<p>Spinlocks in the Linux kernel use ticket locks or queued spinlocks to guarantee fairness - preventing starvation where one <abbr title="Central Processing Unit">CPU</abbr> repeatedly acquires the lock while others spin indefinitely.</p>
 					</section>
 					<section>
 						<h3 id="semaphores">Semaphores</h3>
-						<p>
-							A semaphore generalizes a mutex: instead of binary "locked/unlocked," it has a count.
-							<code>sem_wait()</code>
-							decrements the count (blocking if it reaches 0).
-							<code>sem_post()</code>
-							increments (waking a waiter).
-							A semaphore initialized to 1 is functionally equivalent to a mutex.
-						</p>
+						<p>A semaphore generalizes a mutex: instead of binary "locked/unlocked," it has a count. <code>sem_wait()</code> decrements the count (blocking if it reaches 0). <code>sem_post()</code> increments (waking a waiter). A semaphore initialized to 1 is functionally equivalent to a mutex.</p>
 						<pre class="c">
 #include &lt;semaphore.h&gt;
 
@@ -424,14 +345,7 @@ int consume() {
 					</section>
 					<section>
 						<h3 id="atomic-operations">Atomic Operations</h3>
-						<p>
-							C11 introduced
-							<code>_Atomic</code>
-							and
-							<code>&lt;stdatomic.h&gt;</code>
-							. These guarantee that operations on the atomically-qualified
-							variable are indivisible - no other thread can observe a partially-completed operation.
-						</p>
+						<p>C11 introduced <code>_Atomic</code> and <code>&lt;stdatomic.h&gt;</code> . These guarantee that operations on the atomically-qualified variable are indivisible - no other thread can observe a partially-completed operation.</p>
 						<pre class="c">
 #include &lt;stdatomic.h&gt;
 
@@ -444,14 +358,7 @@ void *increment_atomic(void *arg) {
     return NULL;
 }
 						</pre>
-						<p>
-							On x86-64,
-							<code>atomic_fetch_add</code>
-							compiles to
-							<code>lock xadd</code>
-							- a single atomic instruction. No load-add-store
-							window exists. No mutex, no syscall, no spin - just hardware atomicity.
-						</p>
+						<p>On x86-64, <code>atomic_fetch_add</code> compiles to <code>lock xadd</code> - a single atomic instruction. No load-add-store window exists. No mutex, no syscall, no spin - just hardware atomicity.</p>
 						<p>GCC builtins provide equivalent functionality without C11:</p>
 						<pre class="c">
 __atomic_add_fetch(&amp;counter, 1, __ATOMIC_SEQ_CST);
@@ -464,13 +371,7 @@ __atomic_compare_exchange_n(&amp;flag, &amp;expected, 1, 0,
 					</section>
 					<section>
 						<h3 id="memory-ordering">Memory Ordering</h3>
-						<p>
-							Atomicity prevents torn reads/writes. Memory ordering prevents reordering - both by the compiler
-							(instruction scheduling) and by the
-							<abbr title="Central Processing Unit">CPU</abbr>
-							(out-of-order execution,
-							store buffers).
-						</p>
+						<p>Atomicity prevents torn reads/writes. Memory ordering prevents reordering - both by the compiler (instruction scheduling) and by the <abbr title="Central Processing Unit">CPU</abbr> (out-of-order execution, store buffers).</p>
 						<p>The C11 memory order constants:</p>
 						<table>
 							<thead>
@@ -502,21 +403,8 @@ __atomic_compare_exchange_n(&amp;flag, &amp;expected, 1, 0,
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							On x86-64, the hardware provides relatively strong ordering (TSO - Total Store Order): loads
-							are not reordered with other loads, stores are not reordered with other stores. The main reordering
-							risk is store-load: a load can complete before a prior store becomes visible to other cores.
-							<code>mfence</code>
-							,
-							<code>lock</code>
-							-prefixed instructions, and
-							<code>xchg</code>
-							prevent this.
-						</p>
-						<p>
-							ARM64 and POWER have weaker memory models - more reordering is allowed. Acquire/release semantics
-							are essential for portable code.
-						</p>
+						<p>On x86-64, the hardware provides relatively strong ordering (TSO - Total Store Order): loads are not reordered with other loads, stores are not reordered with other stores. The main reordering risk is store-load: a load can complete before a prior store becomes visible to other cores. <code>mfence</code> , <code>lock</code> -prefixed instructions, and <code>xchg</code> prevent this.</p>
+						<p>ARM64 and POWER have weaker memory models - more reordering is allowed. Acquire/release semantics are essential for portable code.</p>
 						<pre class="c">
 /* Double-checked locking pattern - requires acquire/release */
 atomic_int initialized = 0;
@@ -535,19 +423,7 @@ struct Config *get_config() {
     return atomic_load(&amp;global_config);
 }
 						</pre>
-						<p>
-							Without acquire/release, the compiler or
-							<abbr title="Central Processing Unit">CPU</abbr>
-							could reorder
-							<code>initialized = 1</code>
-							before
-							<code>global_config = cfg</code>
-							- a thread sees
-							<code>initialized == 1</code>
-							but reads a NULL
-							<code>global_config</code>
-							.
-						</p>
+						<p>Without acquire/release, the compiler or <abbr title="Central Processing Unit">CPU</abbr> could reorder <code>initialized = 1</code> before <code>global_config = cfg</code> - a thread sees <code>initialized == 1</code> but reads a NULL <code>global_config</code> .</p>
 					</section>
 					<section>
 						<h3 id="toctou-the-classic-check-then-act">TOCTOU: The Classic Check-Then-Act</h3>
@@ -562,41 +438,12 @@ if (access(path, W_OK) == 0) {   /* TIME OF CHECK: is file writable? */
     }
 }
 						</pre>
-						<p>
-							Between
-							<code>access()</code>
-							and
-							<code>open()</code>
-							, an attacker replaces the file at
-							<code>path</code>
-							with a symlink to
-							<code>/etc/passwd</code>
-							.
-							<code>access()</code>
-							checks the original file's permissions (which pass).
-							<code>open()</code>
-							follows
-							the symlink and opens
-							<code>/etc/passwd</code>
-							with the victim's privileges.
-						</p>
-						<p>
-							The root cause: file path resolution is not atomic. The path
-							<code>&#34;/tmp/userfile&#34;</code>
-							is a
-							<em>name</em>
-							-
-							it resolves to an inode at the moment of each syscall. Between two syscalls, the mapping from
-							name to inode can change.
-						</p>
+						<p>Between <code>access()</code> and <code>open()</code> , an attacker replaces the file at <code>path</code> with a symlink to <code>/etc/passwd</code> . <code>access()</code> checks the original file's permissions (which pass). <code>open()</code> follows the symlink and opens <code>/etc/passwd</code> with the victim's privileges.</p>
+						<p>The root cause: file path resolution is not atomic. The path <code>&#34;/tmp/userfile&#34;</code> is a <em>name</em> - it resolves to an inode at the moment of each syscall. Between two syscalls, the mapping from name to inode can change.</p>
 					</section>
 					<section>
 						<h3 id="signal-handler-races">Signal Handler Races</h3>
-						<p>
-							Signal handlers execute asynchronously and can interrupt a thread at any instruction boundary
-							(unless signals are masked). If a signal handler modifies a global variable that the main program
-							also reads/modifies, a race exists:
-						</p>
+						<p>Signal handlers execute asynchronously and can interrupt a thread at any instruction boundary (unless signals are masked). If a signal handler modifies a global variable that the main program also reads/modifies, a race exists:</p>
 						<pre class="c">
 #include &lt;signal.h&gt;
 #include &lt;stdio.h&gt;
@@ -621,18 +468,7 @@ int main() {
     }
 }
 						</pre>
-						<p>
-							The rule: only
-							<code>volatile sig_atomic_t</code>
-							variables can be safely accessed from signal handlers.
-							Anything larger (64-bit on 32-bit platforms, structs) can be torn. Anything more complex (linked
-							list manipulation,
-							<code>printf</code>
-							,
-							<code>malloc</code>
-							) is not async-signal-safe and can deadlock or corrupt
-							heap state.
-						</p>
+						<p>The rule: only <code>volatile sig_atomic_t</code> variables can be safely accessed from signal handlers. Anything larger (64-bit on 32-bit platforms, structs) can be torn. Anything more complex (linked list manipulation, <code>printf</code> , <code>malloc</code> ) is not async-signal-safe and can deadlock or corrupt heap state.</p>
 						<pre class="c">
 // Safe pattern: sig_atomic_t flag + blocking main-loop check
 volatile sig_atomic_t signal_received = 0;
@@ -655,14 +491,7 @@ int main() {
 					</section>
 					<section>
 						<h3 id="fork-multithreading-dangers">fork() + Multithreading Dangers</h3>
-						<p>
-							<code>fork()</code>
-							in a multi-threaded program creates a child process with a single thread (a copy of
-							the calling thread). All other threads of the parent simply vanish in the child - while holding
-							mutexes, in the middle of
-							<code>malloc</code>
-							, or in any inconsistent state.
-						</p>
+						<p><code>fork()</code> in a multi-threaded program creates a child process with a single thread (a copy of the calling thread). All other threads of the parent simply vanish in the child - while holding mutexes, in the middle of <code>malloc</code> , or in any inconsistent state.</p>
 						<pre class="c">
 /* NEVER do this in a threaded program */
 void dangerous_fork() {
@@ -672,18 +501,7 @@ void dangerous_fork() {
     // any attempt to lock the mutex in the child -&gt; deadlock forever
 }
 						</pre>
-						<p>
-							The only safe pattern:
-							<code>fork()</code>
-							before any threads are created, or
-							<code>fork()</code>
-							+ immediate
-							<code>exec()</code>
-							in the child (which replaces the process image, discarding stale mutex state).
-							<code>pthread_atfork()</code>
-							allows registering handlers that lock all mutexes before fork and unlock them after (in parent
-							and child), but this is fragile and error-prone.
-						</p>
+						<p>The only safe pattern: <code>fork()</code> before any threads are created, or <code>fork()</code> + immediate <code>exec()</code> in the child (which replaces the process image, discarding stale mutex state). <code>pthread_atfork()</code> allows registering handlers that lock all mutexes before fork and unlock them after (in parent and child), but this is fragile and error-prone.</p>
 						<pre class="c">
 void prepare_fork() { pthread_mutex_lock(&amp;all_locks); }
 void parent_after_fork() { pthread_mutex_unlock(&amp;all_locks); }
@@ -708,14 +526,7 @@ gcc -g -fsanitize=thread -pthread -o race_tsan race_counter.c
 #
 #   Location is global &#39;counter&#39; of size 4 at ...
 						</pre>
-						<p>
-							TSan instruments every memory access with a shadow cell. When two accesses conflict (at least
-							one write, different threads, no happens-before relationship via synchronization), TSan reports
-							the race. The overhead is 5x-15x in
-							<abbr title="Central Processing Unit">CPU</abbr>
-							and 5x-10x in memory - suitable
-							for testing, not production.
-						</p>
+						<p>TSan instruments every memory access with a shadow cell. When two accesses conflict (at least one write, different threads, no happens-before relationship via synchronization), TSan reports the race. The overhead is 5x-15x in <abbr title="Central Processing Unit">CPU</abbr> and 5x-10x in memory - suitable for testing, not production.</p>
 					</section>
 					<section>
 						<h3 id="helgrind-valgrind-tool">Helgrind (Valgrind Tool)</h3>
@@ -731,11 +542,7 @@ valgrind --tool=helgrind ./race_counter
 # Locks held: none
 #   at 0x...: increment (race_counter.c:10)
 						</pre>
-						<p>
-							Helgrind also models the happens-before relationship by tracking every mutex lock/unlock and
-							every thread creation/join. It is slower than TSan (20x-100x overhead) but reports richer diagnostics
-							about lock ordering and deadlock potential.
-						</p>
+						<p>Helgrind also models the happens-before relationship by tracking every mutex lock/unlock and every thread creation/join. It is slower than TSan (20x-100x overhead) but reports richer diagnostics about lock ordering and deadlock potential.</p>
 					</section>
 					<section>
 						<h3 id="gcc-warning-flags-for-races">GCC Warning Flags for Races</h3>
@@ -744,31 +551,11 @@ valgrind --tool=helgrind ./race_counter
 gcc -Wconversion -Wsign-compare -c race_counter.c
 # warning: conversion to &#39;int&#39; from &#39;long int&#39; may alter its value
 						</pre>
-						<p>
-							A 32-bit counter on a 64-bit platform, incremented by multiple threads, wraps earlier than expected.
-							Combined with races, the wrap point becomes unpredictable.
-						</p>
+						<p>A 32-bit counter on a 64-bit platform, incremented by multiple threads, wraps earlier than expected. Combined with races, the wrap point becomes unpredictable.</p>
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Write a Go program with two goroutines that each increment a shared
-							<code>int64</code>
-							one million times.
-							Run it with
-							<code>go run -race race.go</code>
-							and observe the
-							<code>WARNING: DATA RACE</code>
-							report. Then fix it
-							twice - once with
-							<code>sync/atomic</code>
-							and once with a
-							<code>sync.Mutex</code>
-							- and confirm that both versions
-							print
-							<code>2000000</code>
-							.
-						</p>
+						<p>Write a Go program with two goroutines that each increment a shared <code>int64</code> one million times. Run it with <code>go run -race race.go</code> and observe the <code>WARNING: DATA RACE</code> report. Then fix it twice - once with <code>sync/atomic</code> and once with a <code>sync.Mutex</code> - and confirm that both versions print <code>2000000</code> .</p>
 						<pre class="go">
 package main
 
@@ -800,19 +587,7 @@ func main() {
 						<pre class="bash">
 go run -race race.go;
 						</pre>
-						<p>
-							The atomic fix replaces
-							<code>counter++</code>
-							with
-							<code>atomic.AddInt64(&amp;counter, 1)</code>
-							and imports
-							<code>sync/atomic</code>
-							; the mutex fix guards the increment with
-							<code>lock.Lock()</code>
-							and
-							<code>lock.Unlock()</code>
-							.
-						</p>
+						<p>The atomic fix replaces <code>counter++</code> with <code>atomic.AddInt64(&amp;counter, 1)</code> and imports <code>sync/atomic</code> ; the mutex fix guards the increment with <code>lock.Lock()</code> and <code>lock.Unlock()</code> .</p>
 					</section>
 					<section>
 						<h3 id="references">References</h3>

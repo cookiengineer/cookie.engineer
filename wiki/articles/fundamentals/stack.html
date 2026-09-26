@@ -162,19 +162,10 @@
 
 				<article>
 					<h2 id="stack">Stack</h2>
-					<p>
-						The call stack - frame structure, prologue/epilogue, System V AMD64 ABI, stack canaries, alignment,
-						GDB inspection, and stack overflow.
-					</p>
+					<p>The call stack - frame structure, prologue/epilogue, System V AMD64 ABI, stack canaries, alignment, GDB inspection, and stack overflow.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							The stack is the LIFO (Last In, First Out) memory region where a process keeps function call
-							frames, return addresses, and local variables. This article covers the x86-64 frame layout,
-							the System V AMD64 calling convention, stack alignment and the red zone, stack canaries, and
-							how the kernel grows and guards the stack. By the end you can read a frame in GDB, name what
-							each register holds, and explain how a stack overflow escapes the frame.
-						</p>
+						<p>The stack is the LIFO (Last In, First Out) memory region where a process keeps function call frames, return addresses, and local variables. This article covers the x86-64 frame layout, the System V AMD64 calling convention, stack alignment and the red zone, stack canaries, and how the kernel grows and guards the stack. By the end you can read a frame in GDB, name what each register holds, and explain how a stack overflow escapes the frame.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -185,17 +176,7 @@
 					</section>
 					<section>
 						<h3 id="what-the-stack-is">What the Stack Is</h3>
-						<p>
-							The stack is a LIFO (Last In, First Out) memory region that manages function execution. Every
-							function call pushes a new stack frame; every return pops it. The
-							<abbr title="Central Processing Unit">CPU</abbr>
-							's
-							<code>rsp</code>
-							register points to the current top of the stack. The stack grows downward on x86, x86-64,
-							and ARM - meaning
-							<code>rsp</code>
-							decreases when data is pushed.
-						</p>
+						<p>The stack is a LIFO (Last In, First Out) memory region that manages function execution. Every function call pushes a new stack frame; every return pops it. The <abbr title="Central Processing Unit">CPU</abbr> 's <code>rsp</code> register points to the current top of the stack. The stack grows downward on x86, x86-64, and ARM - meaning <code>rsp</code> decreases when data is pushed.</p>
 						<pre class="plaintext">
 High addresses (e.g., 0x7ffffffff000)
 ┌──────────────────────┐
@@ -310,11 +291,7 @@ add:
     pop    rbp              ; Restore caller&#39;s base pointer
     ret                     ; Return (pop rip)
 						</pre>
-						<p>
-							With optimization (
-							<code>-O2</code>
-							):
-						</p>
+						<p>With optimization ( <code>-O2</code> ):</p>
 						<pre class="x86asm">
 add:
     lea    rax, [rdi + rsi]  ; a + b -&gt; rax in one instruction
@@ -346,7 +323,7 @@ objdump -d -M intel /tmp/func.o2
 								</tr>
 								<tr>
 									<td align="center">rbp</td>
-									<td align="center">Base pointer - points to the base of the current stack frame (optional, can be used as general-purpose register with<code>-fomit-frame-pointer</code>)</td>
+									<td align="center">Base pointer - points to the base of the current stack frame (optional, can be used as general-purpose register with <code>-fomit-frame-pointer</code>)</td>
 								</tr>
 								<tr>
 									<td align="center">rip</td>
@@ -354,19 +331,7 @@ objdump -d -M intel /tmp/func.o2
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							With
-							<code>-fomit-frame-pointer</code>
-							(default in
-							<code>-O1</code>
-							and above on modern GCC),
-							<code>rbp</code>
-							is freed up as
-							a general-purpose register. Stack variables are accessed relative to
-							<code>rsp</code>
-							instead, which the
-							compiler tracks via frame size accounting.
-						</p>
+						<p>With <code>-fomit-frame-pointer</code> (default in <code>-O1</code> and above on modern GCC), <code>rbp</code> is freed up as a general-purpose register. Stack variables are accessed relative to <code>rsp</code> instead, which the compiler tracks via frame size accounting.</p>
 						<pre class="bash">
 # Check if a binary uses frame pointers
 readelf -S /usr/bin/ls | grep eh_frame
@@ -375,10 +340,7 @@ objdump -d /usr/bin/ls | grep -c &#39;push.*rbp&#39;
 					</section>
 					<section>
 						<h3 id="system-v-amd64-abi-calling-convention">System V AMD64 ABI - Calling Convention</h3>
-						<p>
-							The System V ABI specifies how function arguments are passed and the stack is managed on x86-64
-							Linux:
-						</p>
+						<p>The System V ABI specifies how function arguments are passed and the stack is managed on x86-64 Linux:</p>
 						<h4 id="integerpointer-arguments-in-order">Integer/Pointer Arguments (in order)</h4>
 						<table>
 							<thead>
@@ -464,17 +426,8 @@ objdump -d /usr/bin/ls | grep -c &#39;push.*rbp&#39;
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							<b>Caller-saved (volatile) registers</b>
-							- the caller must save these before a call if their values
-							are needed after:
-							<code>rax, rcx, rdx, rsi, rdi, r8-r11</code>
-						</p>
-						<p>
-							<b>Callee-saved (nonvolatile) registers</b>
-							- the callee must preserve these:
-							<code>rbx, rbp, r12-r15, rsp</code>
-						</p>
+						<p><b>Caller-saved (volatile) registers</b> - the caller must save these before a call if their values are needed after: <code>rax, rcx, rdx, rsi, rdi, r8-r11</code></p>
+						<p><b>Callee-saved (nonvolatile) registers</b> - the callee must preserve these: <code>rbx, rbp, r12-r15, rsp</code></p>
 						<pre class="plaintext">
 Caller before call:             Callee prologue:
   save volatile regs              push rbp
@@ -488,22 +441,7 @@ Caller before call:             Callee prologue:
 					</section>
 					<section>
 						<h3 id="stack-alignment">Stack Alignment</h3>
-						<p>
-							The x86-64 ABI requires the stack to be
-							<b>16-byte aligned</b>
-							immediately before the
-							<code>call</code>
-							instruction
-							executes. This means
-							<code>rsp</code>
-							% 16 == 0 when
-							<code>call</code>
-							pushes the 8-byte return address, making
-							<code>rsp</code>
-							% 16 == 8 at function entry. The prologue must adjust
-							<code>rsp</code>
-							to realign if needed.
-						</p>
+						<p>The x86-64 ABI requires the stack to be <b>16-byte aligned</b> immediately before the <code>call</code> instruction executes. This means <code>rsp</code> % 16 == 0 when <code>call</code> pushes the 8-byte return address, making <code>rsp</code> % 16 == 8 at function entry. The prologue must adjust <code>rsp</code> to realign if needed.</p>
 						<pre class="x86asm">
 ; Function that needs to call another function
 ; rsp % 16 == 8 at entry (due to return address)
@@ -511,39 +449,12 @@ sub rsp, 8        ; Now rsp % 16 == 0 - aligned for call
 call other_func
 add rsp, 8        ; Restore
 						</pre>
-						<p>
-							Alignment matters because SSE/
-							<abbr title="Advanced Vector Extensions">AVX</abbr>
-							instructions (
-							<code>movaps</code>
-							,
-							<code>movdqa</code>
-							) fault on unaligned addresses.
-							The compiler handles this automatically; you only need to worry when writing raw assembly that
-							calls C functions.
-						</p>
+						<p>Alignment matters because SSE/<abbr title="Advanced Vector Extensions">AVX</abbr> instructions ( <code>movaps</code> , <code>movdqa</code> ) fault on unaligned addresses. The compiler handles this automatically; you only need to worry when writing raw assembly that calls C functions.</p>
 					</section>
 					<section>
 						<h3 id="the-red-zone">The Red Zone</h3>
-						<p>
-							The System V AMD64 ABI defines a
-							<b>128-byte red zone</b>
-							below
-							<code>rsp</code>
-							- memory the function can
-							use without adjusting
-							<code>rsp</code>
-							. This is valid because signals are delivered on a separate stack
-							(or above
-							<code>rsp</code>
-							). The kernel guarantees it won't touch the red zone.
-						</p>
-						<p>
-							The Windows x64 ABI has
-							<b>no red zone</b>
-							- the equivalent region can be clobbered by interrupts
-							at any time.
-						</p>
+						<p>The System V AMD64 ABI defines a <b>128-byte red zone</b> below <code>rsp</code> - memory the function can use without adjusting <code>rsp</code> . This is valid because signals are delivered on a separate stack (or above <code>rsp</code> ). The kernel guarantees it won't touch the red zone.</p>
+						<p>The Windows x64 ABI has <b>no red zone</b> - the equivalent region can be clobbered by interrupts at any time.</p>
 						<pre class="x86asm">
 ; Linux: valid use of red zone
 mov [rsp - 8], rax     ; Store in red zone - rsp unchanged
@@ -560,13 +471,7 @@ ret
 					</section>
 					<section>
 						<h3 id="stack-canaries">Stack Canaries</h3>
-						<p>
-							GCC's
-							<code>-fstack-protector</code>
-							(enabled by default on ArchLinux) inserts a guard value (canary) between
-							the stack frame's local variables and the saved return address. Before the function returns,
-							it checks the canary. If a buffer overflow corrupts the canary, the program aborts.
-						</p>
+						<p>GCC's <code>-fstack-protector</code> (enabled by default on ArchLinux) inserts a guard value (canary) between the stack frame's local variables and the saved return address. Before the function returns, it checks the canary. If a buffer overflow corrupts the canary, the program aborts.</p>
 						<pre class="plaintext">
 Without canary:                With canary:
 ┌──────────────────┐          ┌──────────────────┐
@@ -636,11 +541,7 @@ objdump -d /usr/bin/bash | grep -A10 &#39;__stack_chk_fail&#39;
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							On Linux, the stack sits at the high end of the user address space and grows downward toward
-							the heap. Between stack and heap lies mmap territory (shared libraries, anonymous mappings).
-							This layout is enforced by the kernel's ELF loader.
-						</p>
+						<p>On Linux, the stack sits at the high end of the user address space and grows downward toward the heap. Between stack and heap lies mmap territory (shared libraries, anonymous mappings). This layout is enforced by the kernel's ELF loader.</p>
 					</section>
 					<section>
 						<h3 id="stack-size-limit">Stack Size Limit</h3>
@@ -661,28 +562,11 @@ ulimit -s 16384  # 16 MiB
 cat /proc/$$/maps | grep stack
 # Stack segment grows on-demand, up to ulimit -s
 						</pre>
-						<p>
-							<b>Thread stacks:</b>
-							Threads created with
-							<code>pthread_create()</code>
-							get their own stack. The default
-							size is set by
-							<code>pthread_attr_setstacksize()</code>
-							. If not specified, glibc uses
-							<code>ulimit -s</code>
-							(typically
-							8 MiB).
-						</p>
+						<p><b>Thread stacks:</b> Threads created with <code>pthread_create()</code> get their own stack. The default size is set by <code>pthread_attr_setstacksize()</code> . If not specified, glibc uses <code>ulimit -s</code> (typically 8 MiB).</p>
 					</section>
 					<section>
 						<h3 id="alloca-dynamic-stack-allocation">alloca() - Dynamic Stack Allocation</h3>
-						<p>
-							<code>alloca()</code>
-							allocates memory on the stack that is automatically freed when the function returns.
-							It's faster than
-							<code>malloc()</code>
-							(no heap bookkeeping) but dangerous for large/variable sizes.
-						</p>
+						<p><code>alloca()</code> allocates memory on the stack that is automatically freed when the function returns. It's faster than <code>malloc()</code> (no heap bookkeeping) but dangerous for large/variable sizes.</p>
 						<pre class="c">
 #include &lt;stdio.h&gt;
 #include &lt;stdlib.h&gt;
@@ -706,24 +590,13 @@ int main() {
     return 0;
 }
 						</pre>
-						<p>
-							<code>alloca()</code>
-							is not part of the C standard; it's a platform extension. GCC implements it inline
-							<ul>
-								<li>it simply adjusts <code>rsp</code> by the requested amount. There's no <code>freealloca()</code> - memory is</li>
-							</ul>
-							reclaimed
-							when the function's epilogue restores
-							<code>rsp</code>
-							.
-						</p>
+						<p><code>alloca()</code> is not part of the C standard; it's a platform extension. GCC implements it inline<ul>
+	<li>it simply adjusts <code>rsp</code> by the requested amount. There's no <code>freealloca()</code> - memory is</li>
+</ul> reclaimed when the function's epilogue restores <code>rsp</code> .</p>
 					</section>
 					<section>
 						<h3 id="stack-overflow">Stack Overflow</h3>
-						<p>
-							A stack overflow occurs when the stack grows past its allocated region. On Linux, this is detected
-							by the guard page mechanism:
-						</p>
+						<p>A stack overflow occurs when the stack grows past its allocated region. On Linux, this is detected by the guard page mechanism:</p>
 						<pre class="plaintext">
 ┌────────────────────┐
 │  Stack region      │ (e.g., 8 MiB, r/w)
@@ -740,13 +613,7 @@ int main() {
 │  Other mappings    │
 └────────────────────┘
 						</pre>
-						<p>
-							When
-							<code>rsp</code>
-							decrements into the guard region, a page fault occurs. The kernel checks if this
-							is a legitimate stack expansion (within 1 MiB of the current stack boundary) and extends the
-							mapping. If the access is past the guard page (into other mappings), the kernel sends SIGSEGV.
-						</p>
+						<p>When <code>rsp</code> decrements into the guard region, a page fault occurs. The kernel checks if this is a legitimate stack expansion (within 1 MiB of the current stack boundary) and extends the mapping. If the access is past the guard page (into other mappings), the kernel sends SIGSEGV.</p>
 						<pre class="c">
 // Exploding the stack - infinite recursion
 void recurse(int n) {
@@ -767,10 +634,7 @@ gcc -o stack-overflow stack-overflow.c &amp;&amp; ./stack-overflow
 					</section>
 					<section>
 						<h3 id="sigaltstack-custom-signal-stack">sigaltstack - Custom Signal Stack</h3>
-						<p>
-							Signals can be delivered on a separate stack to handle stack overflow scenarios or to avoid
-							corrupting the normal stack when handling a SEGV caused by stack exhaustion:
-						</p>
+						<p>Signals can be delivered on a separate stack to handle stack overflow scenarios or to avoid corrupting the normal stack when handling a SEGV caused by stack exhaustion:</p>
 						<pre class="c">
 #include &lt;stdio.h&gt;
 #include &lt;stdlib.h&gt;
@@ -883,23 +747,7 @@ perf stat -e faults -e minor-faults ls /usr/share &gt;/dev/null
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Write a Go tool that reports the mapped stack region and the kernel limit that bounds it. Read
-							<code>/proc/self/maps</code>
-							, find the
-							<code>[stack]</code>
-							mapping, and print its low address, high address, and
-							size in KiB. Then read
-							<code>RLIMIT_STACK</code>
-							with
-							<code>syscall.Getrlimit</code>
-							and compare the soft limit with
-							the mapping. Run it again after
-							<code>ulimit -s 1024</code>
-							and after spawning a goroutine, and explain
-							why the mapped main-thread stack can be smaller than the limit and why goroutine stacks are
-							separate.
-						</p>
+						<p>Write a Go tool that reports the mapped stack region and the kernel limit that bounds it. Read <code>/proc/self/maps</code> , find the <code>[stack]</code> mapping, and print its low address, high address, and size in KiB. Then read <code>RLIMIT_STACK</code> with <code>syscall.Getrlimit</code> and compare the soft limit with the mapping. Run it again after <code>ulimit -s 1024</code> and after spawning a goroutine, and explain why the mapped main-thread stack can be smaller than the limit and why goroutine stacks are separate.</p>
 						<pre class="go">
 package main
 

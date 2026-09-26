@@ -139,40 +139,22 @@
 
 				<article>
 					<h2 id="page-cache">Page Cache</h2>
-					<p>
-						The Linux page cache, from address_space and the xarray to writeback, dirty page management,
-						read-ahead, and direct I/O.
-					</p>
+					<p>The Linux page cache, from address_space and the xarray to writeback, dirty page management, read-ahead, and direct I/O.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							The page cache is the bridge between the VFS and the memory manager. It caches file-backed pages
-							so repeated reads return from RAM, absorbs writes for asynchronous writeback, and backs
-							<code>mmap()</code>
-							. After reading this article you can inspect cache residency, tune dirty page limits, explain
-							read-ahead, and decide when
-							<code>O_DIRECT</code>
-							is worth the trouble.
-						</p>
+						<p>The page cache is the bridge between the VFS and the memory manager. It caches file-backed pages so repeated reads return from RAM, absorbs writes for asynchronous writeback, and backs <code>mmap()</code> . After reading this article you can inspect cache residency, tune dirty page limits, explain read-ahead, and decide when <code>O_DIRECT</code> is worth the trouble.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
 						<ul>
 							<li><a href="/wiki/articles/fundamentals/virtual-memory.html">Virtual Memory</a> - page tables, TLB, page faults, mmap() internals</li>
-							<li><a href="/wiki/articles/sysinternals/memory-manager.html">Memory Manager</a> - physical memory management, page frame reclamation, LRU</li>
+							<li><a href="/wiki/articles/sysinternals/memory-manager.html">Memory Manager</a> - physical memory management, page frame reclamation, <abbr title="Least Recently Used">LRU</abbr></li>
 							<li><a href="/wiki/articles/sysinternals/vfs.html">VFS</a> - superblock, inode, dentry, struct file, address_space</li>
 						</ul>
 					</section>
 					<section>
 						<h3 id="page-cache-io-bridge">Page Cache I/O Bridge</h3>
-						<p>
-							The page cache is the central bridge between the VFS and the memory manager. It caches file-backed
-							pages in memory so that repeated reads return from RAM instead of going to disk, and writes
-							can be buffered, coalesced, and deferred. Without the page cache, every
-							<code>read()</code>
-							would be a
-							synchronous disk operation, a 10,000x slowdown.
-						</p>
+						<p>The page cache is the central bridge between the VFS and the memory manager. It caches file-backed pages in memory so that repeated reads return from RAM instead of going to disk, and writes can be buffered, coalesced, and deferred. Without the page cache, every <code>read()</code> would be a synchronous disk operation, a 10,000x slowdown.</p>
 						<p>The page cache serves three simultaneous roles:</p>
 						<ol>
 							<li><b>Read cache</b> : file data read from disk stays in memory for subsequent reads</li>
@@ -223,18 +205,7 @@
 					</section>
 					<section>
 						<h3 id="address-space-per-inode">address_space Per Inode</h3>
-						<p>
-							Every
-							<code>struct inode</code>
-							that supports file-backed data has an embedded
-							<code>struct address_space</code>
-							in
-							<code>i_mapping</code>
-							. The
-							<code>address_space</code>
-							ties together the file's logical offset space with physical
-							memory pages:
-						</p>
+						<p>Every <code>struct inode</code> that supports file-backed data has an embedded <code>struct address_space</code> in <code>i_mapping</code> . The <code>address_space</code> ties together the file's logical offset space with physical memory pages:</p>
 						<pre class="c">
 // include/linux/fs.h — struct address_space (abbreviated)
 struct address_space {
@@ -303,12 +274,7 @@ os.close(fd)
 					</section>
 					<section>
 						<h3 id="page-cache-radix-tree-xarray">Page Cache Radix Tree / XArray</h3>
-						<p>
-							The page cache uses an xarray (formerly radix tree) to map file offsets (in page-sized units)
-							to
-							<code>struct folio</code>
-							pointers. This enables O(log n) lookups and efficient range scans:
-						</p>
+						<p>The page cache uses an xarray (formerly radix tree) to map file offsets (in page-sized units) to <code>struct folio</code> pointers. This enables O(log n) lookups and efficient range scans:</p>
 						<pre class="plaintext">
 XArray Structure (per-address_space i_pages):
 ══════════════════════════════════════════════════════════════
@@ -376,15 +342,7 @@ kill %1 2&gt;/dev/null
 					</section>
 					<section>
 						<h3 id="write-through-vs-write-back">Write-Through vs Write-Back</h3>
-						<p>
-							Linux uses
-							<b>write-back caching</b>
-							by default. Writes are buffered in the page cache and flushed
-							to disk asynchronously. This is far faster than write-through (where every
-							<code>write()</code>
-							blocks
-							until disk I/O completes) but risks data loss on power failure:
-						</p>
+						<p>Linux uses <b>write-back caching</b> by default. Writes are buffered in the page cache and flushed to disk asynchronously. This is far faster than write-through (where every <code>write()</code> blocks until disk I/O completes) but risks data loss on power failure:</p>
 						<pre class="plaintext">
 Write-Through:                          Write-Back (Linux default):
 ══════════════                          ═══════════════════════════
@@ -430,10 +388,7 @@ grep -E &#34;^nr_dirty|^nr_writeback|^nr_dirty_threshold&#34; /proc/vmstat
 					</section>
 					<section>
 						<h3 id="dirty-pages-and-writeback">Dirty Pages and Writeback</h3>
-						<p>
-							Dirty pages are the kernel's responsibility. They must be written to disk before they can be
-							reclaimed or before the system shuts down:
-						</p>
+						<p>Dirty pages are the kernel's responsibility. They must be written to disk before they can be reclaimed or before the system shuts down:</p>
 						<pre class="plaintext">
 Dirty Page Lifecycle:
 ══════════════════════════════════════════════════════════════
@@ -495,13 +450,7 @@ kretprobe:do_writepages /retval &gt;= 0/ {
 					</section>
 					<section>
 						<h3 id="writeback-throttling">Writeback Throttling</h3>
-						<p>
-							When a process writes faster than the disk can absorb, the kernel throttles the writer. The
-							function
-							<code>balance_dirty_pages()</code>
-							is called at the end of each write and blocks the writing process
-							if the system's dirty page limit is exceeded:
-						</p>
+						<p>When a process writes faster than the disk can absorb, the kernel throttles the writer. The function <code>balance_dirty_pages()</code> is called at the end of each write and blocks the writing process if the system's dirty page limit is exceeded:</p>
 						<pre class="plaintext">
 balance_dirty_pages() Logic:
 ══════════════════════════════════════════════════════════════
@@ -562,15 +511,7 @@ sudo sysctl -w vm.dirty_background_ratio=10
 					</section>
 					<section>
 						<h3 id="mmap-and-page-cache-interaction">mmap() and Page Cache Interaction</h3>
-						<p>
-							Memory-mapped files share pages directly with the page cache. When you
-							<code>mmap()</code>
-							a file and write
-							to the mapped memory, you're modifying the same physical page that a concurrent
-							<code>read()</code>
-							would
-							see:
-						</p>
+						<p>Memory-mapped files share pages directly with the page cache. When you <code>mmap()</code> a file and write to the mapped memory, you're modifying the same physical page that a concurrent <code>read()</code> would see:</p>
 						<pre class="plaintext">
 mmap() and Page Cache — Same Pages:
 ══════════════════════════════════════════════════════════════
@@ -641,10 +582,7 @@ PYEOF
 					</section>
 					<section>
 						<h3 id="read-ahead-prediction">Read-Ahead Prediction</h3>
-						<p>
-							The page cache implements read-ahead to hide I/O latency for sequential readers. When the kernel
-							detects sequential access, it proactively reads pages ahead of the current position:
-						</p>
+						<p>The page cache implements read-ahead to hide I/O latency for sequential readers. When the kernel detects sequential access, it proactively reads pages ahead of the current position:</p>
 						<pre class="plaintext">
 Read-Ahead State Machine:
 ══════════════════════════════════════════════════════════════
@@ -755,14 +693,7 @@ rm /tmp/coherence_test
 					</section>
 					<section>
 						<h3 id="page-cache-and-memory-pressure">Page Cache and Memory Pressure</h3>
-						<p>
-							Under memory pressure, the page allocator invokes page reclaim. Clean file-backed pages are
-							the
-							<b>preferred</b>
-							reclaim targets: they can be freed instantly (just drop the page, data is
-							on disk). Dirty pages must be written back before reclaim. Anonymous pages (process heap/stack)
-							must be swapped out, which is slower and more expensive:
-						</p>
+						<p>Under memory pressure, the page allocator invokes page reclaim. Clean file-backed pages are the <b>preferred</b> reclaim targets: they can be freed instantly (just drop the page, data is on disk). Dirty pages must be written back before reclaim. Anonymous pages (process heap/stack) must be swapped out, which is slower and more expensive:</p>
 						<pre class="plaintext">
 Reclaim Priority Order (simplified):
 ══════════════════════════════════════════════════════════════
@@ -821,12 +752,7 @@ kretprobe:shrink_page_list /retval &gt;= 0/ {
 					</section>
 					<section>
 						<h3 id="direct-io-bypassing-the-page-cache">Direct I/O: Bypassing the Page Cache</h3>
-						<p>
-							Applications that manage their own caching (databases, virtual machines) can use
-							<code>O_DIRECT</code>
-							to bypass the page cache entirely. Direct I/O transfers data directly between the user buffer
-							and the block device:
-						</p>
+						<p>Applications that manage their own caching (databases, virtual machines) can use <code>O_DIRECT</code> to bypass the page cache entirely. Direct I/O transfers data directly between the user buffer and the block device:</p>
 						<pre class="plaintext">
 Direct I/O Path vs Buffered I/O:
 ══════════════════════════════════════════════════════════════
@@ -926,10 +852,7 @@ sudo fincore /usr/bin/* /usr/lib/* 2&gt;/dev/null | sort -k2 -rn | head -10
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Run the page cache container lab. It walks through cache population, dirty page writeback, buffered
-							versus direct I/O, read-ahead, and mmap() sharing.
-						</p>
+						<p>Run the page cache container lab. It walks through cache population, dirty page writeback, buffered versus direct I/O, read-ahead, and mmap() sharing.</p>
 						<p><a href="/wiki/articles/sysinternals/page-cache.Containerfile">page-cache.Containerfile</a></p>
 						<pre class="bash">
 podman build -t page-cache-lab -f page-cache.Containerfile .

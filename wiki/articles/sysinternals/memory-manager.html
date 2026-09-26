@@ -171,23 +171,10 @@
 
 				<article>
 					<h2 id="memory-manager">Memory Manager</h2>
-					<p>
-						Page table walk, TLB shootdown, page fault handling, copy-on-write, swap, huge pages, NUMA,
-						page reclaim, reverse mapping, and kernel memory accounting.
-					</p>
+					<p>Page table walk, TLB shootdown, page fault handling, copy-on-write, swap, huge pages, NUMA, page reclaim, reverse mapping, and kernel memory accounting.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							The memory manager owns every virtual-to-physical translation in the system. This article follows
-							a page from a fault on a user address through the four- and five-level page tables, the TLB,
-							the page allocator, and the reclaim path, and shows how to inspect the result with
-							<code>/proc</code>
-							,
-							<code>/sys</code>
-							, and
-							<code>perf</code>
-							.
-						</p>
+						<p>The memory manager owns every virtual-to-physical translation in the system. This article follows a page from a fault on a user address through the four- and five-level page tables, the TLB, the page allocator, and the reclaim path, and shows how to inspect the result with <code>/proc</code> , <code>/sys</code> , and <code>perf</code> .</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -197,14 +184,7 @@
 					</section>
 					<section>
 						<h3 id="the-memory-managers-job">The Memory Manager's Job</h3>
-						<p>
-							The memory manager is the kernel subsystem responsible for translating virtual addresses to
-							physical addresses, handling page faults, managing the page cache, reclaiming memory under pressure,
-							and enforcing process isolation. It is not a single function or file - it spans
-							<code>/usr/src/linux/mm/</code>
-							, consuming roughly 150,000 lines of C across 80+ source files. Every memory access in the system
-							passes through code that originates here.
-						</p>
+						<p>The memory manager is the kernel subsystem responsible for translating virtual addresses to physical addresses, handling page faults, managing the page cache, reclaiming memory under pressure, and enforcing process isolation. It is not a single function or file - it spans <code>/usr/src/linux/mm/</code> , consuming roughly 150,000 lines of C across 80+ source files. Every memory access in the system passes through code that originates here.</p>
 						<pre class="plaintext">
 User process requests a page (via mmap, brk, or implicit demand paging):
     │
@@ -260,13 +240,7 @@ User process requests a page (via mmap, brk, or implicit demand paging):
 					</section>
 					<section>
 						<h3 id="page-table-walk-deep-dive">Page Table Walk - Deep Dive</h3>
-						<p>
-							Virtual-to-physical translation is a multi-level lookup. Each level narrows the search by indexing
-							into a 512-entry table. The final
-							<abbr title="Penetration Test">PT</abbr>
-							E (Page Table Entry) contains the physical
-							frame number and permission bits.
-						</p>
+						<p>Virtual-to-physical translation is a multi-level lookup. Each level narrows the search by indexing into a 512-entry table. The final <abbr title="Penetration Test">PT</abbr> E (Page Table Entry) contains the physical frame number and permission bits.</p>
 						<h4 id="x86-64-4-level-paging">x86-64 4-Level Paging</h4>
 						<pre class="plaintext">
 Virtual Address (48 bits):
@@ -346,10 +320,7 @@ else:
 &#34;
 						</pre>
 						<h4 id="level-paging">5-Level Paging</h4>
-						<p>
-							With 5-level paging, the virtual address expands to 57 bits (128 PiB address space). An additional
-							P5GD/PGD level sits above PML4:
-						</p>
+						<p>With 5-level paging, the virtual address expands to 57 bits (128 PiB address space). An additional P5GD/PGD level sits above PML4:</p>
 						<pre class="plaintext">
 57-bit VA:  [PGD:9][P4D:9][PDPT:9][PD:9][PT:9][Offset:12]
 Levels:     CR3 → PGD → P4D → PDPT → PD → PT → Page
@@ -362,15 +333,7 @@ grep &#34;CONFIG_X86_5LEVEL=&#34; /boot/config-$(uname -r)
 					</section>
 					<section>
 						<h3 id="tlb-translation-lookaside-buffer">TLB - Translation Lookaside Buffer</h3>
-						<p>
-							The TLB is a small,
-							<abbr title="Central Processing Unit">CPU</abbr>
-							-internal cache that maps virtual pages to
-							physical frames. It is multi-level (L1 ITLB/DTLB, L2 STLB), virtually-tagged on some designs,
-							and per-
-							<abbr title="Central Processing Unit">CPU</abbr>
-							-core.
-						</p>
+						<p>The TLB is a small, <abbr title="Central Processing Unit">CPU</abbr> -internal cache that maps virtual pages to physical frames. It is multi-level (L1 ITLB/DTLB, L2 STLB), virtually-tagged on some designs, and per- <abbr title="Central Processing Unit">CPU</abbr> -core.</p>
 						<pre class="plaintext">
 Intel Ice Lake TLB hierarchy (example):
 
@@ -402,14 +365,7 @@ TLB Lookup Flow:
     Physical address delivered to cache subsystem
 						</pre>
 						<h4 id="tlb-shootdown">TLB Shootdown</h4>
-						<p>
-							When a page table entry is modified (unmapped, permissions changed), every
-							<abbr title="Central Processing Unit">CPU</abbr>
-							core that might have that translation cached in its TLB must be notified. This is called a TLB
-							shootdown, implemented via Inter-Processor Interrupts (
-							<abbr title="Internet Protocol">IP</abbr>
-							Is).
-						</p>
+						<p>When a page table entry is modified (unmapped, permissions changed), every <abbr title="Central Processing Unit">CPU</abbr> core that might have that translation cached in its TLB must be notified. This is called a TLB shootdown, implemented via Inter-Processor Interrupts ( <abbr title="Internet Protocol">IP</abbr> Is).</p>
 						<pre class="plaintext">
 TLB shootdown sequence:
   1. CPU A modifies PTE (e.g., unmaps a page)
@@ -523,14 +479,7 @@ cat /proc/vmstat | grep -E &#34;^(pgfault|pgmajfault|pgpgin|pgpgout|pswpin|pswpo
 					</section>
 					<section>
 						<h3 id="copy-on-write-cow">Copy-on-Write (CoW)</h3>
-						<p>
-							Copy-on-write is the optimization that makes
-							<code>fork()</code>
-							fast. Instead of copying every page of
-							the parent's address space, the child shares the parent's pages as read-only. When either tries
-							to write, a page fault occurs, a new physical page is allocated, the data is copied, and the
-							page table is updated.
-						</p>
+						<p>Copy-on-write is the optimization that makes <code>fork()</code> fast. Instead of copying every page of the parent's address space, the child shares the parent's pages as read-only. When either tries to write, a page fault occurs, a new physical page is allocated, the data is copied, and the page table is updated.</p>
 						<pre class="plaintext">
 fork() CoW Sequence:
   Parent process                    Child process
@@ -604,10 +553,7 @@ EOF
 					</section>
 					<section>
 						<h3 id="working-set-and-page-replacement">Working Set and Page Replacement</h3>
-						<p>
-							The kernel must decide which pages to evict when memory is scarce. Linux uses a two-list LRU
-							strategy (active + inactive lists) for each reclaimable page type.
-						</p>
+						<p>The kernel must decide which pages to evict when memory is scarce. Linux uses a two-list <abbr title="Least Recently Used">LRU</abbr> strategy (active + inactive lists) for each reclaimable page type.</p>
 						<pre class="plaintext">
 Two-List LRU Strategy:
 
@@ -656,11 +602,7 @@ cat /proc/vmstat | grep -E &#34;pgscan|pgsteal|kswapd&#34;
 					</section>
 					<section>
 						<h3 id="swap-subsystem">Swap Subsystem</h3>
-						<p>
-							When anonymous memory must be evicted, it is written to swap space. Linux supports multiple
-							swap areas (partitions, files) with priorities. The swap subsystem uses a swap cache to avoid
-							duplicate writes and to handle race conditions between page-out and subsequent page-in.
-						</p>
+						<p>When anonymous memory must be evicted, it is written to swap space. Linux supports multiple swap areas (partitions, files) with priorities. The swap subsystem uses a swap cache to avoid duplicate writes and to handle race conditions between page-out and subsequent page-in.</p>
 						<pre class="plaintext">
 Swap Lifecycle:
   Page on anonymous LRU
@@ -699,18 +641,8 @@ Swap Lifecycle:
   │  fault)             │
   └───────────────────┘
 						</pre>
-						<p>
-							<b>zswap:</b>
-							Compresses pages before writing them to swap, storing them in a compressed RAM pool.
-							This avoids slow disk I/O for compressible pages.
-						</p>
-						<p>
-							<b>frontswap:</b>
-							A hook that allows a backend (like Xen tmem or
-							<abbr title="Virtual Machine">VM</abbr>
-							ware balloon
-							driver) to intercept swap-out before it reaches disk.
-						</p>
+						<p><b>zswap:</b> Compresses pages before writing them to swap, storing them in a compressed RAM pool. This avoids slow disk I/O for compressible pages.</p>
+						<p><b>frontswap:</b> A hook that allows a backend (like Xen tmem or <abbr title="Virtual Machine">VM</abbr> ware balloon driver) to intercept swap-out before it reaches disk.</p>
 						<pre class="bash">
 # Swap configuration
 swapon --show
@@ -735,11 +667,7 @@ cat /proc/vmstat | grep -E &#34;pswpin|pswpout&#34;
 					</section>
 					<section>
 						<h3 id="huge-pages">Huge Pages</h3>
-						<p>
-							Standard 4 KiB pages create enormous page tables (4 GiB of RAM = 1 million pages = 8 MiB of
-							page tables). Huge pages reduce TLB pressure and page table overhead at the cost of internal
-							fragmentation and allocation latency.
-						</p>
+						<p>Standard 4 KiB pages create enormous page tables (4 GiB of RAM = 1 million pages = 8 MiB of page tables). Huge pages reduce TLB pressure and page table overhead at the cost of internal fragmentation and allocation latency.</p>
 						<h4 id="x86-64-huge-page-sizes">x86-64 huge page sizes</h4>
 						<pre class="plaintext">
 2 MiB huge pages (PMD-level):
@@ -775,14 +703,7 @@ cat /proc/vmstat | grep -E &#34;pswpin|pswpout&#34;
   4 KiB page
 						</pre>
 						<h4 id="transparent-huge-pages-thp">Transparent Huge Pages (THP)</h4>
-						<p>
-							THP automatically promotes contiguous 4 KiB pages to 2 MiB huge pages when possible. The kernel
-							daemon
-							<code>khugepaged</code>
-							scans memory for merge opportunities. When a THP must be split (e.g.,
-							<code>mprotect</code>
-							with smaller granularity), it's demoted back to 4 KiB pages.
-						</p>
+						<p>THP automatically promotes contiguous 4 KiB pages to 2 MiB huge pages when possible. The kernel daemon <code>khugepaged</code> scans memory for merge opportunities. When a THP must be split (e.g., <code>mprotect</code> with smaller granularity), it's demoted back to 4 KiB pages.</p>
 						<pre class="bash">
 # THP status
 cat /sys/kernel/mm/transparent_hugepage/enabled
@@ -813,15 +734,7 @@ echo never | sudo tee /sys/kernel/mm/transparent_hugepage/enabled
 					</section>
 					<section>
 						<h3 id="numa-non-uniform-memory-access">NUMA - Non-Uniform Memory Access</h3>
-						<p>
-							On multi-socket systems, each
-							<abbr title="Central Processing Unit">CPU</abbr>
-							has local memory (fast) and remote
-							memory (2-3x slower). The kernel's page allocator and scheduler are NUMA-aware, preferring to
-							allocate memory from the local node and schedule threads on the
-							<abbr title="Central Processing Unit">CPU</abbr>
-							closest to their memory.
-						</p>
+						<p>On multi-socket systems, each <abbr title="Central Processing Unit">CPU</abbr> has local memory (fast) and remote memory (2-3x slower). The kernel's page allocator and scheduler are NUMA-aware, preferring to allocate memory from the local node and schedule threads on the <abbr title="Central Processing Unit">CPU</abbr> closest to their memory.</p>
 						<pre class="plaintext">
 NUMA Topology (2-socket system):
 
@@ -912,18 +825,7 @@ cat /proc/meminfo | grep -E &#34;SReclaimable|SUnreclaim|Cached|Buffers&#34;
 					</section>
 					<section>
 						<h3 id="reverse-mapping-rmap">Reverse Mapping (rmap)</h3>
-						<p>
-							Reverse mapping solves the problem: "Given a physical page, which
-							<abbr title="Penetration Test">PT</abbr>
-							Es
-							point to it?" When the kernel needs to evict a page, it must find and invalidate every
-							<abbr title="Penetration Test">PT</abbr>
-							E that references it. The rmap subsystem tracks this information through
-							<code>anon_vma</code>
-							and
-							<code>address_space</code>
-							structures.
-						</p>
+						<p>Reverse mapping solves the problem: "Given a physical page, which <abbr title="Penetration Test">PT</abbr> Es point to it?" When the kernel needs to evict a page, it must find and invalidate every <abbr title="Penetration Test">PT</abbr> E that references it. The rmap subsystem tracks this information through <code>anon_vma</code> and <code>address_space</code> structures.</p>
 						<pre class="plaintext">
 Page → PTE mappings:
 
@@ -950,11 +852,7 @@ echo 0 | sudo tee /sys/kernel/debug/tracing/events/rmap/try_to_unmap/enable 2&gt
 					</section>
 					<section>
 						<h3 id="page-cache-interaction">Page Cache Interaction</h3>
-						<p>
-							The page cache stores file data in memory. It sits between the VFS and the block layer, absorbing
-							reads and delaying writes. The memory manager treats file-backed pages differently from anonymous
-							pages:
-						</p>
+						<p>The page cache stores file data in memory. It sits between the VFS and the block layer, absorbing reads and delaying writes. The memory manager treats file-backed pages differently from anonymous pages:</p>
 						<ul>
 							<li><b>File-backed pages</b> can be evicted without swap (just write back dirty data)</li>
 							<li><b>Anonymous pages</b> require swap to evict</li>
@@ -974,11 +872,7 @@ cat /proc/vmstat | grep pgpgin
 					</section>
 					<section>
 						<h3 id="memory-control-groups-memcg">Memory Control Groups (memcg)</h3>
-						<p>
-							Memory cgroups limit, account, and isolate memory usage for groups of processes. Each memcg
-							has its own LRU lists, page counters, and OOM settings - enabling container memory limits, per-service
-							charging, and accurate accounting.
-						</p>
+						<p>Memory cgroups limit, account, and isolate memory usage for groups of processes. Each memcg has its own <abbr title="Least Recently Used">LRU</abbr> lists, page counters, and OOM settings - enabling container memory limits, per-service charging, and accurate accounting.</p>
 						<pre class="plaintext">
 Memory cgroup accounting:
   mem_cgroup → memory.stat (counters)
@@ -1060,13 +954,7 @@ grep -i huge /proc/meminfo | grep -v &#34;HugePages_&#34;
 					</section>
 					<section>
 						<h3 id="kernel-same-page-merging-ksm">Kernel Same-page Merging (KSM)</h3>
-						<p>
-							KSM scans anonymous pages for identical content and merges them into a single copy-on-write
-							page. Originally designed for virtual machine memory deduplication, it can be used by any application
-							via
-							<code>madvise(MADV_MERGEABLE)</code>
-							.
-						</p>
+						<p>KSM scans anonymous pages for identical content and merges them into a single copy-on-write page. Originally designed for virtual machine memory deduplication, it can be used by any application via <code>madvise(MADV_MERGEABLE)</code> .</p>
 						<pre class="bash">
 # KSM status
 cat /sys/kernel/mm/ksm/run             # 1 = enabled
@@ -1189,12 +1077,7 @@ sudo cat /proc/1/smaps_rollup 2&gt;/dev/null
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Write a Go tool that translates a virtual address to a physical frame by reading
-							<code>/proc/self/pagemap</code>
-							. Allocate a 1 MiB slice, touch one byte per page, then print the present, swapped, and shared
-							bits plus the physical frame number for the first page.
-						</p>
+						<p>Write a Go tool that translates a virtual address to a physical frame by reading <code>/proc/self/pagemap</code> . Allocate a 1 MiB slice, touch one byte per page, then print the present, swapped, and shared bits plus the physical frame number for the first page.</p>
 						<pre class="go">
 package main
 
@@ -1246,19 +1129,7 @@ func main() {
 	}
 }
 						</pre>
-						<p>
-							Build it with
-							<code>go build -o pagemap pagemap.go</code>
-							. Run it as an unprivileged user, then with
-							<code>sudo</code>
-							: since Linux 4.0 the kernel zeroes the PFN field for callers without
-							<code>CAP_SYS_ADMIN</code>
-							. Finally,
-							have the process
-							<code>fork</code>
-							a child that writes to the same buffer and re-read the shared and present
-							bits to observe copy-on-write in action.
-						</p>
+						<p>Build it with <code>go build -o pagemap pagemap.go</code> . Run it as an unprivileged user, then with <code>sudo</code> : since Linux 4.0 the kernel zeroes the PFN field for callers without <code>CAP_SYS_ADMIN</code> . Finally, have the process <code>fork</code> a child that writes to the same buffer and re-read the shared and present bits to observe copy-on-write in action.</p>
 					</section>
 					<section>
 						<h3 id="references">References</h3>
@@ -1272,7 +1143,7 @@ func main() {
 							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/mm/rmap.c" target="_blank">Linux kernel: mm/rmap.c</a> - reverse mapping</li>
 							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/mm/huge_memory.c" target="_blank">Linux kernel: mm/huge_memory.c</a> - THP</li>
 							<li><a class="icon-website" href="https://elixir.bootlin.com/linux/latest/source/mm/memcontrol.c" target="_blank">Linux kernel: mm/memcontrol.c</a> - memory cgroup</li>
-							<li><a class="icon-website" href="https://lwn.net/Articles/7468/" target="_blank">LWN.net - Page frame reclaiming</a> - kswapd and the LRU</li>
+							<li><a class="icon-website" href="https://lwn.net/Articles/7468/" target="_blank">LWN.net - Page frame reclaiming</a> - kswapd and the <abbr title="Least Recently Used">LRU</abbr></li>
 							<li><a class="icon-website" href="https://lwn.net/Articles/568870/" target="_blank">LWN.net - NUMA scheduling and memory placement</a></li>
 							<li><a class="icon-website" href="https://man.archlinux.org/man/proc.5" target="_blank">man 5 proc</a> - /proc/meminfo, /proc/vmstat, /proc/zoneinfo</li>
 							<li><a class="icon-website" href="https://man.archlinux.org/man/numa.7" target="_blank">man 7 numa</a> - NUMA policy overview</li>

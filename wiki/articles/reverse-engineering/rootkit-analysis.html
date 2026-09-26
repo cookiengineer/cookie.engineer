@@ -151,19 +151,10 @@
 
 				<article>
 					<h2 id="rootkit-analysis">Rootkit Analysis</h2>
-					<p>
-						Analyze Linux rootkits by examining kernel module hooking, system call table tampering, file
-						system manipulation, and user-space library interception.
-					</p>
+					<p>Analyze Linux rootkits by examining kernel module hooking, system call table tampering, file system manipulation, and user-space library interception.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							A rootkit is software that hides its presence by subverting the operating system mechanisms
-							used to detect it. Linux rootkits work at two levels: kernel-space loadable modules that modify
-							kernel structures, and user-space libraries that intercept the system calls a process makes.
-							This article dissects both, then builds detection tools that compare what the kernel knows with
-							what user-space tools report.
-						</p>
+						<p>A rootkit is software that hides its presence by subverting the operating system mechanisms used to detect it. Linux rootkits work at two levels: kernel-space loadable modules that modify kernel structures, and user-space libraries that intercept the system calls a process makes. This article dissects both, then builds detection tools that compare what the kernel knows with what user-space tools report.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -173,32 +164,8 @@
 							<li><a href="/wiki/articles/reverse-engineering/ld-preload.html">LD_PRELOAD</a> - userland function hooking via LD_PRELOAD</li>
 						</ul>
 						<p>---</p>
-						<p>
-							A rootkit is software that hides its presence by subverting the OS mechanisms used to detect
-							it. It manipulates the same kernel structures that tools like
-							<code>ps</code>
-							,
-							<code>ls</code>
-							,
-							<code>netstat</code>
-							, and
-							<code>ss</code>
-							rely on. If
-							<code>ps</code>
-							reads
-							<code>/proc</code>
-							to list processes, the rootkit intercepts that read and
-							removes its own PID from the output. The defining characteristic of a rootkit is not what it
-							does (backdoor, keylogger,
-							<abbr title="Distributed Denial of Service">DDoS</abbr>
-							) but that it actively hides
-							evidence of its existence.
-						</p>
-						<p>
-							Rootkits operate at two levels: kernel-space (LKM - Loadable Kernel Module, modifies kernel
-							memory and structures) and user-space (LD_PRELOAD, ptrace, or shared library replacement). The
-							analysis approach differs fundamentally between the two.
-						</p>
+						<p>A rootkit is software that hides its presence by subverting the OS mechanisms used to detect it. It manipulates the same kernel structures that tools like <code>ps</code> , <code>ls</code> , <code>netstat</code> , and <code>ss</code> rely on. If <code>ps</code> reads <code>/proc</code> to list processes, the rootkit intercepts that read and removes its own PID from the output. The defining characteristic of a rootkit is not what it does (backdoor, keylogger, <abbr title="Distributed Denial of Service">DDoS</abbr> ) but that it actively hides evidence of its existence.</p>
+						<p>Rootkits operate at two levels: kernel-space (LKM - Loadable Kernel Module, modifies kernel memory and structures) and user-space (LD_PRELOAD, ptrace, or shared library replacement). The analysis approach differs fundamentally between the two.</p>
 					</section>
 					<section>
 						<h3 id="kernel-vs-userland-rootkits">Kernel vs Userland Rootkits</h3>
@@ -219,7 +186,7 @@
 								<tr>
 									<td align="center">Persistence mechanism</td>
 									<td align="center">Installs kernel module, hooks kernel structs</td>
-									<td align="center">Writes to /etc/ld.so.preload,~/.bashrc</td>
+									<td align="center">Writes to /etc/ld.so.preload, ~/.bashrc</td>
 								</tr>
 								<tr>
 									<td align="center">Visibility</td>
@@ -247,12 +214,12 @@
 									<td align="center">Low - crashes affect only hooked process</td>
 								</tr>
 								<tr>
-									<td align="center"><code>/proc/modules</code>impact</td>
+									<td align="center"><code>/proc/modules</code> impact</td>
 									<td align="center">Module hidden from listing</td>
 									<td align="center">No effect on kernel modules</td>
 								</tr>
 								<tr>
-									<td align="center"><code>/proc/kallsyms</code>impact</td>
+									<td align="center"><code>/proc/kallsyms</code> impact</td>
 									<td align="center">Symbols can be hidden (if kptr_restrict=0)</td>
 									<td align="center">No effect on kernel symbols</td>
 								</tr>
@@ -268,12 +235,7 @@
 							<li><b>Module unload</b> ( <code>cleanup_module</code> ): restore original function pointers (few rootkits implement this properly - many crash the kernel on unload)</li>
 						</ol>
 						<h4 id="finding-the-sys-call-table">Finding the sys_call_table</h4>
-						<p>
-							The sys_call_table is an array of function pointers, one per system call number. Historically
-							it was exported via
-							<code>kallsyms</code>
-							:
-						</p>
+						<p>The sys_call_table is an array of function pointers, one per system call number. Historically it was exported via <code>kallsyms</code> :</p>
 						<pre class="c">
 /* /proc/kallsyms entry (on kernels with kptr_restrict=0):
  * ffffffff820001e0 R sys_call_table
@@ -516,25 +478,11 @@ static void __exit rootkit_exit(void)
 module_init(rootkit_init);
 module_exit(rootkit_exit);
 						</pre>
-						<p>
-							The CR0 write-protect manipulation is necessary because the sys_call_table resides in read-only
-							memory. Clearing bit 16 (WP flag) temporarily allows the kernel to write to read-only pages.
-							This is a legacy technique - modern rootkits use
-							<code>text_poke_bp</code>
-							or kprobes to avoid CR0 manipulation.
-						</p>
+						<p>The CR0 write-protect manipulation is necessary because the sys_call_table resides in read-only memory. Clearing bit 16 (WP flag) temporarily allows the kernel to write to read-only pages. This is a legacy technique - modern rootkits use <code>text_poke_bp</code> or kprobes to avoid CR0 manipulation.</p>
 					</section>
 					<section>
 						<h3 id="vfs-hooking">VFS Hooking</h3>
-						<p>
-							A stealthier approach than syscall table modification: hook Virtual File System operations instead.
-							VFS hooks are function pointers in
-							<code>struct file_operations</code>
-							and
-							<code>struct inode_operations</code>
-							-
-							manipulating these is harder to detect than syscall table entries.
-						</p>
+						<p>A stealthier approach than syscall table modification: hook Virtual File System operations instead. VFS hooks are function pointers in <code>struct file_operations</code> and <code>struct inode_operations</code> - manipulating these is harder to detect than syscall table entries.</p>
 						<pre class="c">
 /*
  * VFS-based file hiding rootkit (conceptual)
@@ -571,15 +519,7 @@ static int hooked_filldir(void *ctx, const char *name, int namelen,
 					</section>
 					<section>
 						<h3 id="module-hiding-concealing-from-lsmod">Module Hiding (Concealing from lsmod)</h3>
-						<p>
-							<code>lsmod</code>
-							reads
-							<code>/proc/modules</code>
-							, which is populated by iterating the
-							<code>modules</code>
-							linked list in
-							kernel memory. A rootkit removes itself from this list:
-						</p>
+						<p><code>lsmod</code> reads <code>/proc/modules</code> , which is populated by iterating the <code>modules</code> linked list in kernel memory. A rootkit removes itself from this list:</p>
 						<pre class="c">
 /* Before hiding: lsmod shows the module
  * Module                  Size  Used by
@@ -610,11 +550,7 @@ static void hide_module(void)
 					</section>
 					<section>
 						<h3 id="netfilter-hooking">Netfilter Hooking</h3>
-						<p>
-							Rootkits hook netfilter to hide
-							<abbr title="Command and Control">C2</abbr>
-							connections:
-						</p>
+						<p>Rootkits hook netfilter to hide <abbr title="Command and Control">C2</abbr> connections:</p>
 						<pre class="c">
 #include &lt;linux/netfilter.h&gt;
 #include &lt;linux/netfilter_ipv4.h&gt;
@@ -653,17 +589,7 @@ static unsigned int hook_packet(void *priv, struct sk_buff *skb,
 					</section>
 					<section>
 						<h3 id="process-hiding-via-task-struct">Process Hiding Via task_struct</h3>
-						<p>
-							Processes in Linux are tracked by a doubly-linked list of
-							<code>task_struct</code>
-							nodes.
-							<code>ps</code>
-							and
-							<code>/proc</code>
-							iterate this list. Removing a
-							<code>task_struct</code>
-							from the list hides the process:
-						</p>
+						<p>Processes in Linux are tracked by a doubly-linked list of <code>task_struct</code> nodes. <code>ps</code> and <code>/proc</code> iterate this list. Removing a <code>task_struct</code> from the list hides the process:</p>
 						<pre class="c">
 /*
  * Process hiding by task_struct list removal (conceptual)
@@ -716,12 +642,7 @@ done
 					</section>
 					<section>
 						<h3 id="userland-rootkit-analysis">Userland Rootkit Analysis</h3>
-						<p>
-							Userland rootkits hook libc functions via
-							<code>LD_PRELOAD</code>
-							or library replacement. They are simpler
-							but easier to detect.
-						</p>
+						<p>Userland rootkits hook libc functions via <code>LD_PRELOAD</code> or library replacement. They are simpler but easier to detect.</p>
 						<h4 id="libc-function-hooking">libc Function Hooking</h4>
 						<pre class="c">
 /*
@@ -958,11 +879,7 @@ strings suspicious.ko | grep -E &#39;prepare_kernel_cred|commit_creds|override_c
 					</section>
 					<section>
 						<h3 id="python-sys-call-table-integrity-check">Python: sys_call_table Integrity Check</h3>
-						<p>
-							A userspace script that reads
-							<code>/proc/kallsyms</code>
-							and detects anomalies:
-						</p>
+						<p>A userspace script that reads <code>/proc/kallsyms</code> and detects anomalies:</p>
 						<pre class="python">
 #!/usr/bin/env python3
 &#34;&#34;&#34;
@@ -1115,10 +1032,7 @@ echo 1 | sudo tee /proc/sys/kernel/kptr_restrict
 					</section>
 					<section>
 						<h3 id="diamorphine-rootkit-analysis">Diamorphine Rootkit Analysis</h3>
-						<p>
-							Diamorphine is a well-known open-source LKM rootkit. Its architecture demonstrates all the core
-							techniques:
-						</p>
+						<p>Diamorphine is a well-known open-source LKM rootkit. Its architecture demonstrates all the core techniques:</p>
 						<pre class="plaintext">
 Diamorphine module structure:
 ├── init_module()
@@ -1271,79 +1185,28 @@ done
 									<td align="center">Unchanged - no syscall table hooks</td>
 								</tr>
 								<tr>
-									<td align="center"><code>kernfs</code>vs<code>/proc</code></td>
+									<td align="center"><code>kernfs</code> vs <code>/proc</code></td>
 									<td align="center">Match</td>
 									<td align="center">/proc filtered, kernfs = truth</td>
 									<td align="center">/proc filtered, kernfs = truth</td>
 								</tr>
 								<tr>
-									<td align="center">Statically-linked<code>ls</code></td>
+									<td align="center">Statically-linked <code>ls</code></td>
 									<td align="center">Same as dynamic ls</td>
 									<td align="center">Same as dynamic ls</td>
-									<td align="center"><b>Different!</b>Static ls shows hidden files</td>
+									<td align="center"><b>Different!</b> Static ls shows hidden files</td>
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							The key insight:
-							<b>kernel-level rootkits affect all tools, userland rootkits only affect dynamically-linked tools.</b>
-							A statically-linked
-							<code>ls</code>
-							(compiled with
-							<code>-static</code>
-							) bypasses any LD_PRELOAD hook because it
-							calls the kernel directly via
-							<code>syscall(SYS_getdents, ...)</code>
-							.
-						</p>
+						<p>The key insight: <b>kernel-level rootkits affect all tools, userland rootkits only affect dynamically-linked tools.</b> A statically-linked <code>ls</code> (compiled with <code>-static</code> ) bypasses any LD_PRELOAD hook because it calls the kernel directly via <code>syscall(SYS_getdents, ...)</code> .</p>
 					</section>
 					<section>
 						<h3 id="summary">Summary</h3>
-						<p>
-							Linux rootkits manipulate the boundary between the kernel's truth and userland's perception.
-							Kernel rootkits hook sys_call_table, VFS operations, netfilter, or task_struct lists to filter
-							the kernel's own output before it reaches userspace. Userland rootkits hook libc functions to
-							filter the userspace view of kernel data. Detection requires comparing multiple views of the
-							same data:
-							<code>/proc</code>
-							vs
-							<code>/sys</code>
-							,
-							<code>ps</code>
-							vs
-							<code>/proc</code>
-							PID bruteforce, dynamic vs static tooling. The
-							sys_call_table integrity check - verifying that every handler address falls within the kernel
-							<code>.text</code>
-							segment - catches the most common kernel hooking technique. A statically-linked binary
-							that makes raw syscalls exposes userland rootkits by showing files and processes that the hooked
-							libc hides. No single detection method catches every rootkit, but layered comparison reveals
-							the inconsistencies that rootkits inevitably create.
-						</p>
+						<p>Linux rootkits manipulate the boundary between the kernel's truth and userland's perception. Kernel rootkits hook sys_call_table, VFS operations, netfilter, or task_struct lists to filter the kernel's own output before it reaches userspace. Userland rootkits hook libc functions to filter the userspace view of kernel data. Detection requires comparing multiple views of the same data: <code>/proc</code> vs <code>/sys</code> , <code>ps</code> vs <code>/proc</code> PID bruteforce, dynamic vs static tooling. The sys_call_table integrity check - verifying that every handler address falls within the kernel <code>.text</code> segment - catches the most common kernel hooking technique. A statically-linked binary that makes raw syscalls exposes userland rootkits by showing files and processes that the hooked libc hides. No single detection method catches every rootkit, but layered comparison reveals the inconsistencies that rootkits inevitably create.</p>
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Write a Go tool that finds hidden kernel modules by comparing two views of the same kernel:
-							the list in
-							<code>/proc/modules</code>
-							and the directories under
-							<code>/sys/module</code>
-							. Any module present in
-							one but not the other is being hidden. Extend the tool to read
-							<code>/proc/kallsyms</code>
-							, record the
-							kernel
-							<code>_text</code>
-							and
-							<code>_etext</code>
-							boundaries, and flag every
-							<code>__x64_sys_*</code>
-							handler whose address falls
-							outside that range. Run it on a clean system, then load a harmless test module and hide it from
-							<code>/proc/modules</code>
-							to confirm the detector fires.
-						</p>
+						<p>Write a Go tool that finds hidden kernel modules by comparing two views of the same kernel: the list in <code>/proc/modules</code> and the directories under <code>/sys/module</code> . Any module present in one but not the other is being hidden. Extend the tool to read <code>/proc/kallsyms</code> , record the kernel <code>_text</code> and <code>_etext</code> boundaries, and flag every <code>__x64_sys_*</code> handler whose address falls outside that range. Run it on a clean system, then load a harmless test module and hide it from <code>/proc/modules</code> to confirm the detector fires.</p>
 						<pre class="go">
 package main
 

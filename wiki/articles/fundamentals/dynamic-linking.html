@@ -170,30 +170,10 @@
 
 				<article>
 					<h2 id="dynamic-linking">Dynamic Linking</h2>
-					<p>
-						How ld.so resolves shared library symbols - GOT, PLT, lazy binding, LD_PRELOAD, symbol visibility,
-						and the complete dynamic linking lifecycle on Linux.
-					</p>
+					<p>How ld.so resolves shared library symbols - GOT, PLT, lazy binding, LD_PRELOAD, symbol visibility, and the complete dynamic linking lifecycle on Linux.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							A dynamically linked program does not contain its libraries. The kernel maps its interpreter,
-							<code>ld.so</code>
-							, which loads the shared objects, applies relocations, and only then jumps to the program.
-							That indirection is what makes
-							<code>LD_PRELOAD</code>
-							injection, GOT overwrites, and PLT hijacks possible,
-							and it is why a missing or mismatched library stops a binary before
-							<code>main</code>
-							runs. This article
-							traces the full lifecycle from
-							<code>PT_INTERP</code>
-							to the first lazy symbol resolution, and shows how
-							to inspect, inject, and audit a process. After reading it you can read a
-							<code>.dynamic</code>
-							section,
-							explain lazy versus immediate binding, and hook libc calls at runtime.
-						</p>
+						<p>A dynamically linked program does not contain its libraries. The kernel maps its interpreter, <code>ld.so</code> , which loads the shared objects, applies relocations, and only then jumps to the program. That indirection is what makes <code>LD_PRELOAD</code> injection, GOT overwrites, and PLT hijacks possible, and it is why a missing or mismatched library stops a binary before <code>main</code> runs. This article traces the full lifecycle from <code>PT_INTERP</code> to the first lazy symbol resolution, and shows how to inspect, inject, and audit a process. After reading it you can read a <code>.dynamic</code> section, explain lazy versus immediate binding, and hook libc calls at runtime.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -204,28 +184,8 @@
 					</section>
 					<section>
 						<h3 id="static-vs-dynamic-linking">Static vs Dynamic Linking</h3>
-						<p>
-							Static linking copies all library code into the executable. Every statically linked binary carries
-							its own copy of
-							<code>printf</code>
-							,
-							<code>malloc</code>
-							, and every other function it uses. The result: large binaries,
-							no shared memory between processes, but zero runtime dependencies.
-						</p>
-						<p>
-							Dynamic linking defers symbol resolution to load time (or run time). One copy of
-							<code>libc.so.6</code>
-							in physical RAM serves every process that needs it, mapped read-only into each process's address
-							space. The trade-off: complexity, a larger attack surface (
-							<code>LD_PRELOAD</code>
-							,
-							<code>LD_LIBRARY_PATH</code>
-							), and the possibility of library version mismatches ("
-							<abbr title="Dynamic Link Library">DLL</abbr>
-							Hell" on
-							Windows, "soname" discipline on Linux).
-						</p>
+						<p>Static linking copies all library code into the executable. Every statically linked binary carries its own copy of <code>printf</code> , <code>malloc</code> , and every other function it uses. The result: large binaries, no shared memory between processes, but zero runtime dependencies.</p>
+						<p>Dynamic linking defers symbol resolution to load time (or run time). One copy of <code>libc.so.6</code> in physical RAM serves every process that needs it, mapped read-only into each process's address space. The trade-off: complexity, a larger attack surface ( <code>LD_PRELOAD</code> , <code>LD_LIBRARY_PATH</code> ), and the possibility of library version mismatches (" <abbr title="Dynamic Link Library">DLL</abbr> Hell" on Windows, "soname" discipline on Linux).</p>
 						<p>Static example:</p>
 						<pre class="bash">
 $ gcc -static -o hello_static hello.c
@@ -244,18 +204,11 @@ $ ldd hello_dyn
         libc.so.6 =&gt; /usr/lib/libc.so.6 (0x00007f1a8bc00000)
         /lib64/ld-linux-x86-64.so.2 (0x00007f1a8c200000)
 						</pre>
-						<p>
-							The dynamic binary is 56x smaller. Every function in libc is shared across all processes on
-							the system.
-						</p>
+						<p>The dynamic binary is 56x smaller. Every function in libc is shared across all processes on the system.</p>
 					</section>
 					<section>
 						<h3 id="the-dynamic-linker-ldso">The Dynamic Linker - ld.so</h3>
-						<p>
-							Every dynamically linked ELF specifies its interpreter via
-							<code>PT_INTERP</code>
-							:
-						</p>
+						<p>Every dynamically linked ELF specifies its interpreter via <code>PT_INTERP</code> :</p>
 						<pre class="bash">
 $ readelf -l hello_dyn | grep INTERP -A1
   INTERP         0x0000000000000318 0x0000000000000318 0x0000000000000318
@@ -265,16 +218,7 @@ $ readelf -p .interp hello_dyn
 String dump of section &#39;.interp&#39;:
   [     0]  /lib64/ld-linux-x86-64.so.2
 						</pre>
-						<p>
-							The kernel reads
-							<code>.interp</code>
-							, maps
-							<code>ld.so</code>
-							into the process, and transfers control to it instead
-							of the program's entry point.
-							<code>ld.so</code>
-							then initializes the process:
-						</p>
+						<p>The kernel reads <code>.interp</code> , maps <code>ld.so</code> into the process, and transfers control to it instead of the program's entry point. <code>ld.so</code> then initializes the process:</p>
 						<ol>
 							<li>Parses <code>.dynamic</code> section</li>
 							<li>Loads all <code>DT_NEEDED</code> libraries (recursively)</li>
@@ -285,10 +229,7 @@ String dump of section &#39;.interp&#39;:
 					</section>
 					<section>
 						<h3 id="the-dynamic-section">The .dynamic Section</h3>
-						<p>
-							<code>.dynamic</code>
-							is an array of tagged entries, each a key-value pair:
-						</p>
+						<p><code>.dynamic</code> is an array of tagged entries, each a key-value pair:</p>
 						<pre class="c">
 typedef struct {
     Elf64_Sxword d_tag;   // Tag (what type of entry)
@@ -450,14 +391,7 @@ Dynamic section at offset 0x1b000 contains 28 entries:
 					</section>
 					<section>
 						<h3 id="plt-and-got-the-lazy-binding-mechanism">PLT and GOT - The Lazy Binding Mechanism</h3>
-						<p>
-							The PLT (Procedure Linkage Table) and GOT (Global Offset Table) implement lazy binding - functions
-							are resolved on first call, not at load time. This is the default behavior. Setting
-							<code>LD_BIND_NOW=1</code>
-							or linking with
-							<code>-z now</code>
-							forces all resolution at load time (Full RELRO).
-						</p>
+						<p>The PLT (Procedure Linkage Table) and GOT (Global Offset Table) implement lazy binding - functions are resolved on first call, not at load time. This is the default behavior. Setting <code>LD_BIND_NOW=1</code> or linking with <code>-z now</code> forces all resolution at load time (Full RELRO).</p>
 						<h4 id="the-data-structures">The data structures</h4>
 						<ul>
 							<li><b>.plt</b> - code stubs, one per imported function. First call triggers the resolver; subsequent calls jump directly to the function.</li>
@@ -512,15 +446,9 @@ Disassembly of section .plt:
     3044:   68 01 00 00 00          push   $0x1           # reloc index 1
     3049:   e9 d2 ff ff ff          jmp    3020 &lt;.plt&gt;
 						</pre>
-						<p>
-							Each PLT entry: 1.
-							<code>endbr64</code>
-							- CET (Control-flow Enforcement Technology) landing pad 1.
-							<code>push $index</code>
-							<ul>
-								<li>which JMPREL relocation entry to resolve 1. <code>jmp PLT[0]</code> - jump to the resolver dispatcher</li>
-							</ul>
-						</p>
+						<p>Each PLT entry: 1. <code>endbr64</code> - CET (Control-flow Enforcement Technology) landing pad 1. <code>push $index</code><ul>
+	<li>which JMPREL relocation entry to resolve 1. <code>jmp PLT[0]</code> - jump to the resolver dispatcher</li>
+</ul></p>
 					</section>
 					<section>
 						<h3 id="got-layout">GOT Layout</h3>
@@ -534,12 +462,7 @@ $ readelf -r /bin/ls | grep JUMP_SLOT
 00000001c238  000b00000007 R_X86_64_JUMP_SLOT 0000000000000000 strncmp@GLIBC_2.2.5 + 0
 ...
 						</pre>
-						<p>
-							Each entry in
-							<code>.rela.plt</code>
-							(JMPREL) says: "patch the 8 bytes at this GOT offset with the address
-							of this symbol."
-						</p>
+						<p>Each entry in <code>.rela.plt</code> (JMPREL) says: "patch the 8 bytes at this GOT offset with the address of this symbol."</p>
 					</section>
 					<section>
 						<h3 id="linking-a-program-step-by-step">Linking a Program Step-by-Step</h3>
@@ -572,15 +495,7 @@ $ file libcalc.so
 libcalc.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV),
 dynamically linked, BuildID[sha1]=..., not stripped
 						</pre>
-						<p>
-							<code>-fPIC</code>
-							generates position-independent code (
-							<abbr title="Internet Protocol">IP</abbr>
-							-relative addressing instead
-							of absolute).
-							<code>-shared</code>
-							produces a shared library (ET_DYN) instead of an executable.
-						</p>
+						<p><code>-fPIC</code> generates position-independent code ( <abbr title="Internet Protocol">IP</abbr> -relative addressing instead of absolute). <code>-shared</code> produces a shared library (ET_DYN) instead of an executable.</p>
 						<p>Examine the shared library:</p>
 						<pre class="bash">
 $ readelf -d libcalc.so
@@ -594,13 +509,7 @@ $ nm -D libcalc.so
 000000000000110e T libcalc_init
 0000000000001107 T multiply
 						</pre>
-						<p>
-							The
-							<code>T</code>
-							indicates text-section symbols (functions).
-							<code>nm -D</code>
-							shows dynamic (exported) symbols.
-						</p>
+						<p>The <code>T</code> indicates text-section symbols (functions). <code>nm -D</code> shows dynamic (exported) symbols.</p>
 						<p>Create a consumer:</p>
 						<pre class="c">
 // main.c
@@ -622,12 +531,7 @@ $ ./calc
 ./calc: error while loading shared libraries: libcalc.so:
 cannot open shared object file: No such file or directory
 						</pre>
-						<p>
-							The error is expected - the dynamic linker doesn't search the current directory by default.
-							Fix with
-							<code>LD_LIBRARY_PATH</code>
-							or compile with rpath:
-						</p>
+						<p>The error is expected - the dynamic linker doesn't search the current directory by default. Fix with <code>LD_LIBRARY_PATH</code> or compile with rpath:</p>
 						<pre class="bash">
 # Option 1: LD_LIBRARY_PATH
 $ LD_LIBRARY_PATH=. ./calc
@@ -644,27 +548,11 @@ add(3, 4) = 7
 multiply(3, 4) = 12
 [libcalc] Finalized
 						</pre>
-						<p>
-							Note the constructor/destructor order:
-							<code>libcalc_init</code>
-							runs before
-							<code>main()</code>
-							,
-							<code>libcalc_fini</code>
-							runs after
-							<code>main()</code>
-							returns.
-						</p>
+						<p>Note the constructor/destructor order: <code>libcalc_init</code> runs before <code>main()</code> , <code>libcalc_fini</code> runs after <code>main()</code> returns.</p>
 					</section>
 					<section>
 						<h3 id="library-search-order">Library Search Order</h3>
-						<p>
-							When resolving
-							<code>DT_NEEDED</code>
-							entries, the dynamic linker (
-							<code>ld.so</code>
-							) searches in this order:
-						</p>
+						<p>When resolving <code>DT_NEEDED</code> entries, the dynamic linker ( <code>ld.so</code> ) searches in this order:</p>
 						<ol>
 							<li><b>DT_RPATH</b> - rpath embedded in the executable's <code>.dynamic</code> section (unless <code>DT_RUNPATH</code> is also present)</li>
 							<li><b>LD_LIBRARY_PATH</b> - environment variable (ignored for setuid/setgid binaries)</li>
@@ -695,28 +583,15 @@ multiply(3, 4) = 12
 								<tr>
 									<td align="center">Set via</td>
 									<td align="center"><code>-Wl,-rpath,</code></td>
-									<td align="center"><code>-Wl,-rpath,</code>with<code>--enable-new-dtags</code></td>
+									<td align="center"><code>-Wl,-rpath,</code> with <code>--enable-new-dtags</code></td>
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							Modern linkers default to
-							<code>DT_RUNPATH</code>
-							(
-							<code>--enable-new-dtags</code>
-							). Use
-							<code>readelf -d</code>
-							to check which
-							one is present.
-						</p>
+						<p>Modern linkers default to <code>DT_RUNPATH</code> ( <code>--enable-new-dtags</code> ). Use <code>readelf -d</code> to check which one is present.</p>
 					</section>
 					<section>
 						<h3 id="ld-preload-library-injection">LD_PRELOAD - Library Injection</h3>
-						<p>
-							<code>LD_PRELOAD</code>
-							forces the dynamic linker to load specified shared libraries before any others.
-							This overrides functions in any subsequently loaded library, including libc:
-						</p>
+						<p><code>LD_PRELOAD</code> forces the dynamic linker to load specified shared libraries before any others. This overrides functions in any subsequently loaded library, including libc:</p>
 						<pre class="c">
 // preload_malloc.c - Intercept malloc and log every allocation
 #define _GNU_SOURCE
@@ -746,42 +621,12 @@ $ LD_PRELOAD=./preload_malloc.so ls -l /dev/null
 [HOOK] malloc(120) = 0x55a1b2c00900
 ...
 						</pre>
-						<p>
-							<code>RTLD_NEXT</code>
-							tells
-							<code>dlsym</code>
-							to find the next occurrence of
-							<code>malloc</code>
-							in the symbol search order,
-							skipping the current library. Without a handle,
-							<code>dlsym</code>
-							walks the
-							<em>global</em>
-							symbol namespace.
-						</p>
-						<p>
-							<code>LD_PRELOAD</code>
-							is ignored for setuid/setgid binaries (the kernel sets
-							<code>AT_SECURE=1</code>
-							in the auxiliary
-							vector, and
-							<code>ld.so</code>
-							clears environment variables that affect library loading).
-						</p>
+						<p><code>RTLD_NEXT</code> tells <code>dlsym</code> to find the next occurrence of <code>malloc</code> in the symbol search order, skipping the current library. Without a handle, <code>dlsym</code> walks the <em>global</em> symbol namespace.</p>
+						<p><code>LD_PRELOAD</code> is ignored for setuid/setgid binaries (the kernel sets <code>AT_SECURE=1</code> in the auxiliary vector, and <code>ld.so</code> clears environment variables that affect library loading).</p>
 					</section>
 					<section>
 						<h3 id="symbol-visibility-and-binding">Symbol Visibility and Binding</h3>
-						<p>
-							GCC's default visibility is
-							<code>default</code>
-							- all symbols are exported from shared libraries. This
-							bloats the dynamic symbol table and increases the attack surface.
-							<code>-fvisibility=hidden</code>
-							makes
-							symbols
-							<code>LOCAL</code>
-							by default:
-						</p>
+						<p>GCC's default visibility is <code>default</code> - all symbols are exported from shared libraries. This bloats the dynamic symbol table and increases the attack surface. <code>-fvisibility=hidden</code> makes symbols <code>LOCAL</code> by default:</p>
 						<pre class="c">
 // libsecret.c
 #include &lt;stdio.h&gt;
@@ -810,35 +655,13 @@ $ nm -D libsecret.so
 0000000000001142 T public_api
 0000000000001151 T critical_value
 						</pre>
-						<p>
-							<code>internal_helper</code>
-							is absent from
-							<code>nm -D</code>
-							- it exists in
-							<code>.symtab</code>
-							(static linking) but not in
-							<code>.dynsym</code>
-							(dynamic linking). This also prevents overrides via
-							<code>LD_PRELOAD</code>
-							.
-						</p>
+						<p><code>internal_helper</code> is absent from <code>nm -D</code> - it exists in <code>.symtab</code> (static linking) but not in <code>.dynsym</code> (dynamic linking). This also prevents overrides via <code>LD_PRELOAD</code> .</p>
 						<h4 id="visibility-effects-on-performance">Visibility effects on performance</h4>
-						<p>
-							Hidden/protected symbols allow the compiler to use direct calls instead of PLT indirection.
-							Within a shared library, calls to hidden functions use
-							<code>call $direct_offset</code>
-							instead of
-							<code>call *GOT[n](%rip)</code>
-							. This eliminates a memory indirection and a GOT entry.
-						</p>
+						<p>Hidden/protected symbols allow the compiler to use direct calls instead of PLT indirection. Within a shared library, calls to hidden functions use <code>call $direct_offset</code> instead of <code>call *GOT[n](%rip)</code> . This eliminates a memory indirection and a GOT entry.</p>
 					</section>
 					<section>
 						<h3 id="relocation-types">Relocation Types</h3>
-						<p>
-							x86-64 uses
-							<code>Elf64_Rela</code>
-							:
-						</p>
+						<p>x86-64 uses <code>Elf64_Rela</code> :</p>
 						<pre class="c">
 typedef struct {
     Elf64_Addr r_offset;   // Address to patch
@@ -889,29 +712,8 @@ typedef struct {
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							<code>R_X86_64_COPY</code>
-							is interesting: when an executable references a global variable in a shared
-							library, the linker can't use a GOT indirection on the executable side (the code is already
-							compiled). Instead, it creates a
-							<code>.bss</code>
-							copy, and the dynamic linker copies the data at load
-							time. The executable and the shared library now have independent copies.
-						</p>
-						<p>
-							<code>R_X86_64_IRELATIVE</code>
-							resolves STT_GNU_IFUNC symbols - functions whose implementation is selected
-							at load time based on
-							<abbr title="Central Processing Unit">CPU</abbr>
-							features (e.g.,
-							<code>memcpy</code>
-							choosing between
-							SSE,
-							<abbr title="Advanced Vector Extensions">AVX</abbr>
-							,
-							<abbr title="Advanced Vector Extensions 512 Bit">AVX-512</abbr>
-							):
-						</p>
+						<p><code>R_X86_64_COPY</code> is interesting: when an executable references a global variable in a shared library, the linker can't use a GOT indirection on the executable side (the code is already compiled). Instead, it creates a <code>.bss</code> copy, and the dynamic linker copies the data at load time. The executable and the shared library now have independent copies.</p>
+						<p><code>R_X86_64_IRELATIVE</code> resolves STT_GNU_IFUNC symbols - functions whose implementation is selected at load time based on <abbr title="Central Processing Unit">CPU</abbr> features (e.g., <code>memcpy</code> choosing between SSE, <abbr title="Advanced Vector Extensions">AVX</abbr>, <abbr title="Advanced Vector Extensions 512 Bit">AVX-512</abbr>):</p>
 						<pre class="c">
 // ifunc example - select optimal function at load time
 void *resolve_memcpy(void) {
@@ -924,13 +726,7 @@ void *memcpy(void *, const void *, size_t) __attribute__((ifunc(&#34;resolve_mem
 					</section>
 					<section>
 						<h3 id="immediate-binding-full-relro">Immediate Binding - Full RELRO</h3>
-						<p>
-							Linking with
-							<code>-z relro -z now</code>
-							marks the GOT as read-only after relocation (Full RELRO). This
-							prevents attackers from overwriting GOT entries (a common technique in format string and heap
-							exploit chains):
-						</p>
+						<p>Linking with <code>-z relro -z now</code> marks the GOT as read-only after relocation (Full RELRO). This prevents attackers from overwriting GOT entries (a common technique in format string and heap exploit chains):</p>
 						<pre class="bash">
 $ gcc -o calc main.c -L. -lcalc -Wl,-rpath,. -Wl,-z,relro,-z,now
 $ readelf -l calc | grep RELRO -A1
@@ -939,15 +735,7 @@ $ readelf -l calc | grep RELRO -A1
 $ readelf -d calc | grep FLAGS
  0x000000000000001e (FLAGS)              BIND_NOW
 						</pre>
-						<p>
-							Compare Partial RELRO (default
-							<code>-z relro</code>
-							, no
-							<code>-z now</code>
-							) vs Full RELRO (
-							<code>-z relro -z now</code>
-							):
-						</p>
+						<p>Compare Partial RELRO (default <code>-z relro</code> , no <code>-z now</code> ) vs Full RELRO ( <code>-z relro -z now</code> ):</p>
 						<table>
 							<thead>
 								<tr>
@@ -997,15 +785,7 @@ $ readelf -d calc | grep FLAGS
 					</section>
 					<section>
 						<h3 id="the-dl-api-runtime-symbol-lookup">The DL API - Runtime Symbol Lookup</h3>
-						<p>
-							P
-							<abbr title="Open Systems Interconnection">OSI</abbr>
-							X defines a runtime symbol resolution
-							<abbr title="Application Programming Interface">API</abbr>
-							via
-							<code>&lt;dlfcn.h&gt;</code>
-							:
-						</p>
+						<p>P <abbr title="Open Systems Interconnection">OSI</abbr> X defines a runtime symbol resolution <abbr title="Application Programming Interface">API</abbr> via <code>&lt;dlfcn.h&gt;</code> :</p>
 						<pre class="c">
 // dlopen_demo.c - Load a library at runtime and call a function
 #include &lt;stdio.h&gt;
@@ -1078,15 +858,7 @@ $ ./dlopen_demo
 					</section>
 					<section>
 						<h3 id="the-audit-interface-ld-audit">The Audit Interface - LD_AUDIT</h3>
-						<p>
-							<code>LD_AUDIT</code>
-							specifies a shared library that implements the
-							<code>rtld-audit</code>
-							interface - callbacks
-							invoked by
-							<code>ld.so</code>
-							at key linkage events:
-						</p>
+						<p><code>LD_AUDIT</code> specifies a shared library that implements the <code>rtld-audit</code> interface - callbacks invoked by <code>ld.so</code> at key linkage events:</p>
 						<pre class="c">
 // audit.c - Minimal LD_AUDIT shared library
 #define _GNU_SOURCE
@@ -1132,12 +904,7 @@ $ LD_AUDIT=./audit.so /bin/ls -l /dev/null 2&gt;&amp;1 | head -20
 					</section>
 					<section>
 						<h3 id="patchelf-editing-elf-properties">patchelf - Editing ELF Properties</h3>
-						<p>
-							<code>patchelf</code>
-							modifies the
-							<code>.dynamic</code>
-							section and program headers of an existing ELF:
-						</p>
+						<p><code>patchelf</code> modifies the <code>.dynamic</code> section and program headers of an existing ELF:</p>
 						<pre class="bash">
 # Set a new rpath
 $ patchelf --set-rpath /opt/mylibs ./calc
@@ -1158,14 +925,7 @@ $ patchelf --print-interpreter ./calc
 					</section>
 					<section>
 						<h3 id="vdso-virtual-dynamic-shared-object">vDSO - Virtual Dynamic Shared Object</h3>
-						<p>
-							Every Linux process has
-							<code>linux-vdso.so.1</code>
-							mapped into its address space. It's not a file - it's
-							a small ELF image embedded in the kernel and mapped read-only + executable into every process
-							at execve time. It provides fast implementations of frequently called syscalls (gettimeofday,
-							clock_gettime, getcpu) that don't require a context switch:
-						</p>
+						<p>Every Linux process has <code>linux-vdso.so.1</code> mapped into its address space. It's not a file - it's a small ELF image embedded in the kernel and mapped read-only + executable into every process at execve time. It provides fast implementations of frequently called syscalls (gettimeofday, clock_gettime, getcpu) that don't require a context switch:</p>
 						<pre class="bash">
 $ ldd /bin/ls | head -1
         linux-vdso.so.1 (0x00007ffff7fc1000)
@@ -1173,19 +933,11 @@ $ cat /proc/self/maps | grep vdso
 7ffff7fc1000-7ffff7fc3000 r--p 00000000 00:00 0  [vvar]
 7ffff7fc3000-7ffff7fc5000 r-xp 00000000 00:00 0  [vdso]
 						</pre>
-						<p>
-							The kernel coughs up the vDSO image in the auxiliary vector (
-							<code>AT_SYSINFO_EHDR</code>
-							), and the dynamic
-							linker treats it like any other shared library.
-						</p>
+						<p>The kernel coughs up the vDSO image in the auxiliary vector ( <code>AT_SYSINFO_EHDR</code> ), and the dynamic linker treats it like any other shared library.</p>
 					</section>
 					<section>
 						<h3 id="debugging-dynamic-linking-issues">Debugging Dynamic Linking Issues</h3>
-						<p>
-							<b>ldd</b>
-							- list dynamic dependencies:
-						</p>
+						<p><b>ldd</b> - list dynamic dependencies:</p>
 						<pre class="bash">
 $ ldd /bin/ls
         linux-vdso.so.1 (0x00007f363d129000)
@@ -1193,10 +945,7 @@ $ ldd /bin/ls
         libc.so.6 =&gt; /usr/lib/libc.so.6 (0x00007f363ce00000)
         /lib64/ld-linux-x86-64.so.2 (0x00007f363d12b000)
 						</pre>
-						<p>
-							<b>LD_DEBUG</b>
-							- trace the dynamic linker's decisions:
-						</p>
+						<p><b>LD_DEBUG</b> - trace the dynamic linker's decisions:</p>
 						<pre class="bash">
 $ LD_DEBUG=files /bin/ls 2&gt;&amp;1 | head -30
      229491:
@@ -1320,36 +1069,11 @@ ld.so: calls DT_FINI_ARRAY functions, then DT_FINI (reverse order)
   ▼
 exit_group() syscall -&gt; process terminates
 						</pre>
-						<p>
-							This sequence runs millions of times a day on every Linux system. Every shell command, every
-							daemon startup, every
-							<code>fork()</code>
-							+
-							<code>execve()</code>
-							triggers this exact chain. Understanding it is foundational
-							to everything that follows - buffer overflows, format strings, PLT/GOT overwrites, and
-							<abbr title="Return-Oriented Programming">ROP</abbr>
-							chains all rely on manipulating one or more stages of this process.
-						</p>
+						<p>This sequence runs millions of times a day on every Linux system. Every shell command, every daemon startup, every <code>fork()</code> + <code>execve()</code> triggers this exact chain. Understanding it is foundational to everything that follows - buffer overflows, format strings, PLT/GOT overwrites, and <abbr title="Return-Oriented Programming">ROP</abbr> chains all rely on manipulating one or more stages of this process.</p>
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Reimplement a small
-							<code>readelf -d</code>
-							in Go with the
-							<code>debug/elf</code>
-							package. Print every
-							<code>DT_NEEDED</code>
-							library, then check
-							<code>DT_FLAGS</code>
-							/
-							<code>DT_FLAGS_1</code>
-							and report whether the binary uses immediate binding
-							(Full RELRO). Extend it to parse the
-							<code>.rela.plt</code>
-							section by hand and print each imported symbol.
-						</p>
+						<p>Reimplement a small <code>readelf -d</code> in Go with the <code>debug/elf</code> package. Print every <code>DT_NEEDED</code> library, then check <code>DT_FLAGS</code> / <code>DT_FLAGS_1</code> and report whether the binary uses immediate binding (Full RELRO). Extend it to parse the <code>.rela.plt</code> section by hand and print each imported symbol.</p>
 						<pre class="go">
 package main
 

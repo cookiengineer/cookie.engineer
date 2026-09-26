@@ -152,27 +152,10 @@
 
 				<article>
 					<h2 id="udp-scanning">UDP Scanning</h2>
-					<p>
-						<abbr title="User Datagram Protocol">UDP</abbr>
-						port scanning mechanics - why it is slow,
-						<abbr title="Internet Control Message Protocol">ICMP</abbr>
-						rate limiting, service-specific probes, nmap -sU internals, writing a raw
-						<abbr title="User Datagram Protocol">UDP</abbr>
-						scanner in Python, and unicornscan as a high-speed alternative.
-					</p>
+					<p><abbr title="User Datagram Protocol">UDP</abbr> port scanning mechanics - why it is slow, <abbr title="Internet Control Message Protocol">ICMP</abbr> rate limiting, service-specific probes, nmap -sU internals, writing a raw <abbr title="User Datagram Protocol">UDP</abbr> scanner in Python, and unicornscan as a high-speed alternative.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							scanning is slow and ambiguous because
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							gives no delivery guarantee and no handshake. A closed port is proven only by an
-							<abbr title="Internet Control Message Protocol">ICMP</abbr>
-							Port Unreachable error; silence means
-							<code>open|filtered</code>
-							. This article explains the mechanics,
-							the kernel rate limits, service-specific probes, and how to write your own scanner in Go.
-						</p>
+						<p><abbr title="User Datagram Protocol">UDP</abbr> scanning is slow and ambiguous because <abbr title="User Datagram Protocol">UDP</abbr> gives no delivery guarantee and no handshake. A closed port is proven only by an <abbr title="Internet Control Message Protocol">ICMP</abbr> Port Unreachable error; silence means <code>open|filtered</code> . This article explains the mechanics, the kernel rate limits, service-specific probes, and how to write your own scanner in Go.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -184,76 +167,21 @@
 					</section>
 					<section>
 						<h3 id="why-udp-scanning-is-different">Why UDP Scanning Is Different</h3>
-						<p>
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							is connection-oriented. A
-							<abbr title="Synchronize">SYN</abbr>
-							packet sent
-							to an open
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							port receives a
-							<abbr title="Synchronize">SYN</abbr>
-							-ACK. A
-							<abbr title="Synchronize">SYN</abbr>
-							to a closed port receives a RST. The response is guaranteed at the protocol level - every
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							implementation must respond to a
-							<abbr title="Synchronize">SYN</abbr>
-							, whether the port is open or closed.
-						</p>
-						<p>
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							has none of this.
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							is connectionless
-							<ul>
-								<li>there is no handshake, no acknowledgment, no state machine. An application sends a datagram</li>
-							</ul>
-						</p>
-						<p>
-							and the transport layer delivers it on a best-effort basis. The recipient may or may not process
-							it, and the sender receives no feedback whatsoever from the
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							protocol
-							itself.
-						</p>
-						<p>
-							This fundamental difference makes
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							scanning dramatically harder
-							than
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							scanning:
-						</p>
+						<p><abbr title="Transmission Control Protocol">TCP</abbr> is connection-oriented. A <abbr title="Synchronize">SYN</abbr> packet sent to an open <abbr title="Transmission Control Protocol">TCP</abbr> port receives a <abbr title="Synchronize">SYN</abbr> -ACK. A <abbr title="Synchronize">SYN</abbr> to a closed port receives a RST. The response is guaranteed at the protocol level - every <abbr title="Transmission Control Protocol">TCP</abbr> implementation must respond to a <abbr title="Synchronize">SYN</abbr> , whether the port is open or closed.</p>
+						<p><abbr title="User Datagram Protocol">UDP</abbr> has none of this. <abbr title="User Datagram Protocol">UDP</abbr> is connectionless<ul>
+	<li>there is no handshake, no acknowledgment, no state machine. An application sends a datagram</li>
+</ul></p>
+						<p>and the transport layer delivers it on a best-effort basis. The recipient may or may not process it, and the sender receives no feedback whatsoever from the <abbr title="User Datagram Protocol">UDP</abbr> protocol itself.</p>
+						<p>This fundamental difference makes <abbr title="User Datagram Protocol">UDP</abbr> scanning dramatically harder than <abbr title="Transmission Control Protocol">TCP</abbr> scanning:</p>
 						<pre class="plaintext">
 TCP scan:  SYN  →  SYN-ACK (open)  or  RST (closed)         ← always responds
 UDP scan:  datagram  →  ??? (open)  or  ICMP Unreachable (closed)  ← unpredictable
 						</pre>
-						<p>
-							A
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							listener on an open port is not obligated to respond. A
-							<abbr title="Domain Name System">DNS</abbr>
-							server responds to a valid
-							<abbr title="Domain Name System">DNS</abbr>
-							query, but it might ignore a malformed
-							one. A random
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							echo service might respond to any data. The operating
-							system has no standard behavior for "
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							port is open but the application
-							didn't send a reply." The scanner must wait for a timeout and infer that silence might mean
-							the port is open - or that the response was lost.
-						</p>
+						<p>A <abbr title="User Datagram Protocol">UDP</abbr> listener on an open port is not obligated to respond. A <abbr title="Domain Name System">DNS</abbr> server responds to a valid <abbr title="Domain Name System">DNS</abbr> query, but it might ignore a malformed one. A random <abbr title="User Datagram Protocol">UDP</abbr> echo service might respond to any data. The operating system has no standard behavior for " <abbr title="User Datagram Protocol">UDP</abbr> port is open but the application didn't send a reply." The scanner must wait for a timeout and infer that silence might mean the port is open - or that the response was lost.</p>
 					</section>
 					<section>
 						<h3 id="udp-protocol-mechanics">UDP Protocol Mechanics</h3>
-						<p>
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							is defined in RFC 768 and is intentionally minimal. The entire
-							header is 8 bytes:
-						</p>
+						<p><abbr title="User Datagram Protocol">UDP</abbr> is defined in RFC 768 and is intentionally minimal. The entire header is 8 bytes:</p>
 						<pre class="plaintext">
  0                   1                   2                   3
  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -296,18 +224,7 @@ UDP scan:  datagram  →  ??? (open)  or  ICMP Unreachable (closed)  ← unpredi
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							The checksum is calculated over a pseudo-header that includes source and destination
-							<abbr title="Internet Protocol">IP</abbr>
-							addresses, the protocol number (17 for
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							), and the
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							length - pulled from the
-							<abbr title="Internet Protocol">IP</abbr>
-							header. This ties the transport layer to the
-							network layer, making accidental delivery to the wrong host detectable.
-						</p>
+						<p>The checksum is calculated over a pseudo-header that includes source and destination <abbr title="Internet Protocol">IP</abbr> addresses, the protocol number (17 for <abbr title="User Datagram Protocol">UDP</abbr> ), and the <abbr title="User Datagram Protocol">UDP</abbr> length - pulled from the <abbr title="Internet Protocol">IP</abbr> header. This ties the transport layer to the network layer, making accidental delivery to the wrong host detectable.</p>
 						<pre class="python">
 import struct
 
@@ -347,39 +264,11 @@ def udp_checksum(source_ip: str, dest_ip: str, source_port: int,
 
     return (~total) &amp; 0xFFFF
 						</pre>
-						<p>
-							When a
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							datagram arrives at a closed port, the receiving host sends
-							back an
-							<abbr title="Internet Control Message Protocol">ICMP</abbr>
-							Port Unreachable (Type 3, Code 3). This is
-							the only reliable indicator of a closed
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							port. If no
-							<abbr title="Internet Control Message Protocol">ICMP</abbr>
-							response arrives, the port is either open (the application accepted the datagram silently) or
-							filtered (a firewall dropped the packet).
-						</p>
+						<p>When a <abbr title="User Datagram Protocol">UDP</abbr> datagram arrives at a closed port, the receiving host sends back an <abbr title="Internet Control Message Protocol">ICMP</abbr> Port Unreachable (Type 3, Code 3). This is the only reliable indicator of a closed <abbr title="User Datagram Protocol">UDP</abbr> port. If no <abbr title="Internet Control Message Protocol">ICMP</abbr> response arrives, the port is either open (the application accepted the datagram silently) or filtered (a firewall dropped the packet).</p>
 					</section>
 					<section>
 						<h3 id="icmp-port-unreachable">ICMP Port Unreachable</h3>
-						<p>
-							When a host receives a
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							datagram for a port with no listening socket,
-							the kernel generates an
-							<abbr title="Internet Control Message Protocol">ICMP</abbr>
-							Destination Unreachable message
-							with code 3 (Port Unreachable). The
-							<abbr title="Internet Control Message Protocol">ICMP</abbr>
-							response quotes
-							the
-							<abbr title="Internet Protocol">IP</abbr>
-							header and first 8 bytes of the original
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							datagram:
-						</p>
+						<p>When a host receives a <abbr title="User Datagram Protocol">UDP</abbr> datagram for a port with no listening socket, the kernel generates an <abbr title="Internet Control Message Protocol">ICMP</abbr> Destination Unreachable message with code 3 (Port Unreachable). The <abbr title="Internet Control Message Protocol">ICMP</abbr> response quotes the <abbr title="Internet Protocol">IP</abbr> header and first 8 bytes of the original <abbr title="User Datagram Protocol">UDP</abbr> datagram:</p>
 						<pre class="plaintext">
 Original UDP datagram sent to port 161 (closed):
   IP: src=192.168.1.100, dst=192.168.1.50, proto=UDP
@@ -392,16 +281,7 @@ ICMP Port Unreachable response:
   UDP header quoted: sport=45678, dport=161
   (Only the first 8 bytes are quoted — enough to identify the socket)
 						</pre>
-						<p>
-							The scanner reads the
-							<abbr title="Internet Control Message Protocol">ICMP</abbr>
-							response, extracts the quoted
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							header, and maps it back to the original probe. This is how nmap
-							determines a port is "closed" in a
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							scan.
-						</p>
+						<p>The scanner reads the <abbr title="Internet Control Message Protocol">ICMP</abbr> response, extracts the quoted <abbr title="User Datagram Protocol">UDP</abbr> header, and maps it back to the original probe. This is how nmap determines a port is "closed" in a <abbr title="User Datagram Protocol">UDP</abbr> scan.</p>
 						<pre class="plaintext">
 nmap UDP scan result codes:
   open           — No ICMP error received (application accepted the datagram)
@@ -409,25 +289,11 @@ nmap UDP scan result codes:
   closed         — ICMP Port Unreachable received
   filtered        — ICMP Admin Prohibited or other non-port-unreachable ICMP error
 						</pre>
-						<p>
-							The ambiguity between "open" and "filtered" is the core problem of
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							scanning. An open port that doesn't respond looks exactly like a firewall silently dropping
-							packets.
-						</p>
+						<p>The ambiguity between "open" and "filtered" is the core problem of <abbr title="User Datagram Protocol">UDP</abbr> scanning. An open port that doesn't respond looks exactly like a firewall silently dropping packets.</p>
 					</section>
 					<section>
 						<h3 id="icmp-rate-limiting-on-linux">ICMP Rate Limiting on Linux</h3>
-						<p>
-							Linux enforces a rate limit on outgoing
-							<abbr title="Internet Control Message Protocol">ICMP</abbr>
-							error messages.
-							The kernel does not want to be used as an amplifier in denial-of-service attacks, so it throttles
-							the rate at which it generates
-							<abbr title="Internet Control Message Protocol">ICMP</abbr>
-							Destination Unreachable
-							responses.
-						</p>
+						<p>Linux enforces a rate limit on outgoing <abbr title="Internet Control Message Protocol">ICMP</abbr> error messages. The kernel does not want to be used as an amplifier in denial-of-service attacks, so it throttles the rate at which it generates <abbr title="Internet Control Message Protocol">ICMP</abbr> Destination Unreachable responses.</p>
 						<pre class="bash">
 # View current ICMP rate limit
 cat /proc/sys/net/ipv4/icmp_ratelimit
@@ -440,23 +306,7 @@ cat /proc/sys/net/ipv4/icmp_ratemask
 # Global hard limit on ICMP unreachable messages per second:
 cat /proc/sys/net/ipv4/icmp_msgs_per_sec
 						</pre>
-						<p>
-							The default
-							<code>icmp_ratelimit</code>
-							of 1000 means Linux sends at most one
-							<abbr title="Internet Control Message Protocol">ICMP</abbr>
-							unreachable per second to any given destination for certain
-							<abbr title="Internet Control Message Protocol">ICMP</abbr>
-							types. If you scan 1000
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							ports in one second, only one or two closed
-							ports will actually generate
-							<abbr title="Internet Control Message Protocol">ICMP</abbr>
-							responses - the rest
-							are silently dropped by the kernel's rate limiter. This makes fast
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							scanning impossible from a standard Linux host.
-						</p>
+						<p>The default <code>icmp_ratelimit</code> of 1000 means Linux sends at most one <abbr title="Internet Control Message Protocol">ICMP</abbr> unreachable per second to any given destination for certain <abbr title="Internet Control Message Protocol">ICMP</abbr> types. If you scan 1000 <abbr title="User Datagram Protocol">UDP</abbr> ports in one second, only one or two closed ports will actually generate <abbr title="Internet Control Message Protocol">ICMP</abbr> responses - the rest are silently dropped by the kernel's rate limiter. This makes fast <abbr title="User Datagram Protocol">UDP</abbr> scanning impossible from a standard Linux host.</p>
 						<pre class="bash">
 # Disable ICMP rate limiting (not recommended on production systems)
 echo 0 | sudo tee /proc/sys/net/ipv4/icmp_ratelimit
@@ -469,15 +319,7 @@ cat /proc/sys/net/ipv4/icmp_ratelimit
 echo &#34;net.ipv4.icmp_ratelimit = 0&#34; | sudo tee /etc/sysctl.d/99-udp-scan.conf
 sudo sysctl -p /etc/sysctl.d/99-udp-scan.conf
 						</pre>
-						<p>
-							Even with rate limiting disabled, firewalls often apply their own limits.
-							<code>iptables</code>
-							has a
-							<code>limit</code>
-							module that can be used to rate-limit
-							<abbr title="Internet Control Message Protocol">ICMP</abbr>
-							:
-						</p>
+						<p>Even with rate limiting disabled, firewalls often apply their own limits. <code>iptables</code> has a <code>limit</code> module that can be used to rate-limit <abbr title="Internet Control Message Protocol">ICMP</abbr> :</p>
 						<pre class="bash">
 # Check if iptables limits ICMP
 sudo iptables -L -nv | grep -i icmp
@@ -491,13 +333,7 @@ sudo iptables -A OUTPUT -p icmp --icmp-type destination-unreachable \
 					</section>
 					<section>
 						<h3 id="nmap-udp-scan-mechanics-su">nmap UDP Scan Mechanics ( <code>-sU</code> )</h3>
-						<p>
-							nmap combines
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							probes with
-							<abbr title="Internet Control Message Protocol">ICMP</abbr>
-							error monitoring to determine port state. The basic flow:
-						</p>
+						<p>nmap combines <abbr title="User Datagram Protocol">UDP</abbr> probes with <abbr title="Internet Control Message Protocol">ICMP</abbr> error monitoring to determine port state. The basic flow:</p>
 						<pre class="plaintext">
 1. Send UDP probe to target port
 2. Start timer
@@ -527,20 +363,9 @@ sudo nmap -sS -sU -p U:53,161,T:22,80,443 192.168.1.1
 # Service-specific UDP probes (nmap uses built-in probe database)
 sudo nmap -sU -sV --version-intensity 9 192.168.1.1
 						</pre>
-						<p>
-							nmap's
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							scan sends probes in batches, waiting for
-							<abbr title="Internet Control Message Protocol">ICMP</abbr>
-							responses between rounds. Each probe that doesn't receive a response is retried. The default
-							<code>--max-retries</code>
-							defaults to 10, which makes
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							scans extremely slow
-							<ul>
-								<li>often taking hours for a /24 subnet.</li>
-							</ul>
-						</p>
+						<p>nmap's <abbr title="User Datagram Protocol">UDP</abbr> scan sends probes in batches, waiting for <abbr title="Internet Control Message Protocol">ICMP</abbr> responses between rounds. Each probe that doesn't receive a response is retried. The default <code>--max-retries</code> defaults to 10, which makes <abbr title="User Datagram Protocol">UDP</abbr> scans extremely slow<ul>
+	<li>often taking hours for a /24 subnet.</li>
+</ul></p>
 						<pre class="bash">
 # Control retry behavior
 sudo nmap -sU --max-retries 1 192.168.1.0/24   # 1 retry per port
@@ -555,28 +380,9 @@ sudo nmap -sU -T5 --max-retries 1 --host-timeout 30s 192.168.1.0/24
 					</section>
 					<section>
 						<h3 id="udp-service-specific-probes">UDP Service-Specific Probes</h3>
-						<p>
-							The problem: an open
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							port might stay completely silent. The solution:
-							send a payload that the target service is likely to respond to. nmap ships with
-							<code>nmap-service-probes</code>
-							, a database of service identification payloads. For
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							, these are
-							critical.
-						</p>
+						<p>The problem: an open <abbr title="User Datagram Protocol">UDP</abbr> port might stay completely silent. The solution: send a payload that the target service is likely to respond to. nmap ships with <code>nmap-service-probes</code> , a database of service identification payloads. For <abbr title="User Datagram Protocol">UDP</abbr> , these are critical.</p>
 						<h4 id="dns-probe-port-53">DNS probe (port 53)</h4>
-						<p>
-							A
-							<abbr title="Domain Name System">DNS</abbr>
-							query for a known domain from a valid
-							<abbr title="Domain Name System">DNS</abbr>
-							server will always get a response. nmap sends a query for a domain like
-							<code>www.google.com</code>
-							of
-							type A.
-						</p>
+						<p>A <abbr title="Domain Name System">DNS</abbr> query for a known domain from a valid <abbr title="Domain Name System">DNS</abbr> server will always get a response. nmap sends a query for a domain like <code>www.google.com</code> of type A.</p>
 						<pre class="python">
 import socket
 
@@ -612,16 +418,7 @@ def dns_probe(target: str, port: int = 53) -&gt; bool:
         return False
 						</pre>
 						<h4 id="snmp-probe-port-161">SNMP probe (port 161)</h4>
-						<p>
-							<abbr title="Simple Network Management Protocol">SNMP</abbr>
-							uses
-							<code>ASN.1</code>
-							BER encoding. A get-request for
-							<code>sysDescr.0</code>
-							(OID 1.3.6.1.2.1.1.1.0) will elicit a response from any
-							<abbr title="Simple Network Management Protocol">SNMP</abbr>
-							-enabled device - even with the default "public" community string:
-						</p>
+						<p><abbr title="Simple Network Management Protocol">SNMP</abbr> uses <code>ASN.1</code> BER encoding. A get-request for <code>sysDescr.0</code> (OID 1.3.6.1.2.1.1.1.0) will elicit a response from any <abbr title="Simple Network Management Protocol">SNMP</abbr> -enabled device - even with the default "public" community string:</p>
 						<pre class="python">
 import socket
 import struct
@@ -740,7 +537,7 @@ def dhcp_discover(interface: str = &#34;eth0&#34;) -&gt; bytes | None:
 								<tr>
 									<td align="center">137</td>
 									<td align="center">NetBIOS-NS</td>
-									<td align="center">Name query for*</td>
+									<td align="center">Name query for *</td>
 									<td align="center">Name query response</td>
 								</tr>
 								<tr>
@@ -800,7 +597,7 @@ def dhcp_discover(interface: str = &#34;eth0&#34;) -&gt; bytes | None:
 								<tr>
 									<td align="center">1900</td>
 									<td align="center">SSDP</td>
-									<td align="center">M-SEARCH*</td>
+									<td align="center">M-SEARCH *</td>
 									<td align="center">NOTIFY or 200 OK</td>
 								</tr>
 								<tr>
@@ -814,18 +611,7 @@ def dhcp_discover(interface: str = &#34;eth0&#34;) -&gt; bytes | None:
 					</section>
 					<section>
 						<h3 id="writing-a-raw-udp-scanner-in-python">Writing a Raw UDP Scanner in Python</h3>
-						<p>
-							A minimal
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							scanner needs to send a datagram, then listen for either
-							a
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							response or an
-							<abbr title="Internet Control Message Protocol">ICMP</abbr>
-							error.
-							<abbr title="Internet Control Message Protocol">ICMP</abbr>
-							errors require raw sockets or packet capture:
-						</p>
+						<p>A minimal <abbr title="User Datagram Protocol">UDP</abbr> scanner needs to send a datagram, then listen for either a <abbr title="User Datagram Protocol">UDP</abbr> response or an <abbr title="Internet Control Message Protocol">ICMP</abbr> error. <abbr title="Internet Control Message Protocol">ICMP</abbr> errors require raw sockets or packet capture:</p>
 						<pre class="python">
 #!/usr/bin/env python3
 &#34;&#34;&#34;
@@ -970,21 +756,7 @@ if __name__ == &#34;__main__&#34;:
 					</section>
 					<section>
 						<h3 id="using-unicornscan-for-fast-udp-scanning">Using unicornscan for Fast UDP Scanning</h3>
-						<p>
-							unicornscan is purpose-built for fast
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							scanning. It uses its own
-							userspace
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							/
-							<abbr title="Internet Protocol">IP</abbr>
-							stack, bypassing the
-							kernel's protocol stack entirely. This avoids the
-							<abbr title="Internet Control Message Protocol">ICMP</abbr>
-							rate limiting problem - unicornscan reads raw packets from the wire and processes
-							<abbr title="Internet Control Message Protocol">ICMP</abbr>
-							responses in userspace.
-						</p>
+						<p>unicornscan is purpose-built for fast <abbr title="User Datagram Protocol">UDP</abbr> scanning. It uses its own userspace <abbr title="Transmission Control Protocol">TCP</abbr> / <abbr title="Internet Protocol">IP</abbr> stack, bypassing the kernel's protocol stack entirely. This avoids the <abbr title="Internet Control Message Protocol">ICMP</abbr> rate limiting problem - unicornscan reads raw packets from the wire and processes <abbr title="Internet Control Message Protocol">ICMP</abbr> responses in userspace.</p>
 						<pre class="bash">
 # Install unicornscan on ArchLinux
 sudo pacman -S unicornscan
@@ -1005,11 +777,7 @@ sudo unicornscan -mU -Iv -p 53,123,161 192.168.1.0/24
 # High-speed scan at 1000 pps
 sudo unicornscan -mU -r1000 -Iv -p 1-65535 192.168.1.1
 						</pre>
-						<p>
-							unicornscan advantages over nmap for
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							:
-						</p>
+						<p>unicornscan advantages over nmap for <abbr title="User Datagram Protocol">UDP</abbr> :</p>
 						<table>
 							<thead>
 								<tr>
@@ -1122,18 +890,9 @@ sudo nmap -sU -p 53,67,123,161,500 192.168.1.1
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							The
-							<code>open|filtered</code>
-							ambiguity cannot be resolved without a service-level probe that elicits
-							a response. This is why nmap's
-							<code>-sV</code>
-							(version detection) is essential for
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							<ul>
-								<li>it sends protocol-specific payloads that the target service will answer.</li>
-							</ul>
-						</p>
+						<p>The <code>open|filtered</code> ambiguity cannot be resolved without a service-level probe that elicits a response. This is why nmap's <code>-sV</code> (version detection) is essential for <abbr title="User Datagram Protocol">UDP</abbr><ul>
+	<li>it sends protocol-specific payloads that the target service will answer.</li>
+</ul></p>
 						<pre class="bash">
 # Resolve open|filtered with version detection
 sudo nmap -sU -sV -p 67,500 192.168.1.1
@@ -1146,13 +905,7 @@ sudo nmap -sU -sV -p 67,500 192.168.1.1
 					</section>
 					<section>
 						<h3 id="firewall-behavior-and-udp">Firewall Behavior and UDP</h3>
-						<p>
-							Firewalls handle
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							differently from
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							because there is no state to track:
-						</p>
+						<p>Firewalls handle <abbr title="User Datagram Protocol">UDP</abbr> differently from <abbr title="Transmission Control Protocol">TCP</abbr> because there is no state to track:</p>
 						<pre class="bash">
 # iptables rule to block all UDP to a port
 sudo iptables -A INPUT -p udp --dport 161 -j DROP
@@ -1167,35 +920,11 @@ sudo iptables -A INPUT -p udp --dport 161 -j REJECT \
 sudo nft add rule inet filter input udp dport 161 drop
 sudo nft add rule inet filter input udp dport 161 reject with icmp type port-unreachable
 						</pre>
-						<p>
-							The firewall's
-							<code>REJECT</code>
-							vs
-							<code>DROP</code>
-							policy directly determines whether nmap sees "closed" or "open|filtered."
-							A
-							<code>REJECT</code>
-							firewall tells you the port exists but is firewalled; a
-							<code>DROP</code>
-							firewall gives no
-							information.
-						</p>
+						<p>The firewall's <code>REJECT</code> vs <code>DROP</code> policy directly determines whether nmap sees "closed" or "open|filtered." A <code>REJECT</code> firewall tells you the port exists but is firewalled; a <code>DROP</code> firewall gives no information.</p>
 					</section>
 					<section>
 						<h3 id="ipv6-udp-scanning">IPv6 UDP Scanning</h3>
-						<p>
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							scanning works the same way over
-							<abbr title="Internet Protocol Version 6">IPv6</abbr>
-							with one key difference:
-							<abbr title="Internet Control Message Protocol">ICMP</abbr>
-							v6 replaces
-							<abbr title="Internet Control Message Protocol">ICMP</abbr>
-							v4, and the
-							<abbr title="Internet Control Message Protocol">ICMP</abbr>
-							v6 Destination Unreachable codes differ
-							slightly:
-						</p>
+						<p><abbr title="User Datagram Protocol">UDP</abbr> scanning works the same way over <abbr title="Internet Protocol Version 6">IPv6</abbr> with one key difference: <abbr title="Internet Control Message Protocol">ICMP</abbr> v6 replaces <abbr title="Internet Control Message Protocol">ICMP</abbr> v4, and the <abbr title="Internet Control Message Protocol">ICMP</abbr> v6 Destination Unreachable codes differ slightly:</p>
 						<table>
 							<thead>
 								<tr>
@@ -1278,30 +1007,11 @@ sudo unicornscan -6 -mU -Iv fe80::1
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							scanning is fundamentally about patience and protocol knowledge.
-							You cannot scan
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							the way you scan
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							. You must understand what each service expects to receive and send exactly that. Without a
-							protocol-aware probe, the scanner is blind.
-						</p>
+						<p><abbr title="User Datagram Protocol">UDP</abbr> scanning is fundamentally about patience and protocol knowledge. You cannot scan <abbr title="User Datagram Protocol">UDP</abbr> the way you scan <abbr title="Transmission Control Protocol">TCP</abbr> . You must understand what each service expects to receive and send exactly that. Without a protocol-aware probe, the scanner is blind.</p>
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Write a
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							scanner in Go that uses a raw
-							<abbr title="Internet Control Message Protocol">ICMP</abbr>
-							socket to resolve the
-							<code>open|filtered</code>
-							ambiguity. Send a probe with a normal
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							socket, then listen for a Port Unreachable error and map the quoted header back to the probe.
-						</p>
+						<p>Write a <abbr title="User Datagram Protocol">UDP</abbr> scanner in Go that uses a raw <abbr title="Internet Control Message Protocol">ICMP</abbr> socket to resolve the <code>open|filtered</code> ambiguity. Send a probe with a normal <abbr title="User Datagram Protocol">UDP</abbr> socket, then listen for a Port Unreachable error and map the quoted header back to the probe.</p>
 						<pre class="go">
 package main
 
@@ -1377,14 +1087,7 @@ func main() {
 	fmt.Printf(&#34;%d/udp open|filtered\n&#34;, port)
 }
 						</pre>
-						<p>
-							Run it as root against a known closed port and confirm the
-							<code>closed</code>
-							result. Then extend it to
-							scan a port range and compare the output with
-							<code>sudo nmap -sU --max-retries 1 &lt;host&gt;</code>
-							.
-						</p>
+						<p>Run it as root against a known closed port and confirm the <code>closed</code> result. Then extend it to scan a port range and compare the output with <code>sudo nmap -sU --max-retries 1 &lt;host&gt;</code> .</p>
 					</section>
 					<section>
 						<h3 id="references">References</h3>

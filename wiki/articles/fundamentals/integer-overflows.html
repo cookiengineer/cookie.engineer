@@ -150,19 +150,10 @@
 
 				<article>
 					<h2 id="integer-overflows">Integer Overflows</h2>
-					<p>
-						How arithmetic wrap-around and signed undefined behavior turn size calculations into exploitable
-						bugs.
-					</p>
+					<p>How arithmetic wrap-around and signed undefined behavior turn size calculations into exploitable bugs.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							An integer overflow happens when an arithmetic result does not fit the type that stores it.
-							In C the result wraps for unsigned types and is undefined behavior for signed types, which lets
-							the compiler delete the very bounds check meant to stop it. This article covers the representation,
-							the size calculation patterns that cause most real bugs, and checked arithmetic that fails safely.
-							After reading you can rewrite an unsafe size calculation with a checked one.
-						</p>
+						<p>An integer overflow happens when an arithmetic result does not fit the type that stores it. In C the result wraps for unsigned types and is undefined behavior for signed types, which lets the compiler delete the very bounds check meant to stop it. This article covers the representation, the size calculation patterns that cause most real bugs, and checked arithmetic that fails safely. After reading you can rewrite an unsafe size calculation with a checked one.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -173,19 +164,8 @@
 					</section>
 					<section>
 						<h3 id="the-arithmetic-that-wraps">The Arithmetic That Wraps</h3>
-						<p>
-							An integer overflow occurs when the result of an arithmetic operation exceeds the maximum value
-							representable by the result type. The excess bits are silently discarded, wrapping the value
-							around.
-						</p>
-						<p>
-							On 32-bit unsigned arithmetic:
-							<code>0xFFFFFFFF + 1 = 0x00000000</code>
-							. On 64-bit:
-							<code>0xFFFFFFFFFFFFFFFF + 1 = 0</code>
-							. No exception, no signal, no trap - the hardware sets the carry flag and continues. Software
-							must explicitly check.
-						</p>
+						<p>An integer overflow occurs when the result of an arithmetic operation exceeds the maximum value representable by the result type. The excess bits are silently discarded, wrapping the value around.</p>
+						<p>On 32-bit unsigned arithmetic: <code>0xFFFFFFFF + 1 = 0x00000000</code> . On 64-bit: <code>0xFFFFFFFFFFFFFFFF + 1 = 0</code> . No exception, no signal, no trap - the hardware sets the carry flag and continues. Software must explicitly check.</p>
 						<p>C defines overflow behavior differently for signed and unsigned types:</p>
 						<table>
 							<thead>
@@ -197,7 +177,7 @@
 							</thead>
 							<tbody>
 								<tr>
-									<td align="center"><code>unsigned int</code>,<code>size_t</code></td>
+									<td align="center"><code>unsigned int</code>, <code>size_t</code></td>
 									<td align="center">Defined: wraps modulo 2^N</td>
 									<td align="center">C11 6.2.5p9</td>
 								</tr>
@@ -207,33 +187,20 @@
 									<td align="center">C11 6.5p5</td>
 								</tr>
 								<tr>
-									<td align="center"><code>signed char</code>,<code>short</code></td>
+									<td align="center"><code>signed char</code>, <code>short</code></td>
 									<td align="center">Undefined after integer promotion</td>
 									<td align="center">C11 6.3.1.1</td>
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							Unsigned wraparound is well-defined and deterministic. Signed overflow is pure undefined behavior
-							<ul>
-								<li>the compiler may delete overflow checks, generate unreachable code, or assume the overflow</li>
-							</ul>
-						</p>
+						<p>Unsigned wraparound is well-defined and deterministic. Signed overflow is pure undefined behavior<ul>
+	<li>the compiler may delete overflow checks, generate unreachable code, or assume the overflow</li>
+</ul></p>
 						<p>never happens.</p>
 					</section>
 					<section>
 						<h3 id="twos-complement-representation">Two's Complement Representation</h3>
-						<p>
-							Modern
-							<abbr title="Central Processing Unit">CPU</abbr>
-							s (x86-64, ARM64) use two's complement. The bit pattern
-							for
-							<code>-1</code>
-							is
-							<code>0xFFFFFFFF</code>
-							(all bits set). Addition works identically for signed and unsigned
-							at the hardware level - the difference is only in interpretation.
-						</p>
+						<p>Modern <abbr title="Central Processing Unit">CPU</abbr> s (x86-64, ARM64) use two's complement. The bit pattern for <code>-1</code> is <code>0xFFFFFFFF</code> (all bits set). Addition works identically for signed and unsigned at the hardware level - the difference is only in interpretation.</p>
 						<pre class="plaintext">
 Decimal    Unsigned 32-bit       Signed 32-bit
 -------    -----------------     --------------
@@ -244,15 +211,7 @@ Decimal    Unsigned 32-bit       Signed 32-bit
 4294967295 0xFFFFFFFF            -1          (UINT_MAX)
 4294967296 0x00000000            0           (wrap)
 						</pre>
-						<p>
-							The wrap point for unsigned is
-							<code>UINT_MAX + 1 = 0</code>
-							. For signed,
-							<code>INT_MAX + 1</code>
-							overflows to
-							<code>INT_MIN</code>
-							but is undefined behavior - a conforming compiler may replace it with anything.
-						</p>
+						<p>The wrap point for unsigned is <code>UINT_MAX + 1 = 0</code> . For signed, <code>INT_MAX + 1</code> overflows to <code>INT_MIN</code> but is undefined behavior - a conforming compiler may replace it with anything.</p>
 					</section>
 					<section>
 						<h3 id="undefined-behavior-optimizations">Undefined Behavior Optimizations</h3>
@@ -264,25 +223,8 @@ if (size &lt; 0)    // compiler: user_controlled + 16 can&#39;t overflow (UB)
 
 char *buf = malloc(size);  // compiler: size is always positive
 						</pre>
-						<p>
-							The compiler reasons: "signed overflow is undefined, therefore
-							<code>user_controlled + 16</code>
-							cannot
-							overflow. If it did overflow, anything is allowed, including removing this check. So
-							<code>size &gt;= 0</code>
-							always holds." The
-							<code>if (size &lt; 0)</code>
-							check is eliminated as dead code. The overflow happens at
-							runtime and
-							<code>malloc()</code>
-							receives a small positive value (the wrapped result).
-						</p>
-						<p>
-							Compile with
-							<code>-fwrapv</code>
-							to force signed wraparound (like unsigned) if you must use signed types
-							for size calculations. Better: use unsigned types for sizes.
-						</p>
+						<p>The compiler reasons: "signed overflow is undefined, therefore <code>user_controlled + 16</code> cannot overflow. If it did overflow, anything is allowed, including removing this check. So <code>size &gt;= 0</code> always holds." The <code>if (size &lt; 0)</code> check is eliminated as dead code. The overflow happens at runtime and <code>malloc()</code> receives a small positive value (the wrapped result).</p>
+						<p>Compile with <code>-fwrapv</code> to force signed wraparound (like unsigned) if you must use signed types for size calculations. Better: use unsigned types for sizes.</p>
 						<pre class="bash">
 # Check what the compiler actually did:
 gcc -O2 -S -o - vulnerable.c | grep -A5 &#39;user_controlled&#39;
@@ -367,14 +309,7 @@ gcc -o size_overflow_demo size_overflow_demo.c
 # But malloc gets size = 0
 # malloc(0) = 0x5555555592a0
 						</pre>
-						<p>
-							<code>malloc(0)</code>
-							in glibc returns a valid, allocation-sized pointer (implementation-defined, but
-							glibc treats it as
-							<code>malloc(1)</code>
-							with minimum chunk size 0x20). The program proceeds to write
-							gigabytes through this tiny allocation - a catastrophic heap overflow.
-						</p>
+						<p><code>malloc(0)</code> in glibc returns a valid, allocation-sized pointer (implementation-defined, but glibc treats it as <code>malloc(1)</code> with minimum chunk size 0x20). The program proceeds to write gigabytes through this tiny allocation - a catastrophic heap overflow.</p>
 					</section>
 					<section>
 						<h3 id="integer-promotion-and-narrowing">Integer Promotion and Narrowing</h3>
@@ -398,26 +333,7 @@ unsigned short z = x * y;      // promoted to int: 40000 * 40000 = 1600000000
                                // Yes, 1.6B &lt; 2.1B → no overflow
                                // Assigned to z → 1600000000 % 65536 rolling truncation
 						</pre>
-						<p>
-							The rule: if
-							<code>int</code>
-							can represent all values of the operand type, the operand is promoted to
-							<code>int</code>
-							(signed). If not, it's promoted to
-							<code>unsigned int</code>
-							. Since
-							<code>unsigned short</code>
-							's max (65535)
-							fits in
-							<code>int</code>
-							(32-bit), both operands become
-							<code>int</code>
-							. The multiplication happens in signed
-							<code>int</code>
-							. If the result exceeds
-							<code>INT_MAX</code>
-							, that's signed overflow = UB.
-						</p>
+						<p>The rule: if <code>int</code> can represent all values of the operand type, the operand is promoted to <code>int</code> (signed). If not, it's promoted to <code>unsigned int</code> . Since <code>unsigned short</code> 's max (65535) fits in <code>int</code> (32-bit), both operands become <code>int</code> . The multiplication happens in signed <code>int</code> . If the result exceeds <code>INT_MAX</code> , that's signed overflow = UB.</p>
 						<pre class="plaintext">
 unsigned short s1 = 40000, s2 = 40000;
 // s1 * s2:
@@ -431,29 +347,11 @@ unsigned short s3 = 65535, s4 = 2;
 //   2) int + int → int 65537
 //   3) assign to unsigned short → 65537 % 65536 = 1
 						</pre>
-						<p>
-							On platforms where
-							<code>int</code>
-							is 16-bit (embedded),
-							<code>unsigned short</code>
-							equals
-							<code>unsigned int</code>
-							, no promotion
-							occurs, and behavior differs. This platform-dependent behavior is a recurring source of bugs.
-						</p>
+						<p>On platforms where <code>int</code> is 16-bit (embedded), <code>unsigned short</code> equals <code>unsigned int</code> , no promotion occurs, and behavior differs. This platform-dependent behavior is a recurring source of bugs.</p>
 					</section>
 					<section>
 						<h3 id="size-t-vs-int-mismatches">size_t vs int Mismatches</h3>
-						<p>
-							<code>size_t</code>
-							is the unsigned type for sizes (64-bit on x86-64, 32-bit on x86). It can represent
-							the largest possible object size. Mixing
-							<code>int</code>
-							(signed, 32-bit on LP64) with
-							<code>size_t</code>
-							introduces
-							sign-extension bugs:
-						</p>
+						<p><code>size_t</code> is the unsigned type for sizes (64-bit on x86-64, 32-bit on x86). It can represent the largest possible object size. Mixing <code>int</code> (signed, 32-bit on LP64) with <code>size_t</code> introduces sign-extension bugs:</p>
 						<pre class="c">
 int user_len = -1;   // attacker-controlled
 if (user_len &gt; 1024)
@@ -470,13 +368,7 @@ if (user_len &lt; 0 || (size_t)user_len &gt; 1024)
     return ERROR;
 // -1 &lt; 0 → check catches it
 						</pre>
-						<p>
-							Or use
-							<code>size_t</code>
-							or
-							<code>ssize_t</code>
-							throughout to avoid mixed-sign comparisons and conversions.
-						</p>
+						<p>Or use <code>size_t</code> or <code>ssize_t</code> throughout to avoid mixed-sign comparisons and conversions.</p>
 					</section>
 					<section>
 						<h3 id="check-then-overflow-pattern">Check-Then-Overflow Pattern</h3>
@@ -495,11 +387,7 @@ void process_data(char *data, unsigned int len) {
     memcpy(buf, data, len);   // if len was UINT_MAX, total=0 wraps
 }
 						</pre>
-						<p>
-							When
-							<code>len = UINT_MAX</code>
-							:
-						</p>
+						<p>When <code>len = UINT_MAX</code> :</p>
 						<ul>
 							<li><code>len + 1</code> wraps to <code>0</code></li>
 							<li><code>total</code> becomes <code>0 + sizeof(header_t)</code> , a small value</li>
@@ -582,69 +470,20 @@ gcc -o safe_arithmetic safe_arithmetic.c
 # overflow: width * height
 # p3 = (nil) (should be NULL)
 						</pre>
-						<p>
-							The builtins are architecture-aware - on x86-64 they compile to arithmetic instructions followed
-							by
-							<code>jo</code>
-							(jump on overflow) or
-							<code>jc</code>
-							(jump on carry) checks. No software emulation, no performance
-							cost beyond the branch.
-						</p>
+						<p>The builtins are architecture-aware - on x86-64 they compile to arithmetic instructions followed by <code>jo</code> (jump on overflow) or <code>jc</code> (jump on carry) checks. No software emulation, no performance cost beyond the branch.</p>
 					</section>
 					<section>
 						<h3 id="c11-annex-k-bounds-checking-interfaces">C11 Annex K: Bounds-Checking Interfaces</h3>
-						<p>
-							C11 introduced optional bounds-checking functions (
-							<code>_s</code>
-							suffix):
-						</p>
+						<p>C11 introduced optional bounds-checking functions ( <code>_s</code> suffix):</p>
 						<pre class="c">
 errno_t memcpy_s(void *dest, rsize_t destsz, const void *src, rsize_t count);
 						</pre>
-						<p>
-							<code>rsize_t</code>
-							is
-							<code>size_t</code>
-							constrained to
-							<code>RSIZE_MAX</code>
-							(implementation-defined, often
-							<code>SIZE_MAX &gt;&gt; 1</code>
-							). These functions check for null pointers, overlapping regions, and sizes exceeding
-							<code>RSIZE_MAX</code>
-							. They are not widely implemented (glibc does not provide them), so portable code cannot rely
-							on them.
-						</p>
+						<p><code>rsize_t</code> is <code>size_t</code> constrained to <code>RSIZE_MAX</code> (implementation-defined, often <code>SIZE_MAX &gt;&gt; 1</code> ). These functions check for null pointers, overlapping regions, and sizes exceeding <code>RSIZE_MAX</code> . They are not widely implemented (glibc does not provide them), so portable code cannot rely on them.</p>
 					</section>
 					<section>
 						<h3 id="malloc-edge-cases">malloc Edge Cases</h3>
-						<p>
-							<b>malloc(0):</b>
-							glibc returns a valid pointer (minimum allocation unit, typically 0x20 bytes).
-							P
-							<abbr title="Open Systems Interconnection">OSI</abbr>
-							X says the behavior is implementation-defined - some implementations
-							return NULL. Never assume
-							<code>malloc(0)</code>
-							returns NULL.
-						</p>
-						<p>
-							<b>malloc(SIZE_MAX - small):</b>
-							glibc uses
-							<code>mmap()</code>
-							for large allocations and
-							<code>brk()</code>
-							/
-							<code>sbrk()</code>
-							for smaller ones. A size near
-							<code>SIZE_MAX</code>
-							wraps in internal calculations.
-							<code>malloc(SIZE_MAX)</code>
-							returns NULL. But
-							<code>malloc(SIZE_MAX - 0x10)</code>
-							may pass internal size checks before wrapping in
-							page-alignment arithmetic - behavior is inconsistent.
-						</p>
+						<p><b>malloc(0):</b> glibc returns a valid pointer (minimum allocation unit, typically 0x20 bytes). P <abbr title="Open Systems Interconnection">OSI</abbr> X says the behavior is implementation-defined - some implementations return NULL. Never assume <code>malloc(0)</code> returns NULL.</p>
+						<p><b>malloc(SIZE_MAX - small):</b> glibc uses <code>mmap()</code> for large allocations and <code>brk()</code> / <code>sbrk()</code> for smaller ones. A size near <code>SIZE_MAX</code> wraps in internal calculations. <code>malloc(SIZE_MAX)</code> returns NULL. But <code>malloc(SIZE_MAX - 0x10)</code> may pass internal size checks before wrapping in page-alignment arithmetic - behavior is inconsistent.</p>
 						<pre class="c">
 #include &lt;stdio.h&gt;
 #include &lt;stdlib.h&gt;
@@ -668,26 +507,8 @@ int main() {
 					<section>
 						<h3 id="kernel-specific-integer-overflow">Kernel-Specific Integer Overflow</h3>
 						<p>Linux kernel integer overflows follow the same patterns but with kernel-scale consequences:</p>
-						<p>
-							<b>Size calculation for DMA buffers.</b>
-							Drivers allocate DMA-coherent memory based on user-supplied
-							dimensions. An overflow in
-							<code>width * height * bpp</code>
-							results in a DMA transfer that reads or writes
-							past the allocated buffer into adjacent kernel memory.
-						</p>
-						<p>
-							<b>Reference counter overflow.</b>
-							The kernel uses
-							<code>atomic_t</code>
-							(32-bit signed) for reference counts.
-							Overflow from
-							<code>INT_MAX + 1</code>
-							wraps to
-							<code>INT_MIN</code>
-							. A subsequent decrement back to 0 triggers free-while-in-use.
-							This is a UAF on kernel objects triggered by integer overflow.
-						</p>
+						<p><b>Size calculation for DMA buffers.</b> Drivers allocate DMA-coherent memory based on user-supplied dimensions. An overflow in <code>width * height * bpp</code> results in a DMA transfer that reads or writes past the allocated buffer into adjacent kernel memory.</p>
+						<p><b>Reference counter overflow.</b> The kernel uses <code>atomic_t</code> (32-bit signed) for reference counts. Overflow from <code>INT_MAX + 1</code> wraps to <code>INT_MIN</code> . A subsequent decrement back to 0 triggers free-while-in-use. This is a UAF on kernel objects triggered by integer overflow.</p>
 						<h4 id="sat-add-checked-add-in-the-kernel">sat_add / checked_add in the kernel</h4>
 						<pre class="c">
 // include/linux/overflow.h
@@ -701,10 +522,7 @@ void *p = kmalloc(array_size(n, sizeof(struct foo)), GFP_KERNEL);
 					</section>
 					<section>
 						<h3 id="fuzzing-for-integer-overflows">Fuzzing for Integer Overflows</h3>
-						<p>
-							AFL and libFuzzer can discover integer overflows indirectly - they observe heap buffer overflows
-							caused by undersized allocations. To find the root cause overflow:
-						</p>
+						<p>AFL and libFuzzer can discover integer overflows indirectly - they observe heap buffer overflows caused by undersized allocations. To find the root cause overflow:</p>
 						<pre class="bash">
 # Compile with UBSan (UndefinedBehaviorSanitizer):
 gcc -fsanitize=undefined -g -o fuzz_target fuzz_target.c
@@ -715,12 +533,7 @@ gcc -fsanitize=undefined -g -o fuzz_target fuzz_target.c
 #   unsigned integer overflow: 65536 * 65536 cannot be represented in type &#39;unsigned int&#39;
 # SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior fuzz_target.c:42:23
 						</pre>
-						<p>
-							UBSan catches unsigned wraparound (configurable:
-							<code>-fno-sanitize=unsigned-integer-overflow</code>
-							to
-							disable) and signed overflow by default.
-						</p>
+						<p>UBSan catches unsigned wraparound (configurable: <code>-fno-sanitize=unsigned-integer-overflow</code> to disable) and signed overflow by default.</p>
 					</section>
 					<section>
 						<h3 id="static-analysis-rules">Static Analysis Rules</h3>
@@ -740,35 +553,11 @@ gcc -fsanitize=undefined -g -o fuzz_target fuzz_target.c
 					</section>
 					<section>
 						<h3 id="summary">Summary</h3>
-						<p>
-							Integer overflow is an arithmetic wraparound that violates a programmer's size assumption. Unsigned
-							overflow is defined as modulo 2^N; signed overflow is undefined behavior and invites compiler-eliminated
-							security checks. The dominant exploit pattern is a size calculation that wraps to a small value,
-							producing an undersized allocation that a subsequent write overflows. Prevention: use
-							<code>size_t</code>
-							for sizes, prefer
-							<code>__builtin_mul_overflow</code>
-							and
-							<code>__builtin_add_overflow</code>
-							over manual checks,
-							and run UBSan during testing to catch wraparound at the point of occurrence.
-						</p>
+						<p>Integer overflow is an arithmetic wraparound that violates a programmer's size assumption. Unsigned overflow is defined as modulo 2^N; signed overflow is undefined behavior and invites compiler-eliminated security checks. The dominant exploit pattern is a size calculation that wraps to a small value, producing an undersized allocation that a subsequent write overflows. Prevention: use <code>size_t</code> for sizes, prefer <code>__builtin_mul_overflow</code> and <code>__builtin_add_overflow</code> over manual checks, and run UBSan during testing to catch wraparound at the point of occurrence.</p>
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Write a Go program that computes
-							<code>width * height * channels</code>
-							for an image buffer without ever
-							letting an unsigned multiplication wrap. Implement
-							<code>SafeMul</code>
-							and
-							<code>SafeAdd</code>
-							that return an error
-							on overflow, and a
-							<code>PixelBufferSize</code>
-							helper that chains them.
-						</p>
+						<p>Write a Go program that computes <code>width * height * channels</code> for an image buffer without ever letting an unsigned multiplication wrap. Implement <code>SafeMul</code> and <code>SafeAdd</code> that return an error on overflow, and a <code>PixelBufferSize</code> helper that chains them.</p>
 						<pre class="go">
 package main
 
@@ -811,26 +600,7 @@ func main() {
 	}
 }
 						</pre>
-						<p>
-							Then extend
-							<code>PixelBufferSize</code>
-							with a maximum allowed size, add a table-driven test with at least
-							the boundary cases
-							<code>0</code>
-							,
-							<code>1</code>
-							,
-							<code>UINT32_MAX</code>
-							, and
-							<code>UINT64_MAX</code>
-							, and compare your
-							<code>SafeMul</code>
-							result against
-							<code>bits.Mul64</code>
-							from
-							<code>math/bits</code>
-							.
-						</p>
+						<p>Then extend <code>PixelBufferSize</code> with a maximum allowed size, add a table-driven test with at least the boundary cases <code>0</code> , <code>1</code> , <code>UINT32_MAX</code> , and <code>UINT64_MAX</code> , and compare your <code>SafeMul</code> result against <code>bits.Mul64</code> from <code>math/bits</code> .</p>
 					</section>
 					<section>
 						<h3 id="references">References</h3>

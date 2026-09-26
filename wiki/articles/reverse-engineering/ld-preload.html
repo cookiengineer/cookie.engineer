@@ -169,31 +169,10 @@
 
 				<article>
 					<h2 id="ld-preload-hooking">LD_PRELOAD Hooking</h2>
-					<p>
-						Intercepting function calls at the dynamic linker level to trace, modify, and hijack library
-						calls in Linux binaries.
-					</p>
+					<p>Intercepting function calls at the dynamic linker level to trace, modify, and hijack library calls in Linux binaries.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							LD_PRELOAD exploits the dynamic linker's symbol resolution order: when resolving a function
-							name,
-							<code>ld.so</code>
-							searches the libraries named in
-							<code>LD_PRELOAD</code>
-							before
-							<code>libc</code>
-							and other system libraries,
-							so a hook that exports the same symbol shadows the real implementation. Any dynamically linked
-							binary - malware, closed-source tools, a CI runner - calls your code instead. This requires
-							no ptrace, no breakpoints, and no kernel modules, only a
-							<code>.so</code>
-							file and an environment variable.
-							After reading, you can hook file, network, and execution calls, chain to the original functions
-							with
-							<code>dlsym</code>
-							, and recognize when malware uses the same trick for persistence.
-						</p>
+						<p>LD_PRELOAD exploits the dynamic linker's symbol resolution order: when resolving a function name, <code>ld.so</code> searches the libraries named in <code>LD_PRELOAD</code> before <code>libc</code> and other system libraries, so a hook that exports the same symbol shadows the real implementation. Any dynamically linked binary - malware, closed-source tools, a CI runner - calls your code instead. This requires no ptrace, no breakpoints, and no kernel modules, only a <code>.so</code> file and an environment variable. After reading, you can hook file, network, and execution calls, chain to the original functions with <code>dlsym</code> , and recognize when malware uses the same trick for persistence.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -204,44 +183,19 @@
 					</section>
 					<section>
 						<h3 id="symbol-resolution-order">Symbol Resolution Order</h3>
-						<p>
-							When a binary calls
-							<code>open(&#34;/etc/shadow&#34;, O_RDONLY)</code>
-							, the compiler emits a
-							<code>call open@plt</code>
-							instruction.
-							On first call, the PLT stub invokes
-							<code>_dl_runtime_resolve</code>
-							which walks the symbol tables of all
-							loaded shared objects in order:
-						</p>
+						<p>When a binary calls <code>open(&#34;/etc/shadow&#34;, O_RDONLY)</code> , the compiler emits a <code>call open@plt</code> instruction. On first call, the PLT stub invokes <code>_dl_runtime_resolve</code> which walks the symbol tables of all loaded shared objects in order:</p>
 						<ol>
 							<li><code>LD_PRELOAD</code> libraries (searched first, left to right)</li>
 							<li><code>DT_NEEDED</code> libraries from the binary itself (linked at compile time)</li>
 							<li>The dynamic linker itself ( <code>ld-linux.so</code> )</li>
 							<li><code>libc.so</code> and other system libraries</li>
 						</ol>
-						<p>
-							The first matching symbol wins. If
-							<code>libpreload.so</code>
-							exports
-							<code>open</code>
-							, that definition is used.
-							No relocation, no GOT overwrite - the resolver simply returns your function's address.
-						</p>
-						<p>
-							This is not a security bypass; it's a deliberate debugging/extension mechanism of the ELF dynamic
-							linking model.
-						</p>
+						<p>The first matching symbol wins. If <code>libpreload.so</code> exports <code>open</code> , that definition is used. No relocation, no GOT overwrite - the resolver simply returns your function's address.</p>
+						<p>This is not a security bypass; it's a deliberate debugging/extension mechanism of the ELF dynamic linking model.</p>
 					</section>
 					<section>
 						<h3 id="the-minimal-hook-library">The Minimal Hook Library</h3>
-						<p>
-							A hook library exports functions with the same symbol name as the target. To chain to the original,
-							use
-							<code>dlsym(RTLD_NEXT, &#34;function_name&#34;)</code>
-							:
-						</p>
+						<p>A hook library exports functions with the same symbol name as the target. To chain to the original, use <code>dlsym(RTLD_NEXT, &#34;function_name&#34;)</code> :</p>
 						<pre class="c">
 /*
  * hook.c - minimal LD_PRELOAD hook for open(2)
@@ -290,25 +244,11 @@ int open(const char *pathname, int flags, ...)
     return fd;
 }
 						</pre>
-						<p>
-							Every call to
-							<code>open()</code>
-							- from the binary, from any library it loads, from any thread - passes
-							through this hook. The
-							<code>fprintf</code>
-							output goes to stderr so it doesn't contaminate normal output
-							pipes.
-						</p>
+						<p>Every call to <code>open()</code> - from the binary, from any library it loads, from any thread - passes through this hook. The <code>fprintf</code> output goes to stderr so it doesn't contaminate normal output pipes.</p>
 					</section>
 					<section>
 						<h3 id="constructors-and-destructors">Constructors and Destructors</h3>
-						<p>
-							<code>__attribute__((constructor))</code>
-							and
-							<code>__attribute__((destructor))</code>
-							run automatically at load and
-							unload time:
-						</p>
+						<p><code>__attribute__((constructor))</code> and <code>__attribute__((destructor))</code> run automatically at load and unload time:</p>
 						<pre class="c">
 __attribute__((constructor))
 static void hook_init(void)
@@ -324,18 +264,7 @@ static void hook_fini(void)
             (unsigned long)intercept_count);
 }
 						</pre>
-						<p>
-							Constructors run before
-							<code>main()</code>
-							, after
-							<code>LD_PRELOAD</code>
-							libraries are mapped into the process
-							address space. They fire even if the binary calls
-							<code>execve</code>
-							- each new process inherits
-							<code>LD_PRELOAD</code>
-							and runs constructors again.
-						</p>
+						<p>Constructors run before <code>main()</code> , after <code>LD_PRELOAD</code> libraries are mapped into the process address space. They fire even if the binary calls <code>execve</code> - each new process inherits <code>LD_PRELOAD</code> and runs constructors again.</p>
 					</section>
 					<section>
 						<h3 id="file-access-monitor">File Access Monitor</h3>
@@ -412,11 +341,7 @@ int openat(int dirfd, const char *path, int flags, ...)
 					</section>
 					<section>
 						<h3 id="network-connection-monitor">Network Connection Monitor</h3>
-						<p>
-							Intercept all outbound connections, revealing
-							<abbr title="Command and Control">C2</abbr>
-							infrastructure:
-						</p>
+						<p>Intercept all outbound connections, revealing <abbr title="Command and Control">C2</abbr> infrastructure:</p>
 						<pre class="c">
 #define _GNU_SOURCE
 #include &lt;dlfcn.h&gt;
@@ -462,16 +387,7 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 					</section>
 					<section>
 						<h3 id="command-execution-interceptor">Command Execution Interceptor</h3>
-						<p>
-							Malware often calls
-							<code>execve</code>
-							,
-							<code>system</code>
-							, or
-							<code>popen</code>
-							to spawn shells or install additional payloads.
-							Hook all three:
-						</p>
+						<p>Malware often calls <code>execve</code> , <code>system</code> , or <code>popen</code> to spawn shells or install additional payloads. Hook all three:</p>
 						<pre class="c">
 #define _GNU_SOURCE
 #include &lt;dlfcn.h&gt;
@@ -546,13 +462,7 @@ LD_PRELOAD=./cmd_hook.so ./test_target
 					</section>
 					<section>
 						<h3 id="readwrite-data-capture">Read/Write Data Capture</h3>
-						<p>
-							Intercept
-							<code>read()</code>
-							and
-							<code>write()</code>
-							to capture data flowing over file descriptors:
-						</p>
+						<p>Intercept <code>read()</code> and <code>write()</code> to capture data flowing over file descriptors:</p>
 						<pre class="c">
 #define _GNU_SOURCE
 #include &lt;dlfcn.h&gt;
@@ -612,11 +522,7 @@ ssize_t write(int fd, const void *buf, size_t count)
 					</section>
 					<section>
 						<h3 id="rtld-next-vs-rtld-default">RTLD_NEXT vs RTLD_DEFAULT</h3>
-						<p>
-							Two search modes for
-							<code>dlsym</code>
-							:
-						</p>
+						<p>Two search modes for <code>dlsym</code> :</p>
 						<table>
 							<thead>
 								<tr>
@@ -635,15 +541,7 @@ ssize_t write(int fd, const void *buf, size_t count)
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							<code>RTLD_NEXT</code>
-							is the correct choice in hook libraries.
-							<code>RTLD_DEFAULT</code>
-							would find your own hook
-							function (an infinite loop otherwise avoided by caching). The distinction matters when multiple
-							<code>LD_PRELOAD</code>
-							libraries stack:
-						</p>
+						<p><code>RTLD_NEXT</code> is the correct choice in hook libraries. <code>RTLD_DEFAULT</code> would find your own hook function (an infinite loop otherwise avoided by caching). The distinction matters when multiple <code>LD_PRELOAD</code> libraries stack:</p>
 						<pre class="bash">
 # Stacking hooks: hook_A intercepts open, hook_B also intercepts open
 LD_PRELOAD=./hook_A.so:./hook_B.so ./target
@@ -667,31 +565,9 @@ gcc -shared -fPIC -o hook.so hook.c -ldl -fno-builtin
 #               without this, gcc may inline strlen() instead of calling it,
 #               causing hook functions to break
 						</pre>
-						<p>
-							<b>Without '-fno-builtin'</b>
-							: GCC recognizes
-							<code>memset</code>
-							and
-							<code>memcpy</code>
-							as builtins and may inline
-							them, bypassing your hook. Your hook's own internal calls to these functions might also be optimized
-							away, making dlsym resolution fail silently.
-						</p>
-						<p>
-							<b>Without '-ldl'</b>
-							:
-							<code>undefined reference to &#39;dlsym&#39;</code>
-							- you must link against
-							<code>libdl</code>
-							explicitly.
-						</p>
-						<p>
-							<b>Caching is mandatory</b>
-							: Calling
-							<code>dlsym(RTLD_NEXT, ...)</code>
-							on every invocation of the hooked
-							function is correct but slow. Cache the result in a constructor or a static variable:
-						</p>
+						<p><b>Without '-fno-builtin'</b> : GCC recognizes <code>memset</code> and <code>memcpy</code> as builtins and may inline them, bypassing your hook. Your hook's own internal calls to these functions might also be optimized away, making dlsym resolution fail silently.</p>
+						<p><b>Without '-ldl'</b> : <code>undefined reference to &#39;dlsym&#39;</code> - you must link against <code>libdl</code> explicitly.</p>
+						<p><b>Caching is mandatory</b> : Calling <code>dlsym(RTLD_NEXT, ...)</code> on every invocation of the hooked function is correct but slow. Cache the result in a constructor or a static variable:</p>
 						<pre class="c">
 static orig_open_t real_open = NULL;
 static pthread_once_t once = PTHREAD_ONCE_INIT;
@@ -705,29 +581,11 @@ int open(const char *path, int flags, ...) {
     // ... use real_open
 }
 						</pre>
-						<p>
-							For single-threaded targets, constructor-based caching suffices. For multi-threaded malware
-							(botnets), use
-							<code>pthread_once</code>
-							for thread safety.
-						</p>
+						<p>For single-threaded targets, constructor-based caching suffices. For multi-threaded malware (botnets), use <code>pthread_once</code> for thread safety.</p>
 					</section>
 					<section>
 						<h3 id="hooking-variadic-functions">Hooking Variadic Functions</h3>
-						<p>
-							Variadic functions like
-							<code>printf</code>
-							,
-							<code>open</code>
-							(with O_CREAT),
-							<code>ioctl</code>
-							,
-							<code>fcntl</code>
-							are tricky because
-							the number and types of arguments vary. Use
-							<code>va_list</code>
-							and explicitly check flags:
-						</p>
+						<p>Variadic functions like <code>printf</code> , <code>open</code> (with O_CREAT), <code>ioctl</code> , <code>fcntl</code> are tricky because the number and types of arguments vary. Use <code>va_list</code> and explicitly check flags:</p>
 						<pre class="c">
 int open(const char *pathname, int flags, ...)
 {
@@ -743,34 +601,18 @@ int open(const char *pathname, int flags, ...)
     return real_open(pathname, flags, mode);
 }
 						</pre>
-						<p>
-							Read the variadic argument exactly once. The kernel ignores the mode argument unless
-							<code>O_CREAT</code>
-							is set, so forward it unconditionally and never call
-							<code>va_arg</code>
-							twice.
-						</p>
+						<p>Read the variadic argument exactly once. The kernel ignores the mode argument unless <code>O_CREAT</code> is set, so forward it unconditionally and never call <code>va_arg</code> twice.</p>
 					</section>
 					<section>
 						<h3 id="setuid-and-capabilities">Setuid and Capabilities</h3>
-						<p>
-							LD_PRELOAD is disabled for setuid binaries and binaries with filesystem capabilities. This is
-							a deliberate security measure in
-							<code>glibc</code>
-							:
-						</p>
+						<p>LD_PRELOAD is disabled for setuid binaries and binaries with filesystem capabilities. This is a deliberate security measure in <code>glibc</code> :</p>
 						<pre class="bash">
 $ sudo chmod u+s ./setuid_binary
 $ LD_PRELOAD=./hook.so ./setuid_binary
 # Hook NOT loaded. glibc ignores LD_PRELOAD for secure-execution mode.
 
 						</pre>
-						<p>
-							The kernel exposes secure-execution mode through the auxiliary vector. This tiny program prints
-							the
-							<code>AT_SECURE</code>
-							flag, which is non-zero for setuid binaries and binaries with file capabilities:
-						</p>
+						<p>The kernel exposes secure-execution mode through the auxiliary vector. This tiny program prints the <code>AT_SECURE</code> flag, which is non-zero for setuid binaries and binaries with file capabilities:</p>
 						<pre class="c">
 /* secure-check.c - getauxval(AT_SECURE) is 0 normally, 1 in secure-execution mode. */
 #include &lt;stdio.h&gt;
@@ -788,23 +630,11 @@ gcc -o secure-check secure-check.c
 sudo chmod u+s ./secure-check
 ./secure-check            # AT_SECURE = 1
 						</pre>
-						<p>
-							For setuid binaries, use
-							<code>ptrace</code>
-							-based hooking (GDB) or kernel-level tracing (BPF/ftrace)
-							instead of LD_PRELOAD.
-						</p>
+						<p>For setuid binaries, use <code>ptrace</code> -based hooking (GDB) or kernel-level tracing (BPF/ftrace) instead of LD_PRELOAD.</p>
 					</section>
 					<section>
 						<h3 id="static-binaries">Static Binaries</h3>
-						<p>
-							Statically linked binaries have no dynamic linker -
-							<code>ld.so</code>
-							is never invoked,
-							<code>LD_PRELOAD</code>
-							is
-							never processed:
-						</p>
+						<p>Statically linked binaries have no dynamic linker - <code>ld.so</code> is never invoked, <code>LD_PRELOAD</code> is never processed:</p>
 						<pre class="bash">
 $ file ./static_binary
 static_binary: ELF 64-bit LSB executable, x86-64, statically linked
@@ -820,14 +650,7 @@ ldd ./binary | grep &#34;not a dynamic&#34; # explicitly says &#34;not a dynamic
 					</section>
 					<section>
 						<h3 id="raw-syscalls">Raw Syscalls</h3>
-						<p>
-							Malware may bypass libc wrappers entirely by invoking syscalls directly. An
-							<code>LD_PRELOAD</code>
-							hook
-							on
-							<code>write()</code>
-							cannot intercept:
-						</p>
+						<p>Malware may bypass libc wrappers entirely by invoking syscalls directly. An <code>LD_PRELOAD</code> hook on <code>write()</code> cannot intercept:</p>
 						<pre class="c">
 /* Bypasses LD_PRELOAD hooks on write() */
 #include &lt;unistd.h&gt;
@@ -1039,12 +862,7 @@ grep &#39;^write\|^read\|^openat&#39; strace.log
 					</section>
 					<section>
 						<h3 id="library-injection">Library Injection</h3>
-						<p>
-							LD_PRELOAD only affects newly started processes. To inject into an already-running process,
-							use
-							<code>gdb</code>
-							:
-						</p>
+						<p>LD_PRELOAD only affects newly started processes. To inject into an already-running process, use <code>gdb</code> :</p>
 						<pre class="bash">
 gdb -p $(pgrep target_process)
 (gdb) call (int)dlopen(&#34;/path/to/hook.so&#34;, 2)   # RTLD_NOW = 2
@@ -1059,12 +877,7 @@ gdb -p $(pgrep target_process)
 					</section>
 					<section>
 						<h3 id="ldsopreload-persistence">ld.so.preload Persistence</h3>
-						<p>
-							Malware often writes to
-							<code>/etc/ld.so.preload</code>
-							for persistence - this file is read by the dynamic
-							linker on every process start, applying the specified libraries system-wide:
-						</p>
+						<p>Malware often writes to <code>/etc/ld.so.preload</code> for persistence - this file is read by the dynamic linker on every process start, applying the specified libraries system-wide:</p>
 						<pre class="bash">
 # Detect LD_PRELOAD-based persistence:
 cat /etc/ld.so.preload
@@ -1074,62 +887,15 @@ cat /etc/ld.so.preload
 # /lib/librootkit.so
 # /usr/local/lib/libhide.so
 						</pre>
-						<p>
-							The analysis technique (LD_PRELOAD interception) and the malware technique (ld.so.preload persistence)
-							are the same mechanism used for different purposes. When analyzing a binary that writes to
-							<code>/etc/ld.so.preload</code>
-							, you've found a userland rootkit installer.
-						</p>
+						<p>The analysis technique (LD_PRELOAD interception) and the malware technique (ld.so.preload persistence) are the same mechanism used for different purposes. When analyzing a binary that writes to <code>/etc/ld.so.preload</code> , you've found a userland rootkit installer.</p>
 					</section>
 					<section>
 						<h3 id="summary">Summary</h3>
-						<p>
-							LD_PRELOAD hooks intercept every dynamically-linked function call -
-							<code>open</code>
-							,
-							<code>connect</code>
-							,
-							<code>execve</code>
-							,
-							<code>system</code>
-							,
-							<code>dlopen</code>
-							,
-							<code>read</code>
-							,
-							<code>write</code>
-							- giving you complete observability of a binary's interaction
-							with the OS. It is the first tool to reach for when analyzing unknown Linux binaries. No kernel
-							modules, no ptrace overhead, no performance penalty beyond your logging code. Combine with
-							<code>strace</code>
-							for syscall-level gaps, with GDB for interactive debugging, and with Frida for runtime injection.
-							The compiled
-							<code>.so</code>
-							is portable across any Linux system with the same architecture and glibc
-							version.
-						</p>
+						<p>LD_PRELOAD hooks intercept every dynamically-linked function call - <code>open</code> , <code>connect</code> , <code>execve</code> , <code>system</code> , <code>dlopen</code> , <code>read</code> , <code>write</code> - giving you complete observability of a binary's interaction with the OS. It is the first tool to reach for when analyzing unknown Linux binaries. No kernel modules, no ptrace overhead, no performance penalty beyond your logging code. Combine with <code>strace</code> for syscall-level gaps, with GDB for interactive debugging, and with Frida for runtime injection. The compiled <code>.so</code> is portable across any Linux system with the same architecture and glibc version.</p>
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Write a Go tool that prints the effective symbol search order for a binary without running it.
-							Parse the ELF dynamic section for
-							<code>DT_NEEDED</code>
-							,
-							<code>DT_RPATH</code>
-							, and
-							<code>DT_RUNPATH</code>
-							, then combine
-							that with the
-							<code>LD_PRELOAD</code>
-							environment variable and
-							<code>/etc/ld.so.preload</code>
-							. Run it with and without
-							<code>LD_PRELOAD</code>
-							set and confirm that the preload libraries are searched before the
-							<code>DT_NEEDED</code>
-							libraries.
-						</p>
+						<p>Write a Go tool that prints the effective symbol search order for a binary without running it. Parse the ELF dynamic section for <code>DT_NEEDED</code> , <code>DT_RPATH</code> , and <code>DT_RUNPATH</code> , then combine that with the <code>LD_PRELOAD</code> environment variable and <code>/etc/ld.so.preload</code> . Run it with and without <code>LD_PRELOAD</code> set and confirm that the preload libraries are searched before the <code>DT_NEEDED</code> libraries.</p>
 						<pre class="go">
 package main
 

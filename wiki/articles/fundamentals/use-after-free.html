@@ -144,21 +144,10 @@
 
 				<article>
 					<h2 id="use-after-free">Use After Free</h2>
-					<p>
-						Dangling pointers, heap reuse, object layout overlap, and vtable hijack via UAF - why freeing
-						memory does not null the pointer and how reused chunks become type-confused.
-					</p>
+					<p>Dangling pointers, heap reuse, object layout overlap, and vtable hijack via UAF - why freeing memory does not null the pointer and how reused chunks become type-confused.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							A use-after-free (UAF) is a temporal memory safety violation: a program keeps using a pointer
-							after the memory it points to has been freed. The allocator returns that chunk to a free list
-							and may hand the same bytes to the next allocation. The dangling pointer then sees whatever
-							the new owner wrote, which turns a simple lifetime bug into type confusion and, with a function
-							pointer or vtable in the reused memory, into control-flow hijack. After this article you can
-							trigger a UAF, observe the chunk reuse in GDB, and explain why the bug class still survives
-							modern mitigations.
-						</p>
+						<p>A use-after-free (UAF) is a temporal memory safety violation: a program keeps using a pointer after the memory it points to has been freed. The allocator returns that chunk to a free list and may hand the same bytes to the next allocation. The dangling pointer then sees whatever the new owner wrote, which turns a simple lifetime bug into type confusion and, with a function pointer or vtable in the reused memory, into control-flow hijack. After this article you can trigger a UAF, observe the chunk reuse in GDB, and explain why the bug class still survives modern mitigations.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -170,47 +159,18 @@
 					</section>
 					<section>
 						<h3 id="the-core-mechanism">The Core Mechanism</h3>
-						<p>
-							A use-after-free (UAF) occurs when a program continues to use a pointer after the memory it
-							points to has been freed. The freed chunk is returned to the allocator and may be reused by
-							a subsequent allocation of a different type. The dangling pointer now references memory holding
-							data of an entirely different logical type - type confusion via the allocator.
-						</p>
+						<p>A use-after-free (UAF) occurs when a program continues to use a pointer after the memory it points to has been freed. The freed chunk is returned to the allocator and may be reused by a subsequent allocation of a different type. The dangling pointer now references memory holding data of an entirely different logical type - type confusion via the allocator.</p>
 						<p>Three events in sequence:</p>
 						<ol>
 							<li>Allocate object A: <code>struct Auth *auth = malloc(sizeof(struct Auth))</code> - auth points to heap chunk X.</li>
 							<li>Free object A: <code>free(auth)</code> - chunk X returns to the free list, but <code>auth</code> still holds the address of X.</li>
 							<li>Allocate object B: <code>struct Config *cfg = malloc(sizeof(struct Config))</code> - the allocator reuses chunk X. <code>auth</code> now points to <code>cfg</code> 's memory.</li>
 						</ol>
-						<p>
-							The pointer
-							<code>auth</code>
-							(type
-							<code>struct Auth*</code>
-							) actually references a
-							<code>struct Config</code>
-							. Any read through
-							<code>auth-&gt;is_admin</code>
-							reads
-							<code>cfg</code>
-							's bytes. Any write through
-							<code>auth</code>
-							corrupts
-							<code>cfg</code>
-							.
-						</p>
+						<p>The pointer <code>auth</code> (type <code>struct Auth*</code> ) actually references a <code>struct Config</code> . Any read through <code>auth-&gt;is_admin</code> reads <code>cfg</code> 's bytes. Any write through <code>auth</code> corrupts <code>cfg</code> .</p>
 					</section>
 					<section>
 						<h3 id="why-free-does-not-null-the-pointer">Why free() Does Not Null the Pointer</h3>
-						<p>
-							<code>free(ptr)</code>
-							receives the pointer by value. C passes all arguments by value, so
-							<code>free()</code>
-							gets
-							a copy of the address. It can modify the memory at that address (write free-list links, coalesce
-							with neighbors) but it cannot reach back into the caller's stack frame or global variable to
-							set the original pointer to NULL.
-						</p>
+						<p><code>free(ptr)</code> receives the pointer by value. C passes all arguments by value, so <code>free()</code> gets a copy of the address. It can modify the memory at that address (write free-list links, coalesce with neighbors) but it cannot reach back into the caller's stack frame or global variable to set the original pointer to NULL.</p>
 						<pre class="c">
 void free(void *ptr);  // takes ptr by value, cannot modify caller&#39;s variable
 
@@ -220,38 +180,17 @@ free(p);
 
 p = NULL;  // programmer must do this manually
 						</pre>
-						<p>
-							The allocator does write into the chunk.
-							<code>free()</code>
-							stores forward pointers (
-							<code>fd</code>
-							/
-							<code>bk</code>
-							in the
-							tcache, fastbin, or smallbin chains) in the chunk's user-data area. The first 8-16 bytes of
-							freed user memory become the linked-list node structure. This is why a UAF read on a freed chunk
-							leaks heap metadata or pointer values.
-						</p>
+						<p>The allocator does write into the chunk. <code>free()</code> stores forward pointers ( <code>fd</code> / <code>bk</code> in the tcache, fastbin, or smallbin chains) in the chunk's user-data area. The first 8-16 bytes of freed user memory become the linked-list node structure. This is why a UAF read on a freed chunk leaks heap metadata or pointer values.</p>
 					</section>
 					<section>
 						<h3 id="heap-reuse-after-free">Heap Reuse After free()</h3>
-						<p>
-							glibc's allocator maintains per-thread caches (tcache), fastbins, smallbins, largebins, and
-							the unsorted bin. Each serves a different size range. The allocator prefers the fastest path:
-							if a freed chunk of the right size sits in tcache, the very next
-							<code>malloc()</code>
-							of that size returns
-							it.
-						</p>
+						<p>glibc's allocator maintains per-thread caches (tcache), fastbins, smallbins, largebins, and the unsorted bin. Each serves a different size range. The allocator prefers the fastest path: if a freed chunk of the right size sits in tcache, the very next <code>malloc()</code> of that size returns it.</p>
 						<pre class="plaintext">
 malloc(32) -&gt; checks tcache bin for 32-byte chunks -&gt; pop head -&gt; return
 free(p)    -&gt; push p onto tcache bin for 32-byte chunks -&gt; set p-&gt;fd = old head
 malloc(32) -&gt; pop head -&gt; returns p (the same pointer)
 						</pre>
-						<p>
-							This deterministic reuse makes UAF highly reliable in practice. The probability of reuse increases
-							with matching allocation sizes, low fragmentation, and tcache presence.
-						</p>
+						<p>This deterministic reuse makes UAF highly reliable in practice. The probability of reuse increases with matching allocation sizes, low fragmentation, and tcache presence.</p>
 						<p>Consider the exact sequence in the glibc source:</p>
 						<pre class="c">
 // glibc/malloc/malloc.c - tcache_get()
@@ -262,10 +201,7 @@ static void *tcache_get(size_t tc_idx) {
     return (void *) e;
 }
 						</pre>
-						<p>
-							There is no check that the chunk is not still referenced elsewhere and no validation that the
-							caller is the sole owner. It just pops and returns.
-						</p>
+						<p>There is no check that the chunk is not still referenced elsewhere and no validation that the caller is the sole owner. It just pops and returns.</p>
 					</section>
 					<section>
 						<h3 id="minimal-uaf-demonstration">Minimal UAF Demonstration</h3>
@@ -348,47 +284,16 @@ $3 = (void (*)(const char *)) 0x555555555169 &lt;dangerous_print&gt;
 (gdb) continue
 OWNED: garbage data
 						</pre>
-						<p>
-							The overlap at offset 24 (after the 24-byte padding/data) is where the function pointer sits.
-							<code>sec-&gt;print</code>
-							resolves to the same memory bytes that
-							<code>attacker-&gt;callback</code>
-							wrote.
-						</p>
+						<p>The overlap at offset 24 (after the 24-byte padding/data) is where the function pointer sits. <code>sec-&gt;print</code> resolves to the same memory bytes that <code>attacker-&gt;callback</code> wrote.</p>
 					</section>
 					<section>
 						<h3 id="type-confusion-via-heap-reuse">Type Confusion via Heap Reuse</h3>
-						<p>
-							A UAF enables type confusion without any type cast. The compiler believes
-							<code>sec</code>
-							is a
-							<code>struct Secret*</code>
-							and generates code accordingly. At the machine level,
-							<code>sec-&gt;print</code>
-							is simply a load from
-							<code>[sec + 24]</code>
-							, so the compiler's type checking evaporates. The hardware dereferences whatever 8 bytes sit
-							at that offset. After heap reuse, those 8 bytes are whatever object B placed there.
-						</p>
-						<p>
-							This is the fundamental power of the UAF: it bypasses the type system through the allocator.
-							No amount of
-							<code>-Wall -Wextra</code>
-							catches it, because the compiler cannot track aliasing through
-							<code>malloc</code>
-							and
-							<code>free</code>
-							.
-						</p>
+						<p>A UAF enables type confusion without any type cast. The compiler believes <code>sec</code> is a <code>struct Secret*</code> and generates code accordingly. At the machine level, <code>sec-&gt;print</code> is simply a load from <code>[sec + 24]</code> , so the compiler's type checking evaporates. The hardware dereferences whatever 8 bytes sit at that offset. After heap reuse, those 8 bytes are whatever object B placed there.</p>
+						<p>This is the fundamental power of the UAF: it bypasses the type system through the allocator. No amount of <code>-Wall -Wextra</code> catches it, because the compiler cannot track aliasing through <code>malloc</code> and <code>free</code> .</p>
 					</section>
 					<section>
 						<h3 id="c-vtables-and-uaf">C++ vtables and UAF</h3>
-						<p>
-							C++ objects with virtual functions carry a hidden vtable pointer as their first field. When
-							an object is freed and its memory is reused by a different class, that vtable pointer can be
-							overwritten. A subsequent virtual call through the dangling pointer then reads the attacker-controlled
-							vtable entry and dispatches to an attacker-chosen address.
-						</p>
+						<p>C++ objects with virtual functions carry a hidden vtable pointer as their first field. When an object is freed and its memory is reused by a different class, that vtable pointer can be overwritten. A subsequent virtual call through the dangling pointer then reads the attacker-controlled vtable entry and dispatches to an attacker-chosen address.</p>
 						<pre class="cpp">
 /* vtable_uaf.cpp - compile with g++ -g -O0 */
 #include &lt;cstdio&gt;
@@ -441,13 +346,7 @@ User layout:     [vptr][name............]
 Attacker layout: [vptr][data............]
                   ^-- u-&gt;vptr now points at the attacker&#39;s fake vtable
 						</pre>
-						<p>
-							When
-							<code>u-&gt;greet()</code>
-							executes, the
-							<abbr title="Central Processing Unit">CPU</abbr>
-							does three things:
-						</p>
+						<p>When <code>u-&gt;greet()</code> executes, the <abbr title="Central Processing Unit">CPU</abbr> does three things:</p>
 						<ol>
 							<li>Loads <code>u-&gt;vptr</code> (the first 8 bytes) and gets the address of <code>fake_vtable</code> .</li>
 							<li>Loads <code>fake_vtable[0]</code> , which is the address of <code>mal_greet</code> .</li>
@@ -456,55 +355,13 @@ Attacker layout: [vptr][data............]
 					</section>
 					<section>
 						<h3 id="uaf-in-the-real-world">UAF in the Real World</h3>
-						<p>
-							Browser
-							<abbr title="Document Object Model">DOM</abbr>
-							objects. A JavaScript object allocated on the heap can
-							be freed by a garbage collection pass while a C++
-							<code>ImageElement*</code>
-							still dangles. A new
-							<code>ArrayBuffer</code>
-							allocation reuses the memory, and the type system still thinks it is an
-							<code>ImageElement</code>
-							. Calling
-							<code>-&gt;src()</code>
-							then reads
-							<code>ArrayBuffer</code>
-							backing-store metadata. Exploitation involves crafting the
-							overlapping object to gain an arbitrary read/write primitive.
-						</p>
-						<p>
-							Kernel use-after-free. A
-							<code>struct file</code>
-							is freed when a process closes an fd, but a concurrent
-							thread still holds a file pointer. A
-							<code>struct pipe_buffer</code>
-							allocation reuses the slab. The dangling
-							<code>file-&gt;f_op-&gt;write</code>
-							now reads from pipe_buffer data. Kernel UAFs are exploited via heap spraying:
-							allocating many objects of a controlled type (for example
-							<code>struct tty_struct</code>
-							) to groom the
-							heap and make reuse predictable.
-						</p>
-						<p>
-							V8 JIT engine. JavaScript objects live in V8's managed heap. The optimizing compiler (TurboFan)
-							may embed raw pointers to objects that the garbage collector later frees. If the JIT-compiled
-							code runs with a dangling pointer to freed object memory that now holds a different type, the
-							type confusion enables arbitrary memory access from JavaScript. The V8 sandbox and pointer compression
-							are mitigations against this class.
-						</p>
+						<p>Browser <abbr title="Document Object Model">DOM</abbr> objects. A JavaScript object allocated on the heap can be freed by a garbage collection pass while a C++ <code>ImageElement*</code> still dangles. A new <code>ArrayBuffer</code> allocation reuses the memory, and the type system still thinks it is an <code>ImageElement</code> . Calling <code>-&gt;src()</code> then reads <code>ArrayBuffer</code> backing-store metadata. Exploitation involves crafting the overlapping object to gain an arbitrary read/write primitive.</p>
+						<p>Kernel use-after-free. A <code>struct file</code> is freed when a process closes an fd, but a concurrent thread still holds a file pointer. A <code>struct pipe_buffer</code> allocation reuses the slab. The dangling <code>file-&gt;f_op-&gt;write</code> now reads from pipe_buffer data. Kernel UAFs are exploited via heap spraying: allocating many objects of a controlled type (for example <code>struct tty_struct</code> ) to groom the heap and make reuse predictable.</p>
+						<p>V8 JIT engine. JavaScript objects live in V8's managed heap. The optimizing compiler (TurboFan) may embed raw pointers to objects that the garbage collector later frees. If the JIT-compiled code runs with a dangling pointer to freed object memory that now holds a different type, the type confusion enables arbitrary memory access from JavaScript. The V8 sandbox and pointer compression are mitigations against this class.</p>
 					</section>
 					<section>
 						<h3 id="double-free-relationship">Double Free Relationship</h3>
-						<p>
-							A double free (
-							<code>free(ptr)</code>
-							followed by
-							<code>free(ptr)</code>
-							on the same pointer) is a related bug. Both
-							involve dangling pointers; the difference is the exploitation primitive:
-						</p>
+						<p>A double free ( <code>free(ptr)</code> followed by <code>free(ptr)</code> on the same pointer) is a related bug. Both involve dangling pointers; the difference is the exploitation primitive:</p>
 						<table>
 							<thead>
 								<tr>
@@ -526,71 +383,24 @@ Attacker layout: [vptr][data............]
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							A UAF write can become a double free: if the UAF gives you the ability to overwrite a chunk's
-							<code>fd</code>
-							pointer (the first 8 bytes of the freed chunk's user data), you can corrupt the free list
-							and achieve tcache poisoning - the same outcome as a double free. Many real-world exploits chain
-							UAF, then corrupt the fd, then force an arbitrary allocation.
-						</p>
+						<p>A UAF write can become a double free: if the UAF gives you the ability to overwrite a chunk's <code>fd</code> pointer (the first 8 bytes of the freed chunk's user data), you can corrupt the free list and achieve tcache poisoning - the same outcome as a double free. Many real-world exploits chain UAF, then corrupt the fd, then force an arbitrary allocation.</p>
 					</section>
 					<section>
 						<h3 id="prevention">Prevention</h3>
-						<p>
-							Smart pointers (C++).
-							<code>std::unique_ptr&lt;T&gt;</code>
-							releases the owned object exactly once when it goes
-							out of scope, so no raw pointer is left to dangle.
-							<code>std::shared_ptr&lt;T&gt;</code>
-							uses reference counting:
-							the object is freed only when the last
-							<code>shared_ptr</code>
-							is destroyed.
-						</p>
+						<p>Smart pointers (C++). <code>std::unique_ptr&lt;T&gt;</code> releases the owned object exactly once when it goes out of scope, so no raw pointer is left to dangle. <code>std::shared_ptr&lt;T&gt;</code> uses reference counting: the object is freed only when the last <code>shared_ptr</code> is destroyed.</p>
 						<pre class="cpp">
 std::unique_ptr&lt;User&gt; u = std::make_unique&lt;User&gt;();
 u-&gt;greet();
 // u goes out of scope -&gt; delete called -&gt; no dangling pointer remains
 						</pre>
-						<p>
-							Rust's ownership model. Rust eliminates UAF at compile time through the borrow checker. An owned
-							value is freed when its owner goes out of scope, and references to the value must not outlive
-							the owner. The compiler rejects any code that would create a dangling reference.
-							<code>Box&lt;T&gt;</code>
-							(heap
-							allocation) follows the same rule: the memory is freed when the
-							<code>Box</code>
-							is dropped, and the compiler
-							statically verifies that no references remain.
-						</p>
+						<p>Rust's ownership model. Rust eliminates UAF at compile time through the borrow checker. An owned value is freed when its owner goes out of scope, and references to the value must not outlive the owner. The compiler rejects any code that would create a dangling reference. <code>Box&lt;T&gt;</code> (heap allocation) follows the same rule: the memory is freed when the <code>Box</code> is dropped, and the compiler statically verifies that no references remain.</p>
 						<pre class="rust">
 let u = Box::new(User { name: &#34;Alice&#34;.into() });
 // u is freed here - the compiler guarantees no references exist past this point
 						</pre>
-						<p>
-							Garbage collection. Tracing GC (Go, Java, JavaScript, Python) never frees an object while a
-							reachable reference exists. The collector performs reachability analysis from root pointers,
-							so only objects with zero incoming references are collected. This eliminates use-after-free
-							but introduces its own costs (GC pauses, memory pressure, finalization ordering).
-						</p>
-						<p>
-							Static analysis. Tools such as Coverity, CodeQL, and the Clang Static Analyzer track pointer
-							lifetimes and look for paths where a pointer is dereferenced after a free:
-							<code>free(p)</code>
-							followed
-							by
-							<code>p-&gt;field</code>
-							in the same function, or
-							<code>free(p)</code>
-							where
-							<code>p</code>
-							escapes to a caller or a global.
-						</p>
-						<p>
-							AddressSanitizer (ASAN) instruments every memory access and places freed allocations in a quarantine
-							(a FIFO queue of freed chunks that are not immediately reused). A UAF access to a quarantined
-							chunk triggers an immediate crash with a detailed report:
-						</p>
+						<p>Garbage collection. Tracing GC (Go, Java, JavaScript, Python) never frees an object while a reachable reference exists. The collector performs reachability analysis from root pointers, so only objects with zero incoming references are collected. This eliminates use-after-free but introduces its own costs (GC pauses, memory pressure, finalization ordering).</p>
+						<p>Static analysis. Tools such as Coverity, CodeQL, and the Clang Static Analyzer track pointer lifetimes and look for paths where a pointer is dereferenced after a free: <code>free(p)</code> followed by <code>p-&gt;field</code> in the same function, or <code>free(p)</code> where <code>p</code> escapes to a caller or a global.</p>
+						<p>AddressSanitizer (ASAN) instruments every memory access and places freed allocations in a quarantine (a FIFO queue of freed chunks that are not immediately reused). A UAF access to a quarantined chunk triggers an immediate crash with a detailed report:</p>
 						<pre class="bash">
 gcc -g -fsanitize=address -o uaf_asan uaf_demo.c
 ./uaf_asan
@@ -606,45 +416,17 @@ gcc -g -fsanitize=address -o uaf_asan uaf_demo.c
 #   #0 0x... in malloc
 #   #1 0x... in main uaf_demo.c:17
 						</pre>
-						<p>
-							GWP-ASAN (in production). Google's probabilistic sampling allocator is embedded in Chrome and
-							Android. A fraction of allocations and deallocations are sampled, and sampled allocations go
-							to a separate pool with guard pages and delayed reuse. UAFs on sampled allocations are caught
-							in production with minimal overhead.
-						</p>
+						<p>GWP-ASAN (in production). Google's probabilistic sampling allocator is embedded in Chrome and Android. A fraction of allocations and deallocations are sampled, and sampled allocations go to a separate pool with guard pages and delayed reuse. UAFs on sampled allocations are caught in production with minimal overhead.</p>
 					</section>
 					<section>
 						<h3 id="kernel-mitigations">Kernel Mitigations</h3>
-						<p>
-							SLAB quarantine (Linux KASAN). KASAN is similar to ASAN but for kernel slab allocations. Freed
-							objects sit in a quarantine before reuse, so a UAF access triggers a KASAN report.
-						</p>
-						<p>
-							Use-after-free detection via canaries. Some allocators place a canary value in freed memory.
-							Before dereferencing a freed-pointer-lookalike, they check whether the canary is intact. This
-							is probabilistic and is not deployed in mainline glibc.
-						</p>
-						<p>
-							Memory tagging. ARM's Memory Tagging Extension (MTE) tags each 16-byte granule with a 4-bit
-							tag stored in the upper bits of the pointer.
-							<code>malloc</code>
-							assigns a random tag and
-							<code>free</code>
-							clears
-							it, so any access with a mismatched tag traps. Intel's Linear Address Masking (LAM) instead
-							masks the upper address bits to reduce the entropy available to an attacker who already has
-							a pointer.
-						</p>
+						<p>SLAB quarantine (Linux KASAN). KASAN is similar to ASAN but for kernel slab allocations. Freed objects sit in a quarantine before reuse, so a UAF access triggers a KASAN report.</p>
+						<p>Use-after-free detection via canaries. Some allocators place a canary value in freed memory. Before dereferencing a freed-pointer-lookalike, they check whether the canary is intact. This is probabilistic and is not deployed in mainline glibc.</p>
+						<p>Memory tagging. ARM's Memory Tagging Extension (MTE) tags each 16-byte granule with a 4-bit tag stored in the upper bits of the pointer. <code>malloc</code> assigns a random tag and <code>free</code> clears it, so any access with a mismatched tag traps. Intel's Linear Address Masking (LAM) instead masks the upper address bits to reduce the entropy available to an attacker who already has a pointer.</p>
 					</section>
 					<section>
 						<h3 id="gdb-tracing-allocator-state">GDB - Tracing Allocator State</h3>
-						<p>
-							Compile with debug symbols and break at
-							<code>malloc</code>
-							and
-							<code>free</code>
-							:
-						</p>
+						<p>Compile with debug symbols and break at <code>malloc</code> and <code>free</code> :</p>
 						<pre class="bash">
 gcc -g -no-pie -o uaf uaf_demo.c
 gdb -q ./uaf
@@ -672,10 +454,7 @@ $1 = 0x0   # fd pointer without safe-linking - chunk is at the end of the list
 					</section>
 					<section>
 						<h3 id="heap-grooming-for-exploitation">Heap Grooming for Exploitation</h3>
-						<p>
-							When a UAF exists but reuse is non-deterministic (the freed chunk might go to a different bin,
-							get coalesced, or be served to a different thread), heap grooming forces predictable reuse:
-						</p>
+						<p>When a UAF exists but reuse is non-deterministic (the freed chunk might go to a different bin, get coalesced, or be served to a different thread), heap grooming forces predictable reuse:</p>
 						<ol>
 							<li>Spray: allocate many objects of type B before freeing A. This fills tcache/fastbins with B-sized allocations. When A is freed and later malloc'd, the allocator is more likely to reuse A's memory for a B request.</li>
 							<li>Defragment: allocate and free objects of various sizes to coalesce adjacent free chunks and reduce fragmentation, ensuring A lands in a clean free list.</li>
@@ -695,24 +474,11 @@ void *reuse = malloc(48);   // highly likely to get target back
 					</section>
 					<section>
 						<h3 id="summary">Summary</h3>
-						<p>
-							A use-after-free is a temporal memory safety violation. The allocator recycles memory without
-							knowledge of outstanding pointers. The dangling pointer becomes a window into whichever object
-							reuses the chunk, which is type confusion enforced by the heap. Mitigations range from compile-time
-							ownership tracking (Rust) to runtime quarantine (ASAN) to hardware tagging (ARM MTE). The bug
-							class persists because C and C++ give the programmer full control over pointer lifetimes, and
-							the allocator optimizes for speed over safety.
-						</p>
+						<p>A use-after-free is a temporal memory safety violation. The allocator recycles memory without knowledge of outstanding pointers. The dangling pointer becomes a window into whichever object reuses the chunk, which is type confusion enforced by the heap. Mitigations range from compile-time ownership tracking (Rust) to runtime quarantine (ASAN) to hardware tagging (ARM MTE). The bug class persists because C and C++ give the programmer full control over pointer lifetimes, and the allocator optimizes for speed over safety.</p>
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Demonstrate chunk reuse from Go with cgo. Allocate a 48-byte chunk with
-							<code>C.malloc</code>
-							, free it,
-							and then allocate the same size again. Because both requests fall in the same size class, libc's
-							tcache usually hands back the very same address:
-						</p>
+						<p>Demonstrate chunk reuse from Go with cgo. Allocate a 48-byte chunk with <code>C.malloc</code> , free it, and then allocate the same size again. Because both requests fall in the same size class, libc's tcache usually hands back the very same address:</p>
 						<pre class="go">
 package main
 
@@ -742,16 +508,7 @@ func main() {
 	fmt.Printf(&#34;read through p after free: %s\n&#34;, contents)
 }
 						</pre>
-						<p>
-							Run it with
-							<code>go run main.go</code>
-							(cgo needs a C compiler). Explain why libc returns the same address,
-							then extend the program to write a new value through the dangling
-							<code>p</code>
-							and read it back through
-							<code>q</code>
-							to show that the two pointers alias one chunk.
-						</p>
+						<p>Run it with <code>go run main.go</code> (cgo needs a C compiler). Explain why libc returns the same address, then extend the program to write a new value through the dangling <code>p</code> and read it back through <code>q</code> to show that the two pointers alias one chunk.</p>
 					</section>
 					<section>
 						<h3 id="references">References</h3>

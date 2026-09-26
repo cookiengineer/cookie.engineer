@@ -156,25 +156,10 @@
 
 				<article>
 					<h2 id="port-knocking">Port Knocking</h2>
-					<p>
-						Port knocking and Single Packet Authorization hide a service until a client proves knowledge
-						of a secret sequence or key.
-					</p>
+					<p>Port knocking and Single Packet Authorization hide a service until a client proves knowledge of a secret sequence or key.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							A service that listens on a port is visible to every scanner that reaches it. Port knocking
-							changes that: the real service port stays closed until the client sends a specific sequence
-							of connection attempts (or a single authenticated packet) that only the administrator knows.
-							This article builds the technique from first principles, shows how to configure
-							<code>knockd</code>
-							and
-							<code>fwknop</code>
-							, implements a daemon-less version with the iptables
-							<code>recent</code>
-							module, and explains
-							where port knocking fails and why Single Packet Authorization is the stronger design.
-						</p>
+						<p>A service that listens on a port is visible to every scanner that reaches it. Port knocking changes that: the real service port stays closed until the client sends a specific sequence of connection attempts (or a single authenticated packet) that only the administrator knows. This article builds the technique from first principles, shows how to configure <code>knockd</code> and <code>fwknop</code> , implements a daemon-less version with the iptables <code>recent</code> module, and explains where port knocking fails and why Single Packet Authorization is the stronger design.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -185,30 +170,8 @@
 					</section>
 					<section>
 						<h3 id="the-problem-port-knocking-solves">The Problem Port Knocking Solves</h3>
-						<p>
-							A service listening on a
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							port is visible to anyone who
-							scans the network. Even if the service is hardened -
-							<abbr title="Secure Shell">SSH</abbr>
-							with key-only authentication,
-							<abbr title="Hypertext Transfer Protocol Secure">HTTPS</abbr>
-							with strong ciphers - the port is open. Attackers
-							can probe it, fingerprint the service version, and attempt exploits against the daemon or its
-							dependencies.
-						</p>
-						<p>
-							Port knocking hides the service entirely. The port appears closed to everyone - nmap reports
-							it as
-							<code>closed</code>
-							or
-							<code>filtered</code>
-							. The service only becomes reachable after the client sends a specific
-							sequence of connection attempts to a set of closed ports. After authentication, iptables dynamically
-							opens the real service port for the authenticated client's
-							<abbr title="Internet Protocol">IP</abbr>
-							address.
-						</p>
+						<p>A service listening on a <abbr title="Transmission Control Protocol">TCP</abbr> port is visible to anyone who scans the network. Even if the service is hardened - <abbr title="Secure Shell">SSH</abbr> with key-only authentication, <abbr title="Hypertext Transfer Protocol Secure">HTTPS</abbr> with strong ciphers - the port is open. Attackers can probe it, fingerprint the service version, and attempt exploits against the daemon or its dependencies.</p>
+						<p>Port knocking hides the service entirely. The port appears closed to everyone - nmap reports it as <code>closed</code> or <code>filtered</code> . The service only becomes reachable after the client sends a specific sequence of connection attempts to a set of closed ports. After authentication, iptables dynamically opens the real service port for the authenticated client's <abbr title="Internet Protocol">IP</abbr> address.</p>
 						<pre class="plaintext">
 Without port knocking:
   nmap -&gt; Port 22/tcp  open    OpenSSH 9.4   &lt;- visible, attackable
@@ -223,42 +186,17 @@ With port knocking:
 					</section>
 					<section>
 						<h3 id="how-port-knocking-works">How Port Knocking Works</h3>
-						<p>
-							Port knocking exploits the fact that
-							<code>iptables</code>
-							(and
-							<code>nftables</code>
-							) can dynamically modify firewall
-							rules. A userspace daemon such as
-							<code>knockd</code>
-							sniffs packets with libpcap and watches for connection
-							attempts to the configured ports. The iptables
-							<code>recent</code>
-							module instead keeps its own list of
-							source
-							<abbr title="Internet Protocol">IP</abbr>
-							addresses in the kernel and needs no daemon. Neither approach
-							reads the connection tracking (conntrack) table.
-						</p>
+						<p>Port knocking exploits the fact that <code>iptables</code> (and <code>nftables</code> ) can dynamically modify firewall rules. A userspace daemon such as <code>knockd</code> sniffs packets with libpcap and watches for connection attempts to the configured ports. The iptables <code>recent</code> module instead keeps its own list of source <abbr title="Internet Protocol">IP</abbr> addresses in the kernel and needs no daemon. Neither approach reads the connection tracking (conntrack) table.</p>
 						<p>The sequence is defined by the administrator and acts as a shared secret:</p>
 						<pre class="plaintext">
 Knock sequence: TCP SYN to 7000 -&gt; TCP SYN to 8000 -&gt; TCP SYN to 9000
 Result: ACCEPT rule added for client IP on port 22 (SSH)
 						</pre>
-						<p>
-							Because each
-							<abbr title="Synchronize">SYN</abbr>
-							that hits a closed port gets an RST, the scanner sees nothing
-							unusual. There is no way to distinguish a port that is part of a knock sequence from a genuinely
-							closed port.
-						</p>
+						<p>Because each <abbr title="Synchronize">SYN</abbr> that hits a closed port gets an RST, the scanner sees nothing unusual. There is no way to distinguish a port that is part of a knock sequence from a genuinely closed port.</p>
 					</section>
 					<section>
 						<h3 id="iptables-architecture">IPtables Architecture</h3>
-						<p>
-							The kernel's netfilter subsystem processes packets through chains: PREROUTING, INPUT, FORWARD,
-							OUTPUT, POSTROUTING. Port knocking operates primarily on the INPUT chain:
-						</p>
+						<p>The kernel's netfilter subsystem processes packets through chains: PREROUTING, INPUT, FORWARD, OUTPUT, POSTROUTING. Port knocking operates primarily on the INPUT chain:</p>
 						<pre class="plaintext">
                              +--------------+
                              |   Packet In  |
@@ -292,10 +230,7 @@ Result: ACCEPT rule added for client IP on port 22 (SSH)
 					</section>
 					<section>
 						<h3 id="knockd-configuration">knockd Configuration</h3>
-						<p>
-							knockd is the standard userspace port knocking daemon. It listens on a raw socket (or reads
-							from pcap) and executes commands when knock sequences match:
-						</p>
+						<p>knockd is the standard userspace port knocking daemon. It listens on a raw socket (or reads from pcap) and executes commands when knock sequences match:</p>
 						<pre class="bash">
 # Install knockd on ArchLinux
 sudo pacman -S knockd
@@ -331,17 +266,7 @@ sudo pacman -S knockd
     command         = /usr/sbin/iptables -A INPUT -s %IP% -p tcp --dport 443 -j ACCEPT
     tcpflags        = syn
 						</pre>
-						<p>
-							knockd replaces
-							<code>%IP%</code>
-							with the source
-							<abbr title="Internet Protocol">IP</abbr>
-							of the knocking client. The
-							<code>tcpflags = syn</code>
-							option ensures only
-							<abbr title="Synchronize">SYN</abbr>
-							packets count - RST, ACK, or data packets are ignored.
-						</p>
+						<p>knockd replaces <code>%IP%</code> with the source <abbr title="Internet Protocol">IP</abbr> of the knocking client. The <code>tcpflags = syn</code> option ensures only <abbr title="Synchronize">SYN</abbr> packets count - RST, ACK, or data packets are ignored.</p>
 						<h4 id="start-and-enable-knockd">Start and Enable knockd</h4>
 						<pre class="bash">
 # Enable knockd for the correct interface
@@ -393,13 +318,7 @@ sudo nmap -sS -Pn -p 9000 --max-retries 0 server.example.com
 							<li><b>No integrity protection:</b> An attacker could inject packets into the sequence</li>
 							<li><b>Port collision:</b> The knock ports must not be used by legitimate services</li>
 						</ul>
-						<p>
-							Single Packet Authorization solves all of these by encoding the access request in a single,
-							encrypted, authenticated
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							packet. fwknop (FireWall KNock OPerator)
-							is the reference implementation.
-						</p>
+						<p>Single Packet Authorization solves all of these by encoding the access request in a single, encrypted, authenticated <abbr title="User Datagram Protocol">UDP</abbr> packet. fwknop (FireWall KNock OPerator) is the reference implementation.</p>
 						<pre class="plaintext">
 SPA flow:
   1. Client constructs authorization packet:
@@ -504,14 +423,7 @@ fwknop -A tcp/22 --gpg-recipient server-key --gpg-signer client-key \
 					</section>
 					<section>
 						<h3 id="iptables-recent-module">iptables recent Module</h3>
-						<p>
-							The
-							<code>recent</code>
-							module in iptables tracks
-							<abbr title="Internet Protocol">IP</abbr>
-							addresses that match rules. It
-							can be used to implement simple port knocking without any userspace daemon:
-						</p>
+						<p>The <code>recent</code> module in iptables tracks <abbr title="Internet Protocol">IP</abbr> addresses that match rules. It can be used to implement simple port knocking without any userspace daemon:</p>
 						<pre class="bash">
 #!/bin/bash
 # Simple port knocking with iptables recent module
@@ -591,15 +503,7 @@ echo &#34;    Window opens for ${TIMEOUT_SECONDS}s, then closes.&#34;
 After `TIMEOUT_SECONDS`, entries in recent lists expire.
 The next SSH connection attempt requires a fresh knock sequence.
 						</pre>
-						<p>
-							The
-							<code>recent</code>
-							module stores
-							<abbr title="Internet Protocol">IP</abbr>
-							s in
-							<code>/proc/net/xt_recent/</code>
-							:
-						</p>
+						<p>The <code>recent</code> module stores <abbr title="Internet Protocol">IP</abbr> s in <code>/proc/net/xt_recent/</code> :</p>
 						<pre class="bash">
 # View current knock state
 cat /proc/net/xt_recent/GATE1
@@ -614,14 +518,7 @@ echo clear | sudo tee /proc/net/xt_recent/PASSPHRASE
 					</section>
 					<section>
 						<h3 id="ssh-behind-port-knocking">SSH Behind Port Knocking</h3>
-						<p>
-							The most common use case: hide
-							<abbr title="Secure Shell">SSH</abbr>
-							entirely from the internet. Combine knockd
-							with
-							<abbr title="Secure Shell">SSH</abbr>
-							hardening:
-						</p>
+						<p>The most common use case: hide <abbr title="Secure Shell">SSH</abbr> entirely from the internet. Combine knockd with <abbr title="Secure Shell">SSH</abbr> hardening:</p>
 						<pre class="bash">
 #!/bin/bash
 # Complete SSH-through-knocking setup
@@ -670,10 +567,7 @@ sudo systemctl enable --now knockd
 					</section>
 					<section>
 						<h3 id="stealth-demonstration">Stealth Demonstration</h3>
-						<p>
-							The most compelling demonstration: show that nmap can't find the hidden service, but a client
-							who knows the sequence can connect:
-						</p>
+						<p>The most compelling demonstration: show that nmap can't find the hidden service, but a client who knows the sequence can connect:</p>
 						<pre class="bash">
 # On the server (capture all traffic):
 sudo tcpdump -i eth0 -nn -v &#39;tcp port 2222 or tcp port 7000 or tcp port 8000 or tcp port 9000&#39;
@@ -711,13 +605,7 @@ ssh -p 2222 user@server.example.com
 # 12:00:06.000001 IP client.60003 &gt; server.2222: Flags [S], seq 400
 # 12:00:06.000100 IP server.2222 &gt; client.60003: Flags [S.], seq 500, ack 401  &lt;- SSH RESPONDS!
 						</pre>
-						<p>
-							The nmap scan sees identical behavior from all four ports -
-							<abbr title="Synchronize">SYN</abbr>
-							followed by RST.
-							But after the knock sequence, port 2222 suddenly accepts the connection from the authenticated
-							client.
-						</p>
+						<p>The nmap scan sees identical behavior from all four ports - <abbr title="Synchronize">SYN</abbr> followed by RST. But after the knock sequence, port 2222 suddenly accepts the connection from the authenticated client.</p>
 					</section>
 					<section>
 						<h3 id="sequence-design">Sequence Design</h3>
@@ -747,11 +635,7 @@ For N ports chosen from range [1024, 65535]:
 3-port sequence:  48 bits  (281 trillion) - impractical
 4-port sequence:  64 bits  - strong
 						</pre>
-						<p>
-							Even with 48 bits of entropy, a local attacker can brute force faster because network
-							<abbr title="Round-Trip Time">RTT</abbr>
-							is the only limiting factor. For truly untrusted networks, SPA's cryptographic approach is necessary.
-						</p>
+						<p>Even with 48 bits of entropy, a local attacker can brute force faster because network <abbr title="Round-Trip Time">RTT</abbr> is the only limiting factor. For truly untrusted networks, SPA's cryptographic approach is necessary.</p>
 					</section>
 					<section>
 						<h3 id="nftables-port-knocking">nftables Port Knocking</h3>
@@ -816,64 +700,12 @@ table inet knock {
 					</section>
 					<section>
 						<h3 id="limitations-and-attacks">Limitations and Attacks</h3>
-						<p>
-							<b>TCP sequence number reuse:</b>
-							A captured RST from a knock port does not let an attacker replay
-							the original
-							<abbr title="Synchronize">SYN</abbr>
-							, so the knock itself is not reproducible from the server's
-							reply.
-						</p>
-						<p>
-							<b>Port collision:</b>
-							The knock ports must not host real services. If port 7000 runs a web server,
-							legitimate
-							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
-							traffic would trigger the first knock stage.
-							Choose ports that are unused on the server - or use SPA which uses a single
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							port.
-						</p>
-						<p>
-							<b>Knock sequence observation:</b>
-							A passive observer can see the sequence of ports being accessed.
-							With enough observation, the sequence is revealed. SPA eliminates this - the single encrypted
-							packet reveals nothing about the sequence.
-						</p>
-						<p>
-							<b>NAT complications:</b>
-							If the client is behind
-							<abbr title="Network Address Translation">NAT</abbr>
-							, multiple
-							clients share the same source
-							<abbr title="Internet Protocol">IP</abbr>
-							. One client completing the knock sequence
-							opens the port for everyone behind that
-							<abbr title="Network Address Translation">NAT</abbr>
-							. SPA includes the
-							source
-							<abbr title="Internet Protocol">IP</abbr>
-							in the encrypted payload, so the server can whitelist a specific
-							client behind
-							<abbr title="Network Address Translation">NAT</abbr>
-							.
-						</p>
-						<p>
-							<b>Sequence timing:</b>
-							If the time between knocks is too long, earlier stages expire. If too short,
-							the sequence might be difficult to complete over high-latency links. Configuration must balance
-							security (short windows) with usability.
-						</p>
-						<p>
-							<b>DoS via state exhaustion:</b>
-							An attacker flooding port 7000 can fill the GATE1 recent list
-							with random
-							<abbr title="Internet Protocol">IP</abbr>
-							s, potentially exhausting kernel memory. The
-							<code>recent</code>
-							module
-							has configurable size limits:
-						</p>
+						<p><b>TCP sequence number reuse:</b> A captured RST from a knock port does not let an attacker replay the original <abbr title="Synchronize">SYN</abbr> , so the knock itself is not reproducible from the server's reply.</p>
+						<p><b>Port collision:</b> The knock ports must not host real services. If port 7000 runs a web server, legitimate <abbr title="Hypertext Transfer Protocol">HTTP</abbr> traffic would trigger the first knock stage. Choose ports that are unused on the server - or use SPA which uses a single <abbr title="User Datagram Protocol">UDP</abbr> port.</p>
+						<p><b>Knock sequence observation:</b> A passive observer can see the sequence of ports being accessed. With enough observation, the sequence is revealed. SPA eliminates this - the single encrypted packet reveals nothing about the sequence.</p>
+						<p><b>NAT complications:</b> If the client is behind <abbr title="Network Address Translation">NAT</abbr> , multiple clients share the same source <abbr title="Internet Protocol">IP</abbr> . One client completing the knock sequence opens the port for everyone behind that <abbr title="Network Address Translation">NAT</abbr> . SPA includes the source <abbr title="Internet Protocol">IP</abbr> in the encrypted payload, so the server can whitelist a specific client behind <abbr title="Network Address Translation">NAT</abbr> .</p>
+						<p><b>Sequence timing:</b> If the time between knocks is too long, earlier stages expire. If too short, the sequence might be difficult to complete over high-latency links. Configuration must balance security (short windows) with usability.</p>
+						<p><b>DoS via state exhaustion:</b> An attacker flooding port 7000 can fill the GATE1 recent list with random <abbr title="Internet Protocol">IP</abbr> s, potentially exhausting kernel memory. The <code>recent</code> module has configurable size limits:</p>
 						<pre class="bash">
 # Limit knock table size
 echo 100 | sudo tee /sys/module/xt_recent/parameters/ip_list_tot
@@ -950,45 +782,15 @@ in a single packet.
 					</section>
 					<section>
 						<h3 id="defense-in-depth">Defense in Depth</h3>
-						<p>
-							Port knocking hides services by requiring a specific sequence of connection attempts before
-							the service port is dynamically opened. knockd provides a daemon-based implementation with configurable
-							sequences and commands. fwknop adds cryptographic security with Single Packet Authorization
-							<ul>
-								<li>encrypting, authenticating, and replay-protecting the access request in a single <abbr title="User Datagram Protocol">UDP</abbr></li>
-							</ul>
-						</p>
-						<p>
-							packet. The iptables
-							<code>recent</code>
-							module enables a daemon-less implementation for simple use cases.
-						</p>
-						<p>
-							The technique is not a replacement for service hardening -
-							<abbr title="Secure Shell">SSH</abbr>
-							should still
-							use key authentication,
-							<abbr title="Hypertext Transfer Protocol Secure">HTTPS</abbr>
-							should still use strong
-							ciphers. Port knocking reduces the attack surface by hiding the service entirely from untargeted
-							scans and automated exploit attempts.
-						</p>
+						<p>Port knocking hides services by requiring a specific sequence of connection attempts before the service port is dynamically opened. knockd provides a daemon-based implementation with configurable sequences and commands. fwknop adds cryptographic security with Single Packet Authorization<ul>
+	<li>encrypting, authenticating, and replay-protecting the access request in a single <abbr title="User Datagram Protocol">UDP</abbr></li>
+</ul></p>
+						<p>packet. The iptables <code>recent</code> module enables a daemon-less implementation for simple use cases.</p>
+						<p>The technique is not a replacement for service hardening - <abbr title="Secure Shell">SSH</abbr> should still use key authentication, <abbr title="Hypertext Transfer Protocol Secure">HTTPS</abbr> should still use strong ciphers. Port knocking reduces the attack surface by hiding the service entirely from untargeted scans and automated exploit attempts.</p>
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Write a Go program that detects a knock sequence from a stream of connection events. Implement
-							a
-							<code>KnockTracker</code>
-							that accepts
-							<code>(SourceIP, Port, Timestamp)</code>
-							tuples and returns
-							<code>true</code>
-							when a
-							given source completes the configured sequence in order, within a timeout. Reset a source's
-							progress when it times out, and ignore out-of-order or duplicate knocks. Test it with a matching
-							sequence and a sequence where one step is reordered.
-						</p>
+						<p>Write a Go program that detects a knock sequence from a stream of connection events. Implement a <code>KnockTracker</code> that accepts <code>(SourceIP, Port, Timestamp)</code> tuples and returns <code>true</code> when a given source completes the configured sequence in order, within a timeout. Reset a source's progress when it times out, and ignore out-of-order or duplicate knocks. Test it with a matching sequence and a sequence where one step is reordered.</p>
 						<pre class="go">
 package main
 
@@ -1061,11 +863,7 @@ func main() {
 	}
 }
 						</pre>
-						<p>
-							Save it as
-							<code>knock.go</code>
-							and run:
-						</p>
+						<p>Save it as <code>knock.go</code> and run:</p>
 						<pre class="bash">
 go run knock.go;
 						</pre>

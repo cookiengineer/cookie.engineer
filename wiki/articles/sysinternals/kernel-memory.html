@@ -167,22 +167,10 @@
 
 				<article>
 					<h2 id="kernel-memory">Kernel Memory</h2>
-					<p>
-						Kernel heap allocators - kmalloc, vmalloc, page allocator, slab/SLUB internals, memory zones,
-						fragmentation, and kernel memory corruption patterns.
-					</p>
+					<p>Kernel heap allocators - kmalloc, vmalloc, page allocator, slab/SLUB internals, memory zones, fragmentation, and kernel memory corruption patterns.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							The kernel cannot swap and has no lazy overcommit, so every allocation is backed by physical
-							memory the moment it succeeds. This article walks the layered allocator stack from the page
-							allocator up through slab/SLUB and vmalloc, shows how to inspect each layer through
-							<code>/proc</code>
-							and
-							<code>/sys</code>
-							, and surveys the corruption patterns (out-of-bounds writes, use-after-free, double-free)
-							that turn allocator bugs into kernel exploit primitives.
-						</p>
+						<p>The kernel cannot swap and has no lazy overcommit, so every allocation is backed by physical memory the moment it succeeds. This article walks the layered allocator stack from the page allocator up through slab/SLUB and vmalloc, shows how to inspect each layer through <code>/proc</code> and <code>/sys</code> , and surveys the corruption patterns (out-of-bounds writes, use-after-free, double-free) that turn allocator bugs into kernel exploit primitives.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -194,15 +182,7 @@
 					</section>
 					<section>
 						<h3 id="kernel-memory-landscape">Kernel Memory Landscape</h3>
-						<p>
-							The kernel is not a process, but it needs to allocate memory. Every
-							<code>kmalloc()</code>
-							, every new
-							<code>task_struct</code>
-							, every network socket buffer, every inode cache - all consume kernel memory.
-							Unlike user space, the kernel has no swap backing, no lazy overcommit, and no second chance.
-							When the kernel runs out of memory, the OOM killer activates, or the system panics.
-						</p>
+						<p>The kernel is not a process, but it needs to allocate memory. Every <code>kmalloc()</code> , every new <code>task_struct</code> , every network socket buffer, every inode cache - all consume kernel memory. Unlike user space, the kernel has no swap backing, no lazy overcommit, and no second chance. When the kernel runs out of memory, the OOM killer activates, or the system panics.</p>
 						<pre class="plaintext">
 ┌──────────────────────────────────────────────────────────────────┐
 │                   Kernel Virtual Address Space                   │
@@ -246,10 +226,7 @@
 					</section>
 					<section>
 						<h3 id="the-three-kernel-allocators">The Three Kernel Allocators</h3>
-						<p>
-							The kernel uses a layered allocator architecture. Each layer is optimized for different allocation
-							sizes, lifetimes, and performance characteristics.
-						</p>
+						<p>The kernel uses a layered allocator architecture. Each layer is optimized for different allocation sizes, lifetimes, and performance characteristics.</p>
 						<table>
 							<thead>
 								<tr>
@@ -314,11 +291,7 @@
 					</section>
 					<section>
 						<h3 id="page-allocator-and-the-buddy-system">Page Allocator and the Buddy System</h3>
-						<p>
-							The page allocator is the foundation. All other allocators (slab, vmalloc) sit on top of it.
-							It manages physical memory using the buddy system - a binary splitting algorithm that maintains
-							free page blocks in power-of-two orders.
-						</p>
+						<p>The page allocator is the foundation. All other allocators (slab, vmalloc) sit on top of it. It manages physical memory using the buddy system - a binary splitting algorithm that maintains free page blocks in power-of-two orders.</p>
 						<p>Buddy System Data Structure:</p>
 						<table>
 							<thead>
@@ -413,12 +386,7 @@ Free (order=2 block):
   └─────────────────────┘
 						</pre>
 						<h4 id="the-buddy-formula">The buddy formula</h4>
-						<p>
-							Two pages are buddies if they are the same size, contiguous in physical memory, and the first
-							page's PFN is aligned to
-							<code>2^(order+1)</code>
-							.
-						</p>
+						<p>Two pages are buddies if they are the same size, contiguous in physical memory, and the first page's PFN is aligned to <code>2^(order+1)</code> .</p>
 						<pre class="c">
 // /usr/src/linux/mm/page_alloc.c — find_buddy_page()
 static inline struct page *__page_find_buddy(struct page *page,
@@ -452,11 +420,7 @@ cat /proc/pagetypeinfo | head -30
 					</section>
 					<section>
 						<h3 id="memory-zones">Memory Zones</h3>
-						<p>
-							Physical memory is divided into zones. Each zone serves a specific purpose. The zone division
-							exists because of hardware addressing limitations - some devices can only DMA to the first 16
-							MiB of RAM.
-						</p>
+						<p>Physical memory is divided into zones. Each zone serves a specific purpose. The zone division exists because of hardware addressing limitations - some devices can only DMA to the first 16 MiB of RAM.</p>
 						<pre class="plaintext">
 Memory Zones (x86-64, CONFIG_ZONE_DMA=n, CONFIG_ZONE_DMA32=y):
 
@@ -505,10 +469,7 @@ grep -A2 &#34;Node.*zone&#34; /proc/zoneinfo | grep -E &#34;(Node|managed|name)&
 					</section>
 					<section>
 						<h3 id="gfp-flags-asking-the-kernel-for-memory">GFP Flags: Asking the Kernel for Memory</h3>
-						<p>
-							Every kernel allocation specifies GFP (Get Free Pages) flags that control where the allocation
-							comes from and what the allocator is allowed to do.
-						</p>
+						<p>Every kernel allocation specifies GFP (Get Free Pages) flags that control where the allocation comes from and what the allocator is allowed to do.</p>
 						<pre class="c">
 // /usr/src/linux/include/linux/gfp_types.h
 // Important GFP flag combinations:
@@ -563,16 +524,7 @@ grep -A2 &#34;Node.*zone&#34; /proc/zoneinfo | grep -E &#34;(Node|managed|name)&
 					</section>
 					<section>
 						<h3 id="slub-the-default-slab-allocator">SLUB: The Default Slab Allocator</h3>
-						<p>
-							SLUB is the default slab allocator since Linux 2.6.23 (
-							<code>CONFIG_SLUB=y</code>
-							). It replaced the older
-							SLAB allocator with a simpler, more
-							<abbr title="Central Processing Unit">CPU</abbr>
-							-cache-friendly design; SLOB
-							is a separate allocator for memory-constrained systems. SLUB does not maintain per-cache freelist
-							arrays - instead, it embeds the freelist pointer directly in free objects.
-						</p>
+						<p>SLUB is the default slab allocator since Linux 2.6.23 ( <code>CONFIG_SLUB=y</code> ). It replaced the older SLAB allocator with a simpler, more <abbr title="Central Processing Unit">CPU</abbr> -cache-friendly design; SLOB is a separate allocator for memory-constrained systems. SLUB does not maintain per-cache freelist arrays - instead, it embeds the freelist pointer directly in free objects.</p>
 						<pre class="plaintext">
 SLUB Architecture:
 
@@ -674,12 +626,7 @@ sudo cat /sys/kernel/slab/:ext4_inode_cache/ 2&gt;/dev/null
 					</section>
 					<section>
 						<h3 id="kmalloc-the-kernels-malloc">kmalloc - The Kernel's malloc()</h3>
-						<p>
-							<code>kmalloc()</code>
-							allocates physically contiguous memory from a slab cache. Internally, it selects
-							a pre-allocated kmem_cache based on the requested size (rounded up to the nearest power of two
-							or common size).
-						</p>
+						<p><code>kmalloc()</code> allocates physically contiguous memory from a slab cache. Internally, it selects a pre-allocated kmem_cache based on the requested size (rounded up to the nearest power of two or common size).</p>
 						<pre class="c">
 // /usr/src/linux/include/linux/slab.h
 // kmalloc size → cache mapping (kmalloc-96, kmalloc-192, kmalloc-512, etc.)
@@ -704,12 +651,7 @@ sudo cat /sys/kernel/slab/kmalloc-96/aliases 2&gt;/dev/null
 					</section>
 					<section>
 						<h3 id="vmalloc-virtual-vs-physical-layout">vmalloc: Virtual vs Physical Layout</h3>
-						<p>
-							<code>vmalloc()</code>
-							allocates memory that is contiguous in the kernel's virtual address space but may
-							be scattered across arbitrary physical pages. This avoids fragmentation issues but introduces
-							TLB pressure and a minor performance penalty.
-						</p>
+						<p><code>vmalloc()</code> allocates memory that is contiguous in the kernel's virtual address space but may be scattered across arbitrary physical pages. This avoids fragmentation issues but introduces TLB pressure and a minor performance penalty.</p>
 						<pre class="c">
 // /usr/src/linux/mm/vmalloc.c
 void *vmalloc(unsigned long size);
@@ -815,19 +757,7 @@ sudo cat /proc/vmallocinfo | awk -F&#39;/&#39; &#39;{print $NF}&#39; | sort | un
 					</section>
 					<section>
 						<h3 id="kernel-stack">Kernel Stack</h3>
-						<p>
-							Each thread in Linux gets a kernel stack of
-							<code>THREAD_SIZE</code>
-							bytes (typically 16 KiB = 4 pages
-							on x86-64 with
-							<code>CONFIG_THREAD_SIZE_ORDER=2</code>
-							). The
-							<code>task_struct</code>
-							is embedded at the bottom (or
-							referenced from
-							<code>thread_info</code>
-							on older architectures).
-						</p>
+						<p>Each thread in Linux gets a kernel stack of <code>THREAD_SIZE</code> bytes (typically 16 KiB = 4 pages on x86-64 with <code>CONFIG_THREAD_SIZE_ORDER=2</code> ). The <code>task_struct</code> is embedded at the bottom (or referenced from <code>thread_info</code> on older architectures).</p>
 						<pre class="plaintext">
 Kernel Stack Layout (x86-64, CONFIG_THREAD_INFO_IN_TASK=y):
 
@@ -877,12 +807,7 @@ done 2&gt;/dev/null | sort -t: -k2 -n | tail -10
 					</section>
 					<section>
 						<h3 id="kernel-memory-corruption-patterns">Kernel Memory Corruption Patterns</h3>
-						<p>
-							Kernel heap vulnerabilities are exploited differently from userland. There's no
-							<code>exit()</code>
-							- a
-							corrupted kernel must either be stabilized or exploited before the crash.
-						</p>
+						<p>Kernel heap vulnerabilities are exploited differently from userland. There's no <code>exit()</code> - a corrupted kernel must either be stabilized or exploited before the crash.</p>
 						<h4 id="slab-out-of-bounds-write">1. Slab out-of-bounds write</h4>
 						<pre class="c">
 // Vulnerable code pattern:
@@ -952,11 +877,7 @@ sudo xxd /sys/kernel/slab/kmalloc-256/poison 2&gt;/dev/null
 					</section>
 					<section>
 						<h3 id="kernel-address-sanitizer-kasan">Kernel Address Sanitizer (KASAN)</h3>
-						<p>
-							KASAN is a compiler-based tool that detects out-of-bounds accesses and use-after-free bugs in
-							the kernel. It uses a shadow memory region where each byte represents the accessibility of 8
-							bytes of kernel memory.
-						</p>
+						<p>KASAN is a compiler-based tool that detects out-of-bounds accesses and use-after-free bugs in the kernel. It uses a shadow memory region where each byte represents the accessibility of 8 bytes of kernel memory.</p>
 						<pre class="plaintext">
 KASAN Shadow Memory Mapping:
 
@@ -989,10 +910,7 @@ grep KASAN /boot/config-$(uname -r) 2&gt;/dev/null
 					</section>
 					<section>
 						<h3 id="memory-fragmentation-and-exhaustion">Memory Fragmentation and Exhaustion</h3>
-						<p>
-							Kernel memory fragmentation occurs when the buddy allocator has many free pages but cannot satisfy
-							a contiguous allocation request.
-						</p>
+						<p>Kernel memory fragmentation occurs when the buddy allocator has many free pages but cannot satisfy a contiguous allocation request.</p>
 						<pre class="plaintext">
 External fragmentation:
   Free pages: [P] [P] [P] [P] (4 contiguous pages)
@@ -1033,29 +951,10 @@ echo 1 | sudo tee /proc/sys/vm/compact_memory 2&gt;/dev/null
 					</section>
 					<section>
 						<h3 id="kernel-oom-when-the-kernel-runs-out">Kernel OOM - When the Kernel Runs Out</h3>
-						<p>
-							Unlike user space, the kernel cannot swap itself. When a kernel allocation fails: - For
-							<code>GFP_ATOMIC</code>
-							: returns
-							<code>NULL</code>
-							, caller must handle it - For
-							<code>GFP_KERNEL</code>
-							with
-							<code>__GFP_NORETRY</code>
-							: returns
-							<code>NULL</code>
-							<ul>
-								<li>For <code>GFP_KERNEL</code> (default): invokes OOM killer if reclaim fails</li>
-							</ul>
-						</p>
-						<p>
-							However, kernel allocations failing deep in the kernel (page fault handler, filesystem code)
-							often result in a
-							<code>BUG()</code>
-							or
-							<code>panic()</code>
-							because there's no clean recovery path.
-						</p>
+						<p>Unlike user space, the kernel cannot swap itself. When a kernel allocation fails: - For <code>GFP_ATOMIC</code> : returns <code>NULL</code> , caller must handle it - For <code>GFP_KERNEL</code> with <code>__GFP_NORETRY</code> : returns <code>NULL</code><ul>
+	<li>For <code>GFP_KERNEL</code> (default): invokes OOM killer if reclaim fails</li>
+</ul></p>
+						<p>However, kernel allocations failing deep in the kernel (page fault handler, filesystem code) often result in a <code>BUG()</code> or <code>panic()</code> because there's no clean recovery path.</p>
 						<pre class="bash">
 # Trigger OOM in a container (safe - only the container dies)
 # In the Containerfile lab (kernel-memory.Containerfile):
@@ -1149,15 +1048,7 @@ sudo dmesg | grep -i &#34;SLUB&#34;
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Build and run the kernel memory lab container. It compiles a small module that calls
-							<code>kmalloc()</code>
-							,
-							<code>vmalloc()</code>
-							, and
-							<code>alloc_pages()</code>
-							, then prints the buddy and slab state.
-						</p>
+						<p>Build and run the kernel memory lab container. It compiles a small module that calls <code>kmalloc()</code> , <code>vmalloc()</code> , and <code>alloc_pages()</code> , then prints the buddy and slab state.</p>
 						<p><a href="/wiki/articles/sysinternals/kernel-memory.Containerfile">kernel-memory.Containerfile</a></p>
 						<pre class="bash">
 podman build -t kernel-memory-lab -f kernel-memory.Containerfile .
@@ -1170,22 +1061,7 @@ dmesg | tail -30
 cat /proc/buddyinfo
 head -20 /proc/slabinfo
 						</pre>
-						<p>
-							Then extend
-							<code>kernel_memory_demo.c</code>
-							: allocate a 1 MiB buffer once with
-							<code>kmalloc()</code>
-							and once
-							with
-							<code>vmalloc()</code>
-							, and compare
-							<code>virt_addr_valid()</code>
-							on both pointers. Why does the
-							<code>vmalloc()</code>
-							pointer report as not directly mapped, and which
-							<code>/proc/vmallocinfo</code>
-							entry does it create?
-						</p>
+						<p>Then extend <code>kernel_memory_demo.c</code> : allocate a 1 MiB buffer once with <code>kmalloc()</code> and once with <code>vmalloc()</code> , and compare <code>virt_addr_valid()</code> on both pointers. Why does the <code>vmalloc()</code> pointer report as not directly mapped, and which <code>/proc/vmallocinfo</code> entry does it create?</p>
 					</section>
 					<section>
 						<h3 id="references">References</h3>

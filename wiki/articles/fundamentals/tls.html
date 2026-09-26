@@ -183,32 +183,10 @@
 
 				<article>
 					<h2 id="tls">TLS</h2>
-					<p>
-						Transport Layer Security from first principles -
-						<abbr title="Transport Layer Security">TLS</abbr>
-						1.3 handshake
-						mechanics, cipher suites, ECDHE key exchange, X.509 certificate structure, SNI, ALPN, mutual
-						<abbr title="Transport Layer Security">TLS</abbr>
-						, certificate pinning, and inspecting
-						<abbr title="Transport Layer Security">TLS</abbr>
-						with openssl and Python.
-					</p>
+					<p>Transport Layer Security from first principles - <abbr title="Transport Layer Security">TLS</abbr> 1.3 handshake mechanics, cipher suites, ECDHE key exchange, X.509 certificate structure, SNI, ALPN, mutual <abbr title="Transport Layer Security">TLS</abbr> , certificate pinning, and inspecting <abbr title="Transport Layer Security">TLS</abbr> with openssl and Python.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							<abbr title="Transport Layer Security">TLS</abbr>
-							adds confidentiality, integrity, and authentication on top of
-							a reliable byte stream. It is the protocol behind
-							<code>https://</code>
-							and most modern network services.
-							This article walks through the
-							<abbr title="Transport Layer Security">TLS</abbr>
-							1.3 handshake, ECDHE key exchange,
-							X.509 certificates, extensions such as SNI and ALPN, and hands-on inspection with
-							<code>openssl</code>
-							and Go. After reading you can capture and explain a full handshake and validate a certificate
-							chain.
-						</p>
+						<p><abbr title="Transport Layer Security">TLS</abbr> adds confidentiality, integrity, and authentication on top of a reliable byte stream. It is the protocol behind <code>https://</code> and most modern network services. This article walks through the <abbr title="Transport Layer Security">TLS</abbr> 1.3 handshake, ECDHE key exchange, X.509 certificates, extensions such as SNI and ALPN, and hands-on inspection with <code>openssl</code> and Go. After reading you can capture and explain a full handshake and validate a certificate chain.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -220,39 +198,13 @@
 					</section>
 					<section>
 						<h3 id="the-problem-tls-solves">The Problem TLS Solves</h3>
-						<p>
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							provides reliable byte streams. It does not provide confidentiality
-							(anyone in the path can read the bytes), integrity (anyone can modify the bytes), or authentication
-							(anyone can impersonate the server).
-							<abbr title="Transport Layer Security">TLS</abbr>
-							adds all three on top of
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							:
-						</p>
+						<p><abbr title="Transmission Control Protocol">TCP</abbr> provides reliable byte streams. It does not provide confidentiality (anyone in the path can read the bytes), integrity (anyone can modify the bytes), or authentication (anyone can impersonate the server). <abbr title="Transport Layer Security">TLS</abbr> adds all three on top of <abbr title="Transmission Control Protocol">TCP</abbr> :</p>
 						<ul>
 							<li><b>Confidentiality:</b> Symmetric encryption ( <abbr title="Advanced Encryption Standard">AES</abbr> -GCM, ChaCha20-Poly1305) after key exchange</li>
 							<li><b>Integrity:</b> Authenticated Encryption with Associated Data (AEAD) - detects tampering</li>
 							<li><b>Authentication:</b> Certificate chain validation - verifies the server's identity</li>
 						</ul>
-						<p>
-							<abbr title="Transport Layer Security">TLS</abbr>
-							sits between the application layer (
-							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
-							,
-							<abbr title="Simple Mail Transfer Protocol">SMTP</abbr>
-							,
-							<abbr title="Internet Message Access Protocol">IMAP</abbr>
-							) and the
-							transport layer (
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							). Applications use
-							<abbr title="Transport Layer Security">TLS</abbr>
-							as a drop-in replacement for plain
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							sockets - same interface,
-							encrypted transport.
-						</p>
+						<p><abbr title="Transport Layer Security">TLS</abbr> sits between the application layer ( <abbr title="Hypertext Transfer Protocol">HTTP</abbr> , <abbr title="Simple Mail Transfer Protocol">SMTP</abbr> , <abbr title="Internet Message Access Protocol">IMAP</abbr> ) and the transport layer ( <abbr title="Transmission Control Protocol">TCP</abbr> ). Applications use <abbr title="Transport Layer Security">TLS</abbr> as a drop-in replacement for plain <abbr title="Transmission Control Protocol">TCP</abbr> sockets - same interface, encrypted transport.</p>
 						<pre class="plaintext">
 Application Layer:    HTTP, SMTP, IMAP, FTP
                             ↓
@@ -265,14 +217,7 @@ Network Layer:       IP
 					</section>
 					<section>
 						<h3 id="tls-13-handshake-full-walkthrough">TLS 1.3 Handshake - Full Walkthrough</h3>
-						<p>
-							<abbr title="Transport Layer Security">TLS</abbr>
-							1.3 (RFC 8446) redesigned the handshake for speed and security.
-							It reduces the classic
-							<abbr title="Transport Layer Security">TLS</abbr>
-							1.2 two-round-trip handshake to one round
-							trip, and removes all known-weak cryptographic primitives:
-						</p>
+						<p><abbr title="Transport Layer Security">TLS</abbr> 1.3 (RFC 8446) redesigned the handshake for speed and security. It reduces the classic <abbr title="Transport Layer Security">TLS</abbr> 1.2 two-round-trip handshake to one round trip, and removes all known-weak cryptographic primitives:</p>
 						<pre class="plaintext">
 Client                                    Server
 
@@ -289,83 +234,25 @@ ClientHello
 [Application Data]                  ↔    [Application Data]
 						</pre>
 						<h4 id="step-by-step-breakdown">Step-by-step breakdown</h4>
-						<p>
-							<b>1. ClientHello:</b>
-							The client sends: -
-							<code>client_version</code>
-							:
-							<abbr title="Transport Layer Security">TLS</abbr>
-							1.3
-							(indicated as 0x0303 in legacy_version, with supported_versions extension containing 0x0304)
-							<ul>
-								<li><code>client_random</code> : 32 bytes of random data</li>
-								<li><code>cipher_suites</code> : List of supported AEAD ciphers ( <abbr title="Transport Layer Security">TLS</abbr> _ <abbr title="Advanced Encryption Standard">AES</abbr> _256_GCM_SHA384, <abbr title="Transport Layer Security">TLS</abbr> _CHACHA20_POLY1305_SHA256, <abbr title="Transport Layer Security">TLS</abbr> _ <abbr title="Advanced Encryption Standard">AES</abbr> _128_GCM_SHA256)</li>
-								<li><code>key_share</code> : Client's ECDHE public key for each supported curve (x25519, P-256)</li>
-								<li><code>signature_algorithms</code> : What algorithms the client accepts for certificate signatures (ecdsa_secp256r1_sha256, rsa_pss_rsae_sha256, ed25519)</li>
-								<li><code>supported_groups</code> : Elliptic curve groups for key exchange</li>
-								<li><code>server_name</code> (SNI): The hostname the client wants to reach</li>
-							</ul>
-						</p>
-						<p>
-							<b>2. ServerHello:</b>
-							The server responds with: -
-							<code>server_random</code>
-							: 32 bytes of random data -
-							<code>cipher_suite</code>
-							: The chosen cipher -
-							<code>key_share</code>
-							: Server's ECDHE public key for the chosen
-							group
-						</p>
-						<p>
-							At this point, both sides compute the shared secret from the ECDHE key exchange. All subsequent
-							messages are encrypted under keys derived from this shared secret.
-						</p>
-						<p>
-							<b>3. EncryptedExtensions:</b>
-							Server sends any additional parameters not needed for key negotiation
-							(ALPN, max fragment length, etc.). Encrypted under the handshake key.
-						</p>
-						<p>
-							<b>4. Certificate:</b>
-							Server sends its certificate chain (leaf + intermediates). Encrypted under
-							the handshake key. The client validates: signature chain, hostname match, expiration, revocation
-							status.
-						</p>
-						<p>
-							<b>5. CertificateVerify:</b>
-							Server signs the transcript hash of all handshake messages so far
-							with its certificate's private key. This proves the server possesses the private key for the
-							certificate.
-						</p>
-						<p>
-							<b>6. Finished:</b>
-							Both sides send an
-							<abbr title="Hash-based Message Authentication Code">HMAC</abbr>
-							over the
-							handshake transcript. This prevents downgrade attacks: if any message was modified, the
-							<abbr title="Hash-based Message Authentication Code">HMAC</abbr>
-							will not verify.
-						</p>
-						<p>
-							After the handshake completes, the
-							<abbr title="Transport Layer Security">TLS</abbr>
-							record layer encrypts all
-							application data using the derived traffic keys.
-						</p>
+						<p><b>1. ClientHello:</b> The client sends: - <code>client_version</code> : <abbr title="Transport Layer Security">TLS</abbr> 1.3 (indicated as 0x0303 in legacy_version, with supported_versions extension containing 0x0304)<ul>
+	<li><code>client_random</code> : 32 bytes of random data</li>
+	<li><code>cipher_suites</code> : List of supported AEAD ciphers ( <abbr title="Transport Layer Security">TLS</abbr> _ <abbr title="Advanced Encryption Standard">AES</abbr> _256_GCM_SHA384, <abbr title="Transport Layer Security">TLS</abbr> _CHACHA20_POLY1305_SHA256, <abbr title="Transport Layer Security">TLS</abbr> _ <abbr title="Advanced Encryption Standard">AES</abbr> _128_GCM_SHA256)</li>
+	<li><code>key_share</code> : Client's ECDHE public key for each supported curve (x25519, P-256)</li>
+	<li><code>signature_algorithms</code> : What algorithms the client accepts for certificate signatures (ecdsa_secp256r1_sha256, rsa_pss_rsae_sha256, ed25519)</li>
+	<li><code>supported_groups</code> : Elliptic curve groups for key exchange</li>
+	<li><code>server_name</code> (SNI): The hostname the client wants to reach</li>
+</ul></p>
+						<p><b>2. ServerHello:</b> The server responds with: - <code>server_random</code> : 32 bytes of random data - <code>cipher_suite</code> : The chosen cipher - <code>key_share</code> : Server's ECDHE public key for the chosen group</p>
+						<p>At this point, both sides compute the shared secret from the ECDHE key exchange. All subsequent messages are encrypted under keys derived from this shared secret.</p>
+						<p><b>3. EncryptedExtensions:</b> Server sends any additional parameters not needed for key negotiation (ALPN, max fragment length, etc.). Encrypted under the handshake key.</p>
+						<p><b>4. Certificate:</b> Server sends its certificate chain (leaf + intermediates). Encrypted under the handshake key. The client validates: signature chain, hostname match, expiration, revocation status.</p>
+						<p><b>5. CertificateVerify:</b> Server signs the transcript hash of all handshake messages so far with its certificate's private key. This proves the server possesses the private key for the certificate.</p>
+						<p><b>6. Finished:</b> Both sides send an <abbr title="Hash-based Message Authentication Code">HMAC</abbr> over the handshake transcript. This prevents downgrade attacks: if any message was modified, the <abbr title="Hash-based Message Authentication Code">HMAC</abbr> will not verify.</p>
+						<p>After the handshake completes, the <abbr title="Transport Layer Security">TLS</abbr> record layer encrypts all application data using the derived traffic keys.</p>
 					</section>
 					<section>
 						<h3 id="key-exchange-ecdhe">Key Exchange - ECDHE</h3>
-						<p>
-							<abbr title="Transport Layer Security">TLS</abbr>
-							1.3 mandates forward secrecy through Ephemeral Diffie-Hellman
-							key exchange.
-							<abbr title="Rivest-Shamir-Adleman">RSA</abbr>
-							key transport (where the client encrypts the pre-master
-							secret with the server's
-							<abbr title="Rivest-Shamir-Adleman">RSA</abbr>
-							public key) is removed entirely.
-						</p>
+						<p><abbr title="Transport Layer Security">TLS</abbr> 1.3 mandates forward secrecy through Ephemeral Diffie-Hellman key exchange. <abbr title="Rivest-Shamir-Adleman">RSA</abbr> key transport (where the client encrypts the pre-master secret with the server's <abbr title="Rivest-Shamir-Adleman">RSA</abbr> public key) is removed entirely.</p>
 						<h4 id="ecdhe-key-exchange">ECDHE Key Exchange</h4>
 						<pre class="plaintext">
 Setup: Both sides agree on an elliptic curve (e.g., curve25519)
@@ -384,17 +271,11 @@ Shared secret: Client computes  S = a * B = a * b * G
 The shared secret S is input to HKDF to derive encryption keys.
 The ephemeral keys a and b are discarded after the handshake.
 						</pre>
-						<p>
-							This provides forward secrecy: recording today's encrypted traffic reveals nothing if the server's
-							long-term private key is later compromised, because the ephemeral session keys were discarded.
-						</p>
+						<p>This provides forward secrecy: recording today's encrypted traffic reveals nothing if the server's long-term private key is later compromised, because the ephemeral session keys were discarded.</p>
 					</section>
 					<section>
 						<h3 id="tls-13-cipher-suites">TLS 1.3 Cipher Suites</h3>
-						<p>
-							<abbr title="Transport Layer Security">TLS</abbr>
-							1.3 eliminates all non-AEAD cipher suites. Only five are defined:
-						</p>
+						<p><abbr title="Transport Layer Security">TLS</abbr> 1.3 eliminates all non-AEAD cipher suites. Only five are defined:</p>
 						<table>
 							<thead>
 								<tr>
@@ -443,20 +324,7 @@ The ephemeral keys a and b are discarded after the handshake.
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							The cipher suite no longer specifies the key exchange or authentication mechanism - those are
-							negotiated separately. In
-							<abbr title="Transport Layer Security">TLS</abbr>
-							1.2, a cipher suite like
-							<code>TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384</code>
-							embedded the ECDHE key exchange,
-							<abbr title="Rivest-Shamir-Adleman">RSA</abbr>
-							authentication,
-							<abbr title="Advanced Encryption Standard">AES</abbr>
-							-256-GCM encryption, and SHA-384 hashing all in one identifier.
-							<abbr title="Transport Layer Security">TLS</abbr>
-							1.3 decouples these.
-						</p>
+						<p>The cipher suite no longer specifies the key exchange or authentication mechanism - those are negotiated separately. In <abbr title="Transport Layer Security">TLS</abbr> 1.2, a cipher suite like <code>TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384</code> embedded the ECDHE key exchange, <abbr title="Rivest-Shamir-Adleman">RSA</abbr> authentication, <abbr title="Advanced Encryption Standard">AES</abbr> -256-GCM encryption, and SHA-384 hashing all in one identifier. <abbr title="Transport Layer Security">TLS</abbr> 1.3 decouples these.</p>
 					</section>
 					<section>
 						<h3 id="tls-12-vs-tls-13-key-differences">TLS 1.2 vs TLS 1.3 - Key Differences</h3>
@@ -531,19 +399,11 @@ The ephemeral keys a and b are discarded after the handshake.
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							<abbr title="Transport Layer Security">TLS</abbr>
-							1.3's design principle: if a feature caused security problems,
-							remove it rather than trying to fix it. The result is a simpler, faster, more secure protocol.
-						</p>
+						<p><abbr title="Transport Layer Security">TLS</abbr> 1.3's design principle: if a feature caused security problems, remove it rather than trying to fix it. The result is a simpler, faster, more secure protocol.</p>
 					</section>
 					<section>
 						<h3 id="x509-certificate-structure">X.509 Certificate Structure</h3>
-						<p>
-							X.509 certificates bind a public key to an identity. The standard format (RFC 5280) uses
-							<code>ASN.1</code>
-							DER encoding:
-						</p>
+						<p>X.509 certificates bind a public key to an identity. The standard format (RFC 5280) uses <code>ASN.1</code> DER encoding:</p>
 						<pre class="plaintext">
 Certificate ::= SEQUENCE {
     tbsCertificate       TBSCertificate,        -- &#34;to be signed&#34;
@@ -603,12 +463,7 @@ TBSCertificate ::= SEQUENCE {
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							<b>Subject Alternative Name (SAN):</b>
-							The SAN extension lists the domains/
-							<abbr title="Internet Protocol">IP</abbr>
-							s the certificate is valid for. Modern browsers ignore the Subject CN and only use SAN entries:
-						</p>
+						<p><b>Subject Alternative Name (SAN):</b> The SAN extension lists the domains/ <abbr title="Internet Protocol">IP</abbr> s the certificate is valid for. Modern browsers ignore the Subject CN and only use SAN entries:</p>
 						<pre class="plaintext">
 X509v3 Subject Alternative Name:
     DNS:example.com, DNS:www.example.com, DNS:*.example.com
@@ -621,30 +476,15 @@ Intermediate CA (cross-signed by root)
   ↓ signs
 Leaf certificate (for example.com)
 						</pre>
-						<p>
-							The relying party (browser) validates the chain: 1. Each certificate's signature matches its
-							parent's public key 1. The leaf certificate has not expired 1. The hostname matches a SAN entry
-							<ol>
-								<li>Key Usage allows the operation (digitalSignature for <abbr title="Transport Layer Security">TLS</abbr> server)</li>
-								<li>No certificate in the chain is revoked (CRL/ <abbr title="Online Certificate Status Protocol">OCSP</abbr> )</li>
-								<li>The root is trusted</li>
-							</ol>
-						</p>
+						<p>The relying party (browser) validates the chain: 1. Each certificate's signature matches its parent's public key 1. The leaf certificate has not expired 1. The hostname matches a SAN entry<ol>
+	<li>Key Usage allows the operation (digitalSignature for <abbr title="Transport Layer Security">TLS</abbr> server)</li>
+	<li>No certificate in the chain is revoked (CRL/ <abbr title="Online Certificate Status Protocol">OCSP</abbr> )</li>
+	<li>The root is trusted</li>
+</ol></p>
 					</section>
 					<section>
 						<h3 id="sni-server-name-indication">SNI - Server Name Indication</h3>
-						<p>
-							SNI is a
-							<abbr title="Transport Layer Security">TLS</abbr>
-							extension that tells the server which hostname the
-							client is connecting to, before the server sends its certificate. Without SNI, a server hosting
-							multiple
-							<abbr title="Transport Layer Security">TLS</abbr>
-							sites on one
-							<abbr title="Internet Protocol">IP</abbr>
-							address could
-							not choose which certificate to present:
-						</p>
+						<p>SNI is a <abbr title="Transport Layer Security">TLS</abbr> extension that tells the server which hostname the client is connecting to, before the server sends its certificate. Without SNI, a server hosting multiple <abbr title="Transport Layer Security">TLS</abbr> sites on one <abbr title="Internet Protocol">IP</abbr> address could not choose which certificate to present:</p>
 						<pre class="plaintext">
 Without SNI: Client connects → Server sends default cert (possibly wrong domain)
 With SNI:    ClientHello includes &#34;example.com&#34; → Server chooses correct cert
@@ -656,30 +496,11 @@ openssl s_client -connect 93.184.216.34:443 -servername www.example.com
 # Connect without SNI (server sends default certificate)
 openssl s_client -connect 93.184.216.34:443 -noservername
 						</pre>
-						<p>
-							SNI is sent in cleartext in
-							<abbr title="Transport Layer Security">TLS</abbr>
-							1.2 and 1.3 ClientHello. Anyone
-							monitoring the network can see which hostname is being accessed. Encrypted ClientHello (ECH),
-							also called Encrypted SNI (ESNI), encrypts the SNI extension under a public key published via
-							<abbr title="Domain Name System">DNS</abbr>
-							- but ECH deployment remains limited.
-						</p>
+						<p>SNI is sent in cleartext in <abbr title="Transport Layer Security">TLS</abbr> 1.2 and 1.3 ClientHello. Anyone monitoring the network can see which hostname is being accessed. Encrypted ClientHello (ECH), also called Encrypted SNI (ESNI), encrypts the SNI extension under a public key published via <abbr title="Domain Name System">DNS</abbr> - but ECH deployment remains limited.</p>
 					</section>
 					<section>
 						<h3 id="alpn-protocol-negotiation">ALPN Protocol Negotiation</h3>
-						<p>
-							ALPN lets the client and server agree on which application protocol to use over the
-							<abbr title="Transport Layer Security">TLS</abbr>
-							connection -
-							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
-							/1.1,
-							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
-							/2,
-							or
-							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
-							/3 - without an extra round trip:
-						</p>
+						<p>ALPN lets the client and server agree on which application protocol to use over the <abbr title="Transport Layer Security">TLS</abbr> connection - <abbr title="Hypertext Transfer Protocol">HTTP</abbr> /1.1, <abbr title="Hypertext Transfer Protocol">HTTP</abbr> /2, or <abbr title="Hypertext Transfer Protocol">HTTP</abbr> /3 - without an extra round trip:</p>
 						<pre class="plaintext">
 ClientHello includes ALPN extension: [&#34;h2&#34;, &#34;http/1.1&#34;]
 ServerHello ALPN: &#34;h2&#34;  (server chose HTTP/2)
@@ -697,14 +518,7 @@ curl --http2 -v https://example.com/ 2&gt;&amp;1 | grep ALPN
 					</section>
 					<section>
 						<h3 id="mutual-tls-mtls">Mutual TLS (mTLS)</h3>
-						<p>
-							In standard
-							<abbr title="Transport Layer Security">TLS</abbr>
-							, only the server presents a certificate. In mutual
-							<abbr title="Transport Layer Security">TLS</abbr>
-							, the client also presents one. The server verifies the client's
-							certificate before allowing the connection:
-						</p>
+						<p>In standard <abbr title="Transport Layer Security">TLS</abbr> , only the server presents a certificate. In mutual <abbr title="Transport Layer Security">TLS</abbr> , the client also presents one. The server verifies the client's certificate before allowing the connection:</p>
 						<pre class="plaintext">
 Standard TLS:
   1. ClientHello →
@@ -740,13 +554,7 @@ openssl x509 -req -in client.csr -CA ca.crt -CAkey ca.key \
 					</section>
 					<section>
 						<h3 id="certificate-pinning">Certificate Pinning</h3>
-						<p>
-							Certificate pinning restricts which certificates are valid for a domain. Instead of trusting
-							any certificate signed by any
-							<abbr title="Certificate Authority">CA</abbr>
-							in the trust store, the application
-							pins specific certificates or public keys:
-						</p>
+						<p>Certificate pinning restricts which certificates are valid for a domain. Instead of trusting any certificate signed by any <abbr title="Certificate Authority">CA</abbr> in the trust store, the application pins specific certificates or public keys:</p>
 						<pre class="plaintext">
 Pinning strategies:
   1. Pin the leaf certificate: Only accept this exact certificate
@@ -754,15 +562,7 @@ Pinning strategies:
   3. Pin the intermediate CA: Accept any cert signed by this specific CA
   4. Pin the SPKI hash: Accept any cert whose SubjectPublicKeyInfo hashes to this value
 						</pre>
-						<p>
-							Certificate pinning prevents attacks where a compromised
-							<abbr title="Certificate Authority">CA</abbr>
-							issues
-							a fraudulent certificate. However, it creates operational risks - if the pinned certificate
-							expires and a new one is deployed, pinned clients break.
-							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
-							Public Key Pinning (HPKP) was deprecated for this reason.
-						</p>
+						<p>Certificate pinning prevents attacks where a compromised <abbr title="Certificate Authority">CA</abbr> issues a fraudulent certificate. However, it creates operational risks - if the pinned certificate expires and a new one is deployed, pinned clients break. <abbr title="Hypertext Transfer Protocol">HTTP</abbr> Public Key Pinning (HPKP) was deprecated for this reason.</p>
 						<pre class="bash">
 # Extract SPKI hash for pinning
 openssl x509 -in cert.pem -pubkey -noout | \
@@ -776,11 +576,7 @@ openssl x509 -in cert.pem -pubkey -noout | \
 					</section>
 					<section>
 						<h3 id="certificate-transparency-ct">Certificate Transparency (CT)</h3>
-						<p>
-							Certificate Transparency (RFC 6962) requires certificate authorities to publicly log every certificate
-							they issue. Browsers require Signed Certificate Timestamps (SCTs) as proof that a certificate
-							was logged:
-						</p>
+						<p>Certificate Transparency (RFC 6962) requires certificate authorities to publicly log every certificate they issue. Browsers require Signed Certificate Timestamps (SCTs) as proof that a certificate was logged:</p>
 						<pre class="plaintext">
 How CT works:
   1. CA submits new certificate to one or more CT logs
@@ -805,14 +601,7 @@ ct-submit --log=https://ct.cloudflare.com/logs/nimbus2024 \
 					</section>
 					<section>
 						<h3 id="tls-0-rtt-resumption">TLS 0-RTT Resumption</h3>
-						<p>
-							<abbr title="Transport Layer Security">TLS</abbr>
-							1.3 supports 0-
-							<abbr title="Round-Trip Time">RTT</abbr>
-							resumption: a client
-							that previously connected can send application data immediately in the first flight, before
-							the server responds:
-						</p>
+						<p><abbr title="Transport Layer Security">TLS</abbr> 1.3 supports 0- <abbr title="Round-Trip Time">RTT</abbr> resumption: a client that previously connected can send application data immediately in the first flight, before the server responds:</p>
 						<pre class="plaintext">
 Initial handshake (1-RTT):
   ClientHello + key_share →
@@ -824,16 +613,7 @@ Initial handshake (1-RTT):
   ← ServerHello + key_share + {EncryptedExtensions, Finished} + [Application Data]
   {Finished} + [Application Data] →
 						</pre>
-						<p>
-							The tradeoff: 0-
-							<abbr title="Round-Trip Time">RTT</abbr>
-							data has no forward secrecy (it is encrypted under a
-							PSK derived from a previous connection) and is replayable - an attacker can capture the 0-
-							<abbr title="Round-Trip Time">RTT</abbr>
-							flight and replay it to the server. Servers must implement replay protection or restrict 0-
-							<abbr title="Round-Trip Time">RTT</abbr>
-							to idempotent requests.
-						</p>
+						<p>The tradeoff: 0- <abbr title="Round-Trip Time">RTT</abbr> data has no forward secrecy (it is encrypted under a PSK derived from a previous connection) and is replayable - an attacker can capture the 0- <abbr title="Round-Trip Time">RTT</abbr> flight and replay it to the server. Servers must implement replay protection or restrict 0- <abbr title="Round-Trip Time">RTT</abbr> to idempotent requests.</p>
 					</section>
 					<section>
 						<h3 id="tls-inspection-with-s-client">TLS Inspection with s_client</h3>
@@ -913,10 +693,7 @@ openssl x509 -in cert.pem -noout -fingerprint -sha256
 					</section>
 					<section>
 						<h3 id="lets-encrypt-and-acme">Let's Encrypt and ACME</h3>
-						<p>
-							Let's Encrypt uses the ACME (Automatic Certificate Management Environment, RFC 8555) protocol
-							to automate certificate issuance:
-						</p>
+						<p>Let's Encrypt uses the ACME (Automatic Certificate Management Environment, RFC 8555) protocol to automate certificate issuance:</p>
 						<pre class="plaintext">
 ACME flow:
   1. Agent generates key pair and CSR
@@ -927,24 +704,8 @@ ACME flow:
   6. Server validates challenge
   7. Agent finalizes order → receives certificate
 						</pre>
-						<p>
-							<b>HTTP-01 challenge:</b>
-							The agent places a token at
-							<code>http://example.com/.well-known/acme-challenge/&lt;token&gt;</code>
-							. The ACME server verifies it can fetch this
-							<abbr title="Uniform Resource Locator">URL</abbr>
-							from the public
-							internet.
-						</p>
-						<p>
-							<b>DNS-01 challenge:</b>
-							The agent creates a TXT record at
-							<code>_acme-challenge.example.com</code>
-							containing
-							a validation token. The ACME server queries
-							<abbr title="Domain Name System">DNS</abbr>
-							to verify it.
-						</p>
+						<p><b>HTTP-01 challenge:</b> The agent places a token at <code>http://example.com/.well-known/acme-challenge/&lt;token&gt;</code> . The ACME server verifies it can fetch this <abbr title="Uniform Resource Locator">URL</abbr> from the public internet.</p>
+						<p><b>DNS-01 challenge:</b> The agent creates a TXT record at <code>_acme-challenge.example.com</code> containing a validation token. The ACME server queries <abbr title="Domain Name System">DNS</abbr> to verify it.</p>
 						<pre class="bash">
 # Manual ACME with acme.sh
 sudo pacman -S acme.sh
@@ -1139,12 +900,7 @@ if __name__ == &#34;__main__&#34;:
 					</section>
 					<section>
 						<h3 id="tls-record-protocol">TLS Record Protocol</h3>
-						<p>
-							After the handshake, all data is transmitted in
-							<abbr title="Transport Layer Security">TLS</abbr>
-							records. Each
-							record has a 5-byte header:
-						</p>
+						<p>After the handshake, all data is transmitted in <abbr title="Transport Layer Security">TLS</abbr> records. Each record has a 5-byte header:</p>
 						<pre class="plaintext">
  0                   1                   2                   3
  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -1182,11 +938,7 @@ if __name__ == &#34;__main__&#34;:
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							All records after the handshake are encrypted with AEAD (Authenticated Encryption with Associated
-							Data). The associated data includes the record header fields, so any modification to the header
-							will fail authentication.
-						</p>
+						<p>All records after the handshake are encrypted with AEAD (Authenticated Encryption with Associated Data). The associated data includes the record header fields, so any modification to the header will fail authentication.</p>
 					</section>
 					<section>
 						<h3 id="security-considerations">Security Considerations</h3>
@@ -1256,21 +1008,11 @@ if __name__ == &#34;__main__&#34;:
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							<abbr title="Transport Layer Security">TLS</abbr>
-							1.3 effectively kills the entire class of downgrade, padding
-							oracle, and key-transport attacks by removing the vulnerable primitives entirely.
-						</p>
+						<p><abbr title="Transport Layer Security">TLS</abbr> 1.3 effectively kills the entire class of downgrade, padding oracle, and key-transport attacks by removing the vulnerable primitives entirely.</p>
 					</section>
 					<section>
 						<h3 id="tls-key-schedule">TLS Key Schedule</h3>
-						<p>
-							<abbr title="Transport Layer Security">TLS</abbr>
-							1.3 derives all keys from the ECDHE shared secret using HKDF
-							(
-							<abbr title="Hash-based Message Authentication Code">HMAC</abbr>
-							-based Key Derivation Function, RFC 5869):
-						</p>
+						<p><abbr title="Transport Layer Security">TLS</abbr> 1.3 derives all keys from the ECDHE shared secret using HKDF ( <abbr title="Hash-based Message Authentication Code">HMAC</abbr> -based Key Derivation Function, RFC 5869):</p>
 						<pre class="plaintext">
                      PSK (optional)
                           |
@@ -1293,43 +1035,15 @@ Early Secret → [HKDF-Extract] → binder_key, early_traffic_secret
                                               exporter_master_secret
                                               resumption_master_secret
 						</pre>
-						<p>
-							Each derived secret is used as input to HKDF-Expand to produce the actual encryption keys, initialization
-							vectors (nonces), and record sequence numbers.
-						</p>
+						<p>Each derived secret is used as input to HKDF-Expand to produce the actual encryption keys, initialization vectors (nonces), and record sequence numbers.</p>
 					</section>
 					<section>
 						<h3 id="summary">Summary</h3>
-						<p>
-							<abbr title="Transport Layer Security">TLS</abbr>
-							provides confidentiality, integrity, and authentication on top
-							of
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							.
-							<abbr title="Transport Layer Security">TLS</abbr>
-							1.3 simplifies the
-							protocol dramatically - mandatory forward secrecy via ECDHE, AEAD-only cipher suites, one-round-trip
-							handshake, and removal of all known-weak primitives. Certificates follow X.509 and are validated
-							through a chain of trust rooted in pre-installed
-							<abbr title="Certificate Authority">CA</abbr>
-							certificates. The
-							protocol's security depends on correct implementation of the handshake state machine, certificate
-							validation, and the AEAD record layer - a mistake in any of these three components breaks the
-							security guarantees entirely.
-						</p>
+						<p><abbr title="Transport Layer Security">TLS</abbr> provides confidentiality, integrity, and authentication on top of <abbr title="Transmission Control Protocol">TCP</abbr> . <abbr title="Transport Layer Security">TLS</abbr> 1.3 simplifies the protocol dramatically - mandatory forward secrecy via ECDHE, AEAD-only cipher suites, one-round-trip handshake, and removal of all known-weak primitives. Certificates follow X.509 and are validated through a chain of trust rooted in pre-installed <abbr title="Certificate Authority">CA</abbr> certificates. The protocol's security depends on correct implementation of the handshake state machine, certificate validation, and the AEAD record layer - a mistake in any of these three components breaks the security guarantees entirely.</p>
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Write a
-							<abbr title="Transport Layer Security">TLS</abbr>
-							inspector in Go. Connect to a server, complete the handshake,
-							and print the negotiated version, cipher suite, and leaf certificate fields. Set
-							<code>ServerName</code>
-							in the
-							<code>tls.Config</code>
-							so that SNI and certificate verification work correctly.
-						</p>
+						<p>Write a <abbr title="Transport Layer Security">TLS</abbr> inspector in Go. Connect to a server, complete the handshake, and print the negotiated version, cipher suite, and leaf certificate fields. Set <code>ServerName</code> in the <code>tls.Config</code> so that SNI and certificate verification work correctly.</p>
 						<pre class="go">
 package main
 
@@ -1375,23 +1089,14 @@ func main() {
 	}
 }
 						</pre>
-						<p>
-							Next, start the multi-endpoint lab container and inspect each endpoint with
-							<code>openssl</code>
-							:
-						</p>
+						<p>Next, start the multi-endpoint lab container and inspect each endpoint with <code>openssl</code> :</p>
 						<p><a href="/wiki/articles/fundamentals/tls.Containerfile">tls.Containerfile</a></p>
 						<pre class="bash">
 podman build -t tls -f tls.Containerfile .
 podman run -d --rm --name tls -p 8443:8443 -p 9443:9443 -p 10443:10443 -p 11443:11443 -p 12443:12443 -p 8888:8888 tls
 podman exec -it tls bash
 						</pre>
-						<p>
-							Inside the container, compare the
-							<abbr title="Transport Layer Security">TLS</abbr>
-							1.2 and 1.3 endpoints and
-							observe the self-signed certificate error:
-						</p>
+						<p>Inside the container, compare the <abbr title="Transport Layer Security">TLS</abbr> 1.2 and 1.3 endpoints and observe the self-signed certificate error:</p>
 						<pre class="bash">
 openssl s_client -connect localhost:8443 -CAfile /etc/nginx/certs/ca.crt
 openssl s_client -connect localhost:9443 -CAfile /etc/nginx/certs/ca.crt

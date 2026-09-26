@@ -175,24 +175,10 @@
 
 				<article>
 					<h2 id="pie-position-independent-executable">PIE (Position-Independent Executable)</h2>
-					<p>
-						How PIE compiles the main executable as position-independent code so the kernel can load it
-						at a random base address.
-					</p>
+					<p>How PIE compiles the main executable as position-independent code so the kernel can load it at a random base address.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							Without PIE the main executable loads at a fixed address, so every gadget, function pointer,
-							and return address inside it is known to an attacker even when ASLR randomizes the stack, heap,
-							and libraries. PIE compiles the executable as position-independent code so the kernel can map
-							it at a random base, using
-							<code>RIP</code>
-							-relative addressing plus the GOT and PLT. This article covers
-							the
-							<code>ET_DYN</code>
-							ELF type, the load process, how to check a binary, and how PIE is bypassed. After
-							reading you can tell whether a binary is PIE and explain what an information leak buys an attacker.
-						</p>
+						<p>Without PIE the main executable loads at a fixed address, so every gadget, function pointer, and return address inside it is known to an attacker even when ASLR randomizes the stack, heap, and libraries. PIE compiles the executable as position-independent code so the kernel can map it at a random base, using <code>RIP</code> -relative addressing plus the GOT and PLT. This article covers the <code>ET_DYN</code> ELF type, the load process, how to check a binary, and how PIE is bypassed. After reading you can tell whether a binary is PIE and explain what an information leak buys an attacker.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -204,44 +190,19 @@
 					</section>
 					<section>
 						<h3 id="the-problem-pie-solves">The Problem PIE Solves</h3>
-						<p>
-							Without PIE, every execution of a non-PIE binary loads the executable at the same fixed virtual
-							address. On x86-64 Linux, this address is typically
-							<code>0x400000</code>
-							:
-						</p>
+						<p>Without PIE, every execution of a non-PIE binary loads the executable at the same fixed virtual address. On x86-64 Linux, this address is typically <code>0x400000</code> :</p>
 						<pre class="plaintext">
 0x400000  ─── .interp, .note, .gnu.hash
 0x401000  ─── .text    (executable code — ALWAYS at 0x401000)
 0x402000  ─── .rodata  (read-only data)
 0x403000  ─── .data, .got, .bss  (writable, ALWAYS at 0x403000)
 						</pre>
-						<p>
-							Every
-							<abbr title="Return-Oriented Programming">ROP</abbr>
-							gadget in the binary, every function pointer, every
-							GOT entry, every return address targeting code in the main binary - all at fixed, known addresses.
-							ASLR randomizes the stack, heap, and libraries, but not the executable itself. This means an
-							attacker can find usable
-							<abbr title="Return-Oriented Programming">ROP</abbr>
-							gadgets in the binary without needing
-							an information leak. An entire class of exploits (ret2plt, ret2csu, calling main-binary functions
-							directly) requires zero address knowledge.
-						</p>
-						<p>
-							PIE compiles the main executable as position-independent code, identical in principle to how
-							shared libraries (.so files) are compiled. The kernel's ELF loader can then place the binary
-							at a random base address - the same 28 bits of entropy that shared libraries enjoy. Every address
-							in the binary becomes unknown to an attacker who hasn't first leaked a PIE address.
-						</p>
+						<p>Every <abbr title="Return-Oriented Programming">ROP</abbr> gadget in the binary, every function pointer, every GOT entry, every return address targeting code in the main binary - all at fixed, known addresses. ASLR randomizes the stack, heap, and libraries, but not the executable itself. This means an attacker can find usable <abbr title="Return-Oriented Programming">ROP</abbr> gadgets in the binary without needing an information leak. An entire class of exploits (ret2plt, ret2csu, calling main-binary functions directly) requires zero address knowledge.</p>
+						<p>PIE compiles the main executable as position-independent code, identical in principle to how shared libraries (.so files) are compiled. The kernel's ELF loader can then place the binary at a random base address - the same 28 bits of entropy that shared libraries enjoy. Every address in the binary becomes unknown to an attacker who hasn't first leaked a PIE address.</p>
 					</section>
 					<section>
 						<h3 id="non-pie-vs-pie-elf-header-difference">Non-PIE vs PIE: ELF Header Difference</h3>
-						<p>
-							The fundamental difference is a single field in the ELF header:
-							<code>e_type</code>
-							.
-						</p>
+						<p>The fundamental difference is a single field in the ELF header: <code>e_type</code> .</p>
 						<pre class="bash">
 # Non-PIE binary (legacy, fixed address)
 readelf -h /usr/bin/old_binary | grep Type
@@ -251,16 +212,7 @@ readelf -h /usr/bin/old_binary | grep Type
 readelf -h /bin/ls | grep Type
 # Type: DYN (Shared object file)
 						</pre>
-						<p>
-							A non-PIE executable is
-							<code>ET_EXEC</code>
-							(type 2). The kernel's ELF loader (
-							<code>fs/binfmt_elf.c</code>
-							) uses
-							<code>elf_map</code>
-							to load it at the fixed address specified in the program headers. The segments have
-							absolute virtual addresses:
-						</p>
+						<p>A non-PIE executable is <code>ET_EXEC</code> (type 2). The kernel's ELF loader ( <code>fs/binfmt_elf.c</code> ) uses <code>elf_map</code> to load it at the fixed address specified in the program headers. The segments have absolute virtual addresses:</p>
 						<pre class="plaintext">
 Program Headers (non-PIE):
   Type       Offset             VirtAddr          PhysAddr          FileSiz  MemSiz   Flg Align
@@ -269,24 +221,8 @@ Program Headers (non-PIE):
   LOAD       0x0000000000002000 0x0000000000402000 0x0000000000402000 0x000100 0x000100 R   0x1000
   LOAD       0x0000000000002df0 0x0000000000403df0 0x0000000000403df0 0x000220 0x000220 RW  0x1000
 						</pre>
-						<p>
-							Notice the absolute
-							<code>VirtAddr</code>
-							values - every run uses exactly
-							<code>0x400000</code>
-							,
-							<code>0x401000</code>
-							, etc.
-						</p>
-						<p>
-							A PIE executable is
-							<code>ET_DYN</code>
-							(type 3, same as a shared library). Its program headers use relative
-							addresses (offset from load base), and the kernel's ELF loader maps it via
-							<code>mmap</code>
-							with a randomized
-							base:
-						</p>
+						<p>Notice the absolute <code>VirtAddr</code> values - every run uses exactly <code>0x400000</code> , <code>0x401000</code> , etc.</p>
+						<p>A PIE executable is <code>ET_DYN</code> (type 3, same as a shared library). Its program headers use relative addresses (offset from load base), and the kernel's ELF loader maps it via <code>mmap</code> with a randomized base:</p>
 						<pre class="plaintext">
 Program Headers (PIE):
   Type       Offset             VirtAddr          PhysAddr          FileSiz  MemSiz   Flg Align
@@ -295,15 +231,7 @@ Program Headers (PIE):
   LOAD       0x000000000001b000 0x000000000001b000 0x000000000001b000 0x008000 0x008000 R   0x1000
   LOAD       0x0000000000023000 0x0000000000024000 0x0000000000024000 0x003000 0x003000 RW  0x1000
 						</pre>
-						<p>
-							<code>VirtAddr</code>
-							values are relative to the base (starting at 0). At runtime, the kernel adds the
-							random base address to these offsets. The actual virtual address of
-							<code>.text</code>
-							becomes
-							<code>random_base + 0x1000</code>
-							.
-						</p>
+						<p><code>VirtAddr</code> values are relative to the base (starting at 0). At runtime, the kernel adds the random base address to these offsets. The actual virtual address of <code>.text</code> becomes <code>random_base + 0x1000</code> .</p>
 					</section>
 					<section>
 						<h3 id="detailed-elf-header-comparison">Detailed ELF Header Comparison</h3>
@@ -336,23 +264,7 @@ readelf -d /tmp/test_pie | grep -E &#39;NEEDED|INTERP&#39;
 					<section>
 						<h3 id="how-position-independent-code-works">How Position-Independent Code Works</h3>
 						<p>Position-independent code avoids absolute addresses in the instruction stream. Instead, it uses:</p>
-						<p>
-							<b>1. RIP-relative addressing for code and local data:</b>
-							The x86-64 ISA added
-							<code>RIP</code>
-							-relative
-							addressing (
-							<code>[rip + offset]</code>
-							) specifically to support position-independent code. The
-							<abbr title="Central Processing Unit">CPU</abbr>
-							computes the target address as
-							<code>RIP + sign-extended-32-bit-offset</code>
-							, where
-							<code>RIP</code>
-							points to the
-							<em>next</em>
-							instruction.
-						</p>
+						<p><b>1. RIP-relative addressing for code and local data:</b> The x86-64 ISA added <code>RIP</code> -relative addressing ( <code>[rip + offset]</code> ) specifically to support position-independent code. The <abbr title="Central Processing Unit">CPU</abbr> computes the target address as <code>RIP + sign-extended-32-bit-offset</code> , where <code>RIP</code> points to the <em>next</em> instruction.</p>
 						<pre class="x86asm">
 ; Non-PIC (absolute addressing — fixed address embedded in instruction)
 mov    rax, QWORD PTR [0x404020]    ; loads from fixed address 0x404020
@@ -362,20 +274,8 @@ call   0x401050                      ; call fixed address
 mov    rax, QWORD PTR [rip+0x2f3f]  ; loads from rip + offset
 call   QWORD PTR [rip+0x2f39]       ; indirect call via GOT entry
 						</pre>
-						<p>
-							<code>RIP</code>
-							-relative addressing has a +/-2 GiB range (32-bit signed offset), which is sufficient
-							for a single shared library or executable image. It's the primary mechanism that makes PIE possible
-							on x86-64.
-						</p>
-						<p>
-							<b>2. GOT (Global Offset Table) for external/global data:</b>
-							The GOT is a table of pointers in
-							the
-							<code>.got</code>
-							section. At load time, the dynamic linker fills in the actual addresses of all global
-							symbols (functions and data). Code accesses globals through the GOT:
-						</p>
+						<p><code>RIP</code> -relative addressing has a +/-2 GiB range (32-bit signed offset), which is sufficient for a single shared library or executable image. It's the primary mechanism that makes PIE possible on x86-64.</p>
+						<p><b>2. GOT (Global Offset Table) for external/global data:</b> The GOT is a table of pointers in the <code>.got</code> section. At load time, the dynamic linker fills in the actual addresses of all global symbols (functions and data). Code accesses globals through the GOT:</p>
 						<pre class="c">
 // C source
 extern int global_counter;     // defined in another .so or in .data
@@ -387,16 +287,8 @@ void increment(void) {
 // mov rax, [rip + got_offset_for_global_counter]
 // inc dword [rax]
 						</pre>
-						<p>
-							The GOT itself is at a known offset from the code that references it (within the +/-2 GiB
-							<code>RIP</code>
-							-relative range). The GOT contains the absolute addresses resolved by the dynamic linker.
-						</p>
-						<p>
-							<b>3. PLT (Procedure Linkage Table) for cross-module function calls:</b>
-							When calling a function
-							from a shared library (or another DSO), the compiler generates a call to a PLT stub:
-						</p>
+						<p>The GOT itself is at a known offset from the code that references it (within the +/-2 GiB <code>RIP</code> -relative range). The GOT contains the absolute addresses resolved by the dynamic linker.</p>
+						<p><b>3. PLT (Procedure Linkage Table) for cross-module function calls:</b> When calling a function from a shared library (or another DSO), the compiler generates a call to a PLT stub:</p>
 						<pre class="x86asm">
 ; Calling puts() from a PIE binary:
 call   puts@plt
@@ -406,19 +298,7 @@ call   puts@plt
 ;     push   relocation_index      ; lazy binding: push index
 ;     jmp    .plt0                 ; lazy binding: call resolver
 						</pre>
-						<p>
-							The PLT stub is in the same load module as the call site, so
-							<code>RIP</code>
-							-relative addressing works.
-							At load time (or first call, with lazy binding), the GOT entry for
-							<code>puts</code>
-							is filled with the
-							actual address in libc. After resolution,
-							<code>jmp [rip+GOT[puts]]</code>
-							goes directly to
-							<code>puts</code>
-							in libc.
-						</p>
+						<p>The PLT stub is in the same load module as the call site, so <code>RIP</code> -relative addressing works. At load time (or first call, with lazy binding), the GOT entry for <code>puts</code> is filled with the actual address in libc. After resolution, <code>jmp [rip+GOT[puts]]</code> goes directly to <code>puts</code> in libc.</p>
 					</section>
 					<section>
 						<h3 id="the-pie-load-process">The PIE Load Process</h3>
@@ -432,16 +312,7 @@ call   puts@plt
 							<li>This random address becomes the ELF base ( <code>load_bias</code> )</li>
 							<li>All segment virtual addresses = <code>load_bias + p_vaddr</code></li>
 						</ol>
-						<p>
-							The dynamic linker (
-							<code>ld-linux-x86-64.so.2</code>
-							) receives the ELF base through the auxiliary vector
-							(
-							<code>AT_BASE</code>
-							and
-							<code>AT_PHDR</code>
-							):
-						</p>
+						<p>The dynamic linker ( <code>ld-linux-x86-64.so.2</code> ) receives the ELF base through the auxiliary vector ( <code>AT_BASE</code> and <code>AT_PHDR</code> ):</p>
 						<pre class="c">
 // The auxiliary vector (auxv) is placed on the stack by the kernel
 // Relevant entries for PIE:
@@ -452,13 +323,7 @@ call   puts@plt
 #define AT_ENTRY   9   // Entry point of the program (base-dependent)
 #define AT_EXECFD 22   // File descriptor of the executable
 						</pre>
-						<p>
-							The startup code (
-							<code>_start</code>
-							in
-							<code>crt1.o</code>
-							) uses these to find the GOT and initialize the runtime:
-						</p>
+						<p>The startup code ( <code>_start</code> in <code>crt1.o</code> ) uses these to find the GOT and initialize the runtime:</p>
 						<pre class="x86asm">
 ; crt1.o _start (simplified):
 ; On entry, the stack contains: argc, argv, envp, auxv
@@ -491,7 +356,7 @@ _start:
 								</tr>
 								<tr>
 									<td align="center"><code>-fpie</code></td>
-									<td align="center">Same as<code>-fPIE</code>but may use smaller/faster code model</td>
+									<td align="center">Same as <code>-fPIE</code> but may use smaller/faster code model</td>
 								</tr>
 								<tr>
 									<td align="center"><code>-pie</code></td>
@@ -507,37 +372,12 @@ _start:
 								</tr>
 								<tr>
 									<td align="center"><code>-fpic</code></td>
-									<td align="center">Same as<code>-fPIC</code>with smaller GOT constraints</td>
+									<td align="center">Same as <code>-fPIC</code> with smaller GOT constraints</td>
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							<b>Lowercase vs uppercase:</b>
-							-
-							<code>-fPIE</code>
-							/
-							<code>-fPIC</code>
-							uses the "large" code model - no limit on GOT
-							size. Safe for any code size. -
-							<code>-fpie</code>
-							/
-							<code>-fpic</code>
-							uses the "small" code model - GOT limited
-							to a smaller size for better performance. Fails if the GOT exceeds the limit. - On x86-64, both
-							produce identical code in practice (the small model's limits are generous on 64-bit). Use
-							<code>-fPIE</code>
-							/
-							<code>-fPIC</code>
-							for maximum compatibility.
-						</p>
-						<p>
-							<b>ArchLinux defaults:</b>
-							ArchLinux compiles all packages with PIE enabled by default. The
-							<code>makepkg</code>
-							configuration in
-							<code>/etc/makepkg.conf</code>
-							sets:
-						</p>
+						<p><b>Lowercase vs uppercase:</b> - <code>-fPIE</code> / <code>-fPIC</code> uses the "large" code model - no limit on GOT size. Safe for any code size. - <code>-fpie</code> / <code>-fpic</code> uses the "small" code model - GOT limited to a smaller size for better performance. Fails if the GOT exceeds the limit. - On x86-64, both produce identical code in practice (the small model's limits are generous on 64-bit). Use <code>-fPIE</code> / <code>-fPIC</code> for maximum compatibility.</p>
+						<p><b>ArchLinux defaults:</b> ArchLinux compiles all packages with PIE enabled by default. The <code>makepkg</code> configuration in <code>/etc/makepkg.conf</code> sets:</p>
 						<pre class="bash">
 CFLAGS=&#34;-march=x86-64 -mtune=generic -O2 -pipe -fno-plt -fexceptions \
         -Wp,-D_FORTIFY_SOURCE=3 -Wformat -Werror=format-security \
@@ -545,14 +385,7 @@ CFLAGS=&#34;-march=x86-64 -mtune=generic -O2 -pipe -fno-plt -fexceptions \
 LDFLAGS=&#34;-Wl,-O1 -Wl,--sort-common -Wl,--as-needed -Wl,-z,relro -Wl,-z,now \
          -Wl,-z,pack-relative-relocs&#34;
 						</pre>
-						<p>
-							<code>-fno-plt</code>
-							is an x86-64 optimization that bypasses the PLT for external function calls, using
-							GOT-based indirect calls directly. This reduces lazy binding overhead and is usually combined
-							with
-							<code>-z now</code>
-							(full RELRO).
-						</p>
+						<p><code>-fno-plt</code> is an x86-64 optimization that bypasses the PLT for external function calls, using GOT-based indirect calls directly. This reduces lazy binding overhead and is usually combined with <code>-z now</code> (full RELRO).</p>
 					</section>
 					<section>
 						<h3 id="pie-vs-non-pie-address-comparison">PIE vs Non-PIE Address Comparison</h3>
@@ -632,25 +465,11 @@ done
 #   main - base = 0x1149 every time
 #   global_init - base = 0x401c every time
 						</pre>
-						<p>
-							<b>Key insight:</b>
-							With PIE, the base changes but all internal offsets are fixed. An attacker
-							who leaks a single PIE address (e.g.,
-							<code>main</code>
-							) can compute all other PIE addresses by adding/subtracting
-							known offsets. This is why PIE alone is not a complete mitigation - it must be combined with
-							other defenses that prevent address leaks.
-						</p>
+						<p><b>Key insight:</b> With PIE, the base changes but all internal offsets are fixed. An attacker who leaks a single PIE address (e.g., <code>main</code> ) can compute all other PIE addresses by adding/subtracting known offsets. This is why PIE alone is not a complete mitigation - it must be combined with other defenses that prevent address leaks.</p>
 					</section>
 					<section>
 						<h3 id="debugging-pie-in-gdb">Debugging PIE in GDB</h3>
-						<p>
-							GDB disables ASLR by default (via
-							<code>personality(ADDR_NO_RANDOMIZE)</code>
-							on the debuggee) to make
-							addresses reproducible across runs. This also disables PIE randomization. To work with PIE randomization
-							in GDB:
-						</p>
+						<p>GDB disables ASLR by default (via <code>personality(ADDR_NO_RANDOMIZE)</code> on the debuggee) to make addresses reproducible across runs. This also disables PIE randomization. To work with PIE randomization in GDB:</p>
 						<pre class="bash">
 # GDB with ASLR enabled
 gdb -ex &#34;set disable-randomization off&#34; ./pie_demo_pie
@@ -734,19 +553,7 @@ get_external:
     mov    eax, DWORD PTR [rax]
     ret
 						</pre>
-						<p>
-							The .o files are similar - the difference emerges at link time. The linker for PIE generates
-							<code>.got</code>
-							,
-							<code>.got.plt</code>
-							, and appropriate relocations. For non-PIE, the linker hardcodes absolute
-							addresses (or uses the
-							<code>.got</code>
-							but with
-							<code>R_X86_64_RELATIVE</code>
-							relocations that the dynamic linker
-							resolves at load time by adding the base).
-						</p>
+						<p>The .o files are similar - the difference emerges at link time. The linker for PIE generates <code>.got</code> , <code>.got.plt</code> , and appropriate relocations. For non-PIE, the linker hardcodes absolute addresses (or uses the <code>.got</code> but with <code>R_X86_64_RELATIVE</code> relocations that the dynamic linker resolves at load time by adding the base).</p>
 						<h4 id="linker-relocations-for-pie">Linker relocations for PIE</h4>
 						<pre class="bash">
 readelf -r ./pie_demo_pie | head -40
@@ -759,14 +566,7 @@ readelf -r ./pie_demo_pie | head -40
 # 000000003fd0  000300000007 R_X86_64_JUMP_SLOT 0000000000000000 printf@GLIBC_2.2.5 + 0
 # ...
 						</pre>
-						<p>
-							<code>R_X86_64_RELATIVE</code>
-							relocations mean: "at this GOT address, store (load_base + addend)". The
-							dynamic linker processes these before transferring control to
-							<code>_start</code>
-							. This is how PIE resolves
-							its own internal references.
-						</p>
+						<p><code>R_X86_64_RELATIVE</code> relocations mean: "at this GOT address, store (load_base + addend)". The dynamic linker processes these before transferring control to <code>_start</code> . This is how PIE resolves its own internal references.</p>
 					</section>
 					<section>
 						<h3 id="performance-overhead">Performance Overhead</h3>
@@ -783,26 +583,26 @@ readelf -r ./pie_demo_pie | head -40
 							<tbody>
 								<tr>
 									<td align="center">Call external function (1st)</td>
-									<td align="center"><code>call addr</code>-> PLT -> resolver</td>
+									<td align="center"><code>call addr</code> -> PLT -> resolver</td>
 									<td align="center">same</td>
 									<td align="center">0%</td>
 								</tr>
 								<tr>
 									<td align="center">Call external function (cached)</td>
-									<td align="center"><code>call addr</code>-> PLT -><code>jmp [GOT]</code></td>
+									<td align="center"><code>call addr</code> -> PLT -> <code>jmp [GOT]</code></td>
 									<td align="center">same</td>
 									<td align="center">0%</td>
 								</tr>
 								<tr>
 									<td align="center">Call local function</td>
-									<td align="center"><code>call imm32</code>(direct)</td>
-									<td align="center"><code>call imm32</code>(direct, RIP-relative)</td>
+									<td align="center"><code>call imm32</code> (direct)</td>
+									<td align="center"><code>call imm32</code> (direct, RIP-relative)</td>
 									<td align="center">0%</td>
 								</tr>
 								<tr>
 									<td align="center">Access global variable</td>
-									<td align="center"><code>mov eax, [abs_addr]</code>(1 insn)</td>
-									<td align="center"><code>mov rax, [rip+got]; mov eax, [rax]</code>(2 insns)</td>
+									<td align="center"><code>mov eax, [abs_addr]</code> (1 insn)</td>
+									<td align="center"><code>mov rax, [rip+got]; mov eax, [rax]</code> (2 insns)</td>
 									<td align="center">~1 instruction</td>
 								</tr>
 								<tr>
@@ -813,28 +613,9 @@ readelf -r ./pie_demo_pie | head -40
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							The primary overhead comes from accessing global variables: PIE requires loading the GOT entry
-							first, then dereferencing it. This is one extra load instruction per global variable access.
-							For non-PIE, the absolute address is embedded directly.
-						</p>
-						<p>
-							Measured overhead on real workloads (Phoronix benchmarks, 2017):~1-3% on x86-64. This small
-							cost is why most distributions enable PIE by default - the security benefit vastly outweighs
-							the performance impact.
-						</p>
-						<p>
-							The
-							<code>-fno-plt</code>
-							optimization (enabled on ArchLinux by default) eliminates PLT indirection for
-							external function calls, reducing some of the overhead. With
-							<code>-fno-plt</code>
-							, calls go through GOT
-							entries directly, skipping the PLT jump. It is usually combined with
-							<code>-z now</code>
-							(full RELRO, no
-							lazy binding).
-						</p>
+						<p>The primary overhead comes from accessing global variables: PIE requires loading the GOT entry first, then dereferencing it. This is one extra load instruction per global variable access. For non-PIE, the absolute address is embedded directly.</p>
+						<p>Measured overhead on real workloads (Phoronix benchmarks, 2017):~1-3% on x86-64. This small cost is why most distributions enable PIE by default - the security benefit vastly outweighs the performance impact.</p>
+						<p>The <code>-fno-plt</code> optimization (enabled on ArchLinux by default) eliminates PLT indirection for external function calls, reducing some of the overhead. With <code>-fno-plt</code> , calls go through GOT entries directly, skipping the PLT jump. It is usually combined with <code>-z now</code> (full RELRO, no lazy binding).</p>
 					</section>
 					<section>
 						<h3 id="pic-vs-pie-the-distinction">PIC vs PIE: The Distinction</h3>
@@ -859,8 +640,8 @@ readelf -r ./pie_demo_pie | head -40
 								</tr>
 								<tr>
 									<td align="center"><b>ELF type</b></td>
-									<td align="center"><code>ET_DYN</code>(type 3)</td>
-									<td align="center"><code>ET_DYN</code>(type 3)</td>
+									<td align="center"><code>ET_DYN</code> (type 3)</td>
+									<td align="center"><code>ET_DYN</code> (type 3)</td>
 								</tr>
 								<tr>
 									<td align="center"><b>Symbol preemption</b></td>
@@ -874,13 +655,13 @@ readelf -r ./pie_demo_pie | head -40
 								</tr>
 								<tr>
 									<td align="center"><b>Startup</b></td>
-									<td align="center"><code>_init</code>/<code>_fini</code>called by ld-linux</td>
-									<td align="center"><code>_start</code>-><code>__libc_start_main</code>-><code>main</code></td>
+									<td align="center"><code>_init</code> / <code>_fini</code> called by ld-linux</td>
+									<td align="center"><code>_start</code> -> <code>__libc_start_main</code> -> <code>main</code></td>
 								</tr>
 								<tr>
 									<td align="center"><b>Entry point</b></td>
-									<td align="center">None (or<code>_init</code>)</td>
-									<td align="center"><code>_start</code>(from crt1.o)</td>
+									<td align="center">None (or <code>_init</code>)</td>
+									<td align="center"><code>_start</code> (from crt1.o)</td>
 								</tr>
 								<tr>
 									<td align="center"><b>Can have `main`?</b></td>
@@ -889,28 +670,11 @@ readelf -r ./pie_demo_pie | head -40
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							The internal mechanism is identical. Both use
-							<code>RIP</code>
-							-relative addressing, GOT, and PLT. The
-							practical difference is how the linker treats symbol visibility and interposition. Shared libraries
-							must support symbol interposition (LD_PRELOAD overriding of functions), which requires all external
-							symbols to go through the GOT even for intra-library calls. PIE executables use
-							<code>-Bsymbolic</code>
-							(or
-							<code>-Bsymbolic-functions</code>
-							), which binds intra-binary references directly, skipping the GOT
-							for local symbols.
-						</p>
+						<p>The internal mechanism is identical. Both use <code>RIP</code> -relative addressing, GOT, and PLT. The practical difference is how the linker treats symbol visibility and interposition. Shared libraries must support symbol interposition (LD_PRELOAD overriding of functions), which requires all external symbols to go through the GOT even for intra-library calls. PIE executables use <code>-Bsymbolic</code> (or <code>-Bsymbolic-functions</code> ), which binds intra-binary references directly, skipping the GOT for local symbols.</p>
 					</section>
 					<section>
 						<h3 id="static-pie">Static-PIE</h3>
-						<p>
-							A recent development (supported since binutils 2.31 and glibc 2.27) is
-							<code>-static-pie</code>
-							. This
-							produces a statically linked executable that is still position-independent:
-						</p>
+						<p>A recent development (supported since binutils 2.31 and glibc 2.27) is <code>-static-pie</code> . This produces a statically linked executable that is still position-independent:</p>
 						<pre class="bash">
 gcc -static-pie -o static_pie_demo pie_demo.c -ldl
 
@@ -923,14 +687,7 @@ readelf -d static_pie_demo | head
 readelf -l static_pie_demo | grep -E &#39;LOAD|DYNAMIC&#39;
 # LOAD segments still present, DYNAMIC segment for self-relocation
 						</pre>
-						<p>
-							A static-PIE binary performs its own relocations at startup (in
-							<code>_start</code>
-							before calling
-							<code>__libc_start_main</code>
-							). This combines the security of ASLR with the simplicity of static linking - no shared libraries,
-							no dynamic linker, single-file deployment.
-						</p>
+						<p>A static-PIE binary performs its own relocations at startup (in <code>_start</code> before calling <code>__libc_start_main</code> ). This combines the security of ASLR with the simplicity of static linking - no shared libraries, no dynamic linker, single-file deployment.</p>
 					</section>
 					<section>
 						<h3 id="tools-for-checking-pie-status">Tools for Checking PIE Status</h3>
@@ -979,10 +736,7 @@ done
 					</section>
 					<section>
 						<h3 id="disabling-pie-for-learning">Disabling PIE for Learning</h3>
-						<p>
-							When studying binary exploitation, non-PIE binaries simplify the learning process by providing
-							fixed, predictable addresses:
-						</p>
+						<p>When studying binary exploitation, non-PIE binaries simplify the learning process by providing fixed, predictable addresses:</p>
 						<pre class="bash">
 # Compile without PIE
 gcc -no-pie -o vulnerable vulnerable.c
@@ -1100,10 +854,7 @@ int main(void) {
 					</section>
 					<section>
 						<h3 id="the-auxiliary-vector-and-pie">The Auxiliary Vector and PIE</h3>
-						<p>
-							The kernel communicates the PIE base to the dynamic linker through the auxiliary vector. This
-							can be observed:
-						</p>
+						<p>The kernel communicates the PIE base to the dynamic linker through the auxiliary vector. This can be observed:</p>
 						<pre class="c">
 // print_auxv.c — display auxiliary vector entries
 // Compile: gcc -o print_auxv print_auxv.c
@@ -1151,31 +902,11 @@ gcc -pie -fPIE -o print_auxv print_auxv.c -ldl
 # AT_EXECFN: ./print_auxv
 # AT_RANDOM: 0x7ffe123f49a9  ← 16 random bytes for stack canary seed
 						</pre>
-						<p>
-							Note that
-							<code>AT_BASE</code>
-							is the dynamic linker's base address,
-							<em>not</em>
-							the PIE executable's base. The
-							PIE base can be computed as
-							<code>AT_PHDR - p_offset_of_phdr</code>
-							or
-							<code>AT_ENTRY - entry_point_offset</code>
-							.
-						</p>
+						<p>Note that <code>AT_BASE</code> is the dynamic linker's base address, <em>not</em> the PIE executable's base. The PIE base can be computed as <code>AT_PHDR - p_offset_of_phdr</code> or <code>AT_ENTRY - entry_point_offset</code> .</p>
 					</section>
 					<section>
 						<h3 id="linux-kernel-support-for-pie">Linux Kernel Support for PIE</h3>
-						<p>
-							The kernel doesn't explicitly know about "PIE" - it only knows about
-							<code>ET_DYN</code>
-							vs
-							<code>ET_EXEC</code>
-							.
-							The ELF loader in
-							<code>fs/binfmt_elf.c</code>
-							treats both similarly:
-						</p>
+						<p>The kernel doesn't explicitly know about "PIE" - it only knows about <code>ET_DYN</code> vs <code>ET_EXEC</code> . The ELF loader in <code>fs/binfmt_elf.c</code> treats both similarly:</p>
 						<pre class="c">
 // Simplified kernel ELF loading logic:
 if (elf_ex-&gt;e_type == ET_EXEC) {
@@ -1189,56 +920,23 @@ if (elf_ex-&gt;e_type == ET_EXEC) {
     // load_bias is calculated after mmap: actual_base - p_vaddr
 }
 						</pre>
-						<p>
-							For
-							<code>ET_DYN</code>
-							, the kernel uses
-							<code>ELF_ET_DYN_BASE</code>
-							(architecture-dependent) as a hint for the
-							mmap allocator. On x86-64, this is typically
-							<code>0x555555554000</code>
-							when ASLR is disabled, and fully
-							randomized when ASLR is active. This is why PIE binaries load at
-							<code>0x55...</code>
-							addresses in GDB
-							(without ASLR disabling) vs
-							<code>0x7f...</code>
-							for shared libraries - the mmap allocator separates executables
-							from libraries.
-						</p>
+						<p>For <code>ET_DYN</code> , the kernel uses <code>ELF_ET_DYN_BASE</code> (architecture-dependent) as a hint for the mmap allocator. On x86-64, this is typically <code>0x555555554000</code> when ASLR is disabled, and fully randomized when ASLR is active. This is why PIE binaries load at <code>0x55...</code> addresses in GDB (without ASLR disabling) vs <code>0x7f...</code> for shared libraries - the mmap allocator separates executables from libraries.</p>
 					</section>
 					<section>
 						<h3 id="pie-in-defense-in-depth">PIE in Defense in Depth</h3>
-						<p>
-							PIE is a foundational mitigation that extends ASLR to the executable itself. Its effectiveness
-							depends on the attacker's ability to leak addresses:
-						</p>
+						<p>PIE is a foundational mitigation that extends ASLR to the executable itself. Its effectiveness depends on the attacker's ability to leak addresses:</p>
 						<ul>
 							<li><b>Without an info leak:</b> PIE adds 28 bits of entropy to the binary's code and data. Brute force is impractical on 64-bit.</li>
 							<li><b>With an info leak:</b> PIE provides zero security - all PIE addresses are computable once one is known.</li>
 							<li><b>Combined with ASLR + DEP + RELRO + canaries:</b> PIE forces the attacker to succeed at multiple steps: achieve a write primitive, leak at least one address, bypass canaries, and chain <abbr title="Return-Oriented Programming">ROP</abbr> gadgets from known offsets.</li>
 						</ul>
-						<p>
-							PIE does not eliminate exploitation. It raises the cost and complexity. In a defense-in-depth
-							architecture, PIE forces attackers to combine an information leak with their primary exploit
-							<ul>
-								<li>a significantly harder problem than simply hardcoding addresses.</li>
-							</ul>
-						</p>
+						<p>PIE does not eliminate exploitation. It raises the cost and complexity. In a defense-in-depth architecture, PIE forces attackers to combine an information leak with their primary exploit<ul>
+	<li>a significantly harder problem than simply hardcoding addresses.</li>
+</ul></p>
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Write a Go tool that classifies an ELF file as non-PIE, PIE, or a shared library. The
-							<code>debug/elf</code>
-							package exposes the ELF type and program headers directly. The
-							<code>DF_1_PIE</code>
-							flag in
-							<code>DT_FLAGS_1</code>
-							identifies a PIE even when it is statically linked, so use it first and fall back to a
-							<code>PT_INTERP</code>
-							program header.
-						</p>
+						<p>Write a Go tool that classifies an ELF file as non-PIE, PIE, or a shared library. The <code>debug/elf</code> package exposes the ELF type and program headers directly. The <code>DF_1_PIE</code> flag in <code>DT_FLAGS_1</code> identifies a PIE even when it is statically linked, so use it first and fall back to a <code>PT_INTERP</code> program header.</p>
 						<pre class="go">
 package main
 
@@ -1292,18 +990,7 @@ func main() {
 	fmt.Printf(&#34;%s: %s\n&#34;, os.Args[1], result)
 }
 						</pre>
-						<p>
-							Run it against
-							<code>/bin/ls</code>
-							and against a binary built with
-							<code>gcc -no-pie</code>
-							. Extend it to print
-							the entry point and to report whether the binary has a
-							<code>PT_GNU_RELRO</code>
-							segment and a
-							<code>PT_GNU_STACK</code>
-							segment without execute permission.
-						</p>
+						<p>Run it against <code>/bin/ls</code> and against a binary built with <code>gcc -no-pie</code> . Extend it to print the entry point and to report whether the binary has a <code>PT_GNU_RELRO</code> segment and a <code>PT_GNU_STACK</code> segment without execute permission.</p>
 					</section>
 					<section>
 						<h3 id="references">References</h3>

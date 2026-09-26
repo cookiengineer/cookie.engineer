@@ -140,22 +140,10 @@
 
 				<article>
 					<h2 id="process-injection-on-linux">Process Injection on Linux</h2>
-					<p>
-						ptrace-based shellcode injection, /proc/PID/mem manipulation, LD_PRELOAD, memfd_create fileless
-						execution, process_vm_writev, and GDB scripting for red team operations.
-					</p>
+					<p>ptrace-based shellcode injection, /proc/PID/mem manipulation, LD_PRELOAD, memfd_create fileless execution, process_vm_writev, and GDB scripting for red team operations.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							Process injection runs attacker-controlled code inside an already running process, so the payload
-							inherits the target's user, file descriptors, and network connections. After reading this article
-							you can attach with ptrace, write shellcode through
-							<code>/proc/PID/mem</code>
-							or
-							<code>process_vm_writev</code>
-							,
-							hijack execution through registers or the GOT, and run a fileless payload from a memfd.
-						</p>
+						<p>Process injection runs attacker-controlled code inside an already running process, so the payload inherits the target's user, file descriptors, and network connections. After reading this article you can attach with ptrace, write shellcode through <code>/proc/PID/mem</code> or <code>process_vm_writev</code> , hijack execution through registers or the GOT, and run a fileless payload from a memfd.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -169,11 +157,7 @@
 					</section>
 					<section>
 						<h3 id="anatomy-of-process-injection">Anatomy of Process Injection</h3>
-						<p>
-							Process injection is the technique of introducing arbitrary code into a running process and
-							redirecting execution to it. The goal: run your payload in the context of another process, inheriting
-							its permissions, network connections, and legitimacy.
-						</p>
+						<p>Process injection is the technique of introducing arbitrary code into a running process and redirecting execution to it. The goal: run your payload in the context of another process, inheriting its permissions, network connections, and legitimacy.</p>
 						<p>The injection pipeline has three stages:</p>
 						<pre class="plaintext">
 [1. ATTACH] ──► [2. INJECT] ──► [3. EXECUTE]
@@ -182,35 +166,12 @@
    │ /proc/PID/mem  │ mmap(2)        │ GOT overwrite
    │ process_vm     │ pwrite(2)      │ signal handler
 						</pre>
-						<p>
-							Each stage has constraints: the attachment method determines privilege requirements (ptrace
-							requires
-							<code>CAP_SYS_PTRACE</code>
-							or same UID), the injection method determines where in memory code
-							lands, and the execution trigger determines stealth.
-						</p>
+						<p>Each stage has constraints: the attachment method determines privilege requirements (ptrace requires <code>CAP_SYS_PTRACE</code> or same UID), the injection method determines where in memory code lands, and the execution trigger determines stealth.</p>
 					</section>
 					<section>
 						<h3 id="procpidmem-injection">/proc/PID/mem Injection</h3>
-						<p>
-							The
-							<code>/proc/PID/mem</code>
-							file is a memory image of the target process. With
-							<code>PTRACE_ATTACH</code>
-							, you
-							can read and write any mapped virtual address. Before Linux 3.2, or with
-							<code>ptrace_scope=0</code>
-							,
-							you could write directly; the Yama LSM now restricts this.
-						</p>
-						<p>
-							The technique: open
-							<code>/proc/PID/mem</code>
-							, seek to the target's executable stack (or a mmap'd region),
-							write shellcode, then redirect execution via SIGTR
-							<abbr title="Access Point">AP</abbr>
-							or register manipulation.
-						</p>
+						<p>The <code>/proc/PID/mem</code> file is a memory image of the target process. With <code>PTRACE_ATTACH</code> , you can read and write any mapped virtual address. Before Linux 3.2, or with <code>ptrace_scope=0</code> , you could write directly; the Yama LSM now restricts this.</p>
+						<p>The technique: open <code>/proc/PID/mem</code> , seek to the target's executable stack (or a mmap'd region), write shellcode, then redirect execution via SIGTR <abbr title="Access Point">AP</abbr> or register manipulation.</p>
 						<pre class="c">
 /*
  * proc_mem_inject.c — Inject shellcode via /proc/PID/mem
@@ -409,11 +370,7 @@ int main(int argc, char **argv)
 }
 						</pre>
 						<h4 id="verification">Verification</h4>
-						<p>
-							After injection, check
-							<code>/proc/PID/maps</code>
-							:
-						</p>
+						<p>After injection, check <code>/proc/PID/maps</code> :</p>
 						<pre class="bash">
 # Run the injector
 sudo ./proc_mem_inject 12345
@@ -427,16 +384,7 @@ nc -lvnp 4444
 					</section>
 					<section>
 						<h3 id="ptrace-poketext-injection">ptrace POKETEXT Injection</h3>
-						<p>
-							Instead of
-							<code>/proc/PID/mem</code>
-							, use
-							<code>PTRACE_POKETEXT</code>
-							to write 8 bytes at a time into the target's
-							text segment. This avoids the
-							<code>/proc/PID/mem</code>
-							file descriptor altogether:
-						</p>
+						<p>Instead of <code>/proc/PID/mem</code> , use <code>PTRACE_POKETEXT</code> to write 8 bytes at a time into the target's text segment. This avoids the <code>/proc/PID/mem</code> file descriptor altogether:</p>
 						<pre class="c">
 /*
  * ptrace_poke_inject.c — Inject shellcode using PTRACE_POKETEXT
@@ -641,12 +589,7 @@ int main(int argc, char **argv)
 					</section>
 					<section>
 						<h3 id="yama-lsm-and-ptrace-scope">Yama LSM and ptrace_scope</h3>
-						<p>
-							The Yama Linux Security Module restricts ptrace access to prevent exactly this attack. The value
-							in
-							<code>/proc/sys/kernel/yama/ptrace_scope</code>
-							controls the restriction:
-						</p>
+						<p>The Yama Linux Security Module restricts ptrace access to prevent exactly this attack. The value in <code>/proc/sys/kernel/yama/ptrace_scope</code> controls the restriction:</p>
 						<table>
 							<thead>
 								<tr>
@@ -664,12 +607,12 @@ int main(int argc, char **argv)
 								<tr>
 									<td align="center">1</td>
 									<td align="center">Restricted (default)</td>
-									<td align="center">Only parent-child or processes with<code>CAP_SYS_PTRACE</code></td>
+									<td align="center">Only parent-child or processes with <code>CAP_SYS_PTRACE</code></td>
 								</tr>
 								<tr>
 									<td align="center">2</td>
 									<td align="center">Admin-only</td>
-									<td align="center">Only processes with<code>CAP_SYS_PTRACE</code></td>
+									<td align="center">Only processes with <code>CAP_SYS_PTRACE</code></td>
 								</tr>
 								<tr>
 									<td align="center">3</td>
@@ -687,32 +630,11 @@ echo &#39;kernel.yama.ptrace_scope = 0&#39; &gt;&gt; /etc/sysctl.d/99-injection.
 sysctl -p /etc/sysctl.d/99-injection.conf
 						</pre>
 						<h4 id="bypass-without-root">Bypass Without Root</h4>
-						<p>
-							If you are the parent of the target (you forked it yourself),
-							<code>ptrace_scope=1</code>
-							still allows
-							attachment.
-						</p>
+						<p>If you are the parent of the target (you forked it yourself), <code>ptrace_scope=1</code> still allows attachment.</p>
 					</section>
 					<section>
 						<h3 id="process-vm-writev-injection">process_vm_writev Injection</h3>
-						<p>
-							<code>process_vm_writev(2)</code>
-							writes data directly into another process's memory without a
-							<code>PTRACE_ATTACH</code>
-							. Permission is governed by the
-							<code>PTRACE_MODE_ATTACH_REALCREDS</code>
-							check, so the caller needs the
-							same UID or
-							<code>CAP_SYS_PTRACE</code>
-							, and Yama's
-							<code>ptrace_scope</code>
-							rules still apply because the kernel
-							runs the same
-							<code>ptrace_may_access</code>
-							check. The syscall writes memory; it does not redirect execution,
-							so you still need a separate trigger.
-						</p>
+						<p><code>process_vm_writev(2)</code> writes data directly into another process's memory without a <code>PTRACE_ATTACH</code> . Permission is governed by the <code>PTRACE_MODE_ATTACH_REALCREDS</code> check, so the caller needs the same UID or <code>CAP_SYS_PTRACE</code> , and Yama's <code>ptrace_scope</code> rules still apply because the kernel runs the same <code>ptrace_may_access</code> check. The syscall writes memory; it does not redirect execution, so you still need a separate trigger.</p>
 						<pre class="c">
 /*
  * pvm_inject.c — Inject via process_vm_writev (no ptrace)
@@ -786,12 +708,7 @@ int main(int argc, char **argv)
 }
 						</pre>
 						<h4 id="trigger-execution">Trigger Execution</h4>
-						<p>
-							After writing with
-							<code>process_vm_writev</code>
-							you still need a redirect. Since you are the same UID,
-							you can:
-						</p>
+						<p>After writing with <code>process_vm_writev</code> you still need a redirect. Since you are the same UID, you can:</p>
 						<pre class="bash">
 # 1. Send SIGSTOP, then use PTRACE_ATTACH + PTRACE_SETREGS + PTRACE_DETACH
 # 2. Or overwrite a function pointer / GOT entry that will be called naturally
@@ -800,15 +717,7 @@ int main(int argc, char **argv)
 					</section>
 					<section>
 						<h3 id="got-overwrite-via-procpidmem">GOT Overwrite via /proc/PID/mem</h3>
-						<p>
-							Overwriting a Global Offset Table (GOT) entry redirects a library function call to your shellcode.
-							When the target calls
-							<code>printf()</code>
-							, it jumps to the GOT entry for
-							<code>printf</code>
-							, which now points
-							to your code.
-						</p>
+						<p>Overwriting a Global Offset Table (GOT) entry redirects a library function call to your shellcode. When the target calls <code>printf()</code> , it jumps to the GOT entry for <code>printf</code> , which now points to your code.</p>
 						<pre class="c">
 /*
  * got_overwrite.c — GOT overwrite injection via /proc/PID/mem
@@ -973,16 +882,7 @@ int main(int argc, char **argv)
 					</section>
 					<section>
 						<h3 id="memfd-create-fileless-execution">memfd_create - Fileless Execution</h3>
-						<p>
-							<code>memfd_create(2)</code>
-							creates an anonymous file in memory (backed by tmpfs, not disk). Combined
-							with
-							<code>fexecve(3)</code>
-							, you can execute an ELF binary that never touches the filesystem, bypassing
-							file-based AV/
-							<abbr title="Endpoint Detection and Response">EDR</abbr>
-							.
-						</p>
+						<p><code>memfd_create(2)</code> creates an anonymous file in memory (backed by tmpfs, not disk). Combined with <code>fexecve(3)</code> , you can execute an ELF binary that never touches the filesystem, bypassing file-based AV/ <abbr title="Endpoint Detection and Response">EDR</abbr> .</p>
 						<pre class="c">
 /*
  * memfd_exec.c — Execute an ELF from memory (fileless)
@@ -1072,20 +972,7 @@ int main(int argc, char **argv)
 }
 						</pre>
 						<h4 id="detection">Detection</h4>
-						<p>
-							Monitor
-							<code>memfd_create</code>
-							syscalls. Check
-							<code>/proc/PID/fd/</code>
-							for deleted files (
-							<code>(deleted)</code>
-							marker).
-							Check
-							<code>/proc/PID/exe</code>
-							; if it is a memfd file, it shows as a link to
-							<code>/memfd:</code>
-							.
-						</p>
+						<p>Monitor <code>memfd_create</code> syscalls. Check <code>/proc/PID/fd/</code> for deleted files ( <code>(deleted)</code> marker). Check <code>/proc/PID/exe</code> ; if it is a memfd file, it shows as a link to <code>/memfd:</code> .</p>
 					</section>
 					<section>
 						<h3 id="gdb-injection-scripted">GDB Injection (Scripted)</h3>
@@ -1116,14 +1003,7 @@ gdb -p &#34;$TARGET_PID&#34; -batch \
 rm -f &#34;$SHELLCODE_FILE&#34;
 						</pre>
 						<h4 id="gdb-stealth">GDB Stealth</h4>
-						<p>
-							GDB leaves traces. It writes to
-							<code>.gdb_history</code>
-							, loads Python scripts in
-							<code>~/.gdbinit</code>
-							, and
-							generates core dumps on segfaults. Clean up:
-						</p>
+						<p>GDB leaves traces. It writes to <code>.gdb_history</code> , loads Python scripts in <code>~/.gdbinit</code> , and generates core dumps on segfaults. Clean up:</p>
 						<pre class="bash">
 rm -f ~/.gdb_history /var/crash/*
 echo &#39;set confirm off&#39; &gt; /tmp/.gdbinit
@@ -1240,17 +1120,7 @@ sudo strace -p PID -e trace=ptrace,process_vm_writev,memfd_create
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Inject a payload into the looping
-							<code>/opt/target</code>
-							process inside the lab container. Attach with
-							ptrace, write shellcode into a writable-executable mapping, redirect
-							<abbr title="Routing Information Protocol">RIP</abbr>
-							, and confirm code execution. Then repeat the write with
-							<code>process_vm_writev</code>
-							and compare the
-							detection surface.
-						</p>
+						<p>Inject a payload into the looping <code>/opt/target</code> process inside the lab container. Attach with ptrace, write shellcode into a writable-executable mapping, redirect <abbr title="Routing Information Protocol">RIP</abbr> , and confirm code execution. Then repeat the write with <code>process_vm_writev</code> and compare the detection surface.</p>
 						<p><a href="/wiki/articles/redteam/process-injection.Containerfile">process-injection.Containerfile</a></p>
 						<pre class="bash">
 podman build -t injection-lab -f process-injection.Containerfile .

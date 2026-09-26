@@ -145,27 +145,10 @@
 
 				<article>
 					<h2 id="handle-tables">Handle Tables</h2>
-					<p>
-						Process handle tables, including handle encoding, table expansion, access validation, inheritance,
-						handle leaks, and the Linux file descriptor table analogue.
-					</p>
+					<p>Process handle tables, including handle encoding, table expansion, access validation, inheritance, handle leaks, and the Linux file descriptor table analogue.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							A handle is an opaque integer that indexes a per-process table, translating a user-space value
-							such as
-							<code>0x60</code>
-							into a kernel object pointer. Handle tables keep raw kernel addresses out of
-							user mode while giving the kernel a place to cache access rights and inheritance flags. This
-							article covers the Windows
-							<code>HANDLE_TABLE</code>
-							encoding and three-level expansion, then compares
-							it with the Linux
-							<code>files_struct</code>
-							and
-							<code>fdtable</code>
-							and the abuse patterns that both structures enable.
-						</p>
+						<p>A handle is an opaque integer that indexes a per-process table, translating a user-space value such as <code>0x60</code> into a kernel object pointer. Handle tables keep raw kernel addresses out of user mode while giving the kernel a place to cache access rights and inheritance flags. This article covers the Windows <code>HANDLE_TABLE</code> encoding and three-level expansion, then compares it with the Linux <code>files_struct</code> and <code>fdtable</code> and the abuse patterns that both structures enable.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -176,20 +159,8 @@
 					</section>
 					<section>
 						<h3 id="why-handle-tables-exist">Why Handle Tables Exist</h3>
-						<p>
-							A process interacts with kernel objects - files, threads, mutexes, shared memory sections -
-							through
-							<b>handles</b>
-							. A handle is an opaque integer that indexes into a per-process table.
-						</p>
-						<p>
-							The handle table serves as the translation layer between user-space handle values (like 0x60)
-							and kernel-space object pointers (like
-							<code>&amp;FileObject</code>
-							). Without handle tables, user mode would
-							need to store raw kernel pointers - a security disaster, as it would expose kernel memory layout
-							and enable arbitrary kernel read/write.
-						</p>
+						<p>A process interacts with kernel objects - files, threads, mutexes, shared memory sections - through <b>handles</b> . A handle is an opaque integer that indexes into a per-process table.</p>
+						<p>The handle table serves as the translation layer between user-space handle values (like 0x60) and kernel-space object pointers (like <code>&amp;FileObject</code> ). Without handle tables, user mode would need to store raw kernel pointers - a security disaster, as it would expose kernel memory layout and enable arbitrary kernel read/write.</p>
 						<pre class="plaintext">
 User Mode                            Kernel Mode
 ══════════                            ═══════════
@@ -219,26 +190,11 @@ ReadFile(hFile, buf, 4096)      │    HANDLE_TABLE    │
 
                 Windows: handle table
 						</pre>
-						<p>
-							Linux uses a flat array
-							<code>fdtable</code>
-							(inside
-							<code>struct files_struct</code>
-							), indexed directly by fd number.
-							Windows uses a more complex, multi-level table for scalability.
-						</p>
+						<p>Linux uses a flat array <code>fdtable</code> (inside <code>struct files_struct</code> ), indexed directly by fd number. Windows uses a more complex, multi-level table for scalability.</p>
 					</section>
 					<section>
 						<h3 id="the-handle-table-structure">The HANDLE_TABLE Structure</h3>
-						<p>
-							Every Windows process has an
-							<code>EPROCESS</code>
-							structure. Inside it,
-							<code>ObjectTable</code>
-							points to a
-							<code>HANDLE_TABLE</code>
-							:
-						</p>
+						<p>Every Windows process has an <code>EPROCESS</code> structure. Inside it, <code>ObjectTable</code> points to a <code>HANDLE_TABLE</code> :</p>
 						<pre class="plaintext">
 EPROCESS
   ...
@@ -259,13 +215,7 @@ EPROCESS
                          │  Flags          (ULONG)          │
                          └──────────────────────────────────┘
 						</pre>
-						<p>
-							Linux equivalent -
-							<code>struct files_struct</code>
-							and
-							<code>struct fdtable</code>
-							:
-						</p>
+						<p>Linux equivalent - <code>struct files_struct</code> and <code>struct fdtable</code> :</p>
 						<pre class="plaintext">
 task_struct
   files ──────►  files_struct
@@ -292,10 +242,7 @@ task_struct
 					</section>
 					<section>
 						<h3 id="handle-value-encoding">Handle Value Encoding</h3>
-						<p>
-							A Windows handle is a 32-bit or 64-bit value encoded with both the table index and flags in
-							its low bits:
-						</p>
+						<p>A Windows handle is a 32-bit or 64-bit value encoded with both the table index and flags in its low bits:</p>
 						<pre class="plaintext">
 32-bit Handle Encoding:
 ┌──────────────────────────────────+───────┐
@@ -324,14 +271,7 @@ Example:
   &gt;&gt; 2 = 0x19 = index 25
   &amp; 0x3 = 0x3 = PROTECT_FROM_CLOSE | INHERIT
 						</pre>
-						<p>
-							In Linux, file descriptors use no encoding - the fd number directly indexes the
-							<code>fd</code>
-							array.
-							The
-							<code>O_CLOEXEC</code>
-							flag is stored in a separate bitmap, not encoded in the fd number:
-						</p>
+						<p>In Linux, file descriptors use no encoding - the fd number directly indexes the <code>fd</code> array. The <code>O_CLOEXEC</code> flag is stored in a separate bitmap, not encoded in the fd number:</p>
 						<pre class="bash">
 # Linux fd allocation: simple sequential allocation
 # No encoding, just direct array index
@@ -352,13 +292,7 @@ for fd in fds[:3]:
 					</section>
 					<section>
 						<h3 id="low-level-handle-creation">Low-Level Handle Creation</h3>
-						<p>
-							When
-							<code>ObInsertObject()</code>
-							needs to create a user-mode handle for a kernel object, it calls
-							<code>ObpCreateHandle()</code>
-							:
-						</p>
+						<p>When <code>ObInsertObject()</code> needs to create a user-mode handle for a kernel object, it calls <code>ObpCreateHandle()</code> :</p>
 						<pre class="plaintext">
 ObpCreateHandle(Process, Object, AccessMask, Flags)
     │
@@ -376,11 +310,7 @@ ObpCreateHandle(Process, Object, AccessMask, Flags)
     ├── 7. Unlock HandleTable
     └── 8. Return encoded handle to caller
 						</pre>
-						<p>
-							Each table entry is an
-							<code>OBJECT_HANDLE_TABLE_ENTRY</code>
-							:
-						</p>
+						<p>Each table entry is an <code>OBJECT_HANDLE_TABLE_ENTRY</code> :</p>
 						<pre class="plaintext">
 ┌──────────────────────────────────────────────┐
 │  OBJECT_HANDLE_TABLE_ENTRY (bytes may vary)  │
@@ -399,13 +329,7 @@ ObpCreateHandle(Process, Object, AccessMask, Flags)
 │  };                                          │
 └──────────────────────────────────────────────┘
 						</pre>
-						<p>
-							Linux fd allocation is simpler -
-							<code>get_unused_fd_flags()</code>
-							finds the next zero bit in the
-							<code>open_fds</code>
-							bitmap, expands the table if needed, and returns the fd number:
-						</p>
+						<p>Linux fd allocation is simpler - <code>get_unused_fd_flags()</code> finds the next zero bit in the <code>open_fds</code> bitmap, expands the table if needed, and returns the fd number:</p>
 						<pre class="bash">
 # Trace fd allocation in Linux
 sudo bpftrace -e &#39;
@@ -422,12 +346,7 @@ kprobe:__put_unused_fd {
 					</section>
 					<section>
 						<h3 id="handle-table-expansion">Handle Table Expansion</h3>
-						<p>
-							The Windows handle table uses a
-							<b>three-level (sparse) scheme</b>
-							to conserve memory for processes
-							with few handles while supporting millions of handles:
-						</p>
+						<p>The Windows handle table uses a <b>three-level (sparse) scheme</b> to conserve memory for processes with few handles while supporting millions of handles:</p>
 						<pre class="plaintext">
 TableCode Encoding:
   ┌────────────────────────────────┐
@@ -464,12 +383,7 @@ Handle → Entry Translation:
   if Level == 1: Entry = Table[Index &gt;&gt; 9][Index &amp; 0x1FF]
   if Level == 2: Entry = Table[Index &gt;&gt; 18][(Index &gt;&gt; 9) &amp; 0x1FF][Index &amp; 0x1FF]
 						</pre>
-						<p>
-							Linux file descriptor expansion is simpler - the
-							<code>fdtable</code>
-							is a flat array that's reallocated
-							when full:
-						</p>
+						<p>Linux file descriptor expansion is simpler - the <code>fdtable</code> is a flat array that's reallocated when full:</p>
 						<pre class="bash">
 # Linux fd table expansion: flat array with bitmap
 # Default: 64 inline entries in files_struct
@@ -510,11 +424,7 @@ kprobe:expand_files {
 					</section>
 					<section>
 						<h3 id="access-validation">Access Validation</h3>
-						<p>
-							When a handle is created, the Object Manager validates that the caller has sufficient access
-							rights. The desired access mask (what the caller wants) is compared against the granted access
-							mask (what the security subsystem allows):
-						</p>
+						<p>When a handle is created, the Object Manager validates that the caller has sufficient access rights. The desired access mask (what the caller wants) is compared against the granted access mask (what the security subsystem allows):</p>
 						<pre class="plaintext">
 ACCESS_MASK Structure (32 bits):
 ┌────+───+──+──────────────────────────────+─────────────────────────┐
@@ -544,10 +454,7 @@ AccessCheck Algorithm (simplified):
       ...
       return GrantedAccess
 						</pre>
-						<p>
-							The granted access mask is stored in the handle table entry. Subsequent operations using the
-							handle automatically succeed because the access was pre-validated:
-						</p>
+						<p>The granted access mask is stored in the handle table entry. Subsequent operations using the handle automatically succeed because the access was pre-validated:</p>
 						<pre class="bash">
 # Linux access validation: checked at open() time, not encoded in fd
 # The struct file carries f_mode (FMODE_READ, FMODE_WRITE) but runtime
@@ -606,10 +513,7 @@ Parent Process (PID 1000)              Child Process (PID 2000)
 │                                     │ CloseHandle(h)
 │                                     │ HandleCount = 0 → event destroyed
 						</pre>
-						<p>
-							<code>DuplicateHandle()</code>
-							allows one process to inject a handle into another:
-						</p>
+						<p><code>DuplicateHandle()</code> allows one process to inject a handle into another:</p>
 						<pre class="plaintext">
 DuplicateHandle(srcProcess, srcHandle,
                 dstProcess, &amp;dstHandle,
@@ -627,13 +531,7 @@ Options:
   DUPLICATE_CLOSE_SOURCE   — close srcHandle after duplication
   DUPLICATE_SAME_ACCESS    — copy granted access from source handle
 						</pre>
-						<p>
-							Linux fd inheritance uses
-							<code>O_CLOEXEC</code>
-							flag and
-							<code>close-on-exec</code>
-							bitmap:
-						</p>
+						<p>Linux fd inheritance uses <code>O_CLOEXEC</code> flag and <code>close-on-exec</code> bitmap:</p>
 						<pre class="bash">
 # Linux fd inheritance across fork/exec
 
@@ -673,14 +571,7 @@ with open(&#39;/proc/self/fd/&#39; + str(fd_to_send)) as f:
 					</section>
 					<section>
 						<h3 id="handle-auditing-obpauditobjectaccess">Handle Auditing: ObpAuditObjectAccess</h3>
-						<p>
-							Windows can generate audit events when handles are created or closed for objects with a System
-							Access Control List (S
-							<abbr title="Access Control List">ACL</abbr>
-							). The kernel routine
-							<code>ObpAuditObjectAccess()</code>
-							records:
-						</p>
+						<p>Windows can generate audit events when handles are created or closed for objects with a System Access Control List (S <abbr title="Access Control List">ACL</abbr> ). The kernel routine <code>ObpAuditObjectAccess()</code> records:</p>
 						<ul>
 							<li>Subject (user SID, process ID)</li>
 							<li>Object (name, type)</li>
@@ -706,11 +597,7 @@ Audit Flow:
           │
           └── SeAuditWithClosure → EventLog
 						</pre>
-						<p>
-							Linux auditing uses
-							<code>auditd</code>
-							with syscall rules:
-						</p>
+						<p>Linux auditing uses <code>auditd</code> with syscall rules:</p>
 						<pre class="bash">
 # Linux file descriptor audit equivalent
 # Enable auditing and add rules for specific files
@@ -732,11 +619,7 @@ sudo auditctl -d exit,always -F path=/etc/shadow -F perm=r -F key=shadow-read
 					</section>
 					<section>
 						<h3 id="process-explorer-handleexe-analysis">Process Explorer / Handle.exe Analysis</h3>
-						<p>
-							Sysinternals
-							<b>Process Explorer</b>
-							displays the full handle table of any process. Key columns:
-						</p>
+						<p>Sysinternals <b>Process Explorer</b> displays the full handle table of any process. Key columns:</p>
 						<table>
 							<thead>
 								<tr>
@@ -755,7 +638,7 @@ sudo auditctl -d exit,always -F path=/etc/shadow -F perm=r -F key=shadow-read
 								</tr>
 								<tr>
 									<td align="center">Name</td>
-									<td align="center">Object name (e.g.,<code>\Device\HarddiskVolume3\Windows\System32\ntdll.dll</code>)</td>
+									<td align="center">Object name (e.g., <code>\Device\HarddiskVolume3\Windows\System32\ntdll.dll</code>)</td>
 								</tr>
 								<tr>
 									<td align="center">Access</td>
@@ -763,10 +646,7 @@ sudo auditctl -d exit,always -F path=/etc/shadow -F perm=r -F key=shadow-read
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							<b>Handle.exe</b>
-							(command-line) enumerates all handles system-wide:
-						</p>
+						<p><b>Handle.exe</b> (command-line) enumerates all handles system-wide:</p>
 						<pre class="plaintext">
 handle -a                          # All handles on the system
 handle -p 1234                     # Handles for PID 1234
@@ -807,10 +687,7 @@ sudo perf trace -e &#39;close,open*&#39; -p $$ --no-inherit
 					</section>
 					<section>
 						<h3 id="handle-leaks">Handle Leaks</h3>
-						<p>
-							A handle leak occurs when a process opens handles but never closes them. Over time, the handle
-							table grows, the kernel objects accumulate, and the process eventually hits its handle quota.
-						</p>
+						<p>A handle leak occurs when a process opens handles but never closes them. Over time, the handle table grows, the kernel objects accumulate, and the process eventually hits its handle quota.</p>
 						<pre class="plaintext">
 Handle Leak Example (Windows):
 ══════════════════════════════════════════════════════════════
@@ -830,11 +707,7 @@ Detection:
   Process Explorer handle view   ← hundreds of unnamed Event objects
   !handle in WinDbg              ← kernel debugger: dump handle table
 						</pre>
-						<p>
-							Linux fd leaks are analogous - unreachable fds (no
-							<code>O_CLOEXEC</code>
-							) that are never closed:
-						</p>
+						<p>Linux fd leaks are analogous - unreachable fds (no <code>O_CLOEXEC</code> ) that are never closed:</p>
 						<pre class="bash">
 # Linux fd leak detection
 
@@ -883,13 +756,7 @@ for fd in fds:
 					</section>
 					<section>
 						<h3 id="abuse-patterns">Abuse Patterns</h3>
-						<p>
-							<b>Handle Hijacking</b>
-							- an attacker with sufficient privileges (
-							<code>PROCESS_DUP_HANDLE</code>
-							) duplicates
-							a handle from a privileged process into their own handle table:
-						</p>
+						<p><b>Handle Hijacking</b> - an attacker with sufficient privileges ( <code>PROCESS_DUP_HANDLE</code> ) duplicates a handle from a privileged process into their own handle table:</p>
 						<pre class="plaintext">
 Attacker (PID 5000)                    LSASS (PID 600)
 │                                      │
@@ -908,23 +775,8 @@ Attacker (PID 5000)                    LSASS (PID 600)
 │ Now attacker has KEY_READ access     │
 │ to SAM hive through stolenHandle     │
 						</pre>
-						<p>
-							<b>LSASS Handle Theft</b>
-							- attackers with
-							<code>SeDebugPrivilege</code>
-							can open
-							<abbr title="Local Security Authority Subsystem Service">LSASS</abbr>
-							with
-							<code>PROCESS_DUP_HANDLE</code>
-							, enumerate its handle table, and duplicate handles to authentication
-							tokens or cached credentials.
-						</p>
-						<p>
-							<b>CSRSS Handle Extraction</b>
-							- CSRSS (Client/Server Runtime Subsystem) holds handles to every
-							console process. In older Windows versions, duplicating a CSRSS handle to a target process gave
-							full process access.
-						</p>
+						<p><b>LSASS Handle Theft</b> - attackers with <code>SeDebugPrivilege</code> can open <abbr title="Local Security Authority Subsystem Service">LSASS</abbr> with <code>PROCESS_DUP_HANDLE</code> , enumerate its handle table, and duplicate handles to authentication tokens or cached credentials.</p>
+						<p><b>CSRSS Handle Extraction</b> - CSRSS (Client/Server Runtime Subsystem) holds handles to every console process. In older Windows versions, duplicating a CSRSS handle to a target process gave full process access.</p>
 						<p>Linux equivalent abuse patterns:</p>
 						<pre class="bash">
 # Linux &#34;handle hijacking&#34; equivalent: fd passing, /proc/PID/fd/ access
@@ -983,10 +835,7 @@ PYEOF
 					</section>
 					<section>
 						<h3 id="sedebugprivilege-escalation">SeDebugPrivilege Escalation</h3>
-						<p>
-							<code>SeDebugPrivilege</code>
-							is the most powerful Windows privilege for handle manipulation. It grants:
-						</p>
+						<p><code>SeDebugPrivilege</code> is the most powerful Windows privilege for handle manipulation. It grants:</p>
 						<pre class="plaintext">
 SeDebugPrivilege Effects on Handle Operations:
   - NtOpenProcess: bypass DACL — can open ANY process
@@ -1119,14 +968,7 @@ wait $LEAK_PID 2&gt;/dev/null
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Write a Go tool that decodes a Linux process handle table. Read
-							<code>/proc/&lt;pid&gt;/fd</code>
-							and
-							<code>/proc/&lt;pid&gt;/fdinfo/&lt;fd&gt;</code>
-							, resolve the target path, and print the file descriptor, its access mode, and what it points
-							to. Run it against a shell and watch new descriptors appear as you open files.
-						</p>
+						<p>Write a Go tool that decodes a Linux process handle table. Read <code>/proc/&lt;pid&gt;/fd</code> and <code>/proc/&lt;pid&gt;/fdinfo/&lt;fd&gt;</code> , resolve the target path, and print the file descriptor, its access mode, and what it points to. Run it against a shell and watch new descriptors appear as you open files.</p>
 						<pre class="go">
 package main
 

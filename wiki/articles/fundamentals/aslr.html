@@ -169,22 +169,10 @@
 
 				<article>
 					<h2 id="aslr-address-space-randomization">ASLR - Address Space Randomization</h2>
-					<p>
-						How ASLR randomizes stack, heap, mmap, and executable base addresses per execution, its entropy
-						limits, kernel configuration, and bypass techniques.
-					</p>
+					<p>How ASLR randomizes stack, heap, mmap, and executable base addresses per execution, its entropy limits, kernel configuration, and bypass techniques.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							Without ASLR, every run of a program places its stack, heap, shared libraries, and (for non-PIE
-							binaries) its code at predictable addresses, so a single leaked address reveals the whole layout.
-							ASLR randomizes those bases per execution, forcing an attacker to obtain an information leak
-							first. This article explains which regions are randomized, how much entropy each receives on
-							x86-64, how the
-							<code>randomize_va_space</code>
-							sysctl controls it, and the leak and brute-force techniques
-							used to bypass it.
-						</p>
+						<p>Without ASLR, every run of a program places its stack, heap, shared libraries, and (for non-PIE binaries) its code at predictable addresses, so a single leaked address reveals the whole layout. ASLR randomizes those bases per execution, forcing an attacker to obtain an information leak first. This article explains which regions are randomized, how much entropy each receives on x86-64, how the <code>randomize_va_space</code> sysctl controls it, and the leak and brute-force techniques used to bypass it.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -196,31 +184,11 @@
 					</section>
 					<section>
 						<h3 id="the-problem-aslr-solves">The Problem ASLR Solves</h3>
-						<p>
-							Without ASLR, every execution of a program maps its memory regions at identical, predictable
-							virtual addresses. A standard 64-bit ELF executable loads at
-							<code>0x400000</code>
-							. The heap starts just
-							after the BSS segment. Shared libraries load at deterministic offsets from
-							<code>0x7ffff7ff5000</code>
-							. The stack starts at a fixed high address (near
-							<code>0x7ffffffff000</code>
-							).
-						</p>
-						<p>
-							This determinism means an exploit developed on the attacker's system works identically on the
-							target - offsets, addresses, and layout are known in advance. A single leak of the binary format
-							is a complete exploit blueprint.
-						</p>
-						<p>
-							ASLR introduces per-execution randomization: each time a process starts, its key memory regions
-							<ul>
-								<li>the stack, heap, mmap area (shared libraries), and (with PIE) the executable itself -</li>
-							</ul>
-							are
-							placed at random offsets from their typical base addresses. The attacker can no longer hardcode
-							addresses. A leaked address from one run is useless on the next.
-						</p>
+						<p>Without ASLR, every execution of a program maps its memory regions at identical, predictable virtual addresses. A standard 64-bit ELF executable loads at <code>0x400000</code> . The heap starts just after the BSS segment. Shared libraries load at deterministic offsets from <code>0x7ffff7ff5000</code> . The stack starts at a fixed high address (near <code>0x7ffffffff000</code> ).</p>
+						<p>This determinism means an exploit developed on the attacker's system works identically on the target - offsets, addresses, and layout are known in advance. A single leak of the binary format is a complete exploit blueprint.</p>
+						<p>ASLR introduces per-execution randomization: each time a process starts, its key memory regions<ul>
+	<li>the stack, heap, mmap area (shared libraries), and (with PIE) the executable itself -</li>
+</ul> are placed at random offsets from their typical base addresses. The attacker can no longer hardcode addresses. A leaked address from one run is useless on the next.</p>
 					</section>
 					<section>
 						<h3 id="what-gets-randomized">What Gets Randomized</h3>
@@ -278,11 +246,7 @@
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							The entropy numbers represent the number of bits that vary between runs. With 28 bits of entropy,
-							the mmap base can land in any of 2^28~ 268 million possible positions. On a 4 KiB page-aligned
-							address space, this means 28 bits of randomness in the upper address bits.
-						</p>
+						<p>The entropy numbers represent the number of bits that vary between runs. With 28 bits of entropy, the mmap base can land in any of 2^28~ 268 million possible positions. On a 4 KiB page-aligned address space, this means 28 bits of randomness in the upper address bits.</p>
 					</section>
 					<section>
 						<h3 id="the-randomize-va-space-knob">The randomize_va_space Knob</h3>
@@ -312,16 +276,11 @@ cat /proc/sys/kernel/randomize_va_space
 								<tr>
 									<td align="center">2</td>
 									<td align="center">Full</td>
-									<td align="center">Randomize everything plus heap (brk area).<b>Default on all modern distros.</b></td>
+									<td align="center">Randomize everything plus heap (brk area). <b>Default on all modern distros.</b></td>
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							The value is set early in kernel initialization (in
-							<code>arch/x86/kernel/process.c</code>
-							) and can be
-							changed at runtime (affects new processes, not existing ones):
-						</p>
+						<p>The value is set early in kernel initialization (in <code>arch/x86/kernel/process.c</code> ) and can be changed at runtime (affects new processes, not existing ones):</p>
 						<pre class="bash">
 # Check current setting
 sysctl kernel.randomize_va_space
@@ -336,32 +295,12 @@ echo 2 | sudo tee /proc/sys/kernel/randomize_va_space
 # Make it persistent across reboots
 echo &#34;kernel.randomize_va_space = 2&#34; | sudo tee /etc/sysctl.d/99-aslr.conf
 						</pre>
-						<p>
-							On ArchLinux, the default
-							<code>/usr/lib/sysctl.d/50-default.conf</code>
-							sets this to 2.
-						</p>
+						<p>On ArchLinux, the default <code>/usr/lib/sysctl.d/50-default.conf</code> sets this to 2.</p>
 					</section>
 					<section>
 						<h3 id="how-the-kernel-implements-aslr">How the Kernel Implements ASLR</h3>
-						<p>
-							ASLR is implemented across several kernel subsystems. The randomization happens at different
-							points depending on the region:
-						</p>
-						<p>
-							<b>Stack randomization</b>
-							-
-							<code>arch/x86/kernel/process.c:arch_align_stack()</code>
-							: The stack pointer
-							is randomized when a new process starts (in
-							<code>load_elf_binary</code>
-							). The kernel computes a random
-							offset (up to 8 MiB on 32-bit and about 16 GiB on 64-bit, controlled by
-							<code>STACK_RND_MASK</code>
-							) and
-							subtracts it from the initial stack pointer. This shifts the entire stack region down by that
-							random amount.
-						</p>
+						<p>ASLR is implemented across several kernel subsystems. The randomization happens at different points depending on the region:</p>
+						<p><b>Stack randomization</b> - <code>arch/x86/kernel/process.c:arch_align_stack()</code> : The stack pointer is randomized when a new process starts (in <code>load_elf_binary</code> ). The kernel computes a random offset (up to 8 MiB on 32-bit and about 16 GiB on 64-bit, controlled by <code>STACK_RND_MASK</code> ) and subtracts it from the initial stack pointer. This shifts the entire stack region down by that random amount.</p>
 						<pre class="c">
 // Simplified kernel logic for stack randomization
 // From fs/binfmt_elf.c:randomize_stack_top()
@@ -374,13 +313,7 @@ unsigned long randomize_stack_top(unsigned long stack_top)
     return stack_top - random_variable;
 }
 						</pre>
-						<p>
-							<b>mmap randomization</b>
-							-
-							<code>arch/x86/mm/mmap.c:arch_mmap_rnd()</code>
-							: The mmap base address (where
-							shared libraries and anonymous mappings are placed) is randomized using a larger entropy pool:
-						</p>
+						<p><b>mmap randomization</b> - <code>arch/x86/mm/mmap.c:arch_mmap_rnd()</code> : The mmap base address (where shared libraries and anonymous mappings are placed) is randomized using a larger entropy pool:</p>
 						<pre class="c">
 // From arch/x86/mm/mmap.c
 unsigned long arch_mmap_rnd(void)
@@ -392,13 +325,7 @@ unsigned long arch_mmap_rnd(void)
     return rnd &lt;&lt; PAGE_SHIFT;
 }
 						</pre>
-						<p>
-							<b>Heap (brk) randomization</b>
-							-
-							<code>arch/x86/kernel/process.c</code>
-							: The brk base (initial program break,
-							where the heap starts) is offset from the end of the data segment:
-						</p>
+						<p><b>Heap (brk) randomization</b> - <code>arch/x86/kernel/process.c</code> : The brk base (initial program break, where the heap starts) is offset from the end of the data segment:</p>
 						<pre class="c">
 // The brk random offset is computed in arch_randomize_brk()
 unsigned long arch_randomize_brk(struct mm_struct *mm)
@@ -408,35 +335,12 @@ unsigned long arch_randomize_brk(struct mm_struct *mm)
     return mm-&gt;brk + (rnd &lt;&lt; PAGE_SHIFT);
 }
 						</pre>
-						<p>
-							<b>Executable randomization</b>
-							requires PIE (Position-Independent Executable) - the binary must
-							be compiled as
-							<code>ET_DYN</code>
-							and loaded by
-							<code>mmap</code>
-							rather than at a fixed address. See
-							<a href="/wiki/articles/fundamentals/pie.html">PIE</a>
-							.
-						</p>
-						<p>
-							<b>vDSO randomization:</b>
-							The kernel maps its virtual dynamic shared object (linux-vdso.so.1)
-							into each process. On x86-64, the vDSO is randomized alongside the mmap region, since it's mapped
-							via
-							<code>arch_setup_additional_pages</code>
-							->
-							<code>get_unmapped_area</code>
-							which respects the mmap randomization
-							offset.
-						</p>
+						<p><b>Executable randomization</b> requires PIE (Position-Independent Executable) - the binary must be compiled as <code>ET_DYN</code> and loaded by <code>mmap</code> rather than at a fixed address. See <a href="/wiki/articles/fundamentals/pie.html">PIE</a> .</p>
+						<p><b>vDSO randomization:</b> The kernel maps its virtual dynamic shared object (linux-vdso.so.1) into each process. On x86-64, the vDSO is randomized alongside the mmap region, since it's mapped via <code>arch_setup_additional_pages</code> -> <code>get_unmapped_area</code> which respects the mmap randomization offset.</p>
 					</section>
 					<section>
 						<h3 id="the-randomization-budget">The Randomization Budget</h3>
-						<p>
-							The amount of entropy available for randomization depends on the size of the virtual address
-							space for that region and architectural constraints:
-						</p>
+						<p>The amount of entropy available for randomization depends on the size of the virtual address space for that region and architectural constraints:</p>
 						<h4 id="x86-64-address-space-layout">x86-64 Address Space Layout</h4>
 						<pre class="plaintext">
 0x0000000000000000 ─────────────────────── NULL / unmapped guard
@@ -455,14 +359,7 @@ unsigned long arch_randomize_brk(struct mm_struct *mm)
 0x00007f8000000000 — 0x00007fffffffffff   Stack + mmap region (~512 GiB)
 0x00007fffffffffff                         Stack top
 						</pre>
-						<p>
-							The mmap region on x86-64 uses approximately 28 bits of entropy. The stack uses 22 bits. Why
-							the difference? The stack must be adjacent to the top of user space and grow downward - its
-							randomization range is constrained by the fixed
-							<code>STACK_TOP_MAX</code>
-							and the need to not collide
-							with the mmap region. The mmap region has a larger address range to work with.
-						</p>
+						<p>The mmap region on x86-64 uses approximately 28 bits of entropy. The stack uses 22 bits. Why the difference? The stack must be adjacent to the top of user space and grow downward - its randomization range is constrained by the fixed <code>STACK_TOP_MAX</code> and the need to not collide with the mmap region. The mmap region has a larger address range to work with.</p>
 					</section>
 					<section>
 						<h3 id="verifying-aslr-before-and-after">Verifying ASLR: Before and After</h3>
@@ -565,25 +462,13 @@ cat /proc/self/maps | head -10
 					</section>
 					<section>
 						<h3 id="aslr-and-pie-the-missing-piece">ASLR and PIE: The Missing Piece</h3>
-						<p>
-							Non-PIE executables load at a fixed base address - typically
-							<code>0x400000</code>
-							on x86-64. Even with
-							ASLR at level 2, the main binary's .text, .data, and .bss segments are at fixed positions. This
-							means:
-						</p>
+						<p>Non-PIE executables load at a fixed base address - typically <code>0x400000</code> on x86-64. Even with ASLR at level 2, the main binary's .text, .data, and .bss segments are at fixed positions. This means:</p>
 						<ul>
 							<li>Return addresses into the main binary are predictable (any <abbr title="Return-Oriented Programming">ROP</abbr> gadget in the binary has a fixed address).</li>
 							<li>GOT entries within the binary are at known addresses.</li>
 							<li>Function pointers within the binary (vtables, callback arrays) are at known addresses.</li>
 						</ul>
-						<p>
-							PIE compiles the main executable as position-independent, allowing the kernel to randomize its
-							base address just like any shared library. See
-							<a href="/wiki/articles/fundamentals/pie.html">PIE</a>
-							for
-							the full mechanism.
-						</p>
+						<p>PIE compiles the main executable as position-independent, allowing the kernel to randomize its base address just like any shared library. See <a href="/wiki/articles/fundamentals/pie.html">PIE</a> for the full mechanism.</p>
 						<h4 id="checking-if-a-binary-is-pie">Checking if a binary is PIE</h4>
 						<pre class="bash">
 readelf -h /bin/ls | grep Type
@@ -601,12 +486,7 @@ readelf -h /usr/bin/* 2&gt;/dev/null | grep -B1 &#39;Type:.*EXEC&#39;
 					</section>
 					<section>
 						<h3 id="aslr-entropy-limits">ASLR Entropy Limits</h3>
-						<p>
-							<b>32-bit entropy crisis:</b>
-							On 32-bit x86, the virtual address space is only 4 GiB. The mmap
-							randomization region is constrained to about 8 bits of entropy (256 possible positions). This
-							makes brute-force attacks viable:
-						</p>
+						<p><b>32-bit entropy crisis:</b> On 32-bit x86, the virtual address space is only 4 GiB. The mmap randomization region is constrained to about 8 bits of entropy (256 possible positions). This makes brute-force attacks viable:</p>
 						<pre class="plaintext">
 x86-32 ASLR entropy (Linux, kernel 6.x):
   Stack:   ~11 bits (2048 positions, 8 MiB range)
@@ -614,34 +494,13 @@ x86-32 ASLR entropy (Linux, kernel 6.x):
   Heap:    ~13 bits (8192 positions)
   Exec/PIE:~8 bits
 						</pre>
-						<p>
-							An exploit that crashes and restarts a service can brute-force the 8-bit mmap offset in~128
-							attempts on average, which takes seconds on a networked service.
-						</p>
-						<p>
-							<b>The PaX ASLR approach (historical):</b>
-							The PaX project (precursor to modern Linux ASLR) used
-							the x86 segment registers to shuffle address spaces more aggressively, creating up to 16 bits
-							of entropy on 32-bit. Kernel stack randomization from this line of work was later merged into
-							mainline as
-							<code>CONFIG_RANDOMIZE_KSTACK_OFFSET</code>
-							.
-						</p>
-						<p>
-							<b>64-bit resistance:</b>
-							With 28 bits of mmap entropy on x86-64, brute-force requires~134 million
-							attempts on average. Coupled with the process dying on crash (no infinite retries), this is
-							not practical for most remote exploits.
-						</p>
+						<p>An exploit that crashes and restarts a service can brute-force the 8-bit mmap offset in~128 attempts on average, which takes seconds on a networked service.</p>
+						<p><b>The PaX ASLR approach (historical):</b> The PaX project (precursor to modern Linux ASLR) used the x86 segment registers to shuffle address spaces more aggressively, creating up to 16 bits of entropy on 32-bit. Kernel stack randomization from this line of work was later merged into mainline as <code>CONFIG_RANDOMIZE_KSTACK_OFFSET</code> .</p>
+						<p><b>64-bit resistance:</b> With 28 bits of mmap entropy on x86-64, brute-force requires~134 million attempts on average. Coupled with the process dying on crash (no infinite retries), this is not practical for most remote exploits.</p>
 					</section>
 					<section>
 						<h3 id="information-leaks-the-aslr-bypass">Information Leaks: The ASLR Bypass</h3>
-						<p>
-							The primary bypass for ASLR is not brute force - it's
-							<b>information leakage</b>
-							. If an attacker
-							can leak a single address from the target's address space, they can calculate all others because:
-						</p>
+						<p>The primary bypass for ASLR is not brute force - it's <b>information leakage</b> . If an attacker can leak a single address from the target's address space, they can calculate all others because:</p>
 						<ol>
 							<li><b>Offset relationships are constant:</b> The distance between <code>system()</code> and <code>printf()</code> in libc is fixed (determined at compilation). Leak <code>printf</code> 's address, compute <code>system</code> 's = <code>printf_addr - printf_offset + system_offset</code> .</li>
 						</ol>
@@ -692,22 +551,9 @@ gcc -o fmtstr_leak fmtstr_leak.c -no-pie -fno-stack-protector
 					</section>
 					<section>
 						<h3 id="partial-overwrites">Partial Overwrites</h3>
-						<p>
-							When the attacker doesn't have a full address leak but knows some bytes, they can use partial
-							overwrites:
-						</p>
-						<p>
-							<b>Scenario:</b>
-							A buffer overflow overwrites a pointer. The overflow is limited - only the least
-							significant 2 bytes are controllable. The upper bytes (already on the stack/memory from the
-							original pointer) remain.
-						</p>
-						<p>
-							On x86-64, addresses are 48-bit (sign-extended from bit 47). The lower 12 bits are the page
-							offset (fixed, known). This leaves 36 bits of actual entropy. If the attacker can overwrite
-							2 bytes (16 bits), they reduce uncertainty by 16 bits - a 1-in-65536 brute force per attempt,
-							which is practical for local exploits.
-						</p>
+						<p>When the attacker doesn't have a full address leak but knows some bytes, they can use partial overwrites:</p>
+						<p><b>Scenario:</b> A buffer overflow overwrites a pointer. The overflow is limited - only the least significant 2 bytes are controllable. The upper bytes (already on the stack/memory from the original pointer) remain.</p>
+						<p>On x86-64, addresses are 48-bit (sign-extended from bit 47). The lower 12 bits are the page offset (fixed, known). This leaves 36 bits of actual entropy. If the attacker can overwrite 2 bytes (16 bits), they reduce uncertainty by 16 bits - a 1-in-65536 brute force per attempt, which is practical for local exploits.</p>
 						<pre class="c">
 // partial_overwrite_demo.c
 // Compile: gcc -o partial_overwrite partial_overwrite_demo.c -no-pie
@@ -729,25 +575,11 @@ int main(void) {
     return 0;
 }
 						</pre>
-						<p>
-							On a non-PIE binary,
-							<code>main()</code>
-							is at
-							<code>0x400000 + offset</code>
-							. If the attacker leaks the low 2 bytes
-							of a return address into
-							<code>main</code>
-							, they know the binary base. With PIE, they'd also need to leak
-							2 bytes of the PIE base offset, making partial overwrites harder but still theoretically possible.
-						</p>
+						<p>On a non-PIE binary, <code>main()</code> is at <code>0x400000 + offset</code> . If the attacker leaks the low 2 bytes of a return address into <code>main</code> , they know the binary base. With PIE, they'd also need to leak 2 bytes of the PIE base offset, making partial overwrites harder but still theoretically possible.</p>
 					</section>
 					<section>
 						<h3 id="heap-randomization-and-its-limits">Heap Randomization and Its Limits</h3>
-						<p>
-							The heap (brk area) has only 13 bits of randomization on x86-64. This is because the brk area
-							traditionally starts right after the data+BSS segments and grows upward. There isn't much room
-							to shift it without running into the mmap region.
-						</p>
+						<p>The heap (brk area) has only 13 bits of randomization on x86-64. This is because the brk area traditionally starts right after the data+BSS segments and grows upward. There isn't much room to shift it without running into the mmap region.</p>
 						<pre class="c">
 // heap_aslr.c — demonstrate heap randomization
 // Compile: gcc -o heap_aslr heap_aslr.c -no-pie
@@ -813,54 +645,19 @@ for i in $(seq 1 3); do ./heap_aslr; echo &#34;---&#34;; done
   0x7ffe123f2000-0x7ffe123f6000   r--p  [vvar]
   0x7ffe123f6000-0x7ffe123f8000   r-xp  [vdso]
 						</pre>
-						<p>
-							Key observations: - PIE binary base is completely random (0x5d4b... above - changes every run)
-							<ul>
-								<li>libc, ld-linux, and other libraries cluster in the mmap region (0x7f...)</li>
-								<li>Stack is near top of user space (0x7ffe...) with 22 bits randomization</li>
-								<li>No page is both writable and executable (W^X / <abbr title="Data Execution Prevention">DEP</abbr> active)</li>
-								<li>vvar is adjacent to vdso (kernel maps them as a pair)</li>
-							</ul>
-						</p>
+						<p>Key observations: - PIE binary base is completely random (0x5d4b... above - changes every run)<ul>
+	<li>libc, ld-linux, and other libraries cluster in the mmap region (0x7f...)</li>
+	<li>Stack is near top of user space (0x7ffe...) with 22 bits randomization</li>
+	<li>No page is both writable and executable (W^X / <abbr title="Data Execution Prevention">DEP</abbr> active)</li>
+	<li>vvar is adjacent to vdso (kernel maps them as a pair)</li>
+</ul></p>
 					</section>
 					<section>
 						<h3 id="non-randomized-regions">Non-Randomized Regions</h3>
 						<p>Some areas of the address space are not randomized:</p>
-						<p>
-							<b>vDSO/vvar pair:</b>
-							The vDSO (linux-vdso.so.1) is kernel-provided code mapped into every process.
-							It is randomized along with the mmap region, but its
-							<em>internal</em>
-							layout is fixed - the offsets
-							within the vDSO are known to an attacker (it's the same kernel on every machine). This is rarely
-							useful for exploitation since the vDSO contains only a handful of syscall wrappers (
-							<code>clock_gettime</code>
-							,
-							<code>getcpu</code>
-							,
-							<code>time</code>
-							,
-							<code>gettimeofday</code>
-							).
-						</p>
-						<p>
-							<b>NULL page (0x0):</b>
-							Always unmapped. The zero page guard prevents NULL pointer dereferences
-							from turning into exploitable conditions.
-						</p>
-						<p>
-							<b>vsyscall page (legacy):</b>
-							On older kernels, the vsyscall page at
-							<code>0xffffffffff600000</code>
-							was
-							a fixed-address kernel page containing
-							<code>gettimeofday</code>
-							and
-							<code>time</code>
-							implementations. Modern kernels
-							use vDSO instead, but the vsyscall page still exists in compatibility mode at a fixed address.
-							Some exploits use it as a known-address code region. Check with:
-						</p>
+						<p><b>vDSO/vvar pair:</b> The vDSO (linux-vdso.so.1) is kernel-provided code mapped into every process. It is randomized along with the mmap region, but its <em>internal</em> layout is fixed - the offsets within the vDSO are known to an attacker (it's the same kernel on every machine). This is rarely useful for exploitation since the vDSO contains only a handful of syscall wrappers ( <code>clock_gettime</code> , <code>getcpu</code> , <code>time</code> , <code>gettimeofday</code> ).</p>
+						<p><b>NULL page (0x0):</b> Always unmapped. The zero page guard prevents NULL pointer dereferences from turning into exploitable conditions.</p>
+						<p><b>vsyscall page (legacy):</b> On older kernels, the vsyscall page at <code>0xffffffffff600000</code> was a fixed-address kernel page containing <code>gettimeofday</code> and <code>time</code> implementations. Modern kernels use vDSO instead, but the vsyscall page still exists in compatibility mode at a fixed address. Some exploits use it as a known-address code region. Check with:</p>
 						<pre class="bash">
 cat /proc/self/maps | grep vsyscall
 # On modern ArchLinux, this doesn&#39;t appear — vDSO replaced it
@@ -868,11 +665,7 @@ cat /proc/self/maps | grep vsyscall
 					</section>
 					<section>
 						<h3 id="enablingdisabling-aslr-per-process">Enabling/Disabling ASLR Per-Process</h3>
-						<p>
-							ASLR can be disabled per-process using
-							<code>personality(2)</code>
-							:
-						</p>
+						<p>ASLR can be disabled per-process using <code>personality(2)</code> :</p>
 						<pre class="c">
 // disable_aslr_per_process.c
 // Compile: gcc -o disable_aslr_per_process disable_aslr_per_process.c
@@ -911,10 +704,7 @@ setarch $(uname -m) -R ./disable_aslr_per_process  # same addresses
 					</section>
 					<section>
 						<h3 id="kernel-aslr-kaslr">Kernel ASLR (KASLR)</h3>
-						<p>
-							The kernel itself is randomized at boot time. KASLR randomizes the kernel's base address in
-							the upper half of the virtual address space:
-						</p>
+						<p>The kernel itself is randomized at boot time. KASLR randomizes the kernel's base address in the upper half of the virtual address space:</p>
 						<pre class="bash">
 # Check if KASLR is enabled
 cat /proc/cmdline | grep -o &#39;nokaslr&#39;
@@ -928,11 +718,7 @@ sudo cat /proc/kallsyms | head -5
 # KASLR entropy on x86-64: ~9 bits (512 possible positions)
 # Limited by physical memory layout and kernel size
 						</pre>
-						<p>
-							Disable KASLR at boot by adding
-							<code>nokaslr</code>
-							to kernel command line (for debugging):
-						</p>
+						<p>Disable KASLR at boot by adding <code>nokaslr</code> to kernel command line (for debugging):</p>
 						<pre class="bash">
 # Edit /etc/default/grub
 GRUB_CMDLINE_LINUX_DEFAULT=&#34;... nokaslr&#34;
@@ -1048,20 +834,7 @@ sudo grub-mkconfig -o /boot/grub/grub.cfg
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Write a Go tool that spawns the same child process many times and records the load address of
-							a shared library from
-							<code>/proc/&lt;pid&gt;/maps</code>
-							. Run it once with
-							<code>randomize_va_space=0</code>
-							and once
-							with
-							<code>=2</code>
-							, then estimate how many bits of entropy the observed spread represents. The snippet
-							shows how to read the first
-							<code>libc</code>
-							mapping; extend it to loop and collect the results.
-						</p>
+						<p>Write a Go tool that spawns the same child process many times and records the load address of a shared library from <code>/proc/&lt;pid&gt;/maps</code> . Run it once with <code>randomize_va_space=0</code> and once with <code>=2</code> , then estimate how many bits of entropy the observed spread represents. The snippet shows how to read the first <code>libc</code> mapping; extend it to loop and collect the results.</p>
 						<pre class="go">
 package main
 

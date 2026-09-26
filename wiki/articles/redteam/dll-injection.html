@@ -159,23 +159,10 @@
 
 				<article>
 					<h2 id="dll-shared-library-injection">DLL & Shared Library Injection</h2>
-					<p>
-						How Windows
-						<abbr title="Dynamic Link Library">DLL</abbr>
-						injection and Linux shared-object injection force a
-						process to load attacker code, with cross-compilation from Linux.
-					</p>
+					<p>How Windows <abbr title="Dynamic Link Library">DLL</abbr> injection and Linux shared-object injection force a process to load attacker code, with cross-compilation from Linux.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							A shared library is code that the dynamic linker maps into a running process. Both Windows and
-							Linux let an attacker abuse that mechanism to run code inside another process with that process's
-							privileges. This article covers LD_PRELOAD hooks, ptrace and GOT/PLT injection, LoadLibrary
-							remote-thread injection,
-							<abbr title="Dynamic Link Library">DLL</abbr>
-							search-order hijacking, reflective loading,
-							and how to cross-compile the Windows payloads on a Linux host.
-						</p>
+						<p>A shared library is code that the dynamic linker maps into a running process. Both Windows and Linux let an attacker abuse that mechanism to run code inside another process with that process's privileges. This article covers LD_PRELOAD hooks, ptrace and GOT/PLT injection, LoadLibrary remote-thread injection, <abbr title="Dynamic Link Library">DLL</abbr> search-order hijacking, reflective loading, and how to cross-compile the Windows payloads on a Linux host.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -189,38 +176,14 @@
 					</section>
 					<section>
 						<h3 id="shared-library-injection-model">Shared Library Injection Model</h3>
-						<p>
-							<abbr title="Dynamic Link Library">DLL</abbr>
-							injection (Windows) and SO injection (Linux) share the same fundamental
-							idea: force a target process to load a malicious shared library. Once loaded, the library's
-							entry point (
-							<code>DllMain</code>
-							on Windows, constructor attribute on Linux) executes arbitrary code
-							in the target's address space with the target's privileges.
-						</p>
-						<p>
-							The injection surface is the dynamic linker's search path and loading behavior. Both
-							<code>LoadLibrary</code>
-							and
-							<code>dlopen</code>
-							respect search paths, environment variables, and preload mechanisms. Understanding
-							these gives you control over what code runs where.
-						</p>
+						<p><abbr title="Dynamic Link Library">DLL</abbr> injection (Windows) and SO injection (Linux) share the same fundamental idea: force a target process to load a malicious shared library. Once loaded, the library's entry point ( <code>DllMain</code> on Windows, constructor attribute on Linux) executes arbitrary code in the target's address space with the target's privileges.</p>
+						<p>The injection surface is the dynamic linker's search path and loading behavior. Both <code>LoadLibrary</code> and <code>dlopen</code> respect search paths, environment variables, and preload mechanisms. Understanding these gives you control over what code runs where.</p>
 					</section>
 					<section>
 						<h3 id="linux-ld-preload-injection">Linux: LD_PRELOAD Injection</h3>
-						<p>
-							<code>LD_PRELOAD</code>
-							is the simplest SO injection method. The dynamic linker (
-							<code>ld.so</code>
-							) loads libraries
-							listed in
-							<code>LD_PRELOAD</code>
-							before any other library, and symbols from preloaded libraries take precedence
-							<ul>
-								<li>they shadow the real implementations.</li>
-							</ul>
-						</p>
+						<p><code>LD_PRELOAD</code> is the simplest SO injection method. The dynamic linker ( <code>ld.so</code> ) loads libraries listed in <code>LD_PRELOAD</code> before any other library, and symbols from preloaded libraries take precedence<ul>
+	<li>they shadow the real implementations.</li>
+</ul></p>
 						<h4 id="anatomy-of-an-ld-preload-hook">Anatomy of an LD_PRELOAD hook</h4>
 						<pre class="c">
 /*
@@ -284,10 +247,7 @@ FILE *fopen(const char *path, const char *mode)
     return real_fopen(path, mode);
 }
 						</pre>
-						<p>
-							<b>Test the hook</b>
-							:
-						</p>
+						<p><b>Test the hook</b> :</p>
 						<pre class="bash">
 # Compile the hook library
 gcc -shared -fPIC -o /tmp/libhook.so hook.c -ldl
@@ -302,10 +262,7 @@ cat /tmp/.fopen_log.txt
 # [Fri Jun 26 10:15:32 2026] PID=12345 path=/lib/libc.so.6 mode=re
 						</pre>
 						<h4 id="hooking-a-real-authentication-program">Hooking a real authentication program</h4>
-						<p>
-							A practical example: hook the password comparison in a simple authentication program to accept
-							a master password.
-						</p>
+						<p>A practical example: hook the password comparison in a simple authentication program to accept a master password.</p>
 						<p>Target program - a simple login checker:</p>
 						<pre class="c">
 /*
@@ -390,10 +347,7 @@ int strcmp(const char *s1, const char *s2)
     return real_strcmp(s1, s2);
 }
 						</pre>
-						<p>
-							<b>Test</b>
-							:
-						</p>
+						<p><b>Test</b> :</p>
 						<pre class="bash">
 gcc -shared -fPIC -o /tmp/libbypass.so pam_bypass.c -ldl
 gcc -o /opt/login login.c -lcrypt
@@ -408,14 +362,7 @@ LD_PRELOAD=/tmp/libbypass.so /opt/login &lt;&lt;&lt; $&#39;admin\nSesameOpen2026
 # $ (shell prompt)
 						</pre>
 						<h4 id="system-wide-ld-preload">System-wide LD_PRELOAD</h4>
-						<p>
-							For persistence (requires root): write the path of your malicious
-							<code>.so</code>
-							to
-							<code>/etc/ld.so.preload</code>
-							. Every dynamically linked process loads your library - every shell, every daemon, every cron
-							job.
-						</p>
+						<p>For persistence (requires root): write the path of your malicious <code>.so</code> to <code>/etc/ld.so.preload</code> . Every dynamically linked process loads your library - every shell, every daemon, every cron job.</p>
 						<pre class="bash">
 # Requires root
 echo &#39;/lib/libsystemd-hook.so&#39; &gt;&gt; /etc/ld.so.preload
@@ -426,14 +373,7 @@ LD_DEBUG=libs /bin/ls 2&gt;&amp;1 | grep libsystemd-hook
 # To persist across reboots, ensure the library path is in a
 # location that&#39;s mounted early (not a separate partition)
 						</pre>
-						<p>
-							<b>Full system-wide hook example</b>
-							- intercepting all
-							<code>connect()</code>
-							calls to redirect
-							<abbr title="Command and Control">C2</abbr>
-							traffic:
-						</p>
+						<p><b>Full system-wide hook example</b> - intercepting all <code>connect()</code> calls to redirect <abbr title="Command and Control">C2</abbr> traffic:</p>
 						<pre class="c">
 /*
  * connect_hook.c — Hook connect() system-wide for C2 redirection
@@ -494,14 +434,7 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 					</section>
 					<section>
 						<h3 id="linux-dlopen-injection-via-ptrace">Linux: dlopen Injection via ptrace</h3>
-						<p>
-							Instead of relying on environment variables, you can call
-							<code>dlopen()</code>
-							inside the target process
-							using ptrace. This loads the malicious
-							<code>.so</code>
-							without touching the target's environment:
-						</p>
+						<p>Instead of relying on environment variables, you can call <code>dlopen()</code> inside the target process using ptrace. This loads the malicious <code>.so</code> without touching the target's environment:</p>
 						<pre class="c">
 /*
  * dlopen_inject.c — Call dlopen() in target via ptrace
@@ -663,11 +596,7 @@ int main(int argc, char **argv)
 					</section>
 					<section>
 						<h3 id="linux-gotplt-overwrite">Linux: GOT/PLT Overwrite</h3>
-						<p>
-							The Global Offset Table (GOT) and Procedure Linkage Table (PLT) resolve function addresses at
-							runtime. By overwriting a GOT entry in the target process, you redirect calls from legitimate
-							library functions to your malicious code.
-						</p>
+						<p>The Global Offset Table (GOT) and Procedure Linkage Table (PLT) resolve function addresses at runtime. By overwriting a GOT entry in the target process, you redirect calls from legitimate library functions to your malicious code.</p>
 						<pre class="plaintext">
 Target calls printf() ───► PLT[printf] ───► GOT[printf] ───► libc:printf()
                                    ▲               │
@@ -793,19 +722,7 @@ int main(int argc, char **argv)
 					</section>
 					<section>
 						<h3 id="windows-dll-injection">Windows DLL Injection</h3>
-						<p>
-							The Windows equivalent uses
-							<code>LoadLibraryA/W</code>
-							instead of
-							<code>dlopen</code>
-							. The principle is identical:
-							allocate memory in the target, write the
-							<abbr title="Dynamic Link Library">DLL</abbr>
-							path, create a remote thread
-							whose start address is
-							<code>LoadLibrary</code>
-							, and pass the path string as the thread argument.
-						</p>
+						<p>The Windows equivalent uses <code>LoadLibraryA/W</code> instead of <code>dlopen</code> . The principle is identical: allocate memory in the target, write the <abbr title="Dynamic Link Library">DLL</abbr> path, create a remote thread whose start address is <code>LoadLibrary</code> , and pass the path string as the thread argument.</p>
 						<h4 id="loadlibrary-injection-c">LoadLibrary Injection (C++)</h4>
 						<pre class="c">
 /*
@@ -1042,31 +959,11 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
     return TRUE;
 }
 						</pre>
-						<p>
-							<b>Important DllMain restrictions</b>
-							(from Microsoft docs): - Do not call
-							<code>LoadLibrary</code>
-							from DllMain
-							(loader lock deadlock) - Do not call functions that require the loader lock (most of user32,
-							shell32) -
-							<code>CreateThread</code>
-							is safe, but the thread shouldn't call synchronized functions - Always
-							<code>DisableThreadLibraryCalls</code>
-							to reduce overhead
-						</p>
+						<p><b>Important DllMain restrictions</b> (from Microsoft docs): - Do not call <code>LoadLibrary</code> from DllMain (loader lock deadlock) - Do not call functions that require the loader lock (most of user32, shell32) - <code>CreateThread</code> is safe, but the thread shouldn't call synchronized functions - Always <code>DisableThreadLibraryCalls</code> to reduce overhead</p>
 					</section>
 					<section>
 						<h3 id="dll-search-order-hijacking">DLL Search Order Hijacking</h3>
-						<p>
-							Windows searches for
-							<abbr title="Dynamic Link Library">DLL</abbr>
-							s in a specific order. By placing a malicious
-							<abbr title="Dynamic Link Library">DLL</abbr>
-							with the same name as a legitimate dependency, you can hijack the
-							load. The search order (for
-							<code>LoadLibrary(&#34;foo.dll&#34;)</code>
-							):
-						</p>
+						<p>Windows searches for <abbr title="Dynamic Link Library">DLL</abbr> s in a specific order. By placing a malicious <abbr title="Dynamic Link Library">DLL</abbr> with the same name as a legitimate dependency, you can hijack the load. The search order (for <code>LoadLibrary(&#34;foo.dll&#34;)</code> ):</p>
 						<table>
 							<thead>
 								<tr>
@@ -1118,15 +1015,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							<b>DLL Proxying</b>
-							: When hijacking a legitimate
-							<abbr title="Dynamic Link Library">DLL</abbr>
-							, forward all exported
-							functions to the real
-							<abbr title="Dynamic Link Library">DLL</abbr>
-							so the application doesn't break:
-						</p>
+						<p><b>DLL Proxying</b> : When hijacking a legitimate <abbr title="Dynamic Link Library">DLL</abbr> , forward all exported functions to the real <abbr title="Dynamic Link Library">DLL</abbr> so the application doesn't break:</p>
 						<pre class="c">
 /*
  * version_proxy.c — DLL proxy for version.dll
@@ -1156,37 +1045,9 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 					</section>
 					<section>
 						<h3 id="reflective-dll-injection">Reflective DLL Injection</h3>
-						<p>
-							Reflective
-							<abbr title="Dynamic Link Library">DLL</abbr>
-							Injection loads a
-							<abbr title="Dynamic Link Library">DLL</abbr>
-							from memory
-							without calling
-							<code>LoadLibrary</code>
-							, which avoids: - The
-							<abbr title="Dynamic Link Library">DLL</abbr>
-							being registered
-							in the loader's loaded module list -
-							<code>LoadLibrary</code>
-							-based
-							<abbr title="Endpoint Detection and Response">EDR</abbr>
-							hooks - The
-							<abbr title="Dynamic Link Library">DLL</abbr>
-							needing to exist on disk
-						</p>
-						<p>
-							The idea: write a custom PE loader that parses the
-							<abbr title="Dynamic Link Library">DLL</abbr>
-							's PE headers,
-							maps sections into memory, processes the import table, applies relocations, and calls
-							<code>DllMain</code>
-							. This loader is itself injected as shellcode into the target.
-						</p>
-						<p>
-							<b>Conceptual workflow</b>
-							:
-						</p>
+						<p>Reflective <abbr title="Dynamic Link Library">DLL</abbr> Injection loads a <abbr title="Dynamic Link Library">DLL</abbr> from memory without calling <code>LoadLibrary</code> , which avoids: - The <abbr title="Dynamic Link Library">DLL</abbr> being registered in the loader's loaded module list - <code>LoadLibrary</code> -based <abbr title="Endpoint Detection and Response">EDR</abbr> hooks - The <abbr title="Dynamic Link Library">DLL</abbr> needing to exist on disk</p>
+						<p>The idea: write a custom PE loader that parses the <abbr title="Dynamic Link Library">DLL</abbr> 's PE headers, maps sections into memory, processes the import table, applies relocations, and calls <code>DllMain</code> . This loader is itself injected as shellcode into the target.</p>
+						<p><b>Conceptual workflow</b> :</p>
 						<pre class="plaintext">
 [Load ReflectiveLoader shellcode into target]
     │
@@ -1201,26 +1062,11 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
     ├── Call DllMain(DLL_PROCESS_ATTACH)
     └── Return control to caller
 						</pre>
-						<p>
-							The ReflectiveLoader is typically written in position-independent assembly and prepended to
-							the
-							<abbr title="Dynamic Link Library">DLL</abbr>
-							binary. The combined blob is then injected using any code injection
-							technique.
-						</p>
+						<p>The ReflectiveLoader is typically written in position-independent assembly and prepended to the <abbr title="Dynamic Link Library">DLL</abbr> binary. The combined blob is then injected using any code injection technique.</p>
 					</section>
 					<section>
 						<h3 id="setwindowshookex-injection">SetWindowsHookEx Injection</h3>
-						<p>
-							<code>SetWindowsHookEx</code>
-							installs a hook procedure that Windows injects into all
-							<abbr title="Graphical User Interface">GUI</abbr>
-							processes. If the hook procedure is in a
-							<abbr title="Dynamic Link Library">DLL</abbr>
-							, Windows loads that
-							<abbr title="Dynamic Link Library">DLL</abbr>
-							into every process that receives messages of the hook type:
-						</p>
+						<p><code>SetWindowsHookEx</code> installs a hook procedure that Windows injects into all <abbr title="Graphical User Interface">GUI</abbr> processes. If the hook procedure is in a <abbr title="Dynamic Link Library">DLL</abbr> , Windows loads that <abbr title="Dynamic Link Library">DLL</abbr> into every process that receives messages of the hook type:</p>
 						<pre class="c">
 /*
  * hook_inject.cpp — SetWindowsHookEx DLL injection
@@ -1278,19 +1124,7 @@ int main(void)
 					</section>
 					<section>
 						<h3 id="appinit-dlls-deprecated-but-present">AppInit_DLLs (Deprecated but Present)</h3>
-						<p>
-							Older Windows versions load all
-							<abbr title="Dynamic Link Library">DLL</abbr>
-							s listed in
-							<code>HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows\AppInit_DLLs</code>
-							into every process that loads
-							<code>user32.dll</code>
-							. Modern Windows (8+) requires
-							<code>RequireSignedAppInit_DLLs</code>
-							to be disabled and
-							<code>LoadAppInit_DLLs</code>
-							enabled. This is heavily monitored.
-						</p>
+						<p>Older Windows versions load all <abbr title="Dynamic Link Library">DLL</abbr> s listed in <code>HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows\AppInit_DLLs</code> into every process that loads <code>user32.dll</code> . Modern Windows (8+) requires <code>RequireSignedAppInit_DLLs</code> to be disabled and <code>LoadAppInit_DLLs</code> enabled. This is heavily monitored.</p>
 						<pre class="plaintext">
 HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows
   AppInit_DLLs = &#34;C:\path\to\payload.dll&#34;
@@ -1335,7 +1169,7 @@ objdump -x payload.dll | grep -A20 &#39;Export&#39;
 							<tbody>
 								<tr>
 									<td align="center">LD_PRELOAD env var</td>
-									<td align="center"><code>/proc/PID/environ</code>grep</td>
+									<td align="center"><code>/proc/PID/environ</code> grep</td>
 									<td align="center">Unset after init via clearenv</td>
 								</tr>
 								<tr>
@@ -1465,21 +1299,7 @@ Get-WinEvent -FilterHashtable @{LogName=&#34;Microsoft-Windows-Sysmon/Operationa
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Write a Go tool that reads
-							<code>/proc/PID/maps</code>
-							and reports the shared objects a running process
-							has loaded. Flag any library that resolves outside the standard search path and any mapping
-							that is both writable and executable, two signals that a process has been injected. Build a
-							small hook with
-							<code>gcc -shared -fPIC -o /tmp/libhook.so hook.c</code>
-							, launch a long-running target
-							such as
-							<code>sleep 3000</code>
-							, then attach the scanner to it before and after starting the target with
-							<code>LD_PRELOAD=/tmp/libhook.so</code>
-							and compare the output.
-						</p>
+						<p>Write a Go tool that reads <code>/proc/PID/maps</code> and reports the shared objects a running process has loaded. Flag any library that resolves outside the standard search path and any mapping that is both writable and executable, two signals that a process has been injected. Build a small hook with <code>gcc -shared -fPIC -o /tmp/libhook.so hook.c</code> , launch a long-running target such as <code>sleep 3000</code> , then attach the scanner to it before and after starting the target with <code>LD_PRELOAD=/tmp/libhook.so</code> and compare the output.</p>
 						<pre class="go">
 package main
 
@@ -1546,15 +1366,7 @@ func main() {
 	}
 }
 						</pre>
-						<p>
-							Run it as
-							<code>sudo go run scanner.go &lt;pid&gt;</code>
-							and confirm that the injected library shows up as a
-							non-standard mapping. Then try the same against a process started without
-							<code>LD_PRELOAD</code>
-							to see
-							the baseline.
-						</p>
+						<p>Run it as <code>sudo go run scanner.go &lt;pid&gt;</code> and confirm that the injected library shows up as a non-standard mapping. Then try the same against a process started without <code>LD_PRELOAD</code> to see the baseline.</p>
 					</section>
 					<section>
 						<h3 id="references">References</h3>

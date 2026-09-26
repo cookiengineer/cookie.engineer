@@ -155,35 +155,10 @@
 
 				<article>
 					<h2 id="tcp-fingerprinting">TCP Fingerprinting</h2>
-					<p>
-						Passive and active OS detection through
-						<abbr title="Transmission Control Protocol">TCP</abbr>
-						/
-						<abbr title="Internet Protocol">IP</abbr>
-						stack analysis -
-						<abbr title="Time To Live">TTL</abbr>
-						, window size, option ordering, ISN generation, and cross-protocol
-						fingerprinting techniques.
-					</p>
+					<p>Passive and active OS detection through <abbr title="Transmission Control Protocol">TCP</abbr> / <abbr title="Internet Protocol">IP</abbr> stack analysis - <abbr title="Time To Live">TTL</abbr> , window size, option ordering, ISN generation, and cross-protocol fingerprinting techniques.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							Every operating system implements its
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							/
-							<abbr title="Internet Protocol">IP</abbr>
-							stack a little differently: a different default
-							<abbr title="Time To Live">TTL</abbr>
-							, initial window size, option
-							order, and reset policy. Those differences leak the remote OS without any application banner.
-							This article covers passive fingerprinting from captured
-							<abbr title="Synchronize">SYN</abbr>
-							packets, active
-							probing with nmap and crafted packets, the p0f signature format, and
-							<abbr title="Transport Layer Security">TLS</abbr>
-							ClientHello fingerprinting with JA3 and JA4. By the end you can identify a stack from a packet
-							capture and explain which fields give it away.
-						</p>
+						<p>Every operating system implements its <abbr title="Transmission Control Protocol">TCP</abbr> / <abbr title="Internet Protocol">IP</abbr> stack a little differently: a different default <abbr title="Time To Live">TTL</abbr> , initial window size, option order, and reset policy. Those differences leak the remote OS without any application banner. This article covers passive fingerprinting from captured <abbr title="Synchronize">SYN</abbr> packets, active probing with nmap and crafted packets, the p0f signature format, and <abbr title="Transport Layer Security">TLS</abbr> ClientHello fingerprinting with JA3 and JA4. By the end you can identify a stack from a packet capture and explain which fields give it away.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -194,49 +169,19 @@
 					</section>
 					<section>
 						<h3 id="what-tcp-fingerprinting-is">What TCP Fingerprinting Is</h3>
-						<p>
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							fingerprinting identifies an operating system by analyzing
-							subtle differences in how its
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							/
-							<abbr title="Internet Protocol">IP</abbr>
-							stack implements the protocol. RFC 793 defines
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							behavior,
-							but it leaves implementation details to each vendor: what
-							<abbr title="Time To Live">TTL</abbr>
-							value to use,
-							what window size to set, what order to arrange
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							options,
-							how to generate sequence numbers, and how to respond to ambiguous or invalid packets.
-						</p>
-						<p>
-							Each OS makes different choices. These choices form a unique signature - a fingerprint - that
-							persists regardless of what application is running or what user is logged in.
-						</p>
+						<p><abbr title="Transmission Control Protocol">TCP</abbr> fingerprinting identifies an operating system by analyzing subtle differences in how its <abbr title="Transmission Control Protocol">TCP</abbr> / <abbr title="Internet Protocol">IP</abbr> stack implements the protocol. RFC 793 defines <abbr title="Transmission Control Protocol">TCP</abbr> behavior, but it leaves implementation details to each vendor: what <abbr title="Time To Live">TTL</abbr> value to use, what window size to set, what order to arrange <abbr title="Transmission Control Protocol">TCP</abbr> options, how to generate sequence numbers, and how to respond to ambiguous or invalid packets.</p>
+						<p>Each OS makes different choices. These choices form a unique signature - a fingerprint - that persists regardless of what application is running or what user is logged in.</p>
 					</section>
 					<section>
 						<h3 id="why-fingerprinting-works">Why Fingerprinting Works</h3>
-						<p>
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							/
-							<abbr title="Internet Protocol">IP</abbr>
-							is a specification, not a reference
-							implementation. The RFC describes a protocol, but every vendor writes their own implementation.
-							The RFC says:
-						</p>
+						<p><abbr title="Transmission Control Protocol">TCP</abbr> / <abbr title="Internet Protocol">IP</abbr> is a specification, not a reference implementation. The RFC describes a protocol, but every vendor writes their own implementation. The RFC says:</p>
 						<ul>
 							<li>"The window size should be set based on available buffer space." Each OS picks a different default.</li>
 							<li>"A <abbr title="Transmission Control Protocol">TCP</abbr> MAY implement timestamps." Some do, some don't.</li>
 							<li>"If the port is closed, respond with RST." But what about a packet with no flags set? The RFC is ambiguous. Windows sends RST; Linux drops it silently.</li>
 							<li>"The initial <abbr title="Time To Live">TTL</abbr> MUST be configurable." Each OS ships with a different default.</li>
 						</ul>
-						<p>
-							These implementation decisions are not bugs - they are engineering trade-offs that happen to
-							create an identifiable signature.
-						</p>
+						<p>These implementation decisions are not bugs - they are engineering trade-offs that happen to create an identifiable signature.</p>
 					</section>
 					<section>
 						<h3 id="osi-layers-used-for-fingerprinting">OSI Layers Used for Fingerprinting</h3>
@@ -250,27 +195,9 @@ Layer 7 (TLS):   JA3/JA4 - ClientHello cipher suites, extensions, elliptic curve
 					</section>
 					<section>
 						<h3 id="passive-fingerprinting">Passive Fingerprinting</h3>
-						<p>
-							Passive fingerprinting works by monitoring traffic that the target naturally generates. A
-							<abbr title="Synchronize">SYN</abbr>
-							packet sent by a web browser to a web server reveals the client OS. A
-							<abbr title="Synchronize">SYN</abbr>
-							-ACK
-							returned by a server reveals the server OS. No additional packets are sent - the fingerprint
-							is extracted from normal traffic.
-						</p>
+						<p>Passive fingerprinting works by monitoring traffic that the target naturally generates. A <abbr title="Synchronize">SYN</abbr> packet sent by a web browser to a web server reveals the client OS. A <abbr title="Synchronize">SYN</abbr> -ACK returned by a server reveals the server OS. No additional packets are sent - the fingerprint is extracted from normal traffic.</p>
 						<h4 id="initial-ttl-analysis">Initial TTL Analysis</h4>
-						<p>
-							The
-							<abbr title="Time To Live">TTL</abbr>
-							(Time To Live) field in the
-							<abbr title="Internet Protocol">IP</abbr>
-							header is decremented
-							by each router that forwards the packet. The initial
-							<abbr title="Time To Live">TTL</abbr>
-							is the value set by
-							the sending OS before the packet enters the network.
-						</p>
+						<p>The <abbr title="Time To Live">TTL</abbr> (Time To Live) field in the <abbr title="Internet Protocol">IP</abbr> header is decremented by each router that forwards the packet. The initial <abbr title="Time To Live">TTL</abbr> is the value set by the sending OS before the packet enters the network.</p>
 						<table>
 							<thead>
 								<tr>
@@ -338,20 +265,9 @@ Layer 7 (TLS):   JA3/JA4 - ClientHello cipher suites, extensions, elliptic curve
 							</tbody>
 						</table>
 						<h4 id="how-ttl-fingerprinting-works-in-practice">How TTL fingerprinting works in practice</h4>
-						<p>
-							When you receive a packet, the
-							<abbr title="Time To Live">TTL</abbr>
-							you see is the
-							<em>remaining</em>
-							
-							<abbr title="Time To Live">TTL</abbr>
-							<ul>
-								<li>the initial value minus the number of hops traversed. To identify the OS, you guess the</li>
-							</ul>
-							initial
-							<abbr title="Time To Live">TTL</abbr>
-							by rounding up:
-						</p>
+						<p>When you receive a packet, the <abbr title="Time To Live">TTL</abbr> you see is the <em>remaining</em>  <abbr title="Time To Live">TTL</abbr><ul>
+	<li>the initial value minus the number of hops traversed. To identify the OS, you guess the</li>
+</ul> initial <abbr title="Time To Live">TTL</abbr> by rounding up:</p>
 						<pre class="bash">
 # Received TTL: 51
 # Possible initial TTLs: 64 (13 hops), 128 (77 hops), 255 (204 hops)
@@ -374,12 +290,7 @@ sudo tshark -i eth0 -T fields -e ip.src -e ip.ttl -e tcp.window_size \
     &#39;tcp.flags.syn == 1 and tcp.flags.ack == 0&#39;
 						</pre>
 						<h4 id="tcp-window-size">TCP Window Size</h4>
-						<p>
-							The initial window size in the
-							<abbr title="Synchronize">SYN</abbr>
-							packet is not negotiated - it is set by the
-							OS based on available buffer space. Each OS has a characteristic default.
-						</p>
+						<p>The initial window size in the <abbr title="Synchronize">SYN</abbr> packet is not negotiated - it is set by the OS based on available buffer space. Each OS has a characteristic default.</p>
 						<table>
 							<thead>
 								<tr>
@@ -397,7 +308,7 @@ sudo tshark -i eth0 -T fields -e ip.src -e ip.ttl -e tcp.window_size \
 								<tr>
 									<td align="center">Linux 3.x-5.x</td>
 									<td align="center">29200</td>
-									<td align="center">Default<code>tcp_rmem[1]</code>= 87380 (scaled) -> base window</td>
+									<td align="center">Default <code>tcp_rmem[1]</code> = 87380 (scaled) -> base window</td>
 								</tr>
 								<tr>
 									<td align="center">Linux 6.x</td>
@@ -458,21 +369,7 @@ sudo tshark -i eth0 -T fields \
     &#39;tcp.flags.syn == 1 and tcp.flags.ack == 0&#39;
 						</pre>
 						<h4 id="tcp-option-ordering">TCP Option Ordering</h4>
-						<p>
-							The order of
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							options in the
-							<abbr title="Synchronize">SYN</abbr>
-							packet is
-							an OS fingerprint.
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							options appear in the
-							<abbr title="Synchronize">SYN</abbr>
-							packet after the 20-byte fixed header. The order of
-							<abbr title="Maximum Segment Size">MSS</abbr>
-							, Window Scale,
-							SACK-Permitted, Timestamps, and NOP (padding) varies by OS.
-						</p>
+						<p>The order of <abbr title="Transmission Control Protocol">TCP</abbr> options in the <abbr title="Synchronize">SYN</abbr> packet is an OS fingerprint. <abbr title="Transmission Control Protocol">TCP</abbr> options appear in the <abbr title="Synchronize">SYN</abbr> packet after the 20-byte fixed header. The order of <abbr title="Maximum Segment Size">MSS</abbr> , Window Scale, SACK-Permitted, Timestamps, and NOP (padding) varies by OS.</p>
 						<table>
 							<thead>
 								<tr>
@@ -523,26 +420,9 @@ sudo tshark -i eth0 -T fields \
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							<b>Why option ordering differs:</b>
-							
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							options are TLVs - they
-							carry their own length. An implementation that parses options sequentially in a loop will handle
-							any order. But the order an OS sends them reveals the order in which the kernel code initializes
-							the
-							<abbr title="Synchronize">SYN</abbr>
-							packet's option array. This is a pure implementation artifact.
-						</p>
+						<p><b>Why option ordering differs:</b>  <abbr title="Transmission Control Protocol">TCP</abbr> options are TLVs - they carry their own length. An implementation that parses options sequentially in a loop will handle any order. But the order an OS sends them reveals the order in which the kernel code initializes the <abbr title="Synchronize">SYN</abbr> packet's option array. This is a pure implementation artifact.</p>
 						<h4 id="dont-fragment-df-bit">Don't Fragment (DF) Bit</h4>
-						<p>
-							The DF bit in the
-							<abbr title="Internet Protocol">IP</abbr>
-							header tells routers not to fragment the packet. Some
-							OSes set DF by default on
-							<abbr title="Synchronize">SYN</abbr>
-							packets (used for Path MTU Discovery), others don't.
-						</p>
+						<p>The DF bit in the <abbr title="Internet Protocol">IP</abbr> header tells routers not to fragment the packet. Some OSes set DF by default on <abbr title="Synchronize">SYN</abbr> packets (used for Path MTU Discovery), others don't.</p>
 						<table>
 							<thead>
 								<tr>
@@ -582,12 +462,7 @@ sudo tshark -i eth0 -T fields \
 							</tbody>
 						</table>
 						<h4 id="timestamp-behavior">Timestamp Behavior</h4>
-						<p>
-							Every OS that supports
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							timestamps increments the timestamp
-							value differently:
-						</p>
+						<p>Every OS that supports <abbr title="Transmission Control Protocol">TCP</abbr> timestamps increments the timestamp value differently:</p>
 						<table>
 							<thead>
 								<tr>
@@ -605,7 +480,7 @@ sudo tshark -i eth0 -T fields \
 								<tr>
 									<td align="center">Windows</td>
 									<td align="center">~10 ms</td>
-									<td align="center">Increases by~100/sec</td>
+									<td align="center">Increases by ~100/sec</td>
 								</tr>
 								<tr>
 									<td align="center">macOS</td>
@@ -637,16 +512,7 @@ sudo tshark -i eth0 -T fields -e tcp.options.timestamp.tsval \
 					</section>
 					<section>
 						<h3 id="p0f-passive-os-fingerprinting-tool">p0f - Passive OS Fingerprinting Tool</h3>
-						<p>
-							<code>p0f</code>
-							analyzes
-							<abbr title="Synchronize">SYN</abbr>
-							packets (v2 used
-							<abbr title="Synchronize">SYN</abbr>
-							-ACK; v3 uses
-							<abbr title="Synchronize">SYN</abbr>
-							) and matches them against a signature database.
-						</p>
+						<p><code>p0f</code> analyzes <abbr title="Synchronize">SYN</abbr> packets (v2 used <abbr title="Synchronize">SYN</abbr> -ACK; v3 uses <abbr title="Synchronize">SYN</abbr> ) and matches them against a signature database.</p>
 						<pre class="bash">
 # Install p0f on ArchLinux
 sudo pacman -S p0f
@@ -683,11 +549,7 @@ raw_sig = ver:ittl:olen:mss:wsize,scale:olayout:quirks:pclass
   pclass      - payload class
 						</pre>
 						<h4 id="example-breakdown">Example Breakdown</h4>
-						<p>
-							The signature
-							<code>4:64+0:0:1460:mss*20,7:mss,sok,ts,nop,ws:df,id+:0</code>
-							decodes as:
-						</p>
+						<p>The signature <code>4:64+0:0:1460:mss*20,7:mss,sok,ts,nop,ws:df,id+:0</code> decodes as:</p>
 						<ul>
 							<li><abbr title="Internet Protocol">IP</abbr> version 4</li>
 							<li>Initial <abbr title="Time To Live">TTL</abbr> 64 (distance 0)</li>
@@ -701,23 +563,9 @@ raw_sig = ver:ittl:olen:mss:wsize,scale:olayout:quirks:pclass
 					</section>
 					<section>
 						<h3 id="active-fingerprinting">Active Fingerprinting</h3>
-						<p>
-							Active fingerprinting sends deliberately unusual or ambiguous packets and analyzes the target's
-							response. Each probe exploits a different area of RFC ambiguity.
-						</p>
+						<p>Active fingerprinting sends deliberately unusual or ambiguous packets and analyzes the target's response. Each probe exploits a different area of RFC ambiguity.</p>
 						<h4 id="nmap-os-detection-o">nmap OS Detection ( <code>-O</code> )</h4>
-						<p>
-							nmap's
-							<code>-O</code>
-							sends up to 16
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							/
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							/
-							<abbr title="Internet Control Message Protocol">ICMP</abbr>
-							probes and matches responses against a database
-							of over 2,600 OS signatures.
-						</p>
+						<p>nmap's <code>-O</code> sends up to 16 <abbr title="Transmission Control Protocol">TCP</abbr> / <abbr title="User Datagram Protocol">UDP</abbr> / <abbr title="Internet Control Message Protocol">ICMP</abbr> probes and matches responses against a database of over 2,600 OS signatures.</p>
 						<pre class="bash">
 # OS detection (requires root for raw sockets)
 sudo nmap -O 192.168.1.42
@@ -741,14 +589,7 @@ OS CPE: cpe:/o:linux:linux_kernel:5.4
 OS CPE: cpe:/o:linux:linux_kernel:5.10
 OS CPE: cpe:/o:linux:linux_kernel:5.11
 						</pre>
-						<p>
-							nmap shows the kernel version range when it can't pinpoint the exact version - many Linux kernel
-							versions produce identical
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							fingerprints because the
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							stack hasn't changed between them.
-						</p>
+						<p>nmap shows the kernel version range when it can't pinpoint the exact version - many Linux kernel versions produce identical <abbr title="Transmission Control Protocol">TCP</abbr> fingerprints because the <abbr title="Transmission Control Protocol">TCP</abbr> stack hasn't changed between them.</p>
 						<h4 id="the-probes-nmap-sends-for-os-detection">The probes nmap sends for OS detection</h4>
 						<table>
 							<thead>
@@ -842,13 +683,7 @@ OS CPE: cpe:/o:linux:linux_kernel:5.11
 							</tbody>
 						</table>
 						<h4 id="syn-probe">SYN Probe</h4>
-						<p>
-							The most important probe. Send a
-							<abbr title="Synchronize">SYN</abbr>
-							to an open port, analyze the
-							<abbr title="Synchronize">SYN</abbr>
-							-ACK response:
-						</p>
+						<p>The most important probe. Send a <abbr title="Synchronize">SYN</abbr> to an open port, analyze the <abbr title="Synchronize">SYN</abbr> -ACK response:</p>
 						<pre class="bash">
 # Manual SYN probe with nping
 sudo nping --tcp -p 80 --flags syn 192.168.1.42 -c 1
@@ -857,12 +692,7 @@ sudo nping --tcp -p 80 --flags syn 192.168.1.42 -c 1
 sudo tcpdump -i eth0 -nn -v -c 1 &#39;src 192.168.1.42 and tcp[tcpflags] &amp; tcp-syn != 0 and tcp[tcpflags] &amp; tcp-ack != 0&#39;
 						</pre>
 						<h4 id="null-probe">NULL Probe</h4>
-						<p>
-							Send a packet with no
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							flags set. RFC 793 says: discard
-							silently (open) or RST (closed). Windows: always RST regardless of port state.
-						</p>
+						<p>Send a packet with no <abbr title="Transmission Control Protocol">TCP</abbr> flags set. RFC 793 says: discard silently (open) or RST (closed). Windows: always RST regardless of port state.</p>
 						<pre class="bash">
 # Send NULL probe (no flags set)
 sudo hping3 -c 3 -s 12345 -p 80 192.168.1.42
@@ -880,16 +710,7 @@ sudo hping3 -c 3 -s 12345 -p 80 -F 192.168.1.42
 # No response -&gt; Linux, BSD, macOS
 						</pre>
 						<h4 id="tcp-options-probe">TCP Options Probe</h4>
-						<p>
-							Send a
-							<abbr title="Synchronize">SYN</abbr>
-							with unusual or unexpected
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							option
-							combinations to see which are echoed in the
-							<abbr title="Synchronize">SYN</abbr>
-							-ACK.
-						</p>
+						<p>Send a <abbr title="Synchronize">SYN</abbr> with unusual or unexpected <abbr title="Transmission Control Protocol">TCP</abbr> option combinations to see which are echoed in the <abbr title="Synchronize">SYN</abbr> -ACK.</p>
 						<pre class="bash">
 # Using scapy to craft a SYN with custom options
 sudo python3 &lt;&lt; &#39;EOF&#39;
@@ -952,12 +773,7 @@ done
 sudo tcpdump -i eth0 -nn -c 10 &#39;tcp[tcpflags] &amp; tcp-syn != 0 and tcp[tcpflags] &amp; tcp-ack != 0&#39;
 						</pre>
 						<h4 id="ip-id-analysis">IP ID Analysis</h4>
-						<p>
-							The
-							<abbr title="Internet Protocol">IP</abbr>
-							Identification field helps reassemble fragmented datagrams. Each
-							OS increments it differently:
-						</p>
+						<p>The <abbr title="Internet Protocol">IP</abbr> Identification field helps reassemble fragmented datagrams. Each OS increments it differently:</p>
 						<table>
 							<thead>
 								<tr>
@@ -1124,11 +940,7 @@ sudo tcpdump -i eth0 -nn -v -c 10 &#39;src 192.168.1.42&#39; 2&gt;&amp;1 | grep 
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							Legend: M=
-							<abbr title="Maximum Segment Size">MSS</abbr>
-							, S=SACK, T=Timestamp, N=NOP, W=Window Scale
-						</p>
+						<p>Legend: M= <abbr title="Maximum Segment Size">MSS</abbr> , S=SACK, T=Timestamp, N=NOP, W=Window Scale</p>
 					</section>
 					<section>
 						<h3 id="fingerprint-evasion">Fingerprint Evasion</h3>
@@ -1165,27 +977,7 @@ sudo iptables -t mangle -A OUTPUT -p tcp --tcp-flags SYN,RST SYN \
     -j TCPMSS --clamp-mss-to-pmtu
 						</pre>
 						<h4 id="vpn-based-fingerprint-concealment">VPN-Based Fingerprint Concealment</h4>
-						<p>
-							All
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							fingerprinting relies on analyzing packets that your
-							machine generates. A
-							<abbr title="Virtual Private Network">VPN</abbr>
-							encapsulates your
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							packets inside another
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							or
-							<abbr title="User Datagram Protocol">UDP</abbr>
-							tunnel. The
-							<abbr title="Virtual Private Network">VPN</abbr>
-							server's
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							stack
-							generates the outer packets - the fingerprint the target sees is the
-							<abbr title="Virtual Private Network">VPN</abbr>
-							server's OS, not yours.
-						</p>
+						<p>All <abbr title="Transmission Control Protocol">TCP</abbr> fingerprinting relies on analyzing packets that your machine generates. A <abbr title="Virtual Private Network">VPN</abbr> encapsulates your <abbr title="Transmission Control Protocol">TCP</abbr> packets inside another <abbr title="Transmission Control Protocol">TCP</abbr> or <abbr title="User Datagram Protocol">UDP</abbr> tunnel. The <abbr title="Virtual Private Network">VPN</abbr> server's <abbr title="Transmission Control Protocol">TCP</abbr> stack generates the outer packets - the fingerprint the target sees is the <abbr title="Virtual Private Network">VPN</abbr> server's OS, not yours.</p>
 						<pre class="bash">
 # WireGuard tunnel - your packets are encrypted and encapsulated
 # Target sees the VPN server&#39;s TTL, window size, and option ordering
@@ -1195,20 +987,7 @@ curl ifconfig.me  # IP is now the VPN server&#39;s IP
 					</section>
 					<section>
 						<h3 id="nac-bypass-via-fingerprint-manipulation">NAC Bypass via Fingerprint Manipulation</h3>
-						<p>
-							Network Access Control (NAC) systems often fingerprint devices before granting network access.
-							They check
-							<abbr title="Time To Live">TTL</abbr>
-							,
-							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
-							User-Agent,
-							<abbr title="Dynamic Host Configuration Protocol">DHCP</abbr>
-							options, and sometimes
-							<abbr title="Media Access Control">MAC</abbr>
-							
-							<abbr title="Organizationally Unique Identifiers">OUI</abbr>
-							. Manipulating your fingerprint to match an authorized device class can bypass these checks:
-						</p>
+						<p>Network Access Control (NAC) systems often fingerprint devices before granting network access. They check <abbr title="Time To Live">TTL</abbr> , <abbr title="Hypertext Transfer Protocol">HTTP</abbr> User-Agent, <abbr title="Dynamic Host Configuration Protocol">DHCP</abbr> options, and sometimes <abbr title="Media Access Control">MAC</abbr>  <abbr title="Organizationally Unique Identifiers">OUI</abbr> . Manipulating your fingerprint to match an authorized device class can bypass these checks:</p>
 						<pre class="bash">
 # 1. MAC address spoofing (match authorized vendor OUI)
 sudo ip link set dev eth0 down
@@ -1227,17 +1006,7 @@ curl -A &#34;Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36&#34; h
 					</section>
 					<section>
 						<h3 id="ja3-and-ja4-tls-fingerprinting">JA3 and JA4 TLS Fingerprinting</h3>
-						<p>
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							fingerprinting identifies the OS.
-							<abbr title="Transport Layer Security">TLS</abbr>
-							fingerprinting identifies the
-							<em>application</em>
-							making the connection. JA3 hashes the
-							<abbr title="Transport Layer Security">TLS</abbr>
-							ClientHello fields (supported cipher suites, extensions, elliptic curves, EC point formats)
-							into an MD5 fingerprint. JA4 extends this with protocol identification and QUIC support.
-						</p>
+						<p><abbr title="Transmission Control Protocol">TCP</abbr> fingerprinting identifies the OS. <abbr title="Transport Layer Security">TLS</abbr> fingerprinting identifies the <em>application</em> making the connection. JA3 hashes the <abbr title="Transport Layer Security">TLS</abbr> ClientHello fields (supported cipher suites, extensions, elliptic curves, EC point formats) into an MD5 fingerprint. JA4 extends this with protocol identification and <abbr title="Quick UDP Internet Connections">QUIC</abbr> support.</p>
 						<pre class="bash">
 # Capture TLS ClientHello and extract JA3 hash
 sudo tcpdump -i eth0 -nn -w clienthello.pcap &#39;tcp port 443&#39; &amp;
@@ -1296,12 +1065,7 @@ sudo tshark -r clienthello.pcap -T fields \
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							JA3/JA4 fingerprinting is widely used by CDNs,
-							<abbr title="Web Application Firewall">WAF</abbr>
-							s, and bot detection
-							systems to block automated traffic even when User-Agent headers are spoofed.
-						</p>
+						<p>JA3/JA4 fingerprinting is widely used by CDNs, <abbr title="Web Application Firewall">WAF</abbr> s, and bot detection systems to block automated traffic even when User-Agent headers are spoofed.</p>
 					</section>
 					<section>
 						<h3 id="tcp-fingerprint-analyzer-in-python">TCP Fingerprint Analyzer in Python</h3>
@@ -1425,17 +1189,7 @@ nc -z google.com 80
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Fingerprint the lab container. It runs several
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							listeners
-							and uses nftables to set a different outbound
-							<abbr title="Time To Live">TTL</abbr>
-							per port, so you can practice
-							passive and active detection against known stacks. Window size and option ordering come from
-							the container kernel, not from the rules, which is itself a lesson in how far packet mangling
-							can go.
-						</p>
+						<p>Fingerprint the lab container. It runs several <abbr title="Transmission Control Protocol">TCP</abbr> listeners and uses nftables to set a different outbound <abbr title="Time To Live">TTL</abbr> per port, so you can practice passive and active detection against known stacks. Window size and option ordering come from the container kernel, not from the rules, which is itself a lesson in how far packet mangling can go.</p>
 						<p><a href="/wiki/articles/fundamentals/tcp-fingerprinting.Containerfile">tcp-fingerprinting.Containerfile</a></p>
 						<pre class="bash">
 podman build -t tcp-fingerprinting -f tcp-fingerprinting.Containerfile .

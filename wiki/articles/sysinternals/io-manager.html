@@ -134,30 +134,10 @@
 
 				<article>
 					<h2 id="io-manager">I/O Manager</h2>
-					<p>
-						Windows I/O Manager architecture covering
-						<abbr title="I/O Request Packet">IRP</abbr>
-						s, device stacks, dispatch
-						routines,
-						<abbr title="I/O Completion Port">IOCP</abbr>
-						, and buffering strategies, plus the Linux block layer
-						comparison.
-					</p>
+					<p>Windows I/O Manager architecture covering <abbr title="I/O Request Packet">IRP</abbr> s, device stacks, dispatch routines, <abbr title="I/O Completion Port">IOCP</abbr> , and buffering strategies, plus the Linux block layer comparison.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							Every I/O request crosses a common subsystem before it reaches a device driver. Windows routes
-							requests through the I/O Manager as I/O Request Packets; Linux routes them through the VFS and
-							the block layer. This article dissects both paths, explains buffering and completion models,
-							and shows how to observe them with
-							<code>iostat</code>
-							,
-							<code>iotop</code>
-							, and
-							<code>blktrace</code>
-							. After reading it you
-							can trace a single write from the system call to the device.
-						</p>
+						<p>Every I/O request crosses a common subsystem before it reaches a device driver. Windows routes requests through the I/O Manager as I/O Request Packets; Linux routes them through the VFS and the block layer. This article dissects both paths, explains buffering and completion models, and shows how to observe them with <code>iostat</code> , <code>iotop</code> , and <code>blktrace</code> . After reading it you can trace a single write from the system call to the device.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -168,36 +148,8 @@
 					</section>
 					<section>
 						<h3 id="the-io-problem">The I/O Problem</h3>
-						<p>
-							Every operating system must mediate access to hardware - disks, network cards, keyboards,
-							<abbr title="Graphical Processing Unit">GPU</abbr>
-							s. Without a centralized I/O subsystem, every driver would independently handle buffer management,
-							asynchronous completion, cancellation, and access checks. Heterogeneous drivers lead to inconsistent
-							behavior, deadlocks, and security vulnerabilities.
-						</p>
-						<p>
-							Windows solves this with the
-							<b>I/O Manager</b>
-							(
-							<code>ntoskrnl.exe</code>
-							, source in
-							<code>io/</code>
-							). Linux solves
-							it through the
-							<b>block layer</b>
-							(
-							<code>block/</code>
-							),
-							<b>character device framework</b>
-							(
-							<code>drivers/char/</code>
-							), and
-							<b>VFS</b>
-							(
-							<code>fs/</code>
-							). Both designs share a fundamental insight: I/O is inherently asynchronous,
-							and the OS must provide a uniform abstraction across diverse device types.
-						</p>
+						<p>Every operating system must mediate access to hardware - disks, network cards, keyboards, <abbr title="Graphical Processing Unit">GPU</abbr> s. Without a centralized I/O subsystem, every driver would independently handle buffer management, asynchronous completion, cancellation, and access checks. Heterogeneous drivers lead to inconsistent behavior, deadlocks, and security vulnerabilities.</p>
+						<p>Windows solves this with the <b>I/O Manager</b> ( <code>ntoskrnl.exe</code> , source in <code>io/</code> ). Linux solves it through the <b>block layer</b> ( <code>block/</code> ), <b>character device framework</b> ( <code>drivers/char/</code> ), and <b>VFS</b> ( <code>fs/</code> ). Both designs share a fundamental insight: I/O is inherently asynchronous, and the OS must provide a uniform abstraction across diverse device types.</p>
 						<pre class="plaintext">
 User Application
       │
@@ -235,21 +187,9 @@ User Application
 					</section>
 					<section>
 						<h3 id="windows-irp-io-request-packet">Windows IRP - I/O Request Packet</h3>
-						<p>
-							The fundamental unit of I/O in Windows is the
-							<b>IRP</b>
-							(I/O Request Packet). Every I/O operation
-							<ul>
-								<li>read, write, device control - is represented by an <abbr title="Incident Response">IR</abbr> P allocated</li>
-							</ul>
-							from
-							non-paged pool. The
-							<abbr title="Incident Response">IR</abbr>
-							P travels down the device stack, with each driver
-							adding its own parameters via an
-							<b>I/O stack location</b>
-							.
-						</p>
+						<p>The fundamental unit of I/O in Windows is the <b>IRP</b> (I/O Request Packet). Every I/O operation<ul>
+	<li>read, write, device control - is represented by an <abbr title="Incident Response">IR</abbr> P allocated</li>
+</ul> from non-paged pool. The <abbr title="Incident Response">IR</abbr> P travels down the device stack, with each driver adding its own parameters via an <b>I/O stack location</b> .</p>
 						<pre class="plaintext">
 IRP Structure:
 ┌──────────────────────────────────────────────────────┐
@@ -294,20 +234,8 @@ IRP Structure:
 │  └── StackLocation[N]          ← bottom (PDO)         │
 └──────────────────────────────────────────────────────┘
 						</pre>
-						<p>
-							The
-							<abbr title="Incident Response">IR</abbr>
-							P is processed top-down (highest driver first) and completed bottom-up.
-							<code>CurrentLocation</code>
-							tracks which stack entry is active.
-						</p>
-						<p>
-							Linux equivalent -
-							<code>struct bio</code>
-							and
-							<code>struct request</code>
-							:
-						</p>
+						<p>The <abbr title="Incident Response">IR</abbr> P is processed top-down (highest driver first) and completed bottom-up. <code>CurrentLocation</code> tracks which stack entry is active.</p>
+						<p>Linux equivalent - <code>struct bio</code> and <code>struct request</code> :</p>
 						<pre class="c">
 // Linux block I/O structures (include/linux/blk_types.h)
 
@@ -346,10 +274,7 @@ struct request {
 					</section>
 					<section>
 						<h3 id="device-stacks-layered-driver-model">Device Stacks - Layered Driver Model</h3>
-						<p>
-							Windows drivers are layered - each layer adds or transforms functionality. A disk I/O might
-							pass through five drivers:
-						</p>
+						<p>Windows drivers are layered - each layer adds or transforms functionality. A disk I/O might pass through five drivers:</p>
 						<pre class="plaintext">
 User Application
       │  NtWriteFile(hFile, buf, len, offset, ...)
@@ -444,16 +369,7 @@ cat /sys/block/nvme0n1/queue/scheduler
 					</section>
 					<section>
 						<h3 id="dispatch-routines-major-function-codes">Dispatch Routines: Major Function Codes</h3>
-						<p>
-							Every Windows driver registers dispatch routines for standard I/O operations. The
-							<code>MajorFunction</code>
-							field in the
-							<abbr title="Incident Response">IR</abbr>
-							P stack location determines which dispatch routine handles
-							the
-							<abbr title="Incident Response">IR</abbr>
-							P:
-						</p>
+						<p>Every Windows driver registers dispatch routines for standard I/O operations. The <code>MajorFunction</code> field in the <abbr title="Incident Response">IR</abbr> P stack location determines which dispatch routine handles the <abbr title="Incident Response">IR</abbr> P:</p>
 						<table>
 							<thead>
 								<tr>
@@ -574,13 +490,7 @@ cat /sys/block/nvme0n1/queue/scheduler
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							Linux equivalents - each driver registers
-							<code>struct file_operations</code>
-							or
-							<code>struct block_device_operations</code>
-							:
-						</p>
+						<p>Linux equivalents - each driver registers <code>struct file_operations</code> or <code>struct block_device_operations</code> :</p>
 						<pre class="bash">
 # Linux file_operations — analogous to Windows dispatch table
 # Defined in include/linux/fs.h
@@ -646,15 +556,7 @@ IOCP Architecture:
     NumberOfConcurrent  └────────────────────────┘
     Threads param)
 						</pre>
-						<p>
-							Linux equivalent:
-							<code>libaio</code>
-							(native AIO),
-							<code>io_uring</code>
-							, and
-							<code>epoll</code>
-							:
-						</p>
+						<p>Linux equivalent: <code>libaio</code> (native AIO), <code>io_uring</code> , and <code>epoll</code> :</p>
 						<pre class="bash">
 # Linux async I/O mechanisms comparison:
 #
@@ -681,10 +583,7 @@ ls /sys/kernel/debug/tracing/events/io_uring/
 					</section>
 					<section>
 						<h3 id="buffering-strategies">Buffering Strategies</h3>
-						<p>
-							Windows supports three I/O buffering strategies, selected by the driver when creating its device
-							object:
-						</p>
+						<p>Windows supports three I/O buffering strategies, selected by the driver when creating its device object:</p>
 						<pre class="plaintext">
 1. Buffered I/O (METHOD_BUFFERED)
 ══════════════════════════════════════════════════════════════
@@ -775,17 +674,7 @@ kprobe:do_direct_IO { printf(&#34;Direct I/O: pid=%d comm=%s\n&#34;, pid, comm);
 					</section>
 					<section>
 						<h3 id="fast-io-path">Fast I/O Path</h3>
-						<p>
-							Windows provides a
-							<b>Fast I/O</b>
-							path that bypasses full
-							<abbr title="Incident Response">IR</abbr>
-							P creation for
-							cached, synchronous I/O. Instead of allocating an
-							<abbr title="Incident Response">IR</abbr>
-							P, the I/O Manager
-							directly calls the filesystem driver's FastIoRead/FastIoWrite routines:
-						</p>
+						<p>Windows provides a <b>Fast I/O</b> path that bypasses full <abbr title="Incident Response">IR</abbr> P creation for cached, synchronous I/O. Instead of allocating an <abbr title="Incident Response">IR</abbr> P, the I/O Manager directly calls the filesystem driver's FastIoRead/FastIoWrite routines:</p>
 						<pre class="plaintext">
 Slow Path (Full IRP):              Fast Path:
 ══════════════════════              ═════════
@@ -807,14 +696,7 @@ IoCompleteRequest(irp)
   ▼
 IoFreeIrp(irp)
 						</pre>
-						<p>
-							Linux equivalent: the
-							<b>page cache hit path</b>
-							. When data is cached,
-							<code>read()</code>
-							returns directly
-							from memory without going through the block layer:
-						</p>
+						<p>Linux equivalent: the <b>page cache hit path</b> . When data is cached, <code>read()</code> returns directly from memory without going through the block layer:</p>
 						<pre class="bash">
 # Trace fast vs slow I/O paths in Linux
 sudo bpftrace -e &#39;
@@ -835,15 +717,7 @@ kretprobe:submit_bio /retval &gt; 0/ {
 					</section>
 					<section>
 						<h3 id="cancel-routines-and-irp-cancellation">Cancel Routines and IRP Cancellation</h3>
-						<p>
-							Windows supports cancelling in-progress I/O. Threads call
-							<code>CancelIo()</code>
-							or
-							<code>CancelSynchronousIo()</code>
-							, which sets
-							<code>Irp-&gt;Cancel = TRUE</code>
-							and invokes the driver's cancel routine:
-						</p>
+						<p>Windows supports cancelling in-progress I/O. Threads call <code>CancelIo()</code> or <code>CancelSynchronousIo()</code> , which sets <code>Irp-&gt;Cancel = TRUE</code> and invokes the driver's cancel routine:</p>
 						<pre class="plaintext">
 Cancellation Flow:
 ══════════════════════════════════════════════════════════════
@@ -890,10 +764,7 @@ sudo kill -9 $(ps aux | awk &#39;$8 ~ /D/ {print $2}&#39; | head -1) 2&gt;/dev/n
 					</section>
 					<section>
 						<h3 id="wdf-windows-driver-framework">WDF - Windows Driver Framework</h3>
-						<p>
-							Modern Windows drivers use WDF instead of the legacy WDM (Windows Driver Model). WDF provides
-							two frameworks:
-						</p>
+						<p>Modern Windows drivers use WDF instead of the legacy WDM (Windows Driver Model). WDF provides two frameworks:</p>
 						<table>
 							<thead>
 								<tr>
@@ -904,38 +775,18 @@ sudo kill -9 $(ps aux | awk &#39;$8 ~ /D/ {print $2}&#39; | head -1) 2&gt;/dev/n
 							</thead>
 							<tbody>
 								<tr>
-									<td align="center"><b>KMDF</b>(Kernel-Mode Driver Framework)</td>
+									<td align="center"><b>KMDF</b> (Kernel-Mode Driver Framework)</td>
 									<td align="center">Kernel drivers</td>
 									<td align="center">State machines, power management defaults</td>
 								</tr>
 								<tr>
-									<td align="center"><b>UMDF</b>(User-Mode Driver Framework)</td>
+									<td align="center"><b>UMDF</b> (User-Mode Driver Framework)</td>
 									<td align="center">User-mode drivers</td>
 									<td align="center">Isolated, cannot crash kernel</td>
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							KMDF wraps
-							<abbr title="Incident Response">IR</abbr>
-							P handling - the driver doesn't see
-							<abbr title="Incident Response">IR</abbr>
-							Ps directly. Instead, KMDF converts
-							<abbr title="Incident Response">IR</abbr>
-							Ps into WDFREQUEST objects and calls
-							the driver's
-							<code>EvtIoRead</code>
-							/
-							<code>EvtIoWrite</code>
-							callbacks. This eliminates boilerplate and prevents
-							common bugs like: - Forgetting to complete an
-							<abbr title="Incident Response">IR</abbr>
-							P - Completing an
-							<abbr title="Incident Response">IR</abbr>
-							P from the wrong
-							<abbr title="Incident Response">IR</abbr>
-							QL - Mishandling cancellation
-						</p>
+						<p>KMDF wraps <abbr title="Incident Response">IR</abbr> P handling - the driver doesn't see <abbr title="Incident Response">IR</abbr> Ps directly. Instead, KMDF converts <abbr title="Incident Response">IR</abbr> Ps into WDFREQUEST objects and calls the driver's <code>EvtIoRead</code> / <code>EvtIoWrite</code> callbacks. This eliminates boilerplate and prevents common bugs like: - Forgetting to complete an <abbr title="Incident Response">IR</abbr> P - Completing an <abbr title="Incident Response">IR</abbr> P from the wrong <abbr title="Incident Response">IR</abbr> QL - Mishandling cancellation</p>
 					</section>
 					<section>
 						<h3 id="linux-io-stack-in-depth-trace">Linux I/O Stack: In-Depth Trace</h3>
@@ -974,10 +825,7 @@ strace -e trace=write,read -p $(pgrep dd)
 					</section>
 					<section>
 						<h3 id="linux-io-schedulers">Linux I/O Schedulers</h3>
-						<p>
-							The Linux block layer includes I/O schedulers that reorder, merge, and prioritize requests.
-							This is analogous to Windows's Storport I/O prioritization:
-						</p>
+						<p>The Linux block layer includes I/O schedulers that reorder, merge, and prioritize requests. This is analogous to Windows's Storport I/O prioritization:</p>
 						<pre class="bash">
 # List available I/O schedulers
 cat /sys/block/nvme0n1/queue/scheduler
@@ -1009,23 +857,7 @@ cat /sys/block/nvme0n1/stat
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Build the tracing container and follow one I/O request from the
-							<code>write(2)</code>
-							call down to the
-							block device. Run a sequential
-							<code>fio</code>
-							workload, capture it with
-							<code>blktrace</code>
-							, and correlate the
-							<code>D</code>
-							(issued) and
-							<code>C</code>
-							(completed) events with the scheduler and
-							<code>iostat</code>
-							output. Then switch
-							the scheduler and compare the latency distribution.
-						</p>
+						<p>Build the tracing container and follow one I/O request from the <code>write(2)</code> call down to the block device. Run a sequential <code>fio</code> workload, capture it with <code>blktrace</code> , and correlate the <code>D</code> (issued) and <code>C</code> (completed) events with the scheduler and <code>iostat</code> output. Then switch the scheduler and compare the latency distribution.</p>
 						<p><a href="/wiki/articles/sysinternals/io-manager.Containerfile">io-manager.Containerfile</a></p>
 						<pre class="bash">
 podman build -t io-manager-lab -f io-manager.Containerfile .
@@ -1051,27 +883,7 @@ blktrace -d /dev/$DEV -o - | blkparse -i -
 echo kyber | sudo tee /sys/block/$DEV/queue/scheduler
 fio /workloads/mixed.fio
 						</pre>
-						<p>
-							The container ships
-							<code>fio</code>
-							,
-							<code>iostat</code>
-							,
-							<code>iotop</code>
-							,
-							<code>blktrace</code>
-							, and
-							<code>bpftrace</code>
-							, plus the
-							<code>/workloads/trace_io.sh</code>
-							helper that walks a command through
-							<code>strace</code>
-							,
-							<code>iostat</code>
-							, and the per-device
-							<code>/sys/block</code>
-							statistics.
-						</p>
+						<p>The container ships <code>fio</code> , <code>iostat</code> , <code>iotop</code> , <code>blktrace</code> , and <code>bpftrace</code> , plus the <code>/workloads/trace_io.sh</code> helper that walks a command through <code>strace</code> , <code>iostat</code> , and the per-device <code>/sys/block</code> statistics.</p>
 					</section>
 					<section>
 						<h3 id="references">References</h3>

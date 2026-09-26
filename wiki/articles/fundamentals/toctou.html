@@ -149,25 +149,11 @@
 
 				<article>
 					<h2 id="toctou">TOCTOU</h2>
-					<p>
-						Time-of-Check to Time-of-Use filesystem races - symlink swaps, access/open gaps, O_NOFOLLOW,
-						openat, mkstemp, hardlink attacks, /proc/self/fd tricks, and atomic file operations.
-					</p>
+					<p>Time-of-Check to Time-of-Use filesystem races - symlink swaps, access/open gaps, O_NOFOLLOW, openat, mkstemp, hardlink attacks, /proc/self/fd tricks, and atomic file operations.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							TOCTOU (Time-of-Check to Time-of-Use) is a subclass of race condition specific to filesystem
-							operations. A program checks a condition about a filesystem object (file exists, permission,
-							ownership, type), then later acts on that object (open, write, chmod). Between the check and
-							the act, an attacker changes what the pathname resolves to, so the check and the action apply
-							to different objects.
-						</p>
-						<p>
-							The root cause is that pathname-to-inode resolution is not a single atomic operation. Every
-							syscall that takes a pathname re-resolves it from the directory tree, and between two syscalls
-							the tree can change. After reading you can recognize the vulnerable access/open, stat/open,
-							and pathname-chown patterns, and replace them with file-descriptor based operations.
-						</p>
+						<p>TOCTOU (Time-of-Check to Time-of-Use) is a subclass of race condition specific to filesystem operations. A program checks a condition about a filesystem object (file exists, permission, ownership, type), then later acts on that object (open, write, chmod). Between the check and the act, an attacker changes what the pathname resolves to, so the check and the action apply to different objects.</p>
+						<p>The root cause is that pathname-to-inode resolution is not a single atomic operation. Every syscall that takes a pathname re-resolves it from the directory tree, and between two syscalls the tree can change. After reading you can recognize the vulnerable access/open, stat/open, and pathname-chown patterns, and replace them with file-descriptor based operations.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -218,10 +204,7 @@ int main(int argc, char **argv) {
     return 0;
 }
 						</pre>
-						<p>
-							As root (via setuid), the program checks if the real user can write to the file - then opens
-							it as root. The attacker:
-						</p>
+						<p>As root (via setuid), the program checks if the real user can write to the file - then opens it as root. The attacker:</p>
 						<pre class="bash">
 # Terminal 1 — the attacker
 mkdir /tmp/attacker
@@ -242,46 +225,25 @@ done
 # If the symlink is in place when open() resolves the path,
 # data is appended to /etc/passwd as root
 						</pre>
-						<p>
-							The race window is the gap between
-							<code>access()</code>
-							returning and
-							<code>open()</code>
-							beginning. On a modern
-							system this gap is microseconds, but with enough attempts (thousands per second) and kernel
-							scheduling jitter, the race is consistently winnable.
-						</p>
+						<p>The race window is the gap between <code>access()</code> returning and <code>open()</code> beginning. On a modern system this gap is microseconds, but with enough attempts (thousands per second) and kernel scheduling jitter, the race is consistently winnable.</p>
 					</section>
 					<section>
 						<h3 id="limits-of-o-nofollow">Limits of O_NOFOLLOW</h3>
-						<p>
-							<code>O_NOFOLLOW</code>
-							tells
-							<code>open()</code>
-							to fail if the final component of the path is a symlink:
-						</p>
+						<p><code>O_NOFOLLOW</code> tells <code>open()</code> to fail if the final component of the path is a symlink:</p>
 						<pre class="c">
 int fd = open(path, O_WRONLY | O_NOFOLLOW);
 if (fd &lt; 0 &amp;&amp; errno == ELOOP)
     /* symlink detected, refuse */;
 						</pre>
-						<p>
-							This prevents symlink-based TOCTOU for the
-							<em>last</em>
-							path component. But it does not protect against:
-							<ul>
-								<li>Directory symlinks: if <code>/tmp/userdir</code> is a symlink to <code>/etc</code> , opening <code>/tmp/userdir/file</code> with <code>O_NOFOLLOW</code> follows the <em>directory</em> symlink but refuses a symlink named <code>file</code> . The directory traversal itself is a TOCTOU vector.</li>
-								<li>Hardlink attacks: no symlink involved, <code>O_NOFOLLOW</code> passes. A hardlink to <code>/etc/passwd</code> is a regular directory entry - <code>O_NOFOLLOW</code> does not reject it.</li>
-								<li>Rename attacks: <code>rename(&#34;/tmp/evil&#34;, &#34;/tmp/userfile&#34;)</code> replaces the file atomically between check and open, without symlinks.</li>
-							</ul>
-						</p>
+						<p>This prevents symlink-based TOCTOU for the <em>last</em> path component. But it does not protect against:<ul>
+	<li>Directory symlinks: if <code>/tmp/userdir</code> is a symlink to <code>/etc</code> , opening <code>/tmp/userdir/file</code> with <code>O_NOFOLLOW</code> follows the <em>directory</em> symlink but refuses a symlink named <code>file</code> . The directory traversal itself is a TOCTOU vector.</li>
+	<li>Hardlink attacks: no symlink involved, <code>O_NOFOLLOW</code> passes. A hardlink to <code>/etc/passwd</code> is a regular directory entry - <code>O_NOFOLLOW</code> does not reject it.</li>
+	<li>Rename attacks: <code>rename(&#34;/tmp/evil&#34;, &#34;/tmp/userfile&#34;)</code> replaces the file atomically between check and open, without symlinks.</li>
+</ul></p>
 					</section>
 					<section>
 						<h3 id="correct-pattern-open-and-fstat">Correct Pattern: open and fstat</h3>
-						<p>
-							Instead of checking permissions before opening, open the file first, then verify that the file
-							descriptor refers to the expected object:
-						</p>
+						<p>Instead of checking permissions before opening, open the file first, then verify that the file descriptor refers to the expected object:</p>
 						<pre class="c">
 /* toctou_safe.c — race-free permission check */
 #include &lt;stdio.h&gt;
@@ -341,44 +303,14 @@ int main(int argc, char **argv) {
     return 0;
 }
 						</pre>
-						<p>
-							The fd is bound to the inode at
-							<code>open()</code>
-							time.
-							<code>fstat()</code>
-							operates on the fd, not the pathname
-							<ul>
-								<li>it cannot be tricked by a pathname swap. The attacker can replace the pathname between <code>open()</code></li>
-							</ul>
-						</p>
-						<p>
-							and
-							<code>fstat()</code>
-							, but it doesn't matter: the fd already points to the file that
-							<code>open()</code>
-							resolved
-							to. The check is on the actual file, not the name.
-						</p>
+						<p>The fd is bound to the inode at <code>open()</code> time. <code>fstat()</code> operates on the fd, not the pathname<ul>
+	<li>it cannot be tricked by a pathname swap. The attacker can replace the pathname between <code>open()</code></li>
+</ul></p>
+						<p>and <code>fstat()</code> , but it doesn't matter: the fd already points to the file that <code>open()</code> resolved to. The check is on the actual file, not the name.</p>
 					</section>
 					<section>
 						<h3 id="openat-and-relative-path-operations">openat() and Relative Path Operations</h3>
-						<p>
-							<code>openat(dirfd, pathname, flags)</code>
-							resolves
-							<code>pathname</code>
-							relative to the directory referenced by
-							<code>dirfd</code>
-							. If
-							<code>pathname</code>
-							is absolute,
-							<code>dirfd</code>
-							is ignored. If
-							<code>dirfd</code>
-							is
-							<code>AT_FDCWD</code>
-							, it's relative
-							to the current working directory.
-						</p>
+						<p><code>openat(dirfd, pathname, flags)</code> resolves <code>pathname</code> relative to the directory referenced by <code>dirfd</code> . If <code>pathname</code> is absolute, <code>dirfd</code> is ignored. If <code>dirfd</code> is <code>AT_FDCWD</code> , it's relative to the current working directory.</p>
 						<pre class="c">
 int dirfd = open(&#34;/tmp/safedir&#34;, O_RDONLY | O_DIRECTORY);
 if (dirfd &lt; 0) { perror(&#34;open dir&#34;); return 1; }
@@ -388,42 +320,12 @@ if (dirfd &lt; 0) { perror(&#34;open dir&#34;); return 1; }
    directory (assuming no rename of the directory itself). */
 int fd = openat(dirfd, &#34;userfile&#34;, O_WRONLY | O_NOFOLLOW);
 						</pre>
-						<p>
-							But:
-							<code>openat(dirfd, path)</code>
-							where
-							<code>path</code>
-							contains
-							<code>../</code>
-							components resolves those relative to
-							the
-							<em>directory's position in the tree</em>
-							, not the fd. The fd gives a starting point; path resolution
-							still walks the tree and remains vulnerable to parent directory replacement.
-						</p>
-						<p>
-							The full race-free pattern uses
-							<code>openat()</code>
-							with an fd obtained from
-							<code>open()</code>
-							on the parent directory,
-							plus
-							<code>O_NOFOLLOW</code>
-							, plus device+inode verification via
-							<code>fstat()</code>
-							on the fd that
-							<code>openat()</code>
-							returns.
-						</p>
+						<p>But: <code>openat(dirfd, path)</code> where <code>path</code> contains <code>../</code> components resolves those relative to the <em>directory's position in the tree</em> , not the fd. The fd gives a starting point; path resolution still walks the tree and remains vulnerable to parent directory replacement.</p>
+						<p>The full race-free pattern uses <code>openat()</code> with an fd obtained from <code>open()</code> on the parent directory, plus <code>O_NOFOLLOW</code> , plus device+inode verification via <code>fstat()</code> on the fd that <code>openat()</code> returns.</p>
 					</section>
 					<section>
 						<h3 id="procselffd-tricks">/proc/self/fd Tricks</h3>
-						<p>
-							Linux's
-							<code>/proc/self/fd/N</code>
-							provides a pathname that re-opens file descriptor N. This is intended
-							for debugging but enables TOCTOU bypass:
-						</p>
+						<p>Linux's <code>/proc/self/fd/N</code> provides a pathname that re-opens file descriptor N. This is intended for debugging but enables TOCTOU bypass:</p>
 						<pre class="bash">
 # Program opens /tmp/allowed/file → fd 3
 # Program verifies fd 3 is safe
@@ -432,24 +334,10 @@ int fd = openat(dirfd, &#34;userfile&#34;, O_WRONLY | O_NOFOLLOW);
 #         → re-opens fd 3&#39;s file, but if fd 3 was closed
 #           and replaced with a new fd pointing to something else...
 						</pre>
-						<p>
-							The
-							<code>/proc/self/fd</code>
-							entry follows the symlink of the original open. If the original was opened
-							without
-							<code>O_NOFOLLOW</code>
-							, this re-open may follow a symlink that was swapped in after the original
-							open. But since the fd points to the inode, not the path, the re-open should get the same inode
-							<ul>
-								<li>the race here is on the fd number, not the path.</li>
-							</ul>
-						</p>
-						<p>
-							A more subtle vector: if you pass a fd number to a setuid program and it opens
-							<code>/proc/self/fd/N</code>
-							to access "your" file, the file is opened with the program's privileges, bypassing permission
-							checks.
-						</p>
+						<p>The <code>/proc/self/fd</code> entry follows the symlink of the original open. If the original was opened without <code>O_NOFOLLOW</code> , this re-open may follow a symlink that was swapped in after the original open. But since the fd points to the inode, not the path, the re-open should get the same inode<ul>
+	<li>the race here is on the fd number, not the path.</li>
+</ul></p>
+						<p>A more subtle vector: if you pass a fd number to a setuid program and it opens <code>/proc/self/fd/N</code> to access "your" file, the file is opened with the program's privileges, bypassing permission checks.</p>
 					</section>
 					<section>
 						<h3 id="temp-files-mkstemp-and-tmpfile">Temp Files: mkstemp and tmpfile</h3>
@@ -461,10 +349,7 @@ if (access(&#34;/tmp/myapp.lock&#34;, F_OK) != 0) {
     /* Another process may have created it between access() and open() */
 }
 						</pre>
-						<p>
-							<b>mkstemp()</b>
-							atomically creates and opens a unique temporary file:
-						</p>
+						<p><b>mkstemp()</b> atomically creates and opens a unique temporary file:</p>
 						<pre class="c">
 /* mkstemp_demo.c */
 #include &lt;stdio.h&gt;
@@ -496,18 +381,8 @@ int main() {
     return 0;
 }
 						</pre>
-						<p>
-							<code>mkstemp()</code>
-							uses
-							<code>O_CREAT | O_EXCL | O_RDWR</code>
-							internally - if the file already exists (unlikely
-							with random 6-character suffix), it fails and picks a new name.
-						</p>
-						<p>
-							<b>tmpfile()</b>
-							creates an anonymous temporary file - it has no directory entry at all (it's immediately
-							unlinked after creation). No path means no TOCTOU:
-						</p>
+						<p><code>mkstemp()</code> uses <code>O_CREAT | O_EXCL | O_RDWR</code> internally - if the file already exists (unlikely with random 6-character suffix), it fails and picks a new name.</p>
+						<p><b>tmpfile()</b> creates an anonymous temporary file - it has no directory entry at all (it's immediately unlinked after creation). No path means no TOCTOU:</p>
 						<pre class="c">
 FILE *fp = tmpfile();
 if (!fp) { perror(&#34;tmpfile&#34;); return 1; }
@@ -516,28 +391,11 @@ rewind(fp);
 /* read back */
 fclose(fp);  // file contents freed automatically
 						</pre>
-						<p>
-							The downside: the file has no name, so no other process can access it (by design), and you cannot
-							preserve it across
-							<code>exec()</code>
-							.
-						</p>
+						<p>The downside: the file has no name, so no other process can access it (by design), and you cannot preserve it across <code>exec()</code> .</p>
 					</section>
 					<section>
 						<h3 id="o-creat-o-excl-for-exclusive-creation">O_CREAT | O_EXCL for Exclusive Creation</h3>
-						<p>
-							The combination
-							<code>O_CREAT | O_EXCL</code>
-							makes
-							<code>open()</code>
-							atomically check for file existence and create
-							the file. If the file exists,
-							<code>open()</code>
-							fails with
-							<code>EEXIST</code>
-							. This is the building block of lock
-							files:
-						</p>
+						<p>The combination <code>O_CREAT | O_EXCL</code> makes <code>open()</code> atomically check for file existence and create the file. If the file exists, <code>open()</code> fails with <code>EEXIST</code> . This is the building block of lock files:</p>
 						<pre class="c">
 int lock_fd = open(&#34;/var/run/myapp.pid&#34;, O_CREAT | O_EXCL | O_WRONLY, 0644);
 if (lock_fd &lt; 0) {
@@ -552,17 +410,7 @@ if (lock_fd &lt; 0) {
 dprintf(lock_fd, &#34;%d\n&#34;, getpid());
 /* Do not close if you want the lock to persist */
 						</pre>
-						<p>
-							The atomicity guarantee:
-							<code>POSIX</code>
-							requires that
-							<code>O_CREAT | O_EXCL</code>
-							on a regular file, on a system
-							supporting the
-							<code>POSIX</code>
-							file semantics, never returns success if the file already exists. The
-							check and creation happen atomically in the kernel's VFS layer.
-						</p>
+						<p>The atomicity guarantee: <code>POSIX</code> requires that <code>O_CREAT | O_EXCL</code> on a regular file, on a system supporting the <code>POSIX</code> file semantics, never returns success if the file already exists. The check and creation happen atomically in the kernel's VFS layer.</p>
 					</section>
 					<section>
 						<h3 id="hardlink-chown-toctou">Hardlink chown TOCTOU</h3>
@@ -580,22 +428,7 @@ dprintf(lock_fd, &#34;%d\n&#34;, getpid());
 
 # Now chown changes /etc/passwd&#39;s owner
 						</pre>
-						<p>
-							This works because
-							<code>chown()</code>
-							takes a pathname, not a fd. The
-							<code>POSIX</code>
-							functions
-							<code>fchown()</code>
-							,
-							<code>fchmod()</code>
-							,
-							<code>futimes()</code>
-							,
-							<code>fstat()</code>
-							operate on file descriptors and are immune to this class
-							of attack:
-						</p>
+						<p>This works because <code>chown()</code> takes a pathname, not a fd. The <code>POSIX</code> functions <code>fchown()</code> , <code>fchmod()</code> , <code>futimes()</code> , <code>fstat()</code> operate on file descriptors and are immune to this class of attack:</p>
 						<pre class="c">
 /* Race-free version */
 int fd = open(path, O_RDONLY | O_NOFOLLOW);
@@ -614,10 +447,7 @@ close(fd);
 					</section>
 					<section>
 						<h3 id="directory-traversal-and-toctou">Directory Traversal and TOCTOU</h3>
-						<p>
-							If an attacker controls a directory component of the path, they can replace that directory with
-							a symlink:
-						</p>
+						<p>If an attacker controls a directory component of the path, they can replace that directory with a symlink:</p>
 						<pre class="bash">
 # Program opens: /tmp/userdir/config.txt
 # Step 1: lstat(&#34;/tmp/userdir&#34;) → it&#39;s a real directory, owned by user
@@ -628,16 +458,7 @@ close(fd);
 # Even with O_NOFOLLOW on the final component, the directory traversal
 # follows the symlink because O_NOFOLLOW only affects the last path component
 						</pre>
-						<p>
-							The defense:
-							<code>open()</code>
-							the directory with
-							<code>O_NOFOLLOW</code>
-							, get a dirfd, and use
-							<code>openat()</code>
-							for
-							subsequent operations. The dirfd pins the directory inode even if the name is moved or replaced.
-						</p>
+						<p>The defense: <code>open()</code> the directory with <code>O_NOFOLLOW</code> , get a dirfd, and use <code>openat()</code> for subsequent operations. The dirfd pins the directory inode even if the name is moved or replaced.</p>
 						<pre class="c">
 int dirfd = open(&#34;/tmp/userdir&#34;, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
 if (dirfd &lt; 0) { perror(&#34;open dir&#34;); return 1; }
@@ -653,23 +474,11 @@ if (fd &lt; 0) { perror(&#34;openat&#34;); close(dirfd); return 1; }
 /* Even if someone replaces /tmp/userdir, our dirfd still points
    to the original directory (the inode is kept alive by the fd) */
 						</pre>
-						<p>
-							But note: if
-							<code>config.txt</code>
-							is itself a symlink
-							<em>within</em>
-							the original directory,
-							<code>O_NOFOLLOW</code>
-							catches it. If not, it opens the original file within the original directory - TOCTOU safe.
-						</p>
+						<p>But note: if <code>config.txt</code> is itself a symlink <em>within</em> the original directory, <code>O_NOFOLLOW</code> catches it. If not, it opens the original file within the original directory - TOCTOU safe.</p>
 					</section>
 					<section>
 						<h3 id="rename-and-link-atomicity">rename() and link() Atomicity</h3>
-						<p>
-							<code>rename()</code>
-							is atomic - the new name either replaces the old or exists, never both. This makes
-							it a building block for safe file updates:
-						</p>
+						<p><code>rename()</code> is atomic - the new name either replaces the old or exists, never both. This makes it a building block for safe file updates:</p>
 						<pre class="c">
 /* Atomic file update pattern */
 int fd = open(&#34;/tmp/myfile.tmp&#34;, O_CREAT | O_WRONLY | O_TRUNC, 0644);
@@ -686,33 +495,12 @@ if (rename(&#34;/tmp/myfile.tmp&#34;, &#34;/tmp/myfile&#34;) &lt; 0) {
 /* Any process opening &#34;/tmp/myfile&#34; sees either the old or new inode —
    never a half-written file, never corruption. */
 						</pre>
-						<p>
-							<code>link()</code>
-							is also atomic - two hard links to the same inode either both exist or neither does
-							(except on filesystems that don't support hard links, e.g., FAT).
-						</p>
-						<p>
-							However:
-							<code>rename()</code>
-							only guarantees atomicity within a single filesystem. Cross-device
-							<code>rename()</code>
-							returns
-							<code>EXDEV</code>
-							and requires a copy+delete fallback, which is
-							<em>not</em>
-							atomic.
-						</p>
+						<p><code>link()</code> is also atomic - two hard links to the same inode either both exist or neither does (except on filesystems that don't support hard links, e.g., FAT).</p>
+						<p>However: <code>rename()</code> only guarantees atomicity within a single filesystem. Cross-device <code>rename()</code> returns <code>EXDEV</code> and requires a copy+delete fallback, which is <em>not</em> atomic.</p>
 					</section>
 					<section>
 						<h3 id="inotify-based-detection">inotify-Based Detection</h3>
-						<p>
-							Linux
-							<code>inotify</code>
-							lets a process monitor filesystem events. It cannot
-							<em>prevent</em>
-							TOCTOU but can
-							help detect attacks:
-						</p>
+						<p>Linux <code>inotify</code> lets a process monitor filesystem events. It cannot <em>prevent</em> TOCTOU but can help detect attacks:</p>
 						<pre class="c">
 #include &lt;sys/inotify.h&gt;
 #include &lt;limits.h&gt;
@@ -741,17 +529,7 @@ int main() {
     return 0;
 }
 						</pre>
-						<p>
-							Detection is inherently racy - an attacker can perform the swap after the
-							<code>inotify</code>
-							read but
-							before the application's
-							<code>open()</code>
-							. Defense in depth: combine
-							<code>inotify</code>
-							monitoring with fd-based
-							operations.
-						</p>
+						<p>Detection is inherently racy - an attacker can perform the swap after the <code>inotify</code> read but before the application's <code>open()</code> . Defense in depth: combine <code>inotify</code> monitoring with fd-based operations.</p>
 					</section>
 					<section>
 						<h3 id="full-toctou-exploit-demo">Full TOCTOU Exploit Demo</h3>
@@ -838,113 +616,25 @@ PYEOF
 
 python3 /tmp/race.py
 						</pre>
-						<p>
-							The race succeeds when
-							<code>stat()</code>
-							reads the decoy symlink (it follows symlinks - use
-							<code>lstat()</code>
-							to avoid this) and returns decoy's metadata, then
-							<code>open()</code>
-							resolves the path while it points
-							to
-							<code>/etc/shadow</code>
-							. Since the program runs as root (setuid), it reads the shadow file.
-						</p>
+						<p>The race succeeds when <code>stat()</code> reads the decoy symlink (it follows symlinks - use <code>lstat()</code> to avoid this) and returns decoy's metadata, then <code>open()</code> resolves the path while it points to <code>/etc/shadow</code> . Since the program runs as root (setuid), it reads the shadow file.</p>
 					</section>
 					<section>
 						<h3 id="filesystem-specific-considerations">Filesystem-Specific Considerations</h3>
-						<p>
-							<b>NFS.</b>
-							Network File System introduces server-side latency and caching.
-							<code>O_EXCL</code>
-							is not guaranteed
-							atomic across NFS clients on older NFS versions (NFSv3 and earlier). NFSv4 provides a more robust
-							<code>OPEN</code>
-							with
-							<code>OPEN4_CREATE</code>
-							semantics.
-						</p>
-						<p>
-							<b>tmpfs.</b>
-							Memory-backed filesystems like
-							<code>/tmp</code>
-							(often tmpfs) are local and fast. Races are
-							easier to win because there's no disk I/O jitter. The same
-							<code>O_CREAT | O_EXCL</code>
-							guarantees apply.
-						</p>
-						<p>
-							<b>ext4 / btrfs.</b>
-							Full
-							<code>POSIX</code>
-							semantics.
-							<code>rename()</code>
-							is atomic within the filesystem. Hard links
-							are supported.
-						</p>
-						<p>
-							<b>FAT / exFAT.</b>
-							No hard links or symlinks - limited TOCTOU surface. But
-							<code>rename()</code>
-							may not
-							be atomic; on FAT,
-							<code>rename()</code>
-							can be a copy+delete.
-						</p>
+						<p><b>NFS.</b> Network File System introduces server-side latency and caching. <code>O_EXCL</code> is not guaranteed atomic across NFS clients on older NFS versions (NFSv3 and earlier). NFSv4 provides a more robust <code>OPEN</code> with <code>OPEN4_CREATE</code> semantics.</p>
+						<p><b>tmpfs.</b> Memory-backed filesystems like <code>/tmp</code> (often tmpfs) are local and fast. Races are easier to win because there's no disk I/O jitter. The same <code>O_CREAT | O_EXCL</code> guarantees apply.</p>
+						<p><b>ext4 / btrfs.</b> Full <code>POSIX</code> semantics. <code>rename()</code> is atomic within the filesystem. Hard links are supported.</p>
+						<p><b>FAT / exFAT.</b> No hard links or symlinks - limited TOCTOU surface. But <code>rename()</code> may not be atomic; on FAT, <code>rename()</code> can be a copy+delete.</p>
 					</section>
 					<section>
 						<h3 id="summary">Summary</h3>
-						<p>
-							TOCTOU exploits the gap between a pathname-based check and a pathname-based action. The file
-							path is a name - it resolves to an inode at the moment of each syscall. Between syscalls, the
-							name-to-inode mapping can change via symlink swaps, hardlink creation, directory replacement,
-							or rename. The defense: open first, check second (
-							<code>open()</code>
-							->
-							<code>fstat()</code>
-							-> verify on the fd).
-							Use
-							<code>O_NOFOLLOW</code>
-							,
-							<code>O_CREAT | O_EXCL</code>
-							,
-							<code>mkstemp()</code>
-							,
-							<code>tmpfile()</code>
-							, and
-							<code>openat()</code>
-							with directory
-							fds. Replace
-							<code>chown()</code>
-							,
-							<code>chmod()</code>
-							, and
-							<code>utimes()</code>
-							calls on pathnames with their fd-based counterparts
-							(
-							<code>fchown()</code>
-							,
-							<code>fchmod()</code>
-							,
-							<code>futimes()</code>
-							). The kernel cannot protect you from pathname races
-							<ul>
-								<li>only fd-based operations provide the necessary atomic binding between the file object and</li>
-							</ul>
-						</p>
+						<p>TOCTOU exploits the gap between a pathname-based check and a pathname-based action. The file path is a name - it resolves to an inode at the moment of each syscall. Between syscalls, the name-to-inode mapping can change via symlink swaps, hardlink creation, directory replacement, or rename. The defense: open first, check second ( <code>open()</code> -> <code>fstat()</code> -> verify on the fd). Use <code>O_NOFOLLOW</code> , <code>O_CREAT | O_EXCL</code> , <code>mkstemp()</code> , <code>tmpfile()</code> , and <code>openat()</code> with directory fds. Replace <code>chown()</code> , <code>chmod()</code> , and <code>utimes()</code> calls on pathnames with their fd-based counterparts ( <code>fchown()</code> , <code>fchmod()</code> , <code>futimes()</code> ). The kernel cannot protect you from pathname races<ul>
+	<li>only fd-based operations provide the necessary atomic binding between the file object and</li>
+</ul></p>
 						<p>the permission check.</p>
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Write the race-free open pattern in Go. Open the target with
-							<code>O_NOFOLLOW</code>
-							, verify the file
-							descriptor with
-							<code>Fstat</code>
-							, then write through that same descriptor. Add an ownership check so
-							that the program refuses a file owned by another user.
-						</p>
+						<p>Write the race-free open pattern in Go. Open the target with <code>O_NOFOLLOW</code> , verify the file descriptor with <code>Fstat</code> , then write through that same descriptor. Add an ownership check so that the program refuses a file owned by another user.</p>
 						<pre class="go">
 package main
 
@@ -989,21 +679,7 @@ func main() {
 	fmt.Println(&#34;wrote&#34;, target)
 }
 						</pre>
-						<p>
-							Run it once to create
-							<code>safe.txt</code>
-							. Then replace the path with a symlink to
-							<code>/etc/passwd</code>
-							using
-							<code>ln -sf</code>
-							and confirm the program refuses with
-							<code>ELOOP</code>
-							instead of following it. Finally, remove
-							<code>O_NOFOLLOW</code>
-							and confirm the
-							<code>Fstat</code>
-							ownership check still catches the swap.
-						</p>
+						<p>Run it once to create <code>safe.txt</code> . Then replace the path with a symlink to <code>/etc/passwd</code> using <code>ln -sf</code> and confirm the program refuses with <code>ELOOP</code> instead of following it. Finally, remove <code>O_NOFOLLOW</code> and confirm the <code>Fstat</code> ownership check still catches the swap.</p>
 					</section>
 					<section>
 						<h3 id="references">References</h3>

@@ -161,29 +161,10 @@
 
 				<article>
 					<h2 id="token-impersonation">Token Impersonation</h2>
-					<p>
-						Windows access token structure, token theft, named pipe impersonation, Potato exploits (SeImpersonatePrivilege),
-						<abbr title="User Account Control">UAC</abbr>
-						token filtering, Kerberos delegation, and Linux credential passing
-						via Unix sockets.
-					</p>
+					<p>Windows access token structure, token theft, named pipe impersonation, Potato exploits (SeImpersonatePrivilege), <abbr title="User Account Control">UAC</abbr> token filtering, Kerberos delegation, and Linux credential passing via Unix sockets.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							Windows access tokens are the kernel objects that carry a process identity, and stealing or
-							impersonating one turns a foothold into SYSTEM. This article covers token structure, primary
-							versus impersonation tokens, named pipe impersonation with
-							<code>SeImpersonatePrivilege</code>
-							, the Potato
-							exploit family,
-							<abbr title="User Account Control">UAC</abbr>
-							token filtering, and Kerberos delegation. It closes
-							with the Linux equivalents: UID transitions, capabilities, and
-							<code>SCM_CREDENTIALS</code>
-							passing over
-							Unix domain sockets. By the end you can explain each privilege escalation primitive and where
-							it fails.
-						</p>
+						<p>Windows access tokens are the kernel objects that carry a process identity, and stealing or impersonating one turns a foothold into SYSTEM. This article covers token structure, primary versus impersonation tokens, named pipe impersonation with <code>SeImpersonatePrivilege</code> , the Potato exploit family, <abbr title="User Account Control">UAC</abbr> token filtering, and Kerberos delegation. It closes with the Linux equivalents: UID transitions, capabilities, and <code>SCM_CREDENTIALS</code> passing over Unix domain sockets. By the end you can explain each privilege escalation primitive and where it fails.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -197,21 +178,8 @@
 					</section>
 					<section>
 						<h3 id="the-windows-access-token">The Windows Access Token</h3>
-						<p>
-							Every Windows process carries an
-							<b>access token</b>
-							- a kernel object representing the process's
-							security context. When a thread opens a file, accesses a registry key, or interacts with any
-							securable object, the Security Reference Monitor (SRM) compares the token against the object's
-							<abbr title="Access Control List">ACL</abbr>
-							.
-						</p>
-						<p>
-							An access token is created at logon by
-							<abbr title="Local Security Authority Subsystem Service">LSASS</abbr>
-							and
-							contains:
-						</p>
+						<p>Every Windows process carries an <b>access token</b> - a kernel object representing the process's security context. When a thread opens a file, accesses a registry key, or interacts with any securable object, the Security Reference Monitor (SRM) compares the token against the object's <abbr title="Access Control List">ACL</abbr> .</p>
+						<p>An access token is created at logon by <abbr title="Local Security Authority Subsystem Service">LSASS</abbr> and contains:</p>
 						<table>
 							<thead>
 								<tr>
@@ -224,7 +192,7 @@
 								<tr>
 									<td align="center">User SID</td>
 									<td align="center">Who you are</td>
-									<td align="center"><code>S-1-5-21-3852-1155-500</code>(Administrator)</td>
+									<td align="center"><code>S-1-5-21-3852-1155-500</code> (Administrator)</td>
 								</tr>
 								<tr>
 									<td align="center">Group SIDs</td>
@@ -353,20 +321,9 @@ int main(void)
 					<section>
 						<h3 id="token-types-primary-vs-impersonation">Token Types: Primary vs Impersonation</h3>
 						<h4 id="primary-token">Primary Token</h4>
-						<p>
-							Attached to a process at creation time. Contains the complete security context. Every process
-							has exactly one primary token. Threads inherit the process primary token by default unless explicitly
-							assigned an impersonation token.
-						</p>
+						<p>Attached to a process at creation time. Contains the complete security context. Every process has exactly one primary token. Threads inherit the process primary token by default unless explicitly assigned an impersonation token.</p>
 						<h4 id="impersonation-token">Impersonation Token</h4>
-						<p>
-							Attached to a thread. Created when a server impersonates a client (named pipe,
-							<abbr title="Remote Procedure Call">RPC</abbr>
-							, COM). The thread runs with the client's security context. The thread reverts to its process
-							primary token via
-							<code>RevertToSelf()</code>
-							.
-						</p>
+						<p>Attached to a thread. Created when a server impersonates a client (named pipe, <abbr title="Remote Procedure Call">RPC</abbr> , COM). The thread runs with the client's security context. The thread reverts to its process primary token via <code>RevertToSelf()</code> .</p>
 						<h4 id="token-lifecycle">Token Lifecycle</h4>
 						<pre class="plaintext">
 User logs on
@@ -402,10 +359,7 @@ Process exits — primary token destroyed
 					</section>
 					<section>
 						<h3 id="impersonation-levels">Impersonation Levels</h3>
-						<p>
-							When a thread impersonates, the level determines how much authority the impersonated identity
-							carries:
-						</p>
+						<p>When a thread impersonates, the level determines how much authority the impersonated identity carries:</p>
 						<table>
 							<thead>
 								<tr>
@@ -442,16 +396,7 @@ Process exits — primary token destroyed
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							The client sets the maximum impersonation level when connecting. A server cannot exceed what
-							the client grants. For named pipes, the client specifies this in
-							<code>CreateFile</code>
-							's
-							<code>dwFlagsAndAttributes</code>
-							parameter via
-							<code>SECURITY_SQOS_PRESENT</code>
-							.
-						</p>
+						<p>The client sets the maximum impersonation level when connecting. A server cannot exceed what the client grants. For named pipes, the client specifies this in <code>CreateFile</code> 's <code>dwFlagsAndAttributes</code> parameter via <code>SECURITY_SQOS_PRESENT</code> .</p>
 						<pre class="c">
 /*
  * named_pipe_client.c — Connect with specific impersonation level
@@ -495,10 +440,7 @@ int main(void)
 					</section>
 					<section>
 						<h3 id="token-stealing-the-core-primitive">Token Stealing - The Core Primitive</h3>
-						<p>
-							Token stealing duplicates a token from another process and assigns it to your thread. The classic
-							meterpreter flow:
-						</p>
+						<p>Token stealing duplicates a token from another process and assigns it to your thread. The classic meterpreter flow:</p>
 						<pre class="plaintext">
 1. Enable SeDebugPrivilege (required to open SYSTEM tokens)
 2. Enumerate processes via CreateToolhelp32Snapshot
@@ -633,21 +575,8 @@ int main(void)
 					</section>
 					<section>
 						<h3 id="named-pipe-impersonation">Named Pipe Impersonation</h3>
-						<p>
-							<code>SeImpersonatePrivilege</code>
-							is granted by default to: - Local Administrators - Local Service accounts
-							(including IIS,
-							<abbr title="Structured Query Language">SQL</abbr>
-							Server) - Network Service account - SERVICE accounts
-						</p>
-						<p>
-							If your process holds
-							<code>SeImpersonatePrivilege</code>
-							, you can impersonate
-							<b>any</b>
-							user that connects
-							to a resource you control. The attack pattern:
-						</p>
+						<p><code>SeImpersonatePrivilege</code> is granted by default to: - Local Administrators - Local Service accounts (including IIS, <abbr title="Structured Query Language">SQL</abbr> Server) - Network Service account - SERVICE accounts</p>
+						<p>If your process holds <code>SeImpersonatePrivilege</code> , you can impersonate <b>any</b> user that connects to a resource you control. The attack pattern:</p>
 						<pre class="plaintext">
 [Attacker (with SeImpersonatePrivilege)]
     │
@@ -661,11 +590,7 @@ int main(void)
     └── ImpersonateNamedPipeClient() → run as SYSTEM
 						</pre>
 						<h4 id="printspoofer-pipepotato-technique">PrintSpoofer / PipePotato Technique</h4>
-						<p>
-							PrintSpoofer exploits the fact that the Spooler service (running as SYSTEM) connects to a named
-							pipe when a print job is queued. By creating a pipe with a specific name and triggering a print
-							operation, SYSTEM connects and the attacker impersonates.
-						</p>
+						<p>PrintSpoofer exploits the fact that the Spooler service (running as SYSTEM) connects to a named pipe when a print job is queued. By creating a pipe with a specific name and triggering a print operation, SYSTEM connects and the attacker impersonates.</p>
 						<pre class="c">
 /*
  * named_pipe_impersonate.c — Named pipe impersonation foundation
@@ -802,12 +727,7 @@ int main(void)
 					</section>
 					<section>
 						<h3 id="the-potato-exploit-family">The Potato Exploit Family</h3>
-						<p>
-							The "Potato" exploit family chains
-							<code>SeImpersonatePrivilege</code>
-							with various coercion techniques
-							to get SYSTEM to connect to the attacker-controlled pipe.
-						</p>
+						<p>The "Potato" exploit family chains <code>SeImpersonatePrivilege</code> with various coercion techniques to get SYSTEM to connect to the attacker-controlled pipe.</p>
 						<table>
 							<thead>
 								<tr>
@@ -865,12 +785,7 @@ int main(void)
 [7] CreateProcessWithTokenW() → spawn SYSTEM shell
 						</pre>
 						<h4 id="juicy-potato-clsid">Juicy Potato CLSID</h4>
-						<p>
-							The CLSID (Class Identifier) determines which COM object SYSTEM instantiates. On a Windows 10
-							system, thousands of CLSIDs exist. The relevant ones for Juicy Potato are those with
-							<code>LaunchPermission</code>
-							that allow the current user to launch, and that run as SYSTEM:
-						</p>
+						<p>The CLSID (Class Identifier) determines which COM object SYSTEM instantiates. On a Windows 10 system, thousands of CLSIDs exist. The relevant ones for Juicy Potato are those with <code>LaunchPermission</code> that allow the current user to launch, and that run as SYSTEM:</p>
 						<pre class="powershell">
 # Find viable CLSIDs for Juicy Potato
 # Requires a test harness, but conceptually:
@@ -892,22 +807,12 @@ Get-ChildItem -Path $regPath | ForEach-Object {
 					</section>
 					<section>
 						<h3 id="uac-token-filtering-and-linked-tokens">UAC Token Filtering and Linked Tokens</h3>
-						<p>
-							User Account Control (
-							<abbr title="User Account Control">UAC</abbr>
-							) splits administrator accounts into two
-							tokens:
-						</p>
+						<p>User Account Control ( <abbr title="User Account Control">UAC</abbr> ) splits administrator accounts into two tokens:</p>
 						<ol>
 							<li><b>Elevated Token (Full Administrator)</b> : Contains all administrator group SIDs and privileges. Used when a process is explicitly elevated ("Run as Administrator").</li>
 							<li><b>Filtered Token (Standard User)</b> : The administrator SID is marked <code>DENY_ONLY</code> , sensitive privileges are removed ( <code>SeDebugPrivilege</code> , <code>SeImpersonatePrivilege</code> ). Used for the default desktop session.</li>
 						</ol>
-						<p>
-							The filtered token is the administrator's primary token for normal operation. The elevated token
-							is a
-							<b>linked token</b>
-							- the kernel maintains a link between them.
-						</p>
+						<p>The filtered token is the administrator's primary token for normal operation. The elevated token is a <b>linked token</b> - the kernel maintains a link between them.</p>
 						<pre class="plaintext">
 Logon as &#34;Administrator&#34; (member of Administrators group)
     │
@@ -930,10 +835,7 @@ Linked token created (full admin + filtered linked together)
            New process created with elevated token
 						</pre>
 						<h4 id="token-kidnapping">Token Kidnapping</h4>
-						<p>
-							If you're an administrator but running with the filtered token, you can recover the linked elevated
-							token:
-						</p>
+						<p>If you're an administrator but running with the filtered token, you can recover the linked elevated token:</p>
 						<pre class="c">
 /*
  * uac_bypass_token.c — Recover the linked elevated token (UAC bypass)
@@ -1019,21 +921,9 @@ Get-NtToken -Linked
 					</section>
 					<section>
 						<h3 id="kerberos-delegation-tokens">Kerberos Delegation Tokens</h3>
-						<p>
-							Kerberos delegation allows a service to authenticate to other services on behalf of a user.
-							The delegation token contains the user's TGT (Ticket Granting Ticket) or a service ticket. Abusing
-							delegation tokens is a domain escalation technique.
-						</p>
+						<p>Kerberos delegation allows a service to authenticate to other services on behalf of a user. The delegation token contains the user's TGT (Ticket Granting Ticket) or a service ticket. Abusing delegation tokens is a domain escalation technique.</p>
 						<h4 id="unconstrained-delegation">Unconstrained Delegation</h4>
-						<p>
-							The service receives the user's full TGT. It can authenticate to any service as that user. The
-							TGT is cached in
-							<abbr title="Local Security Authority Subsystem Service">LSASS</abbr>
-							on the server. Dumping
-							<abbr title="Local Security Authority Subsystem Service">LSASS</abbr>
-							on a server with unconstrained delegation
-							yields domain admin TGTs.
-						</p>
+						<p>The service receives the user's full TGT. It can authenticate to any service as that user. The TGT is cached in <abbr title="Local Security Authority Subsystem Service">LSASS</abbr> on the server. Dumping <abbr title="Local Security Authority Subsystem Service">LSASS</abbr> on a server with unconstrained delegation yields domain admin TGTs.</p>
 						<pre class="plaintext">
 User ──► DC (get TGT) ──► Server with Unconstrained Delegation
                                     │
@@ -1042,11 +932,7 @@ User ──► DC (get TGT) ──► Server with Unconstrained Delegation
                                     └── Can request tickets to any service as user
 						</pre>
 						<h4 id="constrained-delegation">Constrained Delegation</h4>
-						<p>
-							The service receives a service ticket for specific back-end services only. The domain controller
-							restricts which services can be delegated to. Abuse requires compromising the front-end service's
-							account.
-						</p>
+						<p>The service receives a service ticket for specific back-end services only. The domain controller restricts which services can be delegated to. Abuse requires compromising the front-end service's account.</p>
 						<pre class="plaintext">
 User ──► DC ──► Frontend Server (Constrained Delegation to MSSQL)
                         │
@@ -1054,13 +940,7 @@ User ──► DC ──► Frontend Server (Constrained Delegation to MSSQL)
                         └── Cannot request tickets for other services
 						</pre>
 						<h4 id="resource-based-constrained-delegation">Resource-Based Constrained Delegation</h4>
-						<p>
-							The back-end service defines who can delegate to it. This is configured on the target service
-							account's
-							<code>msDS-AllowedToActOnBehalfOfOtherIdentity</code>
-							attribute. If you control a computer account
-							or have GenericWrite on the target, you can add yourself as a delegate.
-						</p>
+						<p>The back-end service defines who can delegate to it. This is configured on the target service account's <code>msDS-AllowedToActOnBehalfOfOtherIdentity</code> attribute. If you control a computer account or have GenericWrite on the target, you can add yourself as a delegate.</p>
 						<pre class="powershell">
 # Find computers with unconstrained delegation
 Get-ADComputer -Filter {TrustedForDelegation -eq $true} -Properties TrustedForDelegation
@@ -1077,35 +957,11 @@ Set-ADComputer TARGET-PC -PrincipalsAllowedToDelegateToAccount ATTACKER-PC$
 						<h3 id="linux-equivalent-credential-passing">Linux Equivalent - Credential Passing</h3>
 						<p>Linux does not have "access tokens" in the Windows sense. The equivalent mechanisms are:</p>
 						<h4 id="uidgid">UID/GID</h4>
-						<p>
-							Every process has a real, effective, saved, and filesystem UID. These are stored in the
-							<code>struct cred</code>
-							in the kernel and can be changed with
-							<code>setuid()</code>
-							,
-							<code>seteuid()</code>
-							,
-							<code>setresuid()</code>
-							. The kernel
-							enforces restrictions on which transitions are allowed.
-						</p>
+						<p>Every process has a real, effective, saved, and filesystem UID. These are stored in the <code>struct cred</code> in the kernel and can be changed with <code>setuid()</code> , <code>seteuid()</code> , <code>setresuid()</code> . The kernel enforces restrictions on which transitions are allowed.</p>
 						<h4 id="capabilities">Capabilities</h4>
-						<p>
-							A per-thread bitmask that grants specific privileges (like
-							<code>CAP_SYS_PTRACE</code>
-							and
-							<code>CAP_NET_RAW</code>
-							) without full root. The ambient capability set, added in Linux 4.3, lets an unprivileged program
-							carry part of its permitted set across
-							<code>execve</code>
-							.
-						</p>
+						<p>A per-thread bitmask that grants specific privileges (like <code>CAP_SYS_PTRACE</code> and <code>CAP_NET_RAW</code> ) without full root. The ambient capability set, added in Linux 4.3, lets an unprivileged program carry part of its permitted set across <code>execve</code> .</p>
 						<h4 id="unix-socket-credential-passing">Unix Socket Credential Passing</h4>
-						<p>
-							<code>SCM_CREDENTIALS</code>
-							ancillary data on Unix sockets allows the kernel to pass UID/GID/PID credentials
-							between processes. This is the closest Linux equivalent to named pipe impersonation.
-						</p>
+						<p><code>SCM_CREDENTIALS</code> ancillary data on Unix sockets allows the kernel to pass UID/GID/PID credentials between processes. This is the closest Linux equivalent to named pipe impersonation.</p>
 						<pre class="c">
 /*
  * scm_credentials.c — Unix domain socket credential passing
@@ -1289,11 +1145,7 @@ cat /proc/self/status | grep -E &#39;^(Uid|Gid|Cap)&#39;
 					</section>
 					<section>
 						<h3 id="meterpreter-token-workflow">meterpreter Token Workflow</h3>
-						<p>
-							For reference, the meterpreter commands map to the Windows
-							<abbr title="Application Programming Interface">API</abbr>
-							calls above:
-						</p>
+						<p>For reference, the meterpreter commands map to the Windows <abbr title="Application Programming Interface">API</abbr> calls above:</p>
 						<pre class="plaintext">
 meterpreter &gt; getsystem
     │
@@ -1398,20 +1250,7 @@ ss -xlp | grep -v &#39;^$&#39;
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Write a Go tool that inspects the credentials of a process the way
-							<code>whoami /all</code>
-							does on Windows.
-							It reads
-							<code>/proc/&lt;pid&gt;/status</code>
-							, parses the
-							<code>Uid:</code>
-							and
-							<code>Gid:</code>
-							lines (real, effective, saved,
-							and filesystem IDs), and prints a warning when the real and effective IDs differ - the same
-							signal a setuid binary or a credential transition leaves behind on Linux.
-						</p>
+						<p>Write a Go tool that inspects the credentials of a process the way <code>whoami /all</code> does on Windows. It reads <code>/proc/&lt;pid&gt;/status</code> , parses the <code>Uid:</code> and <code>Gid:</code> lines (real, effective, saved, and filesystem IDs), and prints a warning when the real and effective IDs differ - the same signal a setuid binary or a credential transition leaves behind on Linux.</p>
 						<pre class="go">
 package main
 

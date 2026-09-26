@@ -149,31 +149,10 @@
 
 				<article>
 					<h2 id="virtual-memory">Virtual Memory</h2>
-					<p>
-						Page tables, TLB, page faults, mmap() internals, malloc() backend, /proc/PID/maps dissection,
-						huge pages, ASLR, overcommit, and the OOM killer.
-					</p>
+					<p>Page tables, TLB, page faults, mmap() internals, malloc() backend, /proc/PID/maps dissection, huge pages, ASLR, overcommit, and the OOM killer.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							Every process on Linux runs on its own virtual address space, but the physical RAM underneath
-							is shared, fragmented, and limited. Virtual memory is the translation layer that turns virtual
-							addresses into physical frames, isolates processes from each other, and lets the kernel overcommit
-							memory safely. This article follows the path from a virtual address through the page tables
-							and the TLB, explains how
-							<code>mmap()</code>
-							and
-							<code>malloc()</code>
-							obtain memory, and shows how to read the kernel's
-							own accounting in
-							<code>/proc/PID/maps</code>
-							,
-							<code>smaps</code>
-							, and
-							<code>pagemap</code>
-							. After reading it you can inspect
-							any process's memory map and explain where its pages actually live.
-						</p>
+						<p>Every process on Linux runs on its own virtual address space, but the physical RAM underneath is shared, fragmented, and limited. Virtual memory is the translation layer that turns virtual addresses into physical frames, isolates processes from each other, and lets the kernel overcommit memory safely. This article follows the path from a virtual address through the page tables and the TLB, explains how <code>mmap()</code> and <code>malloc()</code> obtain memory, and shows how to read the kernel's own accounting in <code>/proc/PID/maps</code> , <code>smaps</code> , and <code>pagemap</code> . After reading it you can inspect any process's memory map and explain where its pages actually live.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -185,11 +164,7 @@
 					</section>
 					<section>
 						<h3 id="why-virtual-memory-exists">Why Virtual Memory Exists</h3>
-						<p>
-							Every process on Linux sees a private, contiguous address space - typically 128 TiB on x86-64
-							(47-bit virtual addresses). In reality, physical RAM is shared by all processes, fragmented
-							across DIMMs, and interspersed with memory-mapped I/O holes. Virtual memory solves four problems:
-						</p>
+						<p>Every process on Linux sees a private, contiguous address space - typically 128 TiB on x86-64 (47-bit virtual addresses). In reality, physical RAM is shared by all processes, fragmented across DIMMs, and interspersed with memory-mapped I/O holes. Virtual memory solves four problems:</p>
 						<ol>
 							<li><b>Isolation</b> : Process A cannot read/write Process B's memory. One crashing process cannot corrupt the kernel or other processes.</li>
 							<li><b>Abstraction</b> : Every program can assume its code starts at the same virtual address (0x400000 for traditional executables, 0x555555554000 for PIEs). The linker and loader don't need to know about physical memory layout.</li>
@@ -199,13 +174,7 @@
 					</section>
 					<section>
 						<h3 id="virtual-physical-translation">Virtual -> Physical Translation</h3>
-						<p>
-							The
-							<abbr title="Central Processing Unit">CPU</abbr>
-							's Memory Management Unit (MMU) translates every virtual
-							address to a physical address on every memory access. If the translation fails (no page mapped,
-							insufficient permissions), the MMU raises a page fault.
-						</p>
+						<p>The <abbr title="Central Processing Unit">CPU</abbr> 's Memory Management Unit (MMU) translates every virtual address to a physical address on every memory access. If the translation fails (no page mapped, insufficient permissions), the MMU raises a page fault.</p>
 						<p>Virtual Address (48 bits on x86-64)</p>
 						<table>
 							<thead>
@@ -280,13 +249,7 @@ print(f&#39;virtual: {id(page):#x} physical: {phys}&#39;)
 					</section>
 					<section>
 						<h3 id="tlb-translation-lookaside-buffer">TLB - Translation Lookaside Buffer</h3>
-						<p>
-							A full 4-level page table walk requires 4 memory accesses - far too slow for every instruction
-							fetch and data access. The TLB is a small, fast,
-							<abbr title="Central Processing Unit">CPU</abbr>
-							-internal cache
-							of recently used virtual-to-physical translations.
-						</p>
+						<p>A full 4-level page table walk requires 4 memory accesses - far too slow for every instruction fetch and data access. The TLB is a small, fast, <abbr title="Central Processing Unit">CPU</abbr> -internal cache of recently used virtual-to-physical translations.</p>
 						<pre class="plaintext">
 Virtual Address
       │
@@ -333,19 +296,11 @@ Virtual Address
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							A single 4 KiB page covers only 2 MiB of virtual space when the TLB has 512 entries. Huge pages
-							reduce TLB pressure significantly.
-						</p>
+						<p>A single 4 KiB page covers only 2 MiB of virtual space when the TLB has 512 entries. Huge pages reduce TLB pressure significantly.</p>
 					</section>
 					<section>
 						<h3 id="page-faults">Page Faults</h3>
-						<p>
-							A page fault occurs when the MMU cannot translate the virtual address. The kernel's page fault
-							handler (
-							<code>do_page_fault</code>
-							) determines the cause:
-						</p>
+						<p>A page fault occurs when the MMU cannot translate the virtual address. The kernel's page fault handler ( <code>do_page_fault</code> ) determines the cause:</p>
 						<table>
 							<thead>
 								<tr>
@@ -382,25 +337,11 @@ Virtual Address
 # Monitor page faults in real time with perf
 perf stat -e minor-faults,major-faults ls -R /usr/share &gt;/dev/null
 						</pre>
-						<p>
-							<b>Demand paging:</b>
-							When
-							<code>mmap()</code>
-							creates a mapping, the kernel reserves virtual address space
-							but does NOT allocate physical pages. Physical pages are assigned on first access (read or write),
-							triggering a minor page fault. This is why
-							<code>mmap()</code>
-							is fast even for large mappings.
-						</p>
+						<p><b>Demand paging:</b> When <code>mmap()</code> creates a mapping, the kernel reserves virtual address space but does NOT allocate physical pages. Physical pages are assigned on first access (read or write), triggering a minor page fault. This is why <code>mmap()</code> is fast even for large mappings.</p>
 					</section>
 					<section>
 						<h3 id="mmap-the-memory-mapping-workhorse">mmap() - The Memory Mapping Workhorse</h3>
-						<p>
-							<code>mmap()</code>
-							creates a new mapping in the process's virtual address space. It's the foundation for
-							<code>malloc()</code>
-							(large allocations), shared memory, file I/O, and stack/guard page creation.
-						</p>
+						<p><code>mmap()</code> creates a new mapping in the process's virtual address space. It's the foundation for <code>malloc()</code> (large allocations), shared memory, file I/O, and stack/guard page creation.</p>
 						<pre class="c">
 #include &lt;stdio.h&gt;
 #include &lt;stdlib.h&gt;
@@ -462,11 +403,11 @@ gcc -o mmap-demo mmap-demo.c &amp;&amp; ./mmap-demo
 								</tr>
 								<tr>
 									<td align="center">MAP_FIXED</td>
-									<td align="center">Place mapping at exactly<code>addr</code>; clobbers existing mappings (dangerous)</td>
+									<td align="center">Place mapping at exactly <code>addr</code>; clobbers existing mappings (dangerous)</td>
 								</tr>
 								<tr>
 									<td align="center">MAP_FIXED_NOREPLACE</td>
-									<td align="center">Like MAP_FIXED but fails if anything exists at<code>addr</code>(safer)</td>
+									<td align="center">Like MAP_FIXED but fails if anything exists at <code>addr</code> (safer)</td>
 								</tr>
 								<tr>
 									<td align="center">MAP_POPULATE</td>
@@ -520,11 +461,7 @@ gcc -o mmap-demo mmap-demo.c &amp;&amp; ./mmap-demo
 					</section>
 					<section>
 						<h3 id="malloc-internals">malloc() Internals</h3>
-						<p>
-							<code>malloc()</code>
-							is a user-space memory allocator, not a syscall. It manages a pool of memory obtained
-							from the kernel through two mechanisms:
-						</p>
+						<p><code>malloc()</code> is a user-space memory allocator, not a syscall. It manages a pool of memory obtained from the kernel through two mechanisms:</p>
 						<pre class="plaintext">
 malloc(size) called:
     │
@@ -581,14 +518,7 @@ ltrace -e malloc+free+realloc+calloc ./your-program
 					</section>
 					<section>
 						<h3 id="procpidmaps-reading-the-memory-map">/proc/PID/maps - Reading the Memory Map</h3>
-						<p>
-							Every process exposes its complete virtual memory layout via
-							<code>/proc/PID/maps</code>
-							. Each line represents
-							one virtual memory area (
-							<code>VMA</code>
-							).
-						</p>
+						<p>Every process exposes its complete virtual memory layout via <code>/proc/PID/maps</code> . Each line represents one virtual memory area ( <code>VMA</code> ).</p>
 						<pre class="bash">
 cat /proc/self/maps
 						</pre>
@@ -646,14 +576,7 @@ address-start-address-end perms offset  dev   inode   pathname
 					</section>
 					<section>
 						<h3 id="procpidsmaps">/proc/PID/smaps</h3>
-						<p>
-							While
-							<code>/proc/PID/maps</code>
-							shows what is mapped,
-							<code>/proc/PID/smaps</code>
-							shows how much of each mapping
-							is actually used:
-						</p>
+						<p>While <code>/proc/PID/maps</code> shows what is mapped, <code>/proc/PID/smaps</code> shows how much of each mapping is actually used:</p>
 						<pre class="bash">
 cat /proc/$$/smaps | head -50
 						</pre>
@@ -744,11 +667,7 @@ awk &#39;/^Private_Dirty:/{sum+=$2} END{print sum &#34; kB&#34;}&#39; /proc/$$/s
 					</section>
 					<section>
 						<h3 id="huge-pages">Huge Pages</h3>
-						<p>
-							Default page size on x86-64 is 4 KiB. With 128 TiB of virtual space, a process that touches
-							10 GiB of RAM needs~2.6 million page table entries. Huge pages reduce this by factors of 512
-							(2 MiB pages) or 262144 (1 GiB pages).
-						</p>
+						<p>Default page size on x86-64 is 4 KiB. With 128 TiB of virtual space, a process that touches 10 GiB of RAM needs~2.6 million page table entries. Huge pages reduce this by factors of 512 (2 MiB pages) or 262144 (1 GiB pages).</p>
 						<table>
 							<thead>
 								<tr>
@@ -800,10 +719,7 @@ void* ptr = mmap(NULL, 2*1024*1024, PROT_READ|PROT_WRITE,
 					</section>
 					<section>
 						<h3 id="aslr">ASLR</h3>
-						<p>
-							ASLR randomizes the base addresses of memory regions to make exploitation harder. Without ASLR,
-							every program's stack, heap, and libraries are at predictable addresses.
-						</p>
+						<p>ASLR randomizes the base addresses of memory regions to make exploitation harder. Without ASLR, every program's stack, heap, and libraries are at predictable addresses.</p>
 						<pre class="bash">
 # Check ASLR status
 cat /proc/sys/kernel/randomize_va_space
@@ -862,10 +778,7 @@ done
 					</section>
 					<section>
 						<h3 id="memory-overcommit-and-the-oom-killer">Memory Overcommit and the OOM Killer</h3>
-						<p>
-							Linux, by default, allows processes to request more memory than the system physically has (overcommit).
-							Memory is only assigned when pages are actually written to (demand paging + copy-on-write).
-						</p>
+						<p>Linux, by default, allows processes to request more memory than the system physically has (overcommit). Memory is only assigned when pages are actually written to (demand paging + copy-on-write).</p>
 						<pre class="bash">
 cat /proc/sys/vm/overcommit_memory
 # 0 = Heuristic overcommit (default) — kernel estimates if enough RAM+swap
@@ -881,11 +794,7 @@ cat /proc/meminfo | grep -i commit
 # CommitLimit:     Total virtual memory that can be allocated
 # Committed_AS:    Total virtual memory currently requested by all processes
 						</pre>
-						<p>
-							<b>The OOM Killer:</b>
-							When the kernel runs out of physical memory and cannot reclaim pages, it
-							invokes the OOM (Out Of Memory) killer. It selects a process to kill based on a heuristic score:
-						</p>
+						<p><b>The OOM Killer:</b> When the kernel runs out of physical memory and cannot reclaim pages, it invokes the OOM (Out Of Memory) killer. It selects a process to kill based on a heuristic score:</p>
 						<pre class="bash">
 # OOM score of a process (0 = never killed, 1000 = first to die)
 cat /proc/$$/oom_score
@@ -903,17 +812,7 @@ echo 1000 | sudo tee /proc/$(pidof misbehaving-app)/oom_score_adj
 dmesg | grep -i &#39;oom\|killed&#39;
 journalctl -k | grep -i oom
 						</pre>
-						<p>
-							The OOM score formula roughly:
-							<code>score = (total_RSS / total_RAM) * 1000 + oom_score_adj</code>
-							. The
-							kernel picks the process with the highest
-							<code>oom_score</code>
-							that it can kill (not PID 1, not kernel
-							threads, not with
-							<code>oom_score_adj = -1000</code>
-							).
-						</p>
+						<p>The OOM score formula roughly: <code>score = (total_RSS / total_RAM) * 1000 + oom_score_adj</code> . The kernel picks the process with the highest <code>oom_score</code> that it can kill (not PID 1, not kernel threads, not with <code>oom_score_adj = -1000</code> ).</p>
 					</section>
 					<section>
 						<h3 id="inspecting-page-tables-with-pagemap">Inspecting Page Tables with pagemap</h3>
@@ -984,14 +883,7 @@ awk &#39;/^(Vm|Rss)/{printf &#34;%-20s %s kB\n&#34;, $1, $2}&#39; /proc/$$/statu
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Write a Go program that reports how much resident memory your process uses by parsing
-							<code>/proc/self/smaps</code>
-							. The starter sums nothing yet; complete the
-							<code>Pss</code>
-							parsing and confirm that touching a freshly
-							allocated 8 MiB buffer increases the total:
-						</p>
+						<p>Write a Go program that reports how much resident memory your process uses by parsing <code>/proc/self/smaps</code> . The starter sums nothing yet; complete the <code>Pss</code> parsing and confirm that touching a freshly allocated 8 MiB buffer increases the total:</p>
 						<pre class="go">
 package main
 
@@ -1038,14 +930,7 @@ func main() {
 		before, after, after-before)
 }
 						</pre>
-						<p>
-							Run it with
-							<code>go run main.go</code>
-							and explain why
-							<code>delta</code>
-							is close to the buffer size. Then change
-							the loop so it writes only every 4096th byte and explain why the delta shrinks.
-						</p>
+						<p>Run it with <code>go run main.go</code> and explain why <code>delta</code> is close to the buffer size. Then change the loop so it writes only every 4096th byte and explain why the delta shrinks.</p>
 					</section>
 					<section>
 						<h3 id="references">References</h3>

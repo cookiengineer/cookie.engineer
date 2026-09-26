@@ -169,20 +169,10 @@
 
 				<article>
 					<h2 id="buffer-overflows">Buffer Overflows</h2>
-					<p>
-						Buffer overflow fundamentals - how writing past array boundaries corrupts memory, overwrites
-						return addresses, and the compiler protections designed to stop it.
-					</p>
+					<p>Buffer overflow fundamentals - how writing past array boundaries corrupts memory, overwrites return addresses, and the compiler protections designed to stop it.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							A buffer overflow is the classic memory-corruption primitive: a program writes more data into
-							a fixed-size buffer than it can hold, and the excess spills into adjacent memory. On the stack
-							this overwrites the saved return address, which is how an attacker redirects execution. This
-							article explains why C arrays are unchecked, how the stack frame is laid out, and how to turn
-							an overflow into control of the instruction pointer. It then walks through the mitigations -
-							stack canaries, NX, ASLR, PIE, and RELRO - and how to verify them.
-						</p>
+						<p>A buffer overflow is the classic memory-corruption primitive: a program writes more data into a fixed-size buffer than it can hold, and the excess spills into adjacent memory. On the stack this overwrites the saved return address, which is how an attacker redirects execution. This article explains why C arrays are unchecked, how the stack frame is laid out, and how to turn an overflow into control of the instruction pointer. It then walks through the mitigations - stack canaries, NX, ASLR, PIE, and RELRO - and how to verify them.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -194,26 +184,8 @@
 					</section>
 					<section>
 						<h3 id="the-fundamental-problem">The Fundamental Problem</h3>
-						<p>
-							C arrays have no bounds checking. There is no runtime to verify that
-							<code>buf[i]</code>
-							is within
-							<code>buf</code>
-							's allocated size. The compiler knows the size of the array at compile time but does not emit
-							boundary checks - the language specification says the behavior of out-of-bounds access is undefined.
-						</p>
-						<p>
-							A buffer overflow occurs when a program writes more data to a buffer than the buffer can hold.
-							The excess data spills into adjacent memory, overwriting whatever happens to be there. On the
-							stack, the return address lives right above local variables. Writing past a local array overwrites
-							the saved return address. When the function returns, the
-							<abbr title="Central Processing Unit">CPU</abbr>
-							pops
-							the corrupted return address into
-							<abbr title="Instruction Pointer">RIP</abbr>
-							- and execution continues wherever
-							the attacker wants.
-						</p>
+						<p>C arrays have no bounds checking. There is no runtime to verify that <code>buf[i]</code> is within <code>buf</code> 's allocated size. The compiler knows the size of the array at compile time but does not emit boundary checks - the language specification says the behavior of out-of-bounds access is undefined.</p>
+						<p>A buffer overflow occurs when a program writes more data to a buffer than the buffer can hold. The excess data spills into adjacent memory, overwriting whatever happens to be there. On the stack, the return address lives right above local variables. Writing past a local array overwrites the saved return address. When the function returns, the <abbr title="Central Processing Unit">CPU</abbr> pops the corrupted return address into <abbr title="Instruction Pointer">RIP</abbr> - and execution continues wherever the attacker wants.</p>
 						<pre class="c">
 // overflow.c - Classic stack buffer overflow
 #include &lt;stdio.h&gt;
@@ -231,29 +203,11 @@ int main(int argc, char **argv) {
     return 0;
 }
 						</pre>
-						<p>
-							<code>strcpy</code>
-							has no destination size parameter. It copies bytes from
-							<code>src</code>
-							to
-							<code>dst</code>
-							until it finds
-							a zero byte. If
-							<code>input</code>
-							is longer than 64 bytes,
-							<code>strcpy</code>
-							writes past
-							<code>buffer</code>
-							, corrupting
-							the stack frame.
-						</p>
+						<p><code>strcpy</code> has no destination size parameter. It copies bytes from <code>src</code> to <code>dst</code> until it finds a zero byte. If <code>input</code> is longer than 64 bytes, <code>strcpy</code> writes past <code>buffer</code> , corrupting the stack frame.</p>
 					</section>
 					<section>
 						<h3 id="unsafe-functions">Unsafe Functions</h3>
-						<p>
-							The standard C library contains many functions with no bounds checking. Every one of them is
-							a potential vector:
-						</p>
+						<p>The standard C library contains many functions with no bounds checking. Every one of them is a potential vector:</p>
 						<table>
 							<thead>
 								<tr>
@@ -271,12 +225,12 @@ int main(int argc, char **argv) {
 								<tr>
 									<td align="center"><code>strcpy(dst, src)</code></td>
 									<td align="center">Copies until null, no size</td>
-									<td align="center"><code>strncpy(dst, src, size)</code>or<code>strlcpy</code></td>
+									<td align="center"><code>strncpy(dst, src, size)</code> or <code>strlcpy</code></td>
 								</tr>
 								<tr>
 									<td align="center"><code>strcat(dst, src)</code></td>
 									<td align="center">Concatenates until null, no size</td>
-									<td align="center"><code>strncat(dst, src, size)</code>or<code>strlcat</code></td>
+									<td align="center"><code>strncat(dst, src, size)</code> or <code>strlcat</code></td>
 								</tr>
 								<tr>
 									<td align="center"><code>sprintf(buf, fmt, ...)</code></td>
@@ -286,7 +240,7 @@ int main(int argc, char **argv) {
 								<tr>
 									<td align="center"><code>scanf(&#34;%s&#34;, buf)</code></td>
 									<td align="center">Reads until whitespace, no size</td>
-									<td align="center"><code>scanf(&#34;%63s&#34;, buf)</code>(width specifier)</td>
+									<td align="center"><code>scanf(&#34;%63s&#34;, buf)</code> (width specifier)</td>
 								</tr>
 								<tr>
 									<td align="center"><code>vsprintf(buf, fmt, ...)</code></td>
@@ -296,25 +250,11 @@ int main(int argc, char **argv) {
 								<tr>
 									<td align="center"><code>strtok()</code></td>
 									<td align="center">Modifies input string in place</td>
-									<td align="center"><code>strtok_r()</code>(reentrant version)</td>
+									<td align="center"><code>strtok_r()</code> (reentrant version)</td>
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							The "n" variants (
-							<code>strncpy</code>
-							,
-							<code>strncat</code>
-							,
-							<code>snprintf</code>
-							) are safer but have their own edge cases:
-							<code>strncpy</code>
-							may not null-terminate if the source is longer than the limit.
-							<code>strlcpy</code>
-							and
-							<code>strlcat</code>
-							(BSD) guarantee null-termination.
-						</p>
+						<p>The "n" variants ( <code>strncpy</code> , <code>strncat</code> , <code>snprintf</code> ) are safer but have their own edge cases: <code>strncpy</code> may not null-terminate if the source is longer than the limit. <code>strlcpy</code> and <code>strlcat</code> (BSD) guarantee null-termination.</p>
 					</section>
 					<section>
 						<h3 id="stack-frame-layout">Stack Frame Layout</h3>
@@ -355,12 +295,7 @@ High addresses
 +-----------------------------+
 Low addresses
 						</pre>
-						<p>
-							Writing past
-							<code>buffer[63]</code>
-							first overwrites any alignment padding, then the saved RBP (8 bytes),
-							then the return address (8 bytes), then the function arguments (if any were passed on the stack).
-						</p>
+						<p>Writing past <code>buffer[63]</code> first overwrites any alignment padding, then the saved RBP (8 bytes), then the return address (8 bytes), then the function arguments (if any were passed on the stack).</p>
 					</section>
 					<section>
 						<h3 id="controlled-return-overwrite">Controlled Return Overwrite</h3>
@@ -401,19 +336,11 @@ $ ./overflow AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 Hello, AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 Segmentation fault (core dumped)
 						</pre>
-						<p>
-							The segfault confirms we overwrote the return address. Let's find the exact offset to
-							<abbr title="Instruction Pointer">RIP</abbr>
-							.
-						</p>
+						<p>The segfault confirms we overwrote the return address. Let's find the exact offset to <abbr title="Instruction Pointer">RIP</abbr> .</p>
 					</section>
 					<section>
 						<h3 id="finding-the-offset">Finding the Offset</h3>
-						<p>
-							Use pwntools (ArchLinux:
-							<code>sudo pacman -S python-pwntools</code>
-							):
-						</p>
+						<p>Use pwntools (ArchLinux: <code>sudo pacman -S python-pwntools</code> ):</p>
 						<pre class="bash">
 $ python3 -c &#34;from pwn import *; print(cyclic(120).decode())&#34;
 aaaabaaacaaadaaaeaaafaaagaaahaaaiaaajaaakaaalaaamaaanaaaoaaapaaaqaaaraaasaaataaauaaavaaawaaaxaaayaaazaabbaabcaab
@@ -427,24 +354,12 @@ Program received signal SIGSEGV, Segmentation fault.
 (gdb) info registers rip
 rip            0x6161616a61616169  0x6161616a61616169
 						</pre>
-						<p>
-							<code>RIP = 0x6161616a61616169</code>
-							. Converting to ASCII: the bytes
-							<code>69 61 61 61 6a 61 61 61</code>
-							=
-							<code>iaaajaaa</code>
-							. Find the offset:
-						</p>
+						<p><code>RIP = 0x6161616a61616169</code> . Converting to ASCII: the bytes <code>69 61 61 61 6a 61 61 61</code> = <code>iaaajaaa</code> . Find the offset:</p>
 						<pre class="bash">
 $ python3 -c &#34;from pwn import *; print(cyclic_find(b&#39;iaaajaaa&#39;))&#34;
 72
 						</pre>
-						<p>
-							The return address is 72 bytes after the start of the buffer: buffer (64) + saved RBP (8) =
-							72 bytes to
-							<abbr title="Instruction Pointer">RIP</abbr>
-							.
-						</p>
+						<p>The return address is 72 bytes after the start of the buffer: buffer (64) + saved RBP (8) = 72 bytes to <abbr title="Instruction Pointer">RIP</abbr> .</p>
 						<p>Let's verify with controlled input:</p>
 						<pre class="bash">
 $ python3 -c &#34;print(&#39;A&#39;*72 + &#39;B&#39;*8)&#34;
@@ -455,36 +370,15 @@ Program received signal SIGSEGV, Segmentation fault.
 (gdb) info registers rip
 rip            0x4242424242424242  0x4242424242424242
 						</pre>
-						<p>
-							<code>RIP = 0x4242424242424242</code>
-							= "BBBBBBBB". Perfect - we control the return address with bytes
-							73-80 of the input.
-						</p>
+						<p><code>RIP = 0x4242424242424242</code> = "BBBBBBBB". Perfect - we control the return address with bytes 73-80 of the input.</p>
 					</section>
 					<section>
 						<h3 id="what-the-cpu-sees">What the CPU Sees</h3>
-						<p>
-							At the
-							<code>ret</code>
-							instruction, the
-							<abbr title="Central Processing Unit">CPU</abbr>
-							does:
-						</p>
+						<p>At the <code>ret</code> instruction, the <abbr title="Central Processing Unit">CPU</abbr> does:</p>
 						<pre class="plaintext">
 RIP &lt;- pop()   // Read 8 bytes from [RSP], increment RSP by 8
 						</pre>
-						<p>
-							Before
-							<code>ret</code>
-							, RSP points to the location immediately above the saved RBP - which is the return
-							address slot. The
-							<code>pop</code>
-							reads 8 bytes from there and loads them into
-							<abbr title="Instruction Pointer">RIP</abbr>
-							. If those bytes are attacker-controlled,
-							<abbr title="Instruction Pointer">RIP</abbr>
-							becomes attacker-controlled.
-						</p>
+						<p>Before <code>ret</code> , RSP points to the location immediately above the saved RBP - which is the return address slot. The <code>pop</code> reads 8 bytes from there and loads them into <abbr title="Instruction Pointer">RIP</abbr> . If those bytes are attacker-controlled, <abbr title="Instruction Pointer">RIP</abbr> becomes attacker-controlled.</p>
 						<pre class="x86asm">
 ; Before ret, stack at RSP:
 ;   [RSP+0]: return address bytes (controlled)
@@ -497,12 +391,7 @@ ret              ; Pop overwritten return address -&gt; RIP (attacker-controlled
 					</section>
 					<section>
 						<h3 id="return-to-shellcode">Return-to-Shellcode</h3>
-						<p>
-							Since we compiled with
-							<code>-z execstack</code>
-							, the stack is executable. We can place shellcode in the
-							buffer and overwrite the return address to point to it.
-						</p>
+						<p>Since we compiled with <code>-z execstack</code> , the stack is executable. We can place shellcode in the buffer and overwrite the return address to point to it.</p>
 						<p>Finding the buffer address:</p>
 						<pre class="bash">
 $ gdb ./overflow
@@ -549,13 +438,7 @@ sys.stdout.buffer.write(payload)
 						<pre class="bash">
 $ python3 exploit.py &gt; payload.bin
 						</pre>
-						<p>
-							Common failure: stack alignment. System V ABI requires RSP to be 16-byte aligned before
-							<code>call</code>
-							. If the shellcode doesn't align the stack,
-							<code>syscall</code>
-							may fault. Fixed shellcode:
-						</p>
+						<p>Common failure: stack alignment. System V ABI requires RSP to be 16-byte aligned before <code>call</code> . If the shellcode doesn't align the stack, <code>syscall</code> may fault. Fixed shellcode:</p>
 						<pre class="python">
 # Fixed shellcode with stack alignment
 shellcode = (
@@ -575,28 +458,14 @@ shellcode = (
 					</section>
 					<section>
 						<h3 id="return-to-libc">Return-to-libc</h3>
-						<p>
-							With NX (Non-eXecutable) stack (
-							<code>-z noexecstack</code>
-							), the stack pages are mapped without the
-							execute bit. Attempting to execute shellcode on the stack causes a segfault. The solution: jump
-							to existing code - specifically libc functions like
-							<code>system()</code>
-							.
-						</p>
+						<p>With NX (Non-eXecutable) stack ( <code>-z noexecstack</code> ), the stack pages are mapped without the execute bit. Attempting to execute shellcode on the stack causes a segfault. The solution: jump to existing code - specifically libc functions like <code>system()</code> .</p>
 						<p>The idea:</p>
 						<ol>
 							<li>Overwrite return address with address of <code>system()</code> in libc</li>
 							<li>Set up the argument ( <code>&#34;/bin/sh&#34;</code> string) so RDI points to it</li>
 							<li><code>system()</code> executes, giving a shell</li>
 						</ol>
-						<p>
-							Finding
-							<code>system()</code>
-							and
-							<code>/bin/sh</code>
-							:
-						</p>
+						<p>Finding <code>system()</code> and <code>/bin/sh</code> :</p>
 						<pre class="bash">
 $ gdb ./overflow
 (gdb) break main
@@ -630,11 +499,7 @@ payload += struct.pack(&#34;&lt;Q&#34;, system_addr)   # 3. Jump to system(&#34;
 
 sys.stdout.buffer.write(payload)
 						</pre>
-						<p>
-							The stack layout at
-							<code>ret</code>
-							:
-						</p>
+						<p>The stack layout at <code>ret</code> :</p>
 						<pre class="plaintext">
 High addresses
 +-----------+
@@ -660,11 +525,7 @@ High addresses
 					</section>
 					<section>
 						<h3 id="the-rop-gadget-hunter">The ROP Gadget Hunter</h3>
-						<p>
-							Finding
-							<code>pop rdi; ret</code>
-							manually:
-						</p>
+						<p>Finding <code>pop rdi; ret</code> manually:</p>
 						<pre class="bash">
 $ ROPgadget --binary ./overflow | grep &#34;pop rdi&#34;
 0x0000000000400783 : pop rdi ; ret
@@ -675,17 +536,7 @@ $ objdump -d ./overflow | grep -A1 &#34;5f c3&#34;
   400783:  5f          pop    %rdi
   400784:  c3          ret
 						</pre>
-						<p>
-							The byte sequence
-							<code>5f c3</code>
-							is
-							<code>pop rdi; ret</code>
-							. Searching for gadgets is pattern-matching over
-							the binary's
-							<code>.text</code>
-							section, treating instruction boundaries as irrelevant - any offset in
-							the code that happens to decode as useful instructions is a gadget:
-						</p>
+						<p>The byte sequence <code>5f c3</code> is <code>pop rdi; ret</code> . Searching for gadgets is pattern-matching over the binary's <code>.text</code> section, treating instruction boundaries as irrelevant - any offset in the code that happens to decode as useful instructions is a gadget:</p>
 						<pre class="bash">
 $ python3 -c &#34;
 import subprocess
@@ -707,13 +558,7 @@ $ ./overflow_hardened $(python3 -c &#34;print(&#39;A&#39;*100)&#34;)
 *** stack smashing detected ***: terminated
 Aborted (core dumped)
 						</pre>
-						<p>
-							The program aborts instead of segfaulting. The stack protector inserted a
-							<em>canary</em>
-							- a random
-							8-byte value placed between the buffer and the saved RBP. Before the function returns, it checks
-							if the canary was modified:
-						</p>
+						<p>The program aborts instead of segfaulting. The stack protector inserted a <em>canary</em> - a random 8-byte value placed between the buffer and the saved RBP. Before the function returns, it checks if the canary was modified:</p>
 						<pre class="x86asm">
 ; Function prologue (inserted by -fstack-protector)
 sub  rsp, 0x50                      ; Allocate stack space
@@ -731,12 +576,7 @@ call __stack_chk_fail               ; Otherwise abort
 leave
 ret
 						</pre>
-						<p>
-							The canary is read from
-							<code>fs:0x28</code>
-							(Thread-Local Storage offset 0x28). It's randomized per-thread
-							at process startup. The attack must know or bypass the canary to overwrite the return address:
-						</p>
+						<p>The canary is read from <code>fs:0x28</code> (Thread-Local Storage offset 0x28). It's randomized per-thread at process startup. The attack must know or bypass the canary to overwrite the return address:</p>
 						<table>
 							<thead>
 								<tr>
@@ -774,45 +614,18 @@ Page Table Entry (x86-64, 4-level paging):
 +---+------+---+---+---+---+---+---+---+---+---+---+-------+
  63  62-12                                    2   1   0   0
 						</pre>
-						<p>
-							When NX=1, the
-							<abbr title="Central Processing Unit">CPU</abbr>
-							faults if
-							<abbr title="Instruction Pointer">RIP</abbr>
-							enters that
-							page. The kernel sets NX=1 on stack pages (unless
-							<code>PT_GNU_STACK</code>
-							says otherwise), on heap pages,
-							and on any
-							<code>mmap(..., PROT_READ|PROT_WRITE)</code>
-							regions. Only
-							<code>.text</code>
-							pages mapped from the ELF
-							file have NX=0.
-						</p>
-						<p>
-							An executable-stack binary reads the
-							<code>PT_GNU_STACK</code>
-							program header segment:
-						</p>
+						<p>When NX=1, the <abbr title="Central Processing Unit">CPU</abbr> faults if <abbr title="Instruction Pointer">RIP</abbr> enters that page. The kernel sets NX=1 on stack pages (unless <code>PT_GNU_STACK</code> says otherwise), on heap pages, and on any <code>mmap(..., PROT_READ|PROT_WRITE)</code> regions. Only <code>.text</code> pages mapped from the ELF file have NX=0.</p>
+						<p>An executable-stack binary reads the <code>PT_GNU_STACK</code> program header segment:</p>
 						<pre class="bash">
 $ readelf -l overflow | grep -A1 GNU_STACK
   GNU_STACK      0x000000 0x0000000000000000 0x0000000000000000
                  0x000000 0x000000              RWE    0x10
 						</pre>
-						<p>
-							<code>RWE</code>
-							means Read + Write + Execute on the stack. Normal binaries show
-							<code>RW</code>
-							only.
-						</p>
+						<p><code>RWE</code> means Read + Write + Execute on the stack. Normal binaries show <code>RW</code> only.</p>
 					</section>
 					<section>
 						<h3 id="aslr-and-pie">ASLR and PIE</h3>
-						<p>
-							ASLR randomizes the base addresses of the stack, heap, and shared libraries. PIE (Position-Independent
-							Executable) extends ASLR to the executable's own code:
-						</p>
+						<p>ASLR randomizes the base addresses of the stack, heap, and shared libraries. PIE (Position-Independent Executable) extends ASLR to the executable's own code:</p>
 						<pre class="plaintext">
 With ASLR (each run):
   Stack:   0x7ffc1a3b4000  -&gt;  0x7ffd92f12000  -&gt;  0x7fff8c4d9000
@@ -849,11 +662,7 @@ With ASLR (each run):
 					</section>
 					<section>
 						<h3 id="heap-overflows">Heap Overflows</h3>
-						<p>
-							Heap overflows don't target return addresses - there are none on the heap. Instead they corrupt
-							heap metadata (chunk headers, free list pointers) or adjacent allocated objects. The corruption
-							vector:
-						</p>
+						<p>Heap overflows don't target return addresses - there are none on the heap. Instead they corrupt heap metadata (chunk headers, free list pointers) or adjacent allocated objects. The corruption vector:</p>
 						<pre class="plaintext">
 Heap chunk layout (glibc):
 +--------+------+----------------------------------+
@@ -867,20 +676,7 @@ Heap chunk layout (glibc):
 | Next chunk&#39;s prev_size                             |
 +---------------------------------------------------+
 						</pre>
-						<p>
-							When the program writes past
-							<code>user_data</code>
-							into the next chunk's header, it corrupts
-							<code>size</code>
-							and
-							potentially
-							<code>fd</code>
-							/
-							<code>bk</code>
-							(if the next chunk is free). This is covered in depth in
-							<a href="/wiki/articles/fundamentals/heap-overflows.html">Heap Overflows</a>
-							.
-						</p>
+						<p>When the program writes past <code>user_data</code> into the next chunk's header, it corrupts <code>size</code> and potentially <code>fd</code> / <code>bk</code> (if the next chunk is free). This is covered in depth in <a href="/wiki/articles/fundamentals/heap-overflows.html">Heap Overflows</a> .</p>
 					</section>
 					<section>
 						<h3 id="safe-coding-patterns">Safe Coding Patterns</h3>
@@ -897,11 +693,7 @@ void safe_function(char *input) {
     printf(&#34;Hello, %s\n&#34;, buffer);
 }
 						</pre>
-						<p>
-							Even better, use
-							<code>snprintf</code>
-							:
-						</p>
+						<p>Even better, use <code>snprintf</code> :</p>
 						<pre class="c">
 void safe_function2(char *input) {
     char buffer[64];
@@ -926,7 +718,7 @@ void safe_function2(char *input) {
 							<tbody>
 								<tr>
 									<td align="center">Stack canary</td>
-									<td align="center"><code>-fstack-protector</code>(default)</td>
+									<td align="center"><code>-fstack-protector</code> (default)</td>
 									<td align="center">Places random guard between locals and saved RBP</td>
 								</tr>
 								<tr>
@@ -941,7 +733,7 @@ void safe_function2(char *input) {
 								</tr>
 								<tr>
 									<td align="center">NX</td>
-									<td align="center"><code>-z noexecstack</code>(default)</td>
+									<td align="center"><code>-z noexecstack</code> (default)</td>
 									<td align="center">Non-executable stack</td>
 								</tr>
 								<tr>
@@ -951,7 +743,7 @@ void safe_function2(char *input) {
 								</tr>
 								<tr>
 									<td align="center">PIE</td>
-									<td align="center"><code>-fPIE -pie</code>(default)</td>
+									<td align="center"><code>-fPIE -pie</code> (default)</td>
 									<td align="center">Position-independent executable</td>
 								</tr>
 								<tr>
@@ -986,10 +778,7 @@ $ checksec --file=./hardened
     NX:       NX enabled
     PIE:      PIE enabled
 						</pre>
-						<p>
-							<code>checksec</code>
-							is part of pwntools:
-						</p>
+						<p><code>checksec</code> is part of pwntools:</p>
 						<pre class="bash">
 $ python3 -c &#34;from pwn import *; print(ELF(&#39;./hardened&#39;).checksec())&#34;
 [*] &#39;/home/user/hardened&#39;
@@ -1065,11 +854,7 @@ $ coredumpctl gdb 12345
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							Using AddressSanitizer (
-							<code>-fsanitize=address</code>
-							):
-						</p>
+						<p>Using AddressSanitizer ( <code>-fsanitize=address</code> ):</p>
 						<pre class="bash">
 $ gcc -fsanitize=address -g -o overflow_asan overflow.c
 $ ./overflow_asan $(python3 -c &#34;print(&#39;A&#39;*100)&#34;)
@@ -1086,40 +871,16 @@ Address 0x7ffc8a3b4060 is located in stack of thread T0 at offset 112 in frame
   This frame has 1 object(s):
     [32, 96) &#39;buffer&#39; (line 5) &lt;== Memory access at offset 112 overflows this variable
 						</pre>
-						<p>
-							ASan reports the exact source line and variable that overflowed. It works by instrumenting every
-							memory access with shadow-memory checks, tracking which bytes are valid. The overhead is roughly
-							2x in
-							<abbr title="Central Processing Unit">CPU</abbr>
-							, 2-3x in memory, making it suitable for testing but not
-							production.
-						</p>
+						<p>ASan reports the exact source line and variable that overflowed. It works by instrumenting every memory access with shadow-memory checks, tracking which bytes are valid. The overhead is roughly 2x in <abbr title="Central Processing Unit">CPU</abbr> , 2-3x in memory, making it suitable for testing but not production.</p>
 					</section>
 					<section>
 						<h3 id="summary">Summary</h3>
-						<p>
-							Buffer overflows are the most fundamental memory corruption primitive. The mechanism is simple:
-							write past an array boundary, overwrite the return address. The exploitation strategies (shellcode,
-							ret2libc,
-							<abbr title="Return-Oriented Programming">ROP</abbr>
-							) all derive from this core insight.
-						</p>
-						<p>
-							Every mitigation - canaries, NX, ASLR, PIE, RELRO, FORTIFY_SOU
-							<abbr title="Remote Code Execution">RCE</abbr>
-							, CFI, shadow stacks - exists because of buffer overflows. Understanding the vulnerability is
-							necessary to understand why these protections exist and what they protect against.
-						</p>
+						<p>Buffer overflows are the most fundamental memory corruption primitive. The mechanism is simple: write past an array boundary, overwrite the return address. The exploitation strategies (shellcode, ret2libc, <abbr title="Return-Oriented Programming">ROP</abbr> ) all derive from this core insight.</p>
+						<p>Every mitigation - canaries, NX, ASLR, PIE, RELRO, FORTIFY_SOU <abbr title="Remote Code Execution">RCE</abbr> , CFI, shadow stacks - exists because of buffer overflows. Understanding the vulnerability is necessary to understand why these protections exist and what they protect against.</p>
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Write a Go scanner that flags unsafe libc calls before they ever reach a compiler. It reads
-							a C source file and prints every
-							<code>file:line: source</code>
-							match, so it can be wired into a pre-commit
-							hook or a CI job:
-						</p>
+						<p>Write a Go scanner that flags unsafe libc calls before they ever reach a compiler. It reads a C source file and prints every <code>file:line: source</code> match, so it can be wired into a pre-commit hook or a CI job:</p>
 						<pre class="go">
 package main
 
@@ -1164,15 +925,7 @@ func main() {
 	fmt.Printf(&#34;%d potential unsafe calls\n&#34;, hits)
 }
 						</pre>
-						<p>
-							Run it against the vulnerable program from this article and against
-							<code>safe.c</code>
-							. Then extend the
-							scanner to skip matches inside comments and to warn when
-							<code>strncpy</code>
-							is used without an explicit
-							null terminator on the following line.
-						</p>
+						<p>Run it against the vulnerable program from this article and against <code>safe.c</code> . Then extend the scanner to skip matches inside comments and to warn when <code>strncpy</code> is used without an explicit null terminator on the following line.</p>
 					</section>
 					<section>
 						<h3 id="references">References</h3>

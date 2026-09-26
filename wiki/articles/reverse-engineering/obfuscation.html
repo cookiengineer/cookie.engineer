@@ -160,20 +160,10 @@
 
 				<article>
 					<h2 id="obfuscation-deobfuscation">Obfuscation & Deobfuscation</h2>
-					<p>
-						Techniques malware uses to hide code and how to defeat them, from UPX packing to control flow
-						flattening and virtual machines.
-					</p>
+					<p>Techniques malware uses to hide code and how to defeat them, from UPX packing to control flow flattening and virtual machines.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							Obfuscation raises the cost of static analysis. Packers compress code, crypters encrypt data,
-							protectors add anti-debug and anti-dump checks, and virtualizers translate native instructions
-							into a private bytecode. Each layer wraps the one below, so a sample may be a custom packer
-							around an RC4 payload around a virtualized routine. This article walks the layers from outside
-							in: detection, automated and manual unpacking, crypto identification, string deobfuscation,
-							control flow recovery, and virtual machine analysis.
-						</p>
+						<p>Obfuscation raises the cost of static analysis. Packers compress code, crypters encrypt data, protectors add anti-debug and anti-dump checks, and virtualizers translate native instructions into a private bytecode. Each layer wraps the one below, so a sample may be a custom packer around an RC4 payload around a virtualized routine. This article walks the layers from outside in: detection, automated and manual unpacking, crypto identification, string deobfuscation, control flow recovery, and virtual machine analysis.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -184,11 +174,7 @@
 					</section>
 					<section>
 						<h3 id="the-obfuscation-arms-race">The Obfuscation Arms Race</h3>
-						<p>
-							Malware authors and reverse engineers operate in an escalating conflict. Each generation of
-							obfuscation spawns a generation of deobfuscation tools, which in turn drives more sophisticated
-							obfuscation. The taxonomy follows a clear progression:
-						</p>
+						<p>Malware authors and reverse engineers operate in an escalating conflict. Each generation of obfuscation spawns a generation of deobfuscation tools, which in turn drives more sophisticated obfuscation. The taxonomy follows a clear progression:</p>
 						<table>
 							<thead>
 								<tr>
@@ -231,29 +217,13 @@
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							Each layer wraps the one below. A
-							<abbr title="Virtual Machine">VM</abbr>
-							Protect-protected binary might contain
-							an RC4-crypted payload, packed with a custom packer. The reverse engineer must unwind these
-							layers from outermost to innermost - onion-peeling the binary.
-						</p>
+						<p>Each layer wraps the one below. A <abbr title="Virtual Machine">VM</abbr> Protect-protected binary might contain an RC4-crypted payload, packed with a custom packer. The reverse engineer must unwind these layers from outermost to innermost - onion-peeling the binary.</p>
 					</section>
 					<section>
 						<h3 id="upx-the-universal-packer">UPX: The Universal Packer</h3>
-						<p>
-							UPX is the most common packer in Linux malware. It is not malicious - it is a legitimate compression
-							tool - but it is widely abused because it is free, open-source, and trivially scripted.
-						</p>
+						<p>UPX is the most common packer in Linux malware. It is not malicious - it is a legitimate compression tool - but it is widely abused because it is free, open-source, and trivially scripted.</p>
 						<h4 id="how-upx-works">How UPX Works</h4>
-						<p>
-							The packer reads the original ELF, compresses the loadable sections (
-							<code>.text</code>
-							,
-							<code>.data</code>
-							), and
-							rewrites the binary with three components:
-						</p>
+						<p>The packer reads the original ELF, compresses the loadable sections ( <code>.text</code> , <code>.data</code> ), and rewrites the binary with three components:</p>
 						<pre class="plaintext">
 [UPX Stub (decompressor)] -&gt; [Compressed Data Block] -&gt; [ELF Footer]
 						</pre>
@@ -273,23 +243,7 @@ $Info: This file is packed with the UPX executable packer
 UPX1
 UPX2
 						</pre>
-						<p>
-							The section names
-							<code>UPX0</code>
-							,
-							<code>UPX1</code>
-							,
-							<code>UPX2</code>
-							are characteristic.
-							<code>UPX0</code>
-							is empty in the file (zeros)
-							but holds the uncompressed original
-							<code>.text</code>
-							in memory.
-							<code>UPX1</code>
-							contains both the stub code and
-							compressed data.
-						</p>
+						<p>The section names <code>UPX0</code> , <code>UPX1</code> , <code>UPX2</code> are characteristic. <code>UPX0</code> is empty in the file (zeros) but holds the uncompressed original <code>.text</code> in memory. <code>UPX1</code> contains both the stub code and compressed data.</p>
 						<pre class="bash">
 $ readelf -S suspicious_elf
 [ 1] UPX0             PROGBITS         0000000000401000  00001000
@@ -297,33 +251,15 @@ $ readelf -S suspicious_elf
 [ 2] UPX1             PROGBITS         000000000041f000  00001000
      000000000000c000  0000000000000000         0         0
 						</pre>
-						<p>
-							Notice
-							<code>UPX0</code>
-							has a filesize of 0 but memory size of
-							<code>0x1f000</code>
-							- the section exists only in
-							memory after decompression.
-						</p>
+						<p>Notice <code>UPX0</code> has a filesize of 0 but memory size of <code>0x1f000</code> - the section exists only in memory after decompression.</p>
 						<h4 id="automated-unpacking">Automated Unpacking</h4>
 						<p>The simplest approach:</p>
 						<pre class="bash">
 $ upx -d packed_binary -o unpacked_binary
 						</pre>
-						<p>
-							This works because UPX stores the necessary decompression metadata in the binary. The
-							<code>-d</code>
-							flag
-							invokes UPX's own decompressor on the file.
-						</p>
+						<p>This works because UPX stores the necessary decompression metadata in the binary. The <code>-d</code> flag invokes UPX's own decompressor on the file.</p>
 						<h4 id="manual-unpacking-with-gdb">Manual Unpacking with GDB</h4>
-						<p>
-							When
-							<code>upx -d</code>
-							fails (modified UPX header, corrupted metadata), manual unpacking is required.
-							The core technique is finding the OEP - the point where the stub finishes decompressing and
-							jumps to the original code.
-						</p>
+						<p>When <code>upx -d</code> fails (modified UPX header, corrupted metadata), manual unpacking is required. The core technique is finding the OEP - the point where the stub finishes decompressing and jumps to the original code.</p>
 						<pre class="python">
 #!/usr/bin/env python3
 &#34;&#34;&#34;find_oep.py — Locate Original Entry Point in UPX-packed binary&#34;&#34;&#34;
@@ -424,19 +360,13 @@ Mapped address spaces:
 					</section>
 					<section>
 						<h3 id="import-reconstruction">Import Reconstruction</h3>
-						<p>
-							After unpacking, the dumped binary has broken imports. UPX resolves imports dynamically at runtime
-							<ul>
-								<li>the GOT entries are populated with resolved addresses. The dumped file contains the <em>runtime</em></li>
-							</ul>
-						</p>
+						<p>After unpacking, the dumped binary has broken imports. UPX resolves imports dynamically at runtime<ul>
+	<li>the GOT entries are populated with resolved addresses. The dumped file contains the <em>runtime</em></li>
+</ul></p>
 						<p>GOT values (absolute addresses from the host process), not the original import stubs.</p>
 						<p>For Linux ELF imports, there are two approaches:</p>
 						<h4 id="approach-1-fix-the-got-in-the-dump">Approach 1: Fix the GOT in the dump</h4>
-						<p>
-							Write a script that walks the dynamic symbol table, identifies GOT entries, and converts absolute
-							addresses back to relocation entries:
-						</p>
+						<p>Write a script that walks the dynamic symbol table, identifies GOT entries, and converts absolute addresses back to relocation entries:</p>
 						<pre class="python">
 #!/usr/bin/env python3
 &#34;&#34;&#34;fix_imports.py — Reconstruct ELF imports from a memory dump&#34;&#34;&#34;
@@ -623,11 +553,7 @@ def crack_repeating_xor(data: bytes, min_len: int = 1, max_len: int = 40):
 					</section>
 					<section>
 						<h3 id="rc4-encryption">RC4 Encryption</h3>
-						<p>
-							RC4 is a stream cipher frequently found in malware due to its simplicity (no block operations
-							needed). The algorithm initializes a 256-byte state with the key, then generates a keystream
-							XORed with the plaintext:
-						</p>
+						<p>RC4 is a stream cipher frequently found in malware due to its simplicity (no block operations needed). The algorithm initializes a 256-byte state with the key, then generates a keystream XORed with the plaintext:</p>
 						<pre class="c">
 /* rc4.c — Standard RC4 implementation */
 typedef struct {
@@ -662,31 +588,15 @@ void rc4_crypt(rc4_state *state, unsigned char *data, size_t len) {
 }
 						</pre>
 						<h4 id="identifying-rc4-in-disassembly">Identifying RC4 in Disassembly</h4>
-						<p>
-							RC4 has a distinctive pattern: two 256-byte loops. The first (KSA - Key Scheduling Algorithm)
-							initializes
-							<code>S[0..255] = 0..255</code>
-							then permutes. The second (PRGA - Pseudo-Random Generation
-							Algorithm) generates keystream. Look for:
-						</p>
+						<p>RC4 has a distinctive pattern: two 256-byte loops. The first (KSA - Key Scheduling Algorithm) initializes <code>S[0..255] = 0..255</code> then permutes. The second (PRGA - Pseudo-Random Generation Algorithm) generates keystream. Look for:</p>
 						<ul>
 							<li>Array of 256 bytes ( <code>S[256]</code> ) accessed with modulo-256 arithmetic</li>
 							<li>Two index variables ( <code>i</code> , <code>j</code> ) that wrap around</li>
 							<li>XOR of data with <code>S[(S[i] + S[j]) % 256]</code></li>
 						</ul>
-						<p>
-							The KSA loop is especially recognizable because it fills an array with sequential values 0-255,
-							then permutes it. In Ghidra, this appears as a loop initializing
-							<code>local_108[0..0xff]</code>
-							with ascending
-							values.
-						</p>
+						<p>The KSA loop is especially recognizable because it fills an array with sequential values 0-255, then permutes it. In Ghidra, this appears as a loop initializing <code>local_108[0..0xff]</code> with ascending values.</p>
 						<h4 id="recovering-rc4-key">Recovering RC4 Key</h4>
-						<p>
-							If you observe the KSA executing (via debugger or emulation), you can recover the key by capturing
-							the key material passed to the KSA. Or, if you have known plaintext, XOR it with ciphertext
-							to get the keystream - then backtrack through the RC4 state (if you captured the initial state).
-						</p>
+						<p>If you observe the KSA executing (via debugger or emulation), you can recover the key by capturing the key material passed to the KSA. Or, if you have known plaintext, XOR it with ciphertext to get the keystream - then backtrack through the RC4 state (if you captured the initial state).</p>
 						<pre class="python">
 #!/usr/bin/env python3
 &#34;&#34;&#34;rc4_identify.py — Scan binary for RC4 constant patterns&#34;&#34;&#34;
@@ -722,12 +632,7 @@ def find_rc4_ksa_pattern(filepath: str):
 					</section>
 					<section>
 						<h3 id="aes-encryption">AES Encryption</h3>
-						<p>
-							<abbr title="Advanced Encryption Standard">AES</abbr>
-							is common in ransomware and sophisticated malware. Unlike
-							RC4, it operates on fixed 16-byte blocks with a key schedule expansion. Detection relies on
-							the constant tables embedded in the binary:
-						</p>
+						<p><abbr title="Advanced Encryption Standard">AES</abbr> is common in ransomware and sophisticated malware. Unlike RC4, it operates on fixed 16-byte blocks with a key schedule expansion. Detection relies on the constant tables embedded in the binary:</p>
 						<h4 id="aes-s-box-first-16-bytes">AES S-box (first 16 bytes)</h4>
 						<pre class="plaintext">
 0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5,
@@ -843,10 +748,7 @@ if __name__ == &#39;__main__&#39;:
 						<h3 id="string-obfuscation">String Obfuscation</h3>
 						<p>Malware hides strings to evade static analysis. The techniques and their countermeasures:</p>
 						<h4 id="stack-strings-x86-64">Stack Strings (x86-64)</h4>
-						<p>
-							Instead of storing the string as a data constant, the malware constructs it byte-by-byte on
-							the stack:
-						</p>
+						<p>Instead of storing the string as a data constant, the malware constructs it byte-by-byte on the stack:</p>
 						<pre class="x86asm">
 ; CONSTRUCTING THE STRING &#34;/bin/sh&#34; ON THE STACK
 mov    rax, 0x0068732f6e69622f   ; &#34;/bin/sh\0&#34; in little-endian
@@ -854,12 +756,7 @@ push   rax
 mov    rdi, rsp                   ; rdi now points to &#34;/bin/sh&#34;
 ; ... execve syscall ...
 						</pre>
-						<p>
-							This is visible when Ghidra shows
-							<code>local_18 = 0x68732f6e69622f</code>
-							and the decompiler outputs a
-							comment. To find stack strings programmatically:
-						</p>
+						<p>This is visible when Ghidra shows <code>local_18 = 0x68732f6e69622f</code> and the decompiler outputs a comment. To find stack strings programmatically:</p>
 						<pre class="python">
 #!/usr/bin/env python3
 &#34;&#34;&#34;scan_stack_strings.py — Find stack-constructed strings in disassembly&#34;&#34;&#34;
@@ -900,11 +797,7 @@ def find_stack_strings(ghidra_export_file: str):
     return stack_strings
 						</pre>
 						<h4 id="xor-encoded-strings">XOR-Encoded Strings</h4>
-						<p>
-							The malware stores encrypted strings in
-							<code>.rodata</code>
-							and decodes them at runtime:
-						</p>
+						<p>The malware stores encrypted strings in <code>.rodata</code> and decodes them at runtime:</p>
 						<pre class="c">
 /* Typical XOR string decode wrapper */
 static char encoded_config[] = {
@@ -918,13 +811,7 @@ void init_strings(void) {
     }
 }
 						</pre>
-						<p>
-							To deobfuscate, identify the decode function and emulate it (see
-							<a href="/wiki/articles/reverse-engineering/binary-emulation.html">binary-emulation.html</a>
-							), or use
-							<code>floss</code>
-							(FireEye's FLARE Obfuscated String Solver):
-						</p>
+						<p>To deobfuscate, identify the decode function and emulate it (see <a href="/wiki/articles/reverse-engineering/binary-emulation.html">binary-emulation.html</a> ), or use <code>floss</code> (FireEye's FLARE Obfuscated String Solver):</p>
 						<pre class="bash">
 $ floss -n 8 malware.elf
 FLOSS decoded 23 strings
@@ -934,12 +821,7 @@ Decoding function at 0x4023a0 (XOR, key=0xfe):
   &#34;/proc/self/exe&#34;
   ...
 						</pre>
-						<p>
-							If
-							<code>floss</code>
-							misses built-in strings, write a custom Unicorn-based decoder (emulation approach
-							in binary-emulation article).
-						</p>
+						<p>If <code>floss</code> misses built-in strings, write a custom Unicorn-based decoder (emulation approach in binary-emulation article).</p>
 						<h4 id="base64-xor-combination">Base64 + XOR Combination</h4>
 						<p>A common pattern layers base64 encoding over XOR:</p>
 						<pre class="c">
@@ -957,10 +839,7 @@ def decode_b64_xor(encoded: str, key: int) -&gt; str:
 					</section>
 					<section>
 						<h3 id="opaque-predicates">Opaque Predicates</h3>
-						<p>
-							An opaque predicate is a conditional expression whose value is known at obfuscation time but
-							appears complex to the analyst:
-						</p>
+						<p>An opaque predicate is a conditional expression whose value is known at obfuscation time but appears complex to the analyst:</p>
 						<table>
 							<thead>
 								<tr>
@@ -992,12 +871,12 @@ def decode_b64_xor(encoded: str, key: int) -&gt; str:
 								</tr>
 								<tr>
 									<td align="center">Square hash</td>
-									<td align="center"><code>(x * x) % 4 == 0</code>(x even)</td>
+									<td align="center"><code>(x * x) % 4 == 0</code> (x even)</td>
 									<td align="center">1</td>
 								</tr>
 								<tr>
 									<td align="center">Fermat ltl</td>
-									<td align="center"><code>a^(p-1) % p == 1</code>(p prime)</td>
+									<td align="center"><code>a^(p-1) % p == 1</code> (p prime)</td>
 									<td align="center">1</td>
 								</tr>
 							</tbody>
@@ -1010,11 +889,7 @@ add    eax, 0x0F       ; eax = 0x100 = 256
 cmp    eax, 0x100
 je     target          ; ALWAYS taken — the add result is deterministic
 						</pre>
-						<p>
-							The branch is always taken. Its purpose: bifurcate the control flow graph, creating a "dead
-							branch" that the disassembler may follow but execution never reaches. This confuses both static
-							analysis and decompilation.
-						</p>
+						<p>The branch is always taken. Its purpose: bifurcate the control flow graph, creating a "dead branch" that the disassembler may follow but execution never reaches. This confuses both static analysis and decompilation.</p>
 						<h4 id="defeating-opaque-predicates">Defeating Opaque Predicates</h4>
 						<ol>
 							<li><b>Pattern recognition</b> - most opaque predicates follow known formulas. A Ghidra script can fold them:</li>
@@ -1073,10 +948,7 @@ for node in cfg.graph.nodes():
 					</section>
 					<section>
 						<h3 id="control-flow-flattening">Control Flow Flattening</h3>
-						<p>
-							Control flow flattening (CFF) is a transformation that replaces the natural control flow of
-							a function with a switch-based dispatcher:
-						</p>
+						<p>Control flow flattening (CFF) is a transformation that replaces the natural control flow of a function with a switch-based dispatcher:</p>
 						<pre class="plaintext">
 NATURAL CFG:                    FLATTENED CFG:
 
@@ -1097,23 +969,10 @@ NATURAL CFG:                    FLATTENED CFG:
                                      ...code...
                                      state = F(C); goto dispatcher
 						</pre>
-						<p>
-							Each basic block is split out and assigned a numeric state. After executing, the block computes
-							the next state and jumps back to the dispatcher. The original control flow is encoded in the
-							state variable assignments.
-						</p>
+						<p>Each basic block is split out and assigned a numeric state. After executing, the block computes the next state and jumps back to the dispatcher. The original control flow is encoded in the state variable assignments.</p>
 						<h4 id="identifying-cff">Identifying CFF</h4>
-						<p>
-							In Ghidra, a flattened function shows: - A large switch statement (indirect jump table) at the
-							function entry - Every block ending with
-							<code>state_var = &lt;constant&gt;; goto dispatcher</code>
-							- No fall-through
-							between logical blocks
-						</p>
-						<p>
-							The telltale sign in assembly is a function that is essentially one giant loop with an indirect
-							jump:
-						</p>
+						<p>In Ghidra, a flattened function shows: - A large switch statement (indirect jump table) at the function entry - Every block ending with <code>state_var = &lt;constant&gt;; goto dispatcher</code> - No fall-through between logical blocks</p>
+						<p>The telltale sign in assembly is a function that is essentially one giant loop with an indirect jump:</p>
 						<pre class="x86asm">
 ; FLATTENED FUNCTION (Ghidra decompiler view)
 undefined8 flattened_func(void)
@@ -1150,18 +1009,8 @@ undefined8 flattened_func(void)
 }
 						</pre>
 						<h4 id="deobfuscating-cff">Deobfuscating CFF</h4>
-						<p>
-							<code>O-LLVM</code>
-							is the most common tool producing CFF.
-							<code>Tigress</code>
-							and Hikari also implement it. Each
-							produces predictable patterns.
-						</p>
-						<p>
-							Use
-							<code>deflat.py</code>
-							(open-source deobfuscation tool) to recover the original CFG:
-						</p>
+						<p><code>O-LLVM</code> is the most common tool producing CFF. <code>Tigress</code> and Hikari also implement it. Each produces predictable patterns.</p>
+						<p>Use <code>deflat.py</code> (open-source deobfuscation tool) to recover the original CFG:</p>
 						<pre class="bash">
 $ git clone https://github.com/purseclab/deflat
 $ cd deflat
@@ -1213,11 +1062,7 @@ def recover_cff_states(trace_log: str):
 					</section>
 					<section>
 						<h3 id="virtual-machine-obfuscation">Virtual Machine Obfuscation</h3>
-						<p>
-							<abbr title="Virtual Machine">VM</abbr>
-							Protect and Themida represent the apex of obfuscation difficulty. They
-							translate native x86 instructions into custom bytecode executed by an embedded interpreter.
-						</p>
+						<p><abbr title="Virtual Machine">VM</abbr> Protect and Themida represent the apex of obfuscation difficulty. They translate native x86 instructions into custom bytecode executed by an embedded interpreter.</p>
 						<h4 id="how-it-works">How It Works</h4>
 						<ol>
 							<li>The protector selects critical functions</li>
@@ -1227,11 +1072,7 @@ def recover_cff_states(trace_log: str):
 							<li>The <abbr title="Virtual Machine">VM</abbr> handler table is a set of small functions - one per opcode</li>
 						</ol>
 						<h4 id="identifying-vmprotect">Identifying VMProtect</h4>
-						<p>
-							The
-							<abbr title="Virtual Machine">VM</abbr>
-							interpreter has a recognizable structure:
-						</p>
+						<p>The <abbr title="Virtual Machine">VM</abbr> interpreter has a recognizable structure:</p>
 						<pre class="x86asm">
 ; TYPICAL VM HANDLER DISPATCH LOOP
 vm_loop:
@@ -1246,10 +1087,7 @@ handler_ADD_R64:
     mov    [vregs + rbx*8], rax
     jmp    vm_loop
 						</pre>
-						<p>
-							The handler table is an array of function pointers - typically 50-200 entries, each a small
-							code block. This is visible in Ghidra as a large jump table.
-						</p>
+						<p>The handler table is an array of function pointers - typically 50-200 entries, each a small code block. This is visible in Ghidra as a large jump table.</p>
 						<h4 id="analysis-approaches">Analysis Approaches</h4>
 						<ol>
 							<li><b>VM handler identification</b> : Find the dispatch loop, dump the handler table, categorize handlers by operation (arithmetic, memory, control flow).</li>
@@ -1452,16 +1290,7 @@ if __name__ == &#39;__main__&#39;:
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Write a Go tool that reads an ELF file, prints each section with its Shannon entropy, and flags
-							a section as packed when its entropy exceeds
-							<code>7.0</code>
-							. Then scan the whole file for the first
-							bytes of the
-							<abbr title="Advanced Encryption Standard">AES</abbr>
-							S-box and report whether a crypto implementation
-							is statically linked.
-						</p>
+						<p>Write a Go tool that reads an ELF file, prints each section with its Shannon entropy, and flags a section as packed when its entropy exceeds <code>7.0</code> . Then scan the whole file for the first bytes of the <abbr title="Advanced Encryption Standard">AES</abbr> S-box and report whether a crypto implementation is statically linked.</p>
 						<pre class="go">
 package main
 
@@ -1546,10 +1375,7 @@ func main() {
 	}
 }
 						</pre>
-						<p>
-							Run it against a packed sample and its unpacked form, then explain which section changed entropy
-							and why:
-						</p>
+						<p>Run it against a packed sample and its unpacked form, then explain which section changed entropy and why:</p>
 						<pre class="bash">
 go run entropy.go packed_binary
 upx -d packed_binary -o unpacked_binary

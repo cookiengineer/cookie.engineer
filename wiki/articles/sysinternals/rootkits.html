@@ -171,22 +171,10 @@
 
 				<article>
 					<h2 id="rootkits">Rootkits</h2>
-					<p>
-						Kernel and user-mode stealth techniques, from DKOM and syscall hooking to
-						<abbr title="Extended Berkeley Packet Filter">eBPF</abbr>
-						abuse and cross-view detection on modern Linux.
-					</p>
+					<p>Kernel and user-mode stealth techniques, from DKOM and syscall hooking to <abbr title="Extended Berkeley Packet Filter">eBPF</abbr> abuse and cross-view detection on modern Linux.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							A rootkit hides privileged access by intercepting the interfaces used to inspect a system. This
-							article surveys user-mode
-							<code>LD_PRELOAD</code>
-							hooks, kernel syscall and VFS patching, direct kernel
-							object manipulation, callback and network stack tampering, and
-							<abbr title="Extended Berkeley Packet Filter">eBPF</abbr>
-							abuse. It then shows the cross-view detection principle and the tools that apply it.
-						</p>
+						<p>A rootkit hides privileged access by intercepting the interfaces used to inspect a system. This article surveys user-mode <code>LD_PRELOAD</code> hooks, kernel syscall and VFS patching, direct kernel object manipulation, callback and network stack tampering, and <abbr title="Extended Berkeley Packet Filter">eBPF</abbr> abuse. It then shows the cross-view detection principle and the tools that apply it.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -200,13 +188,7 @@
 					</section>
 					<section>
 						<h3 id="what-is-a-rootkit">What Is a Rootkit</h3>
-						<p>
-							A rootkit is software that obtains and maintains privileged access while concealing its presence
-							from system administrators and security tools. The term originates from the combination of "root"
-							(the Unix superuser) and "kit" (a collection of tools). Rootkits operate on a simple principle:
-							intercept the interfaces that administrators and tools use to inspect the system, then filter
-							out evidence of the rootkit's existence.
-						</p>
+						<p>A rootkit is software that obtains and maintains privileged access while concealing its presence from system administrators and security tools. The term originates from the combination of "root" (the Unix superuser) and "kit" (a collection of tools). Rootkits operate on a simple principle: intercept the interfaces that administrators and tools use to inspect the system, then filter out evidence of the rootkit's existence.</p>
 						<table>
 							<thead>
 								<tr>
@@ -229,36 +211,11 @@
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							A rootkit's survival depends on staying invisible. When the administrator runs
-							<code>ls</code>
-							, you must
-							intercept the
-							<code>getdents64()</code>
-							or
-							<code>getdents()</code>
-							system call. When they run
-							<code>ps aux</code>
-							, you intercept
-							<code>readdir()</code>
-							on
-							<code>/proc</code>
-							. When they run
-							<code>lsmod</code>
-							, you hide your module from the kernel's module
-							list. Every user-space tool is just a chain of system calls; control the system call layer,
-							and you control what the administrator sees.
-						</p>
+						<p>A rootkit's survival depends on staying invisible. When the administrator runs <code>ls</code> , you must intercept the <code>getdents64()</code> or <code>getdents()</code> system call. When they run <code>ps aux</code> , you intercept <code>readdir()</code> on <code>/proc</code> . When they run <code>lsmod</code> , you hide your module from the kernel's module list. Every user-space tool is just a chain of system calls; control the system call layer, and you control what the administrator sees.</p>
 					</section>
 					<section>
 						<h3 id="user-mode-rootkits">User-Mode Rootkits</h3>
-						<p>
-							User-mode rootkits operate entirely in ring 3. They hook library functions, typically through
-							<code>LD_PRELOAD</code>
-							injection,
-							<code>ptrace()</code>
-							-based process injection, or dynamic linker manipulation.
-						</p>
+						<p>User-mode rootkits operate entirely in ring 3. They hook library functions, typically through <code>LD_PRELOAD</code> injection, <code>ptrace()</code> -based process injection, or dynamic linker manipulation.</p>
 						<pre class="plaintext">
 ┌─────────────────────────────────────────────────────────────────────┐
 │                     USER-MODE HOOKING CHAIN                           │
@@ -346,25 +303,11 @@ LD_PRELOAD=&#34;&#34; /bin/ls -la /tmp
 # Statically linked binaries bypass LD_PRELOAD
 busybox ls -la /tmp
 						</pre>
-						<p>
-							User-mode rootkits are fragile. A statically-linked binary ignores
-							<code>LD_PRELOAD</code>
-							. A containerized
-							application has a separate mount namespace.
-							<code>strace</code>
-							reveals the real syscall traffic. They
-							persist poorly across library updates. But they require no kernel privileges: the attacker only
-							needs user-level code execution.
-						</p>
+						<p>User-mode rootkits are fragile. A statically-linked binary ignores <code>LD_PRELOAD</code> . A containerized application has a separate mount namespace. <code>strace</code> reveals the real syscall traffic. They persist poorly across library updates. But they require no kernel privileges: the attacker only needs user-level code execution.</p>
 					</section>
 					<section>
 						<h3 id="syscall-table-hooking">Syscall Table Hooking</h3>
-						<p>
-							Kernel-mode rootkits run at ring 0 and can intercept every system call before any user-space
-							tool sees the results. The classic technique is
-							<code>sys_call_table[]</code>
-							modification.
-						</p>
+						<p>Kernel-mode rootkits run at ring 0 and can intercept every system call before any user-space tool sees the results. The classic technique is <code>sys_call_table[]</code> modification.</p>
 						<pre class="plaintext">
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    SYSCALL TABLE HOOKING                              │
@@ -455,26 +398,11 @@ static inline void enable_write_protection(void) {
 // On CONFIG_STRICT_KERNEL_RWX: kernel .text is mapped with 2MB pages.
 // Modifying CR0.WP fails because the 2MB page is mapped read-only at the page table level.
 						</pre>
-						<p>
-							Modern kernels make syscall table hooking impractical.
-							<code>CONFIG_STRICT_KERNEL_RWX</code>
-							(enabled by
-							default since 4.15) maps kernel text and read-only data with proper page permissions.
-							<code>CONFIG_MODULE_SIG_FORCE</code>
-							prevents unsigned modules from loading. The
-							<code>sys_call_table[]</code>
-							is in
-							<code>.rodata</code>
-							which is mapped
-							read-only at the hardware page table level.
-						</p>
+						<p>Modern kernels make syscall table hooking impractical. <code>CONFIG_STRICT_KERNEL_RWX</code> (enabled by default since 4.15) maps kernel text and read-only data with proper page permissions. <code>CONFIG_MODULE_SIG_FORCE</code> prevents unsigned modules from loading. The <code>sys_call_table[]</code> is in <code>.rodata</code> which is mapped read-only at the hardware page table level.</p>
 					</section>
 					<section>
 						<h3 id="inline-function-patching">Inline Function Patching</h3>
-						<p>
-							Instead of modifying the syscall table (which is read-only), rootkits can patch the prologue
-							of the target function itself:
-						</p>
+						<p>Instead of modifying the syscall table (which is read-only), rootkits can patch the prologue of the target function itself:</p>
 						<pre class="plaintext">
 Original function prologue:
   0xffffffff8123abc0 &lt;sys_getdents64+0&gt;:  push   rbp
@@ -546,11 +474,7 @@ static int __init rk_init(void) {
 					</section>
 					<section>
 						<h3 id="direct-object-manipulation-dkom">Direct Object Manipulation (DKOM)</h3>
-						<p>
-							DKOM is the technique of directly modifying kernel data structures in memory rather than hooking
-							the functions that access them. No code path interception is needed: the attacker simply corrupts
-							the data that enumeration functions walk.
-						</p>
+						<p>DKOM is the technique of directly modifying kernel data structures in memory rather than hooking the functions that access them. No code path interception is needed: the attacker simply corrupts the data that enumeration functions walk.</p>
 						<pre class="plaintext">
 ┌──────────────────────────────────────────────────────────────────────┐
 │                     DKOM: PROCESS HIDING                              │
@@ -685,13 +609,7 @@ static void dkom_hide_process(struct task_struct *target) {
 					</section>
 					<section>
 						<h3 id="callback-manipulation">Callback Manipulation</h3>
-						<p>
-							The kernel uses notification chains extensively to inform registered drivers of events. Rootkits
-							that register themselves on these chains can intercept events. Conversely, rootkits can remove
-							security callbacks to disable
-							<abbr title="Endpoint Detection and Response">EDR</abbr>
-							/AV protections.
-						</p>
+						<p>The kernel uses notification chains extensively to inform registered drivers of events. Rootkits that register themselves on these chains can intercept events. Conversely, rootkits can remove security callbacks to disable <abbr title="Endpoint Detection and Response">EDR</abbr> /AV protections.</p>
 						<pre class="plaintext">
 ┌──────────────────────────────────────────────────────────────────────┐
 │                    NOTIFICATION CHAIN HOOKING                          │
@@ -787,20 +705,7 @@ static struct notifier_block *find_edr_callback(
 					</section>
 					<section>
 						<h3 id="vfs-hooking">VFS Hooking</h3>
-						<p>
-							The Virtual File System (VFS) is the abstraction layer through which every filesystem access
-							passes. By replacing
-							<code>file_operations</code>
-							pointers, a rootkit can intercept
-							<code>read()</code>
-							,
-							<code>write()</code>
-							,
-							<code>readdir()</code>
-							, and
-							<code>ioctl()</code>
-							on arbitrary files.
-						</p>
+						<p>The Virtual File System (VFS) is the abstraction layer through which every filesystem access passes. By replacing <code>file_operations</code> pointers, a rootkit can intercept <code>read()</code> , <code>write()</code> , <code>readdir()</code> , and <code>ioctl()</code> on arbitrary files.</p>
 						<pre class="plaintext">
 ┌──────────────────────────────────────────────────────────────────────┐
 │                      VFS FILE_OPERATIONS HOOKING                       │
@@ -880,21 +785,7 @@ static void hook_proc_dir(struct inode *inode) {
 					</section>
 					<section>
 						<h3 id="network-stack-hooking">Network Stack Hooking</h3>
-						<p>
-							Rootkits hiding network connections intercept the functions that enumerate them:
-							<code>net_device</code>
-							operations,
-							<code>/proc/net/tcp</code>
-							,
-							<code>/proc/net/udp</code>
-							, and the
-							<code>netlink</code>
-							interface used by
-							<code>ss</code>
-							and
-							<code>netstat</code>
-							.
-						</p>
+						<p>Rootkits hiding network connections intercept the functions that enumerate them: <code>net_device</code> operations, <code>/proc/net/tcp</code> , <code>/proc/net/udp</code> , and the <code>netlink</code> interface used by <code>ss</code> and <code>netstat</code> .</p>
 						<pre class="plaintext">
 ┌──────────────────────────────────────────────────────────────────────┐
 │                     NETWORK STACK HOOKING                              │
@@ -987,15 +878,7 @@ static struct nf_hook_ops rk_hooks[] = {
 					</section>
 					<section>
 						<h3 id="ebpf-abuse">eBPF Abuse</h3>
-						<p>
-							The Berkeley Packet Filter evolved from a simple packet filter into a general-purpose in-kernel
-							virtual machine.
-							<abbr title="Extended Berkeley Packet Filter">eBPF</abbr>
-							programs can attach to hundreds of
-							kernel hooks: syscalls, tracepoints, kprobes, socket operations, and more. A malicious
-							<abbr title="Extended Berkeley Packet Filter">eBPF</abbr>
-							program is a rootkit built on the kernel's own infrastructure.
-						</p>
+						<p>The Berkeley Packet Filter evolved from a simple packet filter into a general-purpose in-kernel virtual machine. <abbr title="Extended Berkeley Packet Filter">eBPF</abbr> programs can attach to hundreds of kernel hooks: syscalls, tracepoints, kprobes, socket operations, and more. A malicious <abbr title="Extended Berkeley Packet Filter">eBPF</abbr> program is a rootkit built on the kernel's own infrastructure.</p>
 						<pre class="plaintext">
 ┌──────────────────────────────────────────────────────────────────────┐
 │                       eBPF-BASED ROOTKIT                              │
@@ -1125,18 +1008,7 @@ sudo bpftool map list
 					</section>
 					<section>
 						<h3 id="module-hiding">Module Hiding</h3>
-						<p>
-							When you run
-							<code>lsmod</code>
-							, it reads
-							<code>/proc/modules</code>
-							, which iterates the kernel's linked list of
-							loaded
-							<code>struct module</code>
-							objects. Removing a module from this list makes it invisible to
-							<code>lsmod</code>
-							.
-						</p>
+						<p>When you run <code>lsmod</code> , it reads <code>/proc/modules</code> , which iterates the kernel's linked list of loaded <code>struct module</code> objects. Removing a module from this list makes it invisible to <code>lsmod</code> .</p>
 						<pre class="plaintext">
 ┌──────────────────────────────────────────────────────────────────────┐
 │                       MODULE LIST MANIPULATION                         │
@@ -1212,10 +1084,7 @@ sudo cat /sys/kernel/debug/tracing/available_filter_functions | \
 					</section>
 					<section>
 						<h3 id="stealth-detection-techniques">Stealth Detection Techniques</h3>
-						<p>
-							Detection operates on the cross-view principle: examine the same ground truth through two independent
-							interfaces and diff the results.
-						</p>
+						<p>Detection operates on the cross-view principle: examine the same ground truth through two independent interfaces and diff the results.</p>
 						<table>
 							<thead>
 								<tr>
@@ -1326,7 +1195,7 @@ int trace_sched_switch(struct sched_switch_args *ctx) {
 								</tr>
 								<tr>
 									<td align="center">CONFIG_KASLR; CONFIG_RANDOMIZE_BASE</td>
-									<td align="center">Randomize kernel base address (64-bit: entropy limited by KASAN/CPU alignment); Entropy: 28 bits (x86_64),~12 bits arm64</td>
+									<td align="center">Randomize kernel base address (64-bit: entropy limited by KASAN/CPU alignment); Entropy: 28 bits (x86_64), ~12 bits arm64</td>
 								</tr>
 								<tr>
 									<td align="center">CONFIG_PAGE_TABLE_ISOLATION; CONFIG_CFI_CLANG</td>
@@ -1418,11 +1287,7 @@ ls /proc | grep &#39;^[0-9]&#39; | sort # Processes in /proc
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Build and run the rootkit detection lab. It bundles rkhunter, chkrootkit, unhide, bpftrace,
-							and the tooling used below. The environment is intentionally privileged and must never be exposed
-							to a real network.
-						</p>
+						<p>Build and run the rootkit detection lab. It bundles rkhunter, chkrootkit, unhide, bpftrace, and the tooling used below. The environment is intentionally privileged and must never be exposed to a real network.</p>
 						<p><a href="/wiki/articles/sysinternals/rootkits.Containerfile">rootkits.Containerfile</a></p>
 						<pre class="bash">
 podman build -t rootkits-lab -f rootkits.Containerfile .

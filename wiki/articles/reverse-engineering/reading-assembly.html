@@ -153,21 +153,10 @@
 
 				<article>
 					<h2 id="reading-x86-64-assembly">Reading x86-64 Assembly</h2>
-					<p>
-						Systematic instruction-by-instruction decoding of x86-64 disassembly, covering Intel syntax,
-						essential opcodes, control-flow patterns, function prologues, and manual decompilation.
-					</p>
+					<p>Systematic instruction-by-instruction decoding of x86-64 disassembly, covering Intel syntax, essential opcodes, control-flow patterns, function prologues, and manual decompilation.</p>
 					<section>
 						<h3 id="overview">Overview</h3>
-						<p>
-							Disassembly is the lowest-level view of a compiled program, and reading it fluently is the core
-							skill of reverse engineering. This article teaches the small vocabulary of instructions that
-							covers most real code, then shows how the compiler turns C control structures and functions
-							into recognizable assembly patterns. After reading it you can take an
-							<code>objdump</code>
-							listing and
-							reconstruct the original C logic by hand.
-						</p>
+						<p>Disassembly is the lowest-level view of a compiled program, and reading it fluently is the core skill of reverse engineering. This article teaches the small vocabulary of instructions that covers most real code, then shows how the compiler turns C control structures and functions into recognizable assembly patterns. After reading it you can take an <code>objdump</code> listing and reconstruct the original C logic by hand.</p>
 					</section>
 					<section>
 						<h3 id="required-reading">Required Reading</h3>
@@ -178,46 +167,8 @@
 					</section>
 					<section>
 						<h3 id="why-intel-syntax">Why Intel Syntax</h3>
-						<p>
-							Reverse engineering tools overwhelmingly use Intel syntax: Ghidra, I
-							<abbr title="Domain Admin">DA</abbr>
-							Pro,
-							radare2, Binary Ninja, x64dbg, and LLDB's default on macOS. objdump defaults to AT&T but switches
-							with
-							<code>-M intel</code>
-							. The difference matters.
-						</p>
-						<p>
-							AT&T syntax uses
-							<code>mov src, dst</code>
-							with register prefixes (
-							<code>%rax</code>
-							,
-							<code>%rbx</code>
-							), immediate prefixes
-							(
-							<code>$0x42</code>
-							), and size suffixes (
-							<code>movl</code>
-							,
-							<code>movq</code>
-							). Intel syntax uses
-							<code>mov dst, src</code>
-							with bare
-							register names (
-							<code>rax</code>
-							,
-							<code>rbx</code>
-							), bare immediates (
-							<code>0x42</code>
-							), and memory operand form
-							<code>[base + index*scale + displacement]</code>
-							. Intel syntax reads left-to-right like C assignment:
-							<code>mov rax, rbx</code>
-							means
-							<code>rax = rbx</code>
-							.
-						</p>
+						<p>Reverse engineering tools overwhelmingly use Intel syntax: Ghidra, I <abbr title="Domain Admin">DA</abbr> Pro, radare2, Binary Ninja, x64dbg, and LLDB's default on macOS. objdump defaults to AT&T but switches with <code>-M intel</code> . The difference matters.</p>
+						<p>AT&T syntax uses <code>mov src, dst</code> with register prefixes ( <code>%rax</code> , <code>%rbx</code> ), immediate prefixes ( <code>$0x42</code> ), and size suffixes ( <code>movl</code> , <code>movq</code> ). Intel syntax uses <code>mov dst, src</code> with bare register names ( <code>rax</code> , <code>rbx</code> ), bare immediates ( <code>0x42</code> ), and memory operand form <code>[base + index*scale + displacement]</code> . Intel syntax reads left-to-right like C assignment: <code>mov rax, rbx</code> means <code>rax = rbx</code> .</p>
 						<pre class="plaintext">
 ; AT&amp;T (objdump default)
 movq   %rax, -0x8(%rbp)      ; read: move rax into [rbp-8]
@@ -225,12 +176,7 @@ movq   %rax, -0x8(%rbp)      ; read: move rax into [rbp-8]
 ; Intel (objdump -M intel)
 mov    QWORD PTR [rbp-0x8], rax  ; read: [rbp-8] = rax
 						</pre>
-						<p>
-							Always use Intel syntax when reversing. Every modern tool outputs it. If you use objdump, always
-							pass
-							<code>-M intel</code>
-							.
-						</p>
+						<p>Always use Intel syntax when reversing. Every modern tool outputs it. If you use objdump, always pass <code>-M intel</code> .</p>
 						<pre class="plaintext">
 objdump -d -M intel binary
 objdump -d -M intel --no-show-raw-insn binary  # cleaner output
@@ -238,10 +184,7 @@ objdump -d -M intel --no-show-raw-insn binary  # cleaner output
 					</section>
 					<section>
 						<h3 id="x86-64-register-set">x86-64 Register Set</h3>
-						<p>
-							Before reading disassembly, you must know what each register holds and when it's safe to clobber.
-							The mapping is not arbitrary - the ABI assigns roles.
-						</p>
+						<p>Before reading disassembly, you must know what each register holds and when it's safe to clobber. The mapping is not arbitrary - the ABI assigns roles.</p>
 						<table>
 							<thead>
 								<tr>
@@ -312,45 +255,17 @@ objdump -d -M intel --no-show-raw-insn binary  # cleaner output
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							Lower 32-bit, 16-bit, and 8-bit sub-register aliases exist but don't zero-extend to the full
-							register. Writing to
-							<code>eax</code>
-							zero-extends to
-							<code>rax</code>
-							. Writing to
-							<code>ax</code>
-							,
-							<code>al</code>
-							, or
-							<code>ah</code>
-							leaves upper
-							bits untouched.
-						</p>
+						<p>Lower 32-bit, 16-bit, and 8-bit sub-register aliases exist but don't zero-extend to the full register. Writing to <code>eax</code> zero-extends to <code>rax</code> . Writing to <code>ax</code> , <code>al</code> , or <code>ah</code> leaves upper bits untouched.</p>
 						<pre class="plaintext">
 mov eax, 0          ; sets rax to 0 (zero-extension)
 mov ax, 0           ; only sets lower 16 bits; upper 48 bits are preserved
 mov al, 0           ; only sets lower 8 bits; upper 56 bits are preserved
 						</pre>
-						<p>
-							This behavior causes subtle bugs. When reversing,
-							<code>xor eax, eax</code>
-							always zeroes the full
-							<code>rax</code>
-							. This is the canonical "set to zero" idiom because
-							<code>xor eax, eax</code>
-							is 2 bytes;
-							<code>mov rax, 0</code>
-							is 7 bytes for the immediate.
-						</p>
+						<p>This behavior causes subtle bugs. When reversing, <code>xor eax, eax</code> always zeroes the full <code>rax</code> . This is the canonical "set to zero" idiom because <code>xor eax, eax</code> is 2 bytes; <code>mov rax, 0</code> is 7 bytes for the immediate.</p>
 					</section>
 					<section>
 						<h3 id="essential-instructions">Essential Instructions</h3>
-						<p>
-							You can understand 90% of typical disassembly with roughly 20 instructions. The rest are SSE/
-							<abbr title="Advanced Vector Extensions">AVX</abbr>
-							vector ops, privileged instructions, or redundant mnemonics. Master these first.
-						</p>
+						<p>You can understand 90% of typical disassembly with roughly 20 instructions. The rest are SSE/<abbr title="Advanced Vector Extensions">AVX</abbr> vector ops, privileged instructions, or redundant mnemonics. Master these first.</p>
 						<h4 id="data-movement">Data Movement</h4>
 						<table>
 							<thead>
@@ -379,40 +294,17 @@ mov al, 0           ; only sets lower 8 bits; upper 56 bits are preserved
 								<tr>
 									<td align="center"><code>lea dst, [expr]</code></td>
 									<td align="center"><code>lea rax, [rbp-0x10]</code></td>
-									<td align="center"><code>rax = &amp;local_var</code>(address, NOT value)</td>
+									<td align="center"><code>rax = &amp;local_var</code> (address, NOT value)</td>
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							<code>lea</code>
-							is the most misunderstood instruction in x86-64 reversing. It computes an effective address
-							but does NOT dereference memory.
-							<code>lea rax, [rbp-0x8]</code>
-							computes
-							<code>rbp - 8</code>
-							and stores that pointer
-							in rax. It never touches memory at
-							<code>[rbp-8]</code>
-							. Compare:
-						</p>
+						<p><code>lea</code> is the most misunderstood instruction in x86-64 reversing. It computes an effective address but does NOT dereference memory. <code>lea rax, [rbp-0x8]</code> computes <code>rbp - 8</code> and stores that pointer in rax. It never touches memory at <code>[rbp-8]</code> . Compare:</p>
 						<pre class="c">
 int x = *ptr;        // mov eax, [rdi]     - loads value at ptr
 int *p = &amp;x;         // lea rax, [rbp-8]   - computes address of x
 int y = x * 5;       // lea eax, [rax + rax*4] - compute without dedicated multiply
 						</pre>
-						<p>
-							That last line is critical:
-							<code>lea</code>
-							is often used for arithmetic because it can compute
-							<code>base + index*scale + displacement</code>
-							in a single instruction without modifying flags.
-							<code>lea eax, [rax + rax*4]</code>
-							multiplies by 5.
-							<code>lea rax, [rdi + rsi*8]</code>
-							computes
-							<code>rdi + rsi * 8</code>
-							- an array index.
-						</p>
+						<p>That last line is critical: <code>lea</code> is often used for arithmetic because it can compute <code>base + index*scale + displacement</code> in a single instruction without modifying flags. <code>lea eax, [rax + rax*4]</code> multiplies by 5. <code>lea rax, [rdi + rsi*8]</code> computes <code>rdi + rsi * 8</code> - an array index.</p>
 						<h4 id="arithmetic">Arithmetic</h4>
 						<table>
 							<thead>
@@ -446,17 +338,17 @@ int y = x * 5;       // lea eax, [rax + rax*4] - compute without dedicated multi
 								<tr>
 									<td align="center"><code>imul dst, src</code></td>
 									<td align="center"><code>imul rax, rcx</code></td>
-									<td align="center"><code>rax *= rcx</code>(signed)</td>
+									<td align="center"><code>rax *= rcx</code> (signed)</td>
 								</tr>
 								<tr>
 									<td align="center"><code>imul dst, src1, src2</code></td>
 									<td align="center"><code>imul eax, ebx, 13</code></td>
-									<td align="center"><code>eax = ebx * 13</code>(3-operand form)</td>
+									<td align="center"><code>eax = ebx * 13</code> (3-operand form)</td>
 								</tr>
 								<tr>
 									<td align="center"><code>idiv src</code></td>
 									<td align="center"><code>idiv rcx</code></td>
-									<td align="center"><code>rdx:rax / rcx</code>-><code>rax=quotient, rdx=remainder</code></td>
+									<td align="center"><code>rdx:rax / rcx</code> -> <code>rax=quotient, rdx=remainder</code></td>
 								</tr>
 								<tr>
 									<td align="center"><code>neg dst</code></td>
@@ -464,20 +356,13 @@ int y = x * 5;       // lea eax, [rax + rax*4] - compute without dedicated multi
 									<td align="center"><code>rax = -rax</code></td>
 								</tr>
 								<tr>
-									<td align="center"><code>cdq</code>/<code>cqo</code></td>
+									<td align="center"><code>cdq</code> / <code>cqo</code></td>
 									<td align="center"><code>cqo</code></td>
 									<td align="center">Sign-extend rax -> rdx:rax (for idiv setup)</td>
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							<code>idiv</code>
-							is messy. Before
-							<code>idiv rcx</code>
-							, the 128-bit dividend is in
-							<code>rdx:rax</code>
-							. The typical pattern:
-						</p>
+						<p><code>idiv</code> is messy. Before <code>idiv rcx</code> , the 128-bit dividend is in <code>rdx:rax</code> . The typical pattern:</p>
 						<pre class="plaintext">
 mov    rax, [rbp-0x8]   ; dividend
 cqo                      ; sign-extend rax -&gt; rdx:rax
@@ -506,7 +391,7 @@ idiv   rcx               ; rax = quotient, rdx = remainder
 								<tr>
 									<td align="center"><code>xor dst, src</code></td>
 									<td align="center"><code>xor eax, eax</code></td>
-									<td align="center"><code>eax ^= eax</code>-> zero (canonical zero idiom)</td>
+									<td align="center"><code>eax ^= eax</code> -> zero (canonical zero idiom)</td>
 								</tr>
 								<tr>
 									<td align="center"><code>not dst</code></td>
@@ -516,36 +401,21 @@ idiv   rcx               ; rax = quotient, rdx = remainder
 								<tr>
 									<td align="center"><code>shl dst, count</code></td>
 									<td align="center"><code>shl eax, 3</code></td>
-									<td align="center"><code>eax &lt;&lt;= 3</code>(logical left)</td>
+									<td align="center"><code>eax &lt;&lt;= 3</code> (logical left)</td>
 								</tr>
 								<tr>
 									<td align="center"><code>shr dst, count</code></td>
 									<td align="center"><code>shr rax, cl</code></td>
-									<td align="center"><code>rax &gt;&gt;= cl</code>(logical right)</td>
+									<td align="center"><code>rax &gt;&gt;= cl</code> (logical right)</td>
 								</tr>
 								<tr>
 									<td align="center"><code>sar dst, count</code></td>
 									<td align="center"><code>sar eax, 1</code></td>
-									<td align="center"><code>eax &gt;&gt;= 1</code>(arithmetic right, preserves sign)</td>
+									<td align="center"><code>eax &gt;&gt;= 1</code> (arithmetic right, preserves sign)</td>
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							<code>xor eax, eax</code>
-							is the canonical register zero. It's 2 bytes (
-							<code>31 c0</code>
-							) vs
-							<code>mov eax, 0</code>
-							at 5
-							bytes (
-							<code>b8 00 00 00 00</code>
-							). Any competent compiler uses xor-zeroing. In disassembly, whenever
-							you see
-							<code>xor reg, reg</code>
-							, read it as
-							<code>reg = 0</code>
-							.
-						</p>
+						<p><code>xor eax, eax</code> is the canonical register zero. It's 2 bytes ( <code>31 c0</code> ) vs <code>mov eax, 0</code> at 5 bytes ( <code>b8 00 00 00 00</code> ). Any competent compiler uses xor-zeroing. In disassembly, whenever you see <code>xor reg, reg</code> , read it as <code>reg = 0</code> .</p>
 						<h4 id="comparison-and-test">Comparison and Test</h4>
 						<table>
 							<thead>
@@ -570,20 +440,14 @@ idiv   rcx               ; rax = quotient, rdx = remainder
 									<td align="center"><code>dst &amp; src</code>, sets flags, discards result</td>
 								</tr>
 								<tr>
-									<td align="center"><code>cmp</code>with memory</td>
+									<td align="center"><code>cmp</code> with memory</td>
 									<td align="center"><code>cmp [rdi+0x18], ebx</code></td>
 									<td align="center">ZF, SF, CF, OF</td>
 									<td align="center">Compare memory to register</td>
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							<code>cmp a, b</code>
-							computes
-							<code>a - b</code>
-							and sets flags. The key insight: the flags tell you the relationship
-							between a and b.
-						</p>
+						<p><code>cmp a, b</code> computes <code>a - b</code> and sets flags. The key insight: the flags tell you the relationship between a and b.</p>
 						<pre class="plaintext">
 cmp eax, 0x42
 je  somewhere    ; jump if eax == 0x42 (ZF=1)
@@ -593,26 +457,9 @@ jl  somewhere    ; jump if eax &lt; 0x42  (signed, SF≠OF)
 ja  somewhere    ; jump if eax &gt; 0x42  (unsigned, CF=0 and ZF=0)
 jb  somewhere    ; jump if eax &lt; 0x42  (unsigned, CF=1)
 						</pre>
-						<p>
-							<code>test reg, reg</code>
-							is the canonical null check.
-							<code>test eax, eax</code>
-							sets ZF=1 if
-							<code>eax == 0</code>
-							. Equivalent
-							to
-							<code>cmp eax, 0</code>
-							but 2 bytes instead of 3.
-						</p>
+						<p><code>test reg, reg</code> is the canonical null check. <code>test eax, eax</code> sets ZF=1 if <code>eax == 0</code> . Equivalent to <code>cmp eax, 0</code> but 2 bytes instead of 3.</p>
 						<h4 id="conditional-jumps-decoding-the-branch">Conditional Jumps - Decoding the Branch</h4>
-						<p>
-							Every conditional jump reads flags set by the immediately preceding
-							<code>cmp</code>
-							or
-							<code>test</code>
-							. The mnemonic
-							tells you the condition:
-						</p>
+						<p>Every conditional jump reads flags set by the immediately preceding <code>cmp</code> or <code>test</code> . The mnemonic tells you the condition:</p>
 						<table>
 							<thead>
 								<tr>
@@ -689,20 +536,7 @@ jb  somewhere    ; jump if eax &lt; 0x42  (unsigned, CF=1)
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							The signed/unsigned distinction is critical. If a disassembly shows
-							<code>jl</code>
-							after
-							<code>cmp</code>
-							, the comparison
-							is signed. If it shows
-							<code>jb</code>
-							, it's unsigned. This tells you the type of the C variable:
-							<code>int</code>
-							(signed) vs
-							<code>unsigned int</code>
-							(unsigned).
-						</p>
+						<p>The signed/unsigned distinction is critical. If a disassembly shows <code>jl</code> after <code>cmp</code> , the comparison is signed. If it shows <code>jb</code> , it's unsigned. This tells you the type of the C variable: <code>int</code> (signed) vs <code>unsigned int</code> (unsigned).</p>
 						<h4 id="unconditional-jump-call-return">Unconditional Jump, Call, Return</h4>
 						<table>
 							<thead>
@@ -720,7 +554,7 @@ jb  somewhere    ; jump if eax &lt; 0x42  (unsigned, CF=1)
 								</tr>
 								<tr>
 									<td align="center"><code>call addr</code></td>
-									<td align="center">Push return address;<code>rip = addr</code></td>
+									<td align="center">Push return address; <code>rip = addr</code></td>
 									<td align="center">Function call</td>
 								</tr>
 								<tr>
@@ -730,7 +564,7 @@ jb  somewhere    ; jump if eax &lt; 0x42  (unsigned, CF=1)
 								</tr>
 								<tr>
 									<td align="center"><code>call [rax]</code></td>
-									<td align="center">Push return address;<code>rip = *rax</code></td>
+									<td align="center">Push return address; <code>rip = *rax</code></td>
 									<td align="center">Indirect call (function pointer)</td>
 								</tr>
 								<tr>
@@ -740,30 +574,16 @@ jb  somewhere    ; jump if eax &lt; 0x42  (unsigned, CF=1)
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							<code>call</code>
-							is equivalent to:
-						</p>
+						<p><code>call</code> is equivalent to:</p>
 						<pre class="plaintext">
 push rip_of_next_instruction   ; implicit - not visible in disassembly
 jmp target_function
 						</pre>
-						<p>
-							<code>ret</code>
-							is equivalent to:
-						</p>
+						<p><code>ret</code> is equivalent to:</p>
 						<pre class="plaintext">
 pop rip   ; also implicit - destination comes from stack
 						</pre>
-						<p>
-							The return address pushed by
-							<code>call</code>
-							sits at
-							<code>[rsp]</code>
-							immediately after the call. This is why
-							buffer overflows on the stack can overwrite return addresses: the return address is stored on
-							the stack alongside local variables.
-						</p>
+						<p>The return address pushed by <code>call</code> sits at <code>[rsp]</code> immediately after the call. This is why buffer overflows on the stack can overwrite return addresses: the return address is stored on the stack alongside local variables.</p>
 						<h4 id="stack-operations">Stack Operations</h4>
 						<table>
 							<thead>
@@ -799,31 +619,14 @@ pop rip   ; also implicit - destination comes from stack
 					</section>
 					<section>
 						<h3 id="function-prologue-and-epilogue">Function Prologue And Epilogue</h3>
-						<p>
-							Every non-leaf function (a function that calls other functions) on x86-64 Linux, compiled without
-							<code>-fomit-frame-pointer</code>
-							, begins and ends with the same pattern. Recognizing this instantly tells
-							you where functions start and end.
-						</p>
+						<p>Every non-leaf function (a function that calls other functions) on x86-64 Linux, compiled without <code>-fomit-frame-pointer</code> , begins and ends with the same pattern. Recognizing this instantly tells you where functions start and end.</p>
 						<h4 id="prologue-function-entry">Prologue (function entry)</h4>
 						<pre class="plaintext">
 push   rbp              ; save caller&#39;s frame pointer
 mov    rbp, rsp         ; set new frame pointer = current stack top
 sub    rsp, 0x28        ; allocate 0x28 bytes of local variable space
 						</pre>
-						<p>
-							After the prologue: -
-							<code>rbp</code>
-							points to the base of the current frame (where the saved old rbp
-							sits) -
-							<code>rsp</code>
-							points to the bottom of the local variable area - Local variable N is at
-							<code>[rbp - N*8]</code>
-							(or the appropriate offset) - The return address is at
-							<code>[rbp + 0x8]</code>
-							- The saved caller's rbp is at
-							<code>[rbp]</code>
-						</p>
+						<p>After the prologue: - <code>rbp</code> points to the base of the current frame (where the saved old rbp sits) - <code>rsp</code> points to the bottom of the local variable area - Local variable N is at <code>[rbp - N*8]</code> (or the appropriate offset) - The return address is at <code>[rbp + 0x8]</code> - The saved caller's rbp is at <code>[rbp]</code></p>
 						<pre class="plaintext">
         High addresses
         ┌────────────────────┐
@@ -842,47 +645,17 @@ rsp -&gt;   │  (next call)       │  [rbp - 0x28]
 leave         ; mov rsp, rbp; pop rbp
 ret           ; pop rip
 						</pre>
-						<p>
-							<code>leave</code>
-							is equivalent to:
-						</p>
+						<p><code>leave</code> is equivalent to:</p>
 						<pre class="plaintext">
 mov rsp, rbp    ; deallocate local variable space
 pop rbp         ; restore caller&#39;s frame pointer
 						</pre>
-						<p>
-							This is followed by
-							<code>ret</code>
-							which pops the return address and jumps to it.
-						</p>
-						<p>
-							When
-							<code>-fomit-frame-pointer</code>
-							is used (common with
-							<code>-O2</code>
-							),
-							<code>rbp</code>
-							is used as a general-purpose
-							register (callee-saved). The compiler tracks offsets from
-							<code>rsp</code>
-							instead. Functions compiled
-							this way have no
-							<code>push rbp / mov rbp, rsp</code>
-							- they directly
-							<code>sub rsp, imm</code>
-							and reference locals
-							as
-							<code>[rsp + offset]</code>
-							. This is harder to read manually but saves a register and two instructions
-							per call.
-						</p>
+						<p>This is followed by <code>ret</code> which pops the return address and jumps to it.</p>
+						<p>When <code>-fomit-frame-pointer</code> is used (common with <code>-O2</code> ), <code>rbp</code> is used as a general-purpose register (callee-saved). The compiler tracks offsets from <code>rsp</code> instead. Functions compiled this way have no <code>push rbp / mov rbp, rsp</code> - they directly <code>sub rsp, imm</code> and reference locals as <code>[rsp + offset]</code> . This is harder to read manually but saves a register and two instructions per call.</p>
 					</section>
 					<section>
 						<h3 id="annotated-disassembly-example">Annotated Disassembly Example</h3>
-						<p>
-							Write a small C program that exercises the patterns you need to recognize. Compile it. Disassemble
-							it. Annotate every line.
-						</p>
+						<p>Write a small C program that exercises the patterns you need to recognize. Compile it. Disassemble it. Annotate every line.</p>
 						<pre class="c">
 // example.c
 #include &lt;stdio.h&gt;
@@ -926,11 +699,7 @@ gcc -O0 -fno-stack-protector -no-pie -o example example.c
 						<pre class="plaintext">
 objdump -d -M intel --no-show-raw-insn example
 						</pre>
-						<p>
-							The output for
-							<code>check_password</code>
-							:
-						</p>
+						<p>The output for <code>check_password</code> :</p>
 						<pre class="x86asm">
 0000000000401162 &lt;check_password&gt;:
   401162:  push   rbp
@@ -987,11 +756,7 @@ int check_password(const char *input) {
     return (strcmp(input, secret) == 0);
 }
 						</pre>
-						<p>
-							The
-							<code>authenticate</code>
-							function disassembly:
-						</p>
+						<p>The <code>authenticate</code> function disassembly:</p>
 						<pre class="x86asm">
 0000000000401196 &lt;authenticate&gt;:
   401196:  push   rbp
@@ -1032,10 +797,7 @@ int authenticate(const char *user, const char *pass) {
 					</section>
 					<section>
 						<h3 id="recognizing-control-flow-patterns">Recognizing Control Flow Patterns</h3>
-						<p>
-							Every high-level control structure compiles to a specific pattern. When you see these patterns
-							in disassembly, reconstruct the C.
-						</p>
+						<p>Every high-level control structure compiles to a specific pattern. When you see these patterns in disassembly, reconstruct the C.</p>
 						<h4 id="if-else-diamond">if-else (diamond)</h4>
 						<pre class="plaintext">
     cmp    rax, 0             ; if (condition)
@@ -1104,14 +866,7 @@ for (int i = 0; i &lt;= 9; i++) {
     // body
 }
 						</pre>
-						<p>
-							At
-							<code>-O2</code>
-							, the for loop often converts to a do-while form (inversion optimization), eliminating
-							the initial
-							<code>jmp</code>
-							to the check.
-						</p>
+						<p>At <code>-O2</code> , the for loop often converts to a do-while form (inversion optimization), eliminating the initial <code>jmp</code> to the check.</p>
 						<h4 id="switch-statement-jump-table">switch statement - jump table</h4>
 						<pre class="x86asm">
     cmp    eax, 0x4              ; if (value &gt; 4) goto default
@@ -1133,22 +888,11 @@ switch (value) {
     default: ... break;
 }
 						</pre>
-						<p>
-							The jump table is an array of 32-bit signed offsets in the data section. The
-							<code>movsxd</code>
-							sign-extends
-							the offset into a 64-bit register, then it's added to the table base to form an absolute address.
-						</p>
+						<p>The jump table is an array of 32-bit signed offsets in the data section. The <code>movsxd</code> sign-extends the offset into a 64-bit register, then it's added to the table base to form an absolute address.</p>
 					</section>
 					<section>
 						<h3 id="optimization-effects-o0-vs-o2">Optimization Effects - O0 vs O2</h3>
-						<p>
-							The same
-							<code>check_password</code>
-							function compiled with
-							<code>-O2</code>
-							:
-						</p>
+						<p>The same <code>check_password</code> function compiled with <code>-O2</code> :</p>
 						<pre class="plaintext">
 gcc -O2 -fno-stack-protector -no-pie -o example_O2 example.c
 						</pre>
@@ -1163,28 +907,8 @@ gcc -O2 -fno-stack-protector -no-pie -o example_O2 example.c
   4011e9:  movzx  eax, al
   4011ec:  ret
 						</pre>
-						<p>
-							The prologue and frame pointer are gone, and the string pointer is loaded straight into
-							<code>rsi</code>
-							instead of being spilled to a local. The call is not a pure tail call, because
-							<code>strcmp</code>
-							returns
-							0 on a match and the function must return 1;
-							<code>sete al</code>
-							followed by
-							<code>movzx eax, al</code>
-							performs
-							that conversion.
-						</p>
-						<p>
-							<code>authenticate</code>
-							at
-							<code>-O2</code>
-							inlines
-							<code>check_password</code>
-							and keeps only the values it needs across calls
-							in a callee-saved register:
-						</p>
+						<p>The prologue and frame pointer are gone, and the string pointer is loaded straight into <code>rsi</code> instead of being spilled to a local. The call is not a pure tail call, because <code>strcmp</code> returns 0 on a match and the function must return 1; <code>sete al</code> followed by <code>movzx eax, al</code> performs that conversion.</p>
+						<p><code>authenticate</code> at <code>-O2</code> inlines <code>check_password</code> and keeps only the values it needs across calls in a callee-saved register:</p>
 						<pre class="x86asm">
 00000000004011f0 &lt;authenticate&gt;:
   4011f0:  push   rbx                        ; preserve callee-saved rbx
@@ -1206,37 +930,11 @@ gcc -O2 -fno-stack-protector -no-pie -o example_O2 example.c
   401222:  pop    rbx
   401223:  ret
 						</pre>
-						<p>
-							The compiler replaced the call to
-							<code>check_password</code>
-							with an inline
-							<code>strcmp</code>
-							against the secret
-							string, so the second comparison never leaves
-							<code>authenticate</code>
-							. The only register saved across
-							a call is
-							<code>rbx</code>
-							, which holds
-							<code>pass</code>
-							;
-							<code>rdi</code>
-							is overwritten when the second call needs it. The
-							<code>test</code>
-							/
-							<code>sete</code>
-							/
-							<code>movzx</code>
-							sequence turns a comparison into a 0-or-1 return value without branching.
-						</p>
+						<p>The compiler replaced the call to <code>check_password</code> with an inline <code>strcmp</code> against the secret string, so the second comparison never leaves <code>authenticate</code> . The only register saved across a call is <code>rbx</code> , which holds <code>pass</code> ; <code>rdi</code> is overwritten when the second call needs it. The <code>test</code> / <code>sete</code> / <code>movzx</code> sequence turns a comparison into a 0-or-1 return value without branching.</p>
 					</section>
 					<section>
 						<h3 id="hands-on-manual-decompilation-exercise">Hands-On - Manual Decompilation Exercise</h3>
-						<p>
-							Given this disassembly (a small, self-contained function,
-							<code>-O0</code>
-							), manually translate to C:
-						</p>
+						<p>Given this disassembly (a small, self-contained function, <code>-O0</code> ), manually translate to C:</p>
 						<pre class="x86asm">
 0000000000401220 &lt;mystery&gt;:
   401220:  push   rbp
@@ -1270,39 +968,8 @@ gcc -O2 -fno-stack-protector -no-pie -o example_O2 example.c
 							<li><code>[rbp-0x4]</code> is a local initialized to 0, incremented each iteration - <code>int i = 0</code> .</li>
 							<li><code>[rbp-0x8]</code> is a local that accumulates <code>buf[i]</code> - <code>long sum = 0</code> . The listing skips its</li>
 						</ol>
-						<p>
-							initialization; a real
-							<code>-O0</code>
-							build emits
-							<code>mov QWORD PTR [rbp-0x8], 0x0</code>
-							before the loop. 1.
-							The loop runs while
-							<code>(int64_t)i &lt; len</code>
-							. 1. Inside:
-							<code>sum += buf[i]</code>
-							,
-							<code>i += 2</code>
-							(the
-							<code>add DWORD PTR [rbp-0x4], 0x1</code>
-							appears twice).
-						</p>
-						<p>
-							Wait - the double increment at
-							<code>40124e</code>
-							and
-							<code>401252</code>
-							looks like
-							<code>i += 2</code>
-							, but that's unusual
-							for a sum. Let me reconsider. Actually at
-							<code>-O0</code>
-							, the compiler might generate redundant code.
-							Looking more carefully: the two
-							<code>add</code>
-							instructions are sequential and both target
-							<code>[rbp-0x4]</code>
-							. This means the loop variable increments by 2 each iteration. This is summing every other character.
-						</p>
+						<p>initialization; a real <code>-O0</code> build emits <code>mov QWORD PTR [rbp-0x8], 0x0</code> before the loop. 1. The loop runs while <code>(int64_t)i &lt; len</code> . 1. Inside: <code>sum += buf[i]</code> , <code>i += 2</code> (the <code>add DWORD PTR [rbp-0x4], 0x1</code> appears twice).</p>
+						<p>Wait - the double increment at <code>40124e</code> and <code>401252</code> looks like <code>i += 2</code> , but that's unusual for a sum. Let me reconsider. Actually at <code>-O0</code> , the compiler might generate redundant code. Looking more carefully: the two <code>add</code> instructions are sequential and both target <code>[rbp-0x4]</code> . This means the loop variable increments by 2 each iteration. This is summing every other character.</p>
 						<p>Decompilation:</p>
 						<pre class="c">
 long mystery(const char *buf, long len) {
@@ -1314,15 +981,7 @@ long mystery(const char *buf, long len) {
     return sum;
 }
 						</pre>
-						<p>
-							The function sums every other byte of the input buffer, treating each byte as a signed char,
-							then casting to long. Not useful per se, but walking through the annotation shows how local
-							variables map to
-							<code>[rbp-offset]</code>
-							and how array indexing compiles to
-							<code>[base + index]</code>
-							addressing.
-						</p>
+						<p>The function sums every other byte of the input buffer, treating each byte as a signed char, then casting to long. Not useful per se, but walking through the annotation shows how local variables map to <code>[rbp-offset]</code> and how array indexing compiles to <code>[base + index]</code> addressing.</p>
 					</section>
 					<section>
 						<h3 id="common-pitfalls">Common Pitfalls</h3>
@@ -1331,32 +990,9 @@ long mystery(const char *buf, long len) {
 lea rax, [rbp-0x8]     ; rax = rbp - 8  (ADDRESS)
 mov rax, [rbp-0x8]     ; rax = *(rbp - 8)  (VALUE at that address)
 						</pre>
-						<p>
-							If you see
-							<code>lea rax, [rbp-0x8]</code>
-							followed by
-							<code>mov rdi, rax; call scanf</code>
-							, the function is passing
-							the address of a local variable to scanf - the function wants to write to that variable.
-						</p>
+						<p>If you see <code>lea rax, [rbp-0x8]</code> followed by <code>mov rdi, rax; call scanf</code> , the function is passing the address of a local variable to scanf - the function wants to write to that variable.</p>
 						<h4 id="missing-the-red-zone">Missing the red zone</h4>
-						<p>
-							The System V ABI defines a 128-byte "red zone" below
-							<code>rsp</code>
-							that functions may use without adjusting
-							<code>rsp</code>
-							. Leaf functions (functions that don't call other functions) can access
-							<code>[rsp-0x80]</code>
-							through
-							<code>[rsp-0x1]</code>
-							without a
-							<code>sub rsp, ...</code>
-							. If you see
-							<code>[rsp-0x8]</code>
-							in a leaf function without a corresponding
-							<code>sub rsp</code>
-							, the red zone is in use - not a bug.
-						</p>
+						<p>The System V ABI defines a 128-byte "red zone" below <code>rsp</code> that functions may use without adjusting <code>rsp</code> . Leaf functions (functions that don't call other functions) can access <code>[rsp-0x80]</code> through <code>[rsp-0x1]</code> without a <code>sub rsp, ...</code> . If you see <code>[rsp-0x8]</code> in a leaf function without a corresponding <code>sub rsp</code> , the red zone is in use - not a bug.</p>
 						<h4 id="tail-call-optimization">Tail call optimization</h4>
 						<pre class="x86asm">
 call foo
@@ -1368,78 +1004,32 @@ ret
 ; ... code ...
 jmp foo
 						</pre>
-						<p>
-							When a function ends with
-							<code>jmp target</code>
-							instead of
-							<code>call target; ret</code>
-							, it's a tail call. The
-							callee's
-							<code>ret</code>
-							will return directly to the original caller. This is legitimate and common at
-							<code>-O2</code>
-							.
-						</p>
+						<p>When a function ends with <code>jmp target</code> instead of <code>call target; ret</code> , it's a tail call. The callee's <code>ret</code> will return directly to the original caller. This is legitimate and common at <code>-O2</code> .</p>
 						<h4 id="function-boundaries-in-stripped-bins">Function Boundaries In Stripped Bins</h4>
-						<p>
-							Without symbols, function boundaries become non-obvious. Look for: - The prologue pattern (
-							<code>push rbp; mov rbp, rsp; sub rsp, ...</code>
-							) -
-							<code>ret</code>
-							instructions (end of function) - Padding bytes
-							(
-							<code>0xcc</code>
-							or
-							<code>nop</code>
-							sequences) between functions - Alignment to 16-byte boundaries
-						</p>
+						<p>Without symbols, function boundaries become non-obvious. Look for: - The prologue pattern ( <code>push rbp; mov rbp, rsp; sub rsp, ...</code> ) - <code>ret</code> instructions (end of function) - Padding bytes ( <code>0xcc</code> or <code>nop</code> sequences) between functions - Alignment to 16-byte boundaries</p>
 						<h4 id="rip-relative-string-references">RIP-Relative String References</h4>
 						<pre class="plaintext">
 lea rdi, [rip+0xe93]   ; rdi = &amp;&#34;some string&#34; (rip-relative)
 						</pre>
-						<p>
-							This loads the address of a string in
-							<code>.rodata</code>
-							. The disassembler may already resolve the actual
-							string and show it as a comment:
-						</p>
+						<p>This loads the address of a string in <code>.rodata</code> . The disassembler may already resolve the actual string and show it as a comment:</p>
 						<pre class="plaintext">
 lea rdi, [rip+0xe93]   # 402010 &#34;Access granted.&#34;
 						</pre>
 					</section>
 					<section>
 						<h3 id="reading-stripped-disassembly">Reading Stripped Disassembly</h3>
-						<p>
-							When you run
-							<code>objdump -d</code>
-							on a stripped binary, you get raw addresses without function names.
-							The workflow:
-						</p>
+						<p>When you run <code>objdump -d</code> on a stripped binary, you get raw addresses without function names. The workflow:</p>
 						<ol>
 							<li>Find <code>_start</code> or the entry point (ELF header <code>e_entry</code> field)</li>
 							<li><code>_start</code> calls <code>__libc_start_main</code> with <code>main</code> as an argument - look for the <code>rdi</code> argument to that call</li>
 							<li>That register holds the address of <code>main</code> . Navigate there.</li>
 							<li>From <code>main</code> , trace calls to find all user-defined functions.</li>
 						</ol>
-						<p>
-							Alternatively, let Ghidra/I
-							<abbr title="Domain Admin">DA</abbr>
-							do function detection and then read their disassembly.
-							But knowing how to do it manually matters when dealing with custom loaders or obfuscated binaries
-							that confuse automated analysis.
-						</p>
+						<p>Alternatively, let Ghidra/I <abbr title="Domain Admin">DA</abbr> do function detection and then read their disassembly. But knowing how to do it manually matters when dealing with custom loaders or obfuscated binaries that confuse automated analysis.</p>
 						<pre class="plaintext">
 objdump -d -M intel stripped_binary | grep -A5 &#34;&lt;_start&gt;:&#34;
 						</pre>
-						<p>
-							Then follow the chain:
-							<code>_start</code>
-							->
-							<code>__libc_start_main</code>
-							->
-							<code>main</code>
-							.
-						</p>
+						<p>Then follow the chain: <code>_start</code> -> <code>__libc_start_main</code> -> <code>main</code> .</p>
 					</section>
 					<section>
 						<h3 id="summary">Summary</h3>
@@ -1476,17 +1066,17 @@ objdump -d -M intel stripped_binary | grep -A5 &#34;&lt;_start&gt;:&#34;
 								<tr>
 									<td align="center">Signed compare</td>
 									<td align="center"><code>cmp; jl</code></td>
-									<td align="center"><code>if (a &lt; b)</code>(signed)</td>
+									<td align="center"><code>if (a &lt; b)</code> (signed)</td>
 								</tr>
 								<tr>
 									<td align="center">Unsigned compare</td>
 									<td align="center"><code>cmp; jb</code></td>
-									<td align="center"><code>if (a &lt; b)</code>(unsigned)</td>
+									<td align="center"><code>if (a &lt; b)</code> (unsigned)</td>
 								</tr>
 								<tr>
 									<td align="center">Array access</td>
 									<td align="center"><code>mov rax, [rdi + rsi*8]</code></td>
-									<td align="center"><code>arr[i]</code>where<code>rdi=arr, rsi=i</code></td>
+									<td align="center"><code>arr[i]</code> where <code>rdi=arr, rsi=i</code></td>
 								</tr>
 								<tr>
 									<td align="center">Address-of</td>
@@ -1495,13 +1085,13 @@ objdump -d -M intel stripped_binary | grep -A5 &#34;&lt;_start&gt;:&#34;
 								</tr>
 								<tr>
 									<td align="center">Tail call</td>
-									<td align="center"><code>jmp func</code>at end</td>
+									<td align="center"><code>jmp func</code> at end</td>
 									<td align="center"><code>return func(args)</code></td>
 								</tr>
 								<tr>
 									<td align="center">Jump table</td>
 									<td align="center"><code>jmp [base + rax*8]</code></td>
-									<td align="center"><code>switch</code>statement</td>
+									<td align="center"><code>switch</code> statement</td>
 								</tr>
 								<tr>
 									<td align="center">String reference</td>
@@ -1510,35 +1100,11 @@ objdump -d -M intel stripped_binary | grep -A5 &#34;&lt;_start&gt;:&#34;
 								</tr>
 							</tbody>
 						</table>
-						<p>
-							The skill compounds. Each pattern you internalize makes the next disassembly faster to read.
-							The goal is to reach the point where you look at the assembly and see the C - not translate
-							instruction by instruction, but recognize the gestalt of loops, conditionals, and function boundaries
-							instantly.
-						</p>
+						<p>The skill compounds. Each pattern you internalize makes the next disassembly faster to read. The goal is to reach the point where you look at the assembly and see the C - not translate instruction by instruction, but recognize the gestalt of loops, conditionals, and function boundaries instantly.</p>
 					</section>
 					<section>
 						<h3 id="challenge">Challenge</h3>
-						<p>
-							Disassemble a binary with
-							<code>objdump -d -M intel --no-show-raw-insn binary &gt; disasm.txt</code>
-							. Write
-							a Go tool that parses that listing and, for every function, reports whether it has a standard
-							prologue (
-							<code>push rbp</code>
-							followed by
-							<code>mov rbp, rsp</code>
-							), whether it has an epilogue (
-							<code>leave</code>
-							),
-							and which functions it tail-calls through
-							<code>jmp</code>
-							. Compile the example from this article at
-							<code>-O0</code>
-							and
-							<code>-O2</code>
-							and compare the reports.
-						</p>
+						<p>Disassemble a binary with <code>objdump -d -M intel --no-show-raw-insn binary &gt; disasm.txt</code> . Write a Go tool that parses that listing and, for every function, reports whether it has a standard prologue ( <code>push rbp</code> followed by <code>mov rbp, rsp</code> ), whether it has an epilogue ( <code>leave</code> ), and which functions it tail-calls through <code>jmp</code> . Compile the example from this article at <code>-O0</code> and <code>-O2</code> and compare the reports.</p>
 						<pre class="go">
 package main
 

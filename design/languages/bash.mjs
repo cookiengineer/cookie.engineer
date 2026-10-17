@@ -28,7 +28,7 @@ var hljsGrammar = (function () {
 		Object.assign(VAR, {
 			className: "variable",
 			variants: [
-				{ begin: regex.concat(/\$[\w\d#@][\w\d_]*/,
+				{ begin: regex.concat(/\$[\w#$@?!*-][\w\d_]*/,
 					// negative look-ahead tries to avoid matching patterns that are not
 					// Perl at all like $ident$, @ident@, etc.
 					"(?![\\w\\d])(?![$])") },
@@ -148,6 +148,99 @@ var hljsGrammar = (function () {
 
 		// to consume paths to prevent keyword matches inside them
 		const PATH_MODE = { match: /(\/[a-z._-]+)+/ };
+
+		// `...` command substitution (mirrors SUBST / $(...))
+		const BACKTICK = {
+			className: "subst",
+			begin: /`/,
+			end: /`/,
+			contains: [
+				hljs.BACKSLASH_ESCAPE,
+				VAR,
+				SUBST,
+				QUOTE_STRING
+			]
+		};
+
+		// test operators, only relevant inside `[ ... ]` / `[[ ... ]]`
+		const TEST_OPERATOR = {
+			className: "keyword",
+			match: /-(eq|ne|lt|le|gt|ge|nt|ot|ef|o|z|n|f|d|e|s|r|w|x|h|L|p|S|b|c|g|u|k|t|O|G|N|a|v|R)\b/
+		};
+
+		// `[ ... ]` and `[[ ... ]]` test expressions
+		const TEST = {
+			begin: /\[\[?(?=\s)/,
+			end: /\]\]?/,
+			relevance: 0,
+			contains: [
+				TEST_OPERATOR,
+				{
+					className: "operator",
+					match: /=~|==|!=|<=|>=/
+				},
+				hljs.NUMBER_MODE,
+				QUOTE_STRING,
+				APOS_STRING,
+				VAR
+			]
+		};
+
+		// value after `=` in an option or assignment
+		const SHELL_VALUE = {
+			begin: /=/,
+			end: /(?=\s|$)/,
+			excludeBegin: true,
+			relevance: 0,
+			contains: [
+				BACKTICK,
+				SUBST,
+				VAR,
+				QUOTE_STRING,
+				APOS_STRING,
+				hljs.NUMBER_MODE,
+				{
+					className: "string",
+					match: /\S+/
+				}
+			]
+		};
+
+		// `--long` / `-s` command line options
+		const SHELL_OPTION = {
+			className: "params",
+			begin: /(?<=\s|^)--?[a-zA-Z][a-zA-Z0-9_-]*/,
+			end: /(?=\s|$)/,
+			relevance: 0,
+			contains: [ SHELL_VALUE ]
+		};
+
+		// `export key=value`, `LD_PRELOAD=...`, `--foo bar=qux`
+		const SHELL_ASSIGNMENT = {
+			className: "params",
+			begin: /(?<=\s|^)[a-zA-Z_][a-zA-Z0-9_-]*(?==)/,
+			end: /(?=\s|$)/,
+			relevance: 0,
+			contains: [ SHELL_VALUE ]
+		};
+
+		// `~/path` and `~user/path`
+		const TILDE_PATH = { className: "string", match: /~[a-zA-Z0-9._-]*\/[^\s"'`]*/ };
+
+		// `scheme://host:port/path?query#fragment`
+		const URL = { className: "string", match: /[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^\s"'`<>]+/ };
+
+		// `/absolute`, `./relative` and `../parent` paths
+		const PATH = { className: "string", match: /(?:\.\.?\/|\/)[a-zA-Z0-9._@+*-]*(?:\/[a-zA-Z0-9._@+*-]+)*/ };
+
+		// `*.txt`, `**/*.c` and other glob patterns
+		const GLOB = { className: "string", match: /(?<=\s|^)[^\s"'`]*\*[^\s"'`]*/ };
+
+		// redirections (`>`, `>>`, `2>&1`, `<`, `<<<`, ...)
+		const REDIRECT = { className: "operator", match: /[0-9]*(?:>>|<<<|<<|&>>|>&[0-9]*|&>|>\||<\||>|<)/ };
+
+		// pipes and command separators
+		const SEPARATOR = { className: "operator", match: /&&|\|\||;|\||&/ };
 
 		// http://www.gnu.org/software/bash/manual/html_node/Shell-Builtin-Commands.html
 		const SHELL_BUILT_INS = [
@@ -394,6 +487,16 @@ var hljsGrammar = (function () {
 				]
 			},
 			contains: [
+				BACKTICK,
+				TEST,
+				SHELL_OPTION,
+				SHELL_ASSIGNMENT,
+				TILDE_PATH,
+				URL,
+				PATH,
+				REDIRECT,
+				SEPARATOR,
+				hljs.NUMBER_MODE,
 				KNOWN_SHEBANG, // to catch known shells and boost relevancy
 				hljs.SHEBANG(), // to catch unknown shells but still highlight the shebang
 				FUNCTION,
@@ -405,7 +508,8 @@ var hljsGrammar = (function () {
 				ESCAPED_QUOTE,
 				APOS_STRING,
 				ESCAPED_APOS,
-				VAR
+				VAR,
+				GLOB
 			]
 		};
 	}
